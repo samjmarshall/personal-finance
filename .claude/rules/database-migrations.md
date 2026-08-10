@@ -4,7 +4,6 @@ paths:
   - "src/server/db/**"
   - "src/server/**/*.schema.ts"
   - "src/server/db/shared.schema.ts"
-  - "scripts/seed-dev.ts"
 ---
 
 # Database Migrations
@@ -19,8 +18,6 @@ Always use this two-step process:
 
 1. `yarn db:generate` — generate a migration SQL file in `drizzle/`
 2. `yarn db:migrate` — apply pending migrations and record them in `__drizzle_migrations`
-
-When schema changes touch tables seeded by `scripts/seed-dev.ts`, update the corresponding fixture in `src/server/db/seed/fixtures/*` in the same PR. The seeder is typesafe — a stale fixture will fail `yarn check` and `yarn build`.
 
 ## Data migrations
 

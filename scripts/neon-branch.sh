@@ -119,13 +119,6 @@ load_credentials() {
 # ── Commands ──────────────────────────────────────────────────────────────
 
 cmd_create() {
-  local no_seed=false
-  for arg in "$@"; do
-    if [[ "$arg" == "--no-seed" ]]; then
-      no_seed=true
-    fi
-  done
-
   local git_branch
   git_branch=$(git branch --show-current)
 
@@ -186,17 +179,6 @@ cmd_create() {
   # Run migrations
   log "Running migrations..."
   (cd "$REPO_ROOT" && SKIP_ENV_VALIDATION=1 yarn db:migrate)
-
-  if ! $no_seed; then
-    log "Seeding dev fixtures…"
-    if (cd "$REPO_ROOT" && SKIP_ENV_VALIDATION=1 yarn seed:dev); then
-      log "Seeded"
-    else
-      log "Warning: seed failed — branch is migrated but unseeded. Run 'yarn seed:dev' manually."
-      exit 1
-    fi
-  fi
-
   log "Done — local dev is using branch: $neon_branch_name"
 }
 
@@ -306,8 +288,7 @@ case "${1:-}" in
   status)  cmd_status ;;
   *)
     echo "Usage: scripts/neon-branch.sh {create|delete|status}"
-    echo "  create             Create/reuse Neon branch for current git branch and seed fixtures"
-    echo "  create --no-seed   Create/reuse Neon branch without seeding"
+    echo "  create             Create/reuse Neon branch for current git branch and migrate"
     echo "  delete             Delete current branch's Neon branch"
     echo "  delete --all       Delete all ${PREFIX}/* Neon branches"
     echo "  status             List all ${PREFIX}/* Neon branches"
