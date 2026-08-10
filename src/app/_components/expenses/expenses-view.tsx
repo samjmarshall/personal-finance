@@ -4,8 +4,8 @@ import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
-import { Button, Card } from "~/app/_components/ui/primitives";
 import { Money } from "~/app/_components/ui/money";
+import { Button, Card } from "~/app/_components/ui/primitives";
 import { cn } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ExpenseForm } from "./expense-form";
@@ -63,14 +63,14 @@ export function ExpensesView() {
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
 			<PageHeader
-				title="Expenses"
-				description="Your budgeted outgoings, grouped by category."
 				actions={
 					<Button onClick={openAdd} size="sm">
 						<Plus className="h-4 w-4" />
 						Add expense
 					</Button>
 				}
+				description="Your budgeted outgoings, grouped by category."
+				title="Expenses"
 			/>
 
 			<div className="mt-6 grid grid-cols-3 gap-4">
@@ -81,11 +81,11 @@ export function ExpensesView() {
 						["Per year", totals.year],
 					] as const
 				).map(([label, value]) => (
-					<Card key={label} className="p-4">
-						<p className="text-xs font-medium text-muted-foreground">{label}</p>
+					<Card className="p-4" key={label}>
+						<p className="font-medium text-muted-foreground text-xs">{label}</p>
 						<Money
+							className="mt-1.5 block font-semibold text-foreground text-lg sm:text-xl"
 							value={value}
-							className="mt-1.5 block text-lg font-semibold text-foreground sm:text-xl"
 						/>
 					</Card>
 				))}
@@ -97,13 +97,13 @@ export function ExpensesView() {
 					const isCollapsed = collapsed.has(category);
 					const panelId = `expense-group-${category.replace(/\s+/g, "-")}`;
 					return (
-						<Card key={category} className="overflow-hidden">
+						<Card className="overflow-hidden" key={category}>
 							<button
-								type="button"
-								onClick={() => toggleCategory(category)}
-								aria-expanded={!isCollapsed}
 								aria-controls={panelId}
-								className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
+								aria-expanded={!isCollapsed}
+								className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
+								onClick={() => toggleCategory(category)}
+								type="button"
 							>
 								<span className="flex items-center gap-2">
 									<ChevronDown
@@ -112,23 +112,23 @@ export function ExpensesView() {
 											isCollapsed && "-rotate-90",
 										)}
 									/>
-									<span className="text-sm font-semibold text-foreground">
+									<span className="font-semibold text-foreground text-sm">
 										{category}
 									</span>
-									<span className="text-xs text-muted-foreground">
+									<span className="text-muted-foreground text-xs">
 										({items.length})
 									</span>
 								</span>
-								<span className="text-xs text-muted-foreground">
-									<Money value={groupTotal} className="font-medium" /> / mo
+								<span className="text-muted-foreground text-xs">
+									<Money className="font-medium" value={groupTotal} /> / mo
 								</span>
 							</button>
 							<div
-								id={panelId}
 								className="divide-y divide-border"
 								hidden={isCollapsed}
+								id={panelId}
 							>
-								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
+								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
 									<span>Item</span>
 									<span className="text-right">Fortnight</span>
 									<span className="text-right">Month</span>
@@ -137,39 +137,41 @@ export function ExpensesView() {
 								</div>
 								{items.map((item) => (
 									<div
-										key={item.id}
 										className="group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(3,7rem)_3rem]"
+										key={item.id}
 									>
 										<span className="font-medium text-foreground">
 											{item.name}
 										</span>
 										<Money
+											className="hidden text-right text-muted-foreground sm:block"
 											value={item.fortnight}
-											className="hidden text-right text-muted-foreground sm:block"
 										/>
 										<Money
-											value={item.month}
 											className="text-right font-medium text-foreground"
+											value={item.month}
 										/>
 										<Money
-											value={item.year}
 											className="hidden text-right text-muted-foreground sm:block"
+											value={item.year}
 										/>
 										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
 											<button
-												onClick={() => openEdit(item)}
 												aria-label={`Edit ${item.name}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+												onClick={() => openEdit(item)}
+												type="button"
 											>
 												<Pencil className="h-3.5 w-3.5" />
 											</button>
 											<button
+												aria-label={`Delete ${item.name}`}
+												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
 												onClick={() => {
 													if (confirm(`Delete "${item.name}"?`))
 														remove.mutate({ id: item.id });
 												}}
-												aria-label={`Delete ${item.name}`}
-												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
+												type="button"
 											>
 												<Trash2 className="h-3.5 w-3.5" />
 											</button>
@@ -183,10 +185,10 @@ export function ExpensesView() {
 
 				{!groups.length && (
 					<Card className="p-10 text-center">
-						<p className="text-sm text-muted-foreground">
+						<p className="text-muted-foreground text-sm">
 							No expenses yet. Add your first budgeted item to get started.
 						</p>
-						<Button onClick={openAdd} size="sm" className="mt-4">
+						<Button className="mt-4" onClick={openAdd} size="sm">
 							<Plus className="h-4 w-4" />
 							Add expense
 						</Button>
@@ -195,10 +197,10 @@ export function ExpensesView() {
 			</div>
 
 			<ExpenseForm
-				key={editing ? `edit-${editing.id}` : "add"}
-				open={formOpen}
-				onClose={() => setFormOpen(false)}
 				expense={editing}
+				key={editing ? `edit-${editing.id}` : "add"}
+				onClose={() => setFormOpen(false)}
+				open={formOpen}
 			/>
 		</div>
 	);

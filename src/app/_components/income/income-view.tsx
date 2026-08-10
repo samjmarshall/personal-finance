@@ -4,8 +4,8 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
-import { Button, Card } from "~/app/_components/ui/primitives";
 import { Money } from "~/app/_components/ui/money";
+import { Button, Card } from "~/app/_components/ui/primitives";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { IncomeForm } from "./income-form";
 
@@ -52,14 +52,14 @@ export function IncomeView() {
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
 			<PageHeader
-				title="Income"
-				description="Money coming in each fortnight, by person."
 				actions={
 					<Button onClick={openAdd} size="sm">
 						<Plus className="h-4 w-4" />
 						Add income
 					</Button>
 				}
+				description="Money coming in each fortnight, by person."
+				title="Income"
 			/>
 
 			<div className="mt-6 grid grid-cols-3 gap-4">
@@ -70,12 +70,12 @@ export function IncomeView() {
 						["Per year", totals.year],
 					] as const
 				).map(([label, value]) => (
-					<Card key={label} className="p-4">
-						<p className="text-xs font-medium text-muted-foreground">{label}</p>
+					<Card className="p-4" key={label}>
+						<p className="font-medium text-muted-foreground text-xs">{label}</p>
 						<Money
-							value={value}
+							className="mt-1.5 block font-semibold text-lg sm:text-xl"
 							tone="income"
-							className="mt-1.5 block text-lg font-semibold sm:text-xl"
+							value={value}
 						/>
 					</Card>
 				))}
@@ -85,18 +85,22 @@ export function IncomeView() {
 				{groups.map(([person, items]) => {
 					const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
 					return (
-						<Card key={person} className="overflow-hidden">
-							<div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
-								<h2 className="text-sm font-semibold text-foreground">
+						<Card className="overflow-hidden" key={person}>
+							<div className="flex items-center justify-between border-border border-b bg-muted/40 px-4 py-3">
+								<h2 className="font-semibold text-foreground text-sm">
 									{person}
 								</h2>
-								<span className="text-xs text-muted-foreground">
-									<Money value={groupTotal} tone="income" className="font-medium" />{" "}
+								<span className="text-muted-foreground text-xs">
+									<Money
+										className="font-medium"
+										tone="income"
+										value={groupTotal}
+									/>{" "}
 									/ mo
 								</span>
 							</div>
 							<div className="divide-y divide-border">
-								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
+								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
 									<span>Source</span>
 									<span className="text-right">Fortnight</span>
 									<span className="text-right">Month</span>
@@ -105,42 +109,44 @@ export function IncomeView() {
 								</div>
 								{items.map((item) => (
 									<div
-										key={item.id}
 										className="group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(3,7rem)_3rem]"
+										key={item.id}
 									>
 										<span className="font-medium text-foreground">
 											{item.source}
 										</span>
 										<Money
+											className="hidden text-right sm:block"
+											tone="income"
 											value={item.fortnight}
-											tone="income"
-											className="hidden text-right sm:block"
 										/>
 										<Money
-											value={item.month}
-											tone="income"
 											className="text-right font-medium"
+											tone="income"
+											value={item.month}
 										/>
 										<Money
-											value={item.year}
-											tone="income"
 											className="hidden text-right sm:block"
+											tone="income"
+											value={item.year}
 										/>
 										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
 											<button
-												onClick={() => openEdit(item)}
 												aria-label={`Edit ${item.source}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+												onClick={() => openEdit(item)}
+												type="button"
 											>
 												<Pencil className="h-3.5 w-3.5" />
 											</button>
 											<button
+												aria-label={`Delete ${item.source}`}
+												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
 												onClick={() => {
 													if (confirm(`Delete "${item.source}"?`))
 														remove.mutate({ id: item.id });
 												}}
-												aria-label={`Delete ${item.source}`}
-												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
+												type="button"
 											>
 												<Trash2 className="h-3.5 w-3.5" />
 											</button>
@@ -154,10 +160,10 @@ export function IncomeView() {
 
 				{!groups.length && (
 					<Card className="p-10 text-center">
-						<p className="text-sm text-muted-foreground">
+						<p className="text-muted-foreground text-sm">
 							No income sources yet. Add one to get started.
 						</p>
-						<Button onClick={openAdd} size="sm" className="mt-4">
+						<Button className="mt-4" onClick={openAdd} size="sm">
 							<Plus className="h-4 w-4" />
 							Add income
 						</Button>
@@ -166,9 +172,9 @@ export function IncomeView() {
 			</div>
 
 			<IncomeForm
-				open={formOpen}
-				onClose={() => setFormOpen(false)}
 				income={editing}
+				onClose={() => setFormOpen(false)}
+				open={formOpen}
 			/>
 		</div>
 	);

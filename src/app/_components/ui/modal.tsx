@@ -40,31 +40,33 @@ export function Modal({
 				aria-label="Close dialog"
 				className="absolute inset-0 bg-foreground/30 backdrop-blur-[2px]"
 				onClick={onClose}
+				type="button"
 			/>
 			<div
-				role="dialog"
-				aria-modal="true"
 				aria-label={title}
+				aria-modal="true"
 				className={cn(
 					"relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-border bg-card p-6 shadow-xl sm:max-w-lg sm:rounded-2xl",
 					className,
 				)}
+				role="dialog"
 			>
 				<div className="mb-5 flex items-start justify-between gap-4">
 					<div>
-						<h2 className="text-lg font-semibold text-foreground text-balance">
+						<h2 className="text-balance font-semibold text-foreground text-lg">
 							{title}
 						</h2>
 						{description && (
-							<p className="mt-1 text-sm text-muted-foreground text-pretty">
+							<p className="mt-1 text-pretty text-muted-foreground text-sm">
 								{description}
 							</p>
 						)}
 					</div>
 					<button
-						onClick={onClose}
 						aria-label="Close"
-						className="-mr-1 -mt-1 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						className="-mt-1 -mr-1 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						onClick={onClose}
+						type="button"
 					>
 						<X className="h-4 w-4" />
 					</button>
