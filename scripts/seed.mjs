@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
-import { read, utils } from "xlsx";
 import postgres from "postgres";
+import { read, utils } from "xlsx";
+
+// Load the env file directly rather than via `source` — values containing `&`
+// break shell sourcing. Same approach drizzle-kit takes.
+if (!process.env.DATABASE_URL) process.loadEnvFile();
 
 const sql = postgres(process.env.DATABASE_URL, { max: 1 });
 
@@ -32,6 +36,10 @@ const expenseRows = utils.sheet_to_json(wb.Sheets.Expenses, {
 	blankrows: false,
 });
 
+// createdAt is a drizzle `$defaultFn`, i.e. ORM-side only — these raw inserts
+// bypass it and the column is NOT NULL, so set it explicitly.
+const createdAt = new Date();
+
 const expenses = [];
 let expOrder = 0;
 for (let b = 0; b < EXPENSE_CATEGORIES.length; b++) {
@@ -47,6 +55,7 @@ for (let b = 0; b < EXPENSE_CATEGORIES.length; b++) {
 			month: num(row[base + 2]),
 			year: num(row[base + 3]),
 			sortOrder: expOrder++,
+			createdAt,
 		});
 	}
 }
@@ -74,6 +83,7 @@ for (let b = 0; b < 2; b++) {
 			month: num(row[base + 2]),
 			year: num(row[base + 3]),
 			sortOrder: incOrder++,
+			createdAt,
 		});
 	}
 }
@@ -100,6 +110,7 @@ for (let r = 1; r < txRows.length; r++) {
 		frequency: str(row[5]) ?? "One-off",
 		priority: str(row[6]) ?? "Nice to Have",
 		notes: str(row[7]),
+		createdAt,
 	});
 }
 
@@ -107,24 +118,25 @@ console.log(
 	`Parsed: ${expenses.length} expenses, ${income.length} income, ${transactions.length} transactions`,
 );
 
-await sql`DELETE FROM ${sql("pg-drizzle_expense")}`;
-await sql`DELETE FROM ${sql("pg-drizzle_income")}`;
-await sql`DELETE FROM ${sql("pg-drizzle_transaction")}`;
+await sql`DELETE FROM ${sql("expense")}`;
+await sql`DELETE FROM ${sql("income")}`;
+await sql`DELETE FROM ${sql("transaction")}`;
 
-if (expenses.length)
-	await sql`INSERT INTO ${sql("pg-drizzle_expense")} ${sql(expenses)}`;
-if (income.length)
-	await sql`INSERT INTO ${sql("pg-drizzle_income")} ${sql(income)}`;
+if (expenses.length) await sql`INSERT INTO ${sql("expense")} ${sql(expenses)}`;
+if (income.length) await sql`INSERT INTO ${sql("income")} ${sql(income)}`;
 
 // insert transactions in chunks
 for (let i = 0; i < transactions.length; i += 200) {
 	const chunk = transactions.slice(i, i + 200);
-	await sql`INSERT INTO ${sql("pg-drizzle_transaction")} ${sql(chunk)}`;
+	await sql`INSERT INTO ${sql("transaction")} ${sql(chunk)}`;
 }
 
-const [{ count: ec }] = await sql`SELECT count(*)::int FROM ${sql("pg-drizzle_expense")}`;
-const [{ count: ic }] = await sql`SELECT count(*)::int FROM ${sql("pg-drizzle_income")}`;
-const [{ count: tc }] = await sql`SELECT count(*)::int FROM ${sql("pg-drizzle_transaction")}`;
-console.log(`Seeded rows -> expenses: ${ec}, income: ${ic}, transactions: ${tc}`);
+const [{ count: ec }] = await sql`SELECT count(*)::int FROM ${sql("expense")}`;
+const [{ count: ic }] = await sql`SELECT count(*)::int FROM ${sql("income")}`;
+const [{ count: tc }] =
+	await sql`SELECT count(*)::int FROM ${sql("transaction")}`;
+console.log(
+	`Seeded rows -> expenses: ${ec}, income: ${ic}, transactions: ${tc}`,
+);
 
 await sql.end();
