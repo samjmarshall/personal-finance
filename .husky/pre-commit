@@ -1,1 +1,2 @@
 yarn run check
+yarn run db:check
