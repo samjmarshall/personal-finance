@@ -1,0 +1,150 @@
+name: Post-Deploy Migration
+
+# Fired by Vercel's Repository Dispatch integration once a deployment is live.
+# Migrations therefore run *after* the new code is serving traffic — a failure
+# leaves the schema behind the code, which is why the rollback job below exists.
+on:
+  repository_dispatch:
+    types:
+      - "vercel.deployment.ready"
+
+jobs:
+  migrate:
+    name: DB Migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      statuses: write
+    # NOTE: the database URLs are deliberately NOT job outputs. GitHub silently
+    # scrubs any job output whose value contains a registered secret (the Neon
+    # URI embeds the role password) → it arrives empty in
+    # `needs.migrate.outputs.*`. Only the non-secret branch_id crosses the job
+    # boundary; consumers re-derive the URLs from it via the
+    # ./.github/actions/neon-db-url composite.
+    outputs:
+      branch_id: ${{ steps.neon.outputs.branch_id }}
+      pre_migrate_timestamp: ${{ steps.pre_migrate.outputs.timestamp }}
+
+    steps:
+      - name: Report job & status
+        uses: vercel/repository-dispatch/actions/status@v1
+        with:
+          name: "DB Migration"
+
+      - name: Debug - Log client_payload
+        env:
+          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        run: echo "$PAYLOAD"
+
+      - name: Checkout
+        uses: vercel/repository-dispatch/actions/checkout@v1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Resolve Neon branch
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          GIT_REF: ${{ github.event.client_payload.git.ref }}
+          ENVIRONMENT: ${{ github.event.client_payload.environment }}
+        run: |
+          BRANCHES=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")
+
+          if [ "$ENVIRONMENT" = "production" ]; then
+            BRANCH_ID=$(echo "$BRANCHES" | jq -r '.branches[] | select(.primary == true) | .id')
+          else
+            BRANCH_ID=$(echo "$BRANCHES" | jq -r --arg ref "preview/$GIT_REF" \
+              '.branches[] | select(.name == $ref) | .id')
+          fi
+
+          if [ -z "$BRANCH_ID" ]; then
+            echo "::error::Could not resolve Neon branch for ref '$GIT_REF' \
+          (environment '$ENVIRONMENT'). Failing here at the source so the cause \
+          is one clear error, not a wall of downstream connection failures."
+            exit 1
+          fi
+
+          # branch_id is NOT a secret — it crosses the job boundary safely.
+          echo "branch_id=$BRANCH_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve database URLs
+        id: dburl
+        uses: ./.github/actions/neon-db-url
+        with:
+          neon_api_key: ${{ secrets.NEON_API_KEY }}
+          neon_project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_id: ${{ steps.neon.outputs.branch_id }}
+
+      # Anchor for the production point-in-time restore in the rollback job.
+      - name: Record pre-migration timestamp
+        id: pre_migrate
+        run: echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+      # Catches journal/snapshot collisions before anything is applied.
+      - name: Run database check
+        run: yarn db:check
+        env:
+          SKIP_ENV_VALIDATION: 1
+          DATABASE_URL_UNPOOLED: ${{ steps.dburl.outputs.db_url_unpooled }}
+
+      # Unpooled: DDL must not go through PgBouncer.
+      - name: Run database migrations
+        run: yarn db:migrate
+        env:
+          SKIP_ENV_VALIDATION: 1
+          DATABASE_URL_UNPOOLED: ${{ steps.dburl.outputs.db_url_unpooled }}
+
+  # A failed migration can leave the schema partially applied. The branch_id
+  # guard means a failure *before* branch resolution skips rollback cleanly —
+  # nothing was touched, so there is nothing to undo.
+  rollback:
+    name: Rollback Migration
+    needs: migrate
+    if: ${{ failure() && needs.migrate.outputs.branch_id != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Rollback (preview — reset branch to parent)
+        if: ${{ github.event.client_payload.environment != 'production' }}
+        uses: neondatabase/reset-branch-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ needs.migrate.outputs.branch_id }}
+          parent: true
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      # `preserve_under_name` is required by Neon when restoring a branch from
+      # itself — it keeps the post-migration state around under that name
+      # rather than discarding it.
+      - name: Rollback (production — point-in-time restore)
+        if: ${{ github.event.client_payload.environment == 'production' }}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_ID: ${{ needs.migrate.outputs.branch_id }}
+          BEFORE_TS: ${{ needs.migrate.outputs.pre_migrate_timestamp }}
+        run: |
+          curl -fsS -X POST \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID/restore" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -nc \
+              --arg branch "$BRANCH_ID" \
+              --arg ts "$BEFORE_TS" \
+              '{source_branch_id:$branch, source_timestamp:$ts,
+                preserve_under_name:"pre-migration-backup"}')"
+          echo "::warning::Production database restored to pre-migration state ($BEFORE_TS)"

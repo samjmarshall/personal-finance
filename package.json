@@ -8,6 +8,7 @@
 		"check": "biome check .",
 		"check:unsafe": "biome check --write --unsafe .",
 		"check:write": "biome check --write .",
+		"db:check": "drizzle-kit check",
 		"db:generate": "drizzle-kit generate",
 		"db:custom": "drizzle-kit generate --custom",
 		"db:migrate": "drizzle-kit migrate",

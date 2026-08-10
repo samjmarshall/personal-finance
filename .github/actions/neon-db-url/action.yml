@@ -1,0 +1,69 @@
+name: Resolve Neon DB URL
+description: >
+  Resolve a Neon branch's pooled and unpooled connection URIs from a
+  (non-secret) branch_id. These are surfaced as STEP outputs, never job
+  outputs — GitHub silently scrubs job outputs that contain a registered
+  secret (the URI embeds the role password), which is why the URL must be
+  re-derived inside every job that needs it instead of crossing the
+  `needs.<job>.outputs` boundary.
+
+inputs:
+  neon_api_key:
+    description: Neon API key (secrets.NEON_API_KEY)
+    required: true
+  neon_project_id:
+    description: Neon project ID (vars.NEON_PROJECT_ID)
+    required: true
+  branch_id:
+    description: >
+      Neon branch ID resolved by the calling job. Callers MUST gate this
+      step on a non-empty branch_id; passing an empty value is treated as
+      a hard error so a silent regression fails loudly here rather than as
+      a downstream "no connection string" error.
+    required: true
+
+outputs:
+  db_url:
+    description: Pooled connection URI (PgBouncer)
+    value: ${{ steps.resolve.outputs.db_url }}
+  db_url_unpooled:
+    description: Direct (unpooled) connection URI
+    value: ${{ steps.resolve.outputs.db_url_unpooled }}
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch connection URIs from Neon
+      id: resolve
+      shell: bash
+      env:
+        NEON_API_KEY: ${{ inputs.neon_api_key }}
+        NEON_PROJECT_ID: ${{ inputs.neon_project_id }}
+        BRANCH_ID: ${{ inputs.branch_id }}
+      run: |
+        if [ -z "$BRANCH_ID" ]; then
+          echo "::error::neon-db-url called with an empty branch_id — \
+        callers must gate this step on a resolved branch. Refusing to \
+        continue so the failure is loud, not a downstream null DB URL."
+          exit 1
+        fi
+
+        BASE="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri"
+        QS="branch_id=$BRANCH_ID&role_name=neondb_owner&database_name=neondb"
+
+        POOLED=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" "$BASE?$QS")
+        DIRECT=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" "$BASE?$QS&pooled=false")
+
+        DB_URL=$(echo "$POOLED" | jq -r '.uri // empty')
+        DB_URL_UNPOOLED=$(echo "$DIRECT" | jq -r '.uri // empty')
+
+        if [ -z "$DB_URL" ] || [ -z "$DB_URL_UNPOOLED" ]; then
+          echo "::error::Neon returned no connection URI for branch \
+        '$BRANCH_ID' (pooled empty=$([ -z "$DB_URL" ] && echo yes || echo no), \
+        direct empty=$([ -z "$DB_URL_UNPOOLED" ] && echo yes || echo no)). \
+        Check NEON_API_KEY / NEON_PROJECT_ID and that the branch still exists."
+          exit 1
+        fi
+
+        echo "db_url=$DB_URL" >> "$GITHUB_OUTPUT"
+        echo "db_url_unpooled=$DB_URL_UNPOOLED" >> "$GITHUB_OUTPUT"

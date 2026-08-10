@@ -1,0 +1,109 @@
+name: Preview teardown
+
+on:
+  pull_request:
+    types: [closed]
+  delete:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.event.ref }}
+
+jobs:
+  teardown_preview:
+    name: Tear down preview resources
+    if: github.event_name == 'pull_request' || github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve branch name
+        id: branch
+        env:
+          REF: ${{ github.event.pull_request.head.ref || github.event.ref }}
+        run: echo "name=$REF" >> "$GITHUB_OUTPUT"
+
+      # Closing a PR usually deletes its branch too, firing both triggers for
+      # the same branch. Without this gate the second run re-attempts cleanup
+      # that already happened.
+      - name: Skip if a PR already handled this branch
+        id: skip
+        if: github.event_name == 'delete'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+          REPO: ${{ github.repository }}
+        run: |
+          count=$(gh pr list --repo "$REPO" --state closed --head "$BRANCH" --json number --jq 'length')
+          if [ "$count" -gt 0 ]; then
+            echo "PR exists for $BRANCH — pull_request:closed already handled cleanup"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Created by the Neon-Vercel integration, not by this repo.
+      - name: Delete preview Neon Branch
+        if: steps.skip.outputs.skip != 'true'
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/${{ steps.branch.outputs.name }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      # Created by scripts/neon-branch.sh for git worktrees (PREFIX="local").
+      # Existence-checked because most branches never have one.
+      - name: Delete local Neon Branch (if exists)
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_NAME: local/${{ steps.branch.outputs.name }}
+        run: |
+          npm i -g neonctl@v2
+          if neonctl branches list --project-id "$PROJECT_ID" --output json \
+            | jq -e --arg name "$BRANCH_NAME" '[.. | objects | .name? // empty] | any(. == $name)' > /dev/null; then
+            echo "Branch $BRANCH_NAME exists — deleting"
+            neonctl branches delete "$BRANCH_NAME" --project-id "$PROJECT_ID"
+          else
+            echo "Branch $BRANCH_NAME does not exist — skipping delete"
+          fi
+
+      # The preview/<branch> database is deleted above, so any preview
+      # deployment left running keeps serving (and running crons) against a
+      # database that no longer exists, failing with "password authentication
+      # failed". Removing the deployment stops that immediately.
+      - name: Delete Vercel preview deployments
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+          PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::warning::VERCEL_TOKEN not set — skipping Vercel deployment cleanup"
+            exit 0
+          fi
+          api="https://api.vercel.com"
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          # Match by meta.githubCommitRef (the documented `branch` query filter
+          # is unreliable; preview deployments also report target=null, so we
+          # filter client-side and explicitly exclude production for safety).
+          ids=$(curl -fsS -H "$auth" \
+            "$api/v6/deployments?projectId=$PROJECT_ID&teamId=$TEAM_ID&limit=100" \
+            | jq -r --arg b "$BRANCH" \
+              '.deployments[] | select(.meta.githubCommitRef == $b and .target != "production") | .uid')
+          if [ -z "$ids" ]; then
+            echo "No preview deployments found for branch $BRANCH"
+            exit 0
+          fi
+          for id in $ids; do
+            echo "Deleting Vercel deployment $id"
+            curl -fsS -X DELETE -H "$auth" \
+              "$api/v13/deployments/$id?teamId=$TEAM_ID" | jq -c '{uid, state}'
+          done
+
+      # No Inngest cleanup step: app/environment archival is a dashboard-only
+      # action with no public REST endpoint. Deleting the Vercel deployment
+      # above removes the endpoint Inngest invokes, so orphaned crons (ADR002's
+      # outbox sweep) stop right away rather than waiting out Inngest's 3-day
+      # auto-archive timer.

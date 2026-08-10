@@ -12,6 +12,11 @@ export const env = createEnv({
 				? z.string()
 				: z.string().optional(),
 		DATABASE_URL: z.string().url(),
+		/**
+		 * Direct (non-PgBouncer) connection, used by drizzle-kit for DDL. Optional
+		 * because local dev runs Docker Postgres, which has no pooler.
+		 */
+		DATABASE_URL_UNPOOLED: z.string().url().optional(),
 		NODE_ENV: z
 			.enum(["development", "test", "production"])
 			.default("development"),
@@ -33,6 +38,7 @@ export const env = createEnv({
 	runtimeEnv: {
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		DATABASE_URL: process.env.DATABASE_URL,
+		DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
 		NODE_ENV: process.env.NODE_ENV,
 	},
 	/**
