@@ -5,13 +5,12 @@ import {
 	Scale,
 	Wallet,
 } from "lucide-react";
-
-import { PageHeader } from "~/app/_components/page-header";
 import { MonthlySpendChart } from "~/app/_components/dashboard/monthly-spend-chart";
 import { PriorityBreakdown } from "~/app/_components/dashboard/priority-breakdown";
 import { TopCategories } from "~/app/_components/dashboard/top-categories";
-import { Card } from "~/app/_components/ui/primitives";
+import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
+import { Card } from "~/app/_components/ui/primitives";
 import { cn, formatCurrency } from "~/lib/utils";
 import { api } from "~/trpc/server";
 
@@ -60,30 +59,30 @@ export default async function DashboardPage() {
 	return (
 		<div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
 			<PageHeader
-				title="Overview"
 				description="A snapshot of your household budget and spending."
+				title="Overview"
 			/>
 
 			<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				{stats.map((stat) => {
 					const Icon = stat.icon;
 					return (
-						<Card key={stat.label} className="p-5">
+						<Card className="p-5" key={stat.label}>
 							<div className="flex items-center justify-between">
-								<span className="text-sm font-medium text-muted-foreground">
+								<span className="font-medium text-muted-foreground text-sm">
 									{stat.label}
 								</span>
 								<Icon className={cn("h-4 w-4", stat.accent)} />
 							</div>
 							<p
 								className={cn(
-									"mt-3 text-2xl font-semibold tracking-tight tabular",
+									"tabular mt-3 font-semibold text-2xl tracking-tight",
 									stat.accent,
 								)}
 							>
 								{stat.value}
 							</p>
-							<p className="mt-1 text-xs text-muted-foreground">{stat.hint}</p>
+							<p className="mt-1 text-muted-foreground text-xs">{stat.hint}</p>
 						</Card>
 					);
 				})}
@@ -93,27 +92,26 @@ export default async function DashboardPage() {
 				<Card className="p-5 lg:col-span-2">
 					<div className="mb-4 flex items-center justify-between">
 						<div>
-							<h2 className="text-sm font-semibold text-foreground">
+							<h2 className="font-semibold text-foreground text-sm">
 								Monthly spend
 							</h2>
-							<p className="text-xs text-muted-foreground">
+							<p className="text-muted-foreground text-xs">
 								Recorded outgoings by month
 							</p>
 						</div>
-						<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+						<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
 							<ArrowDownRight className="h-3.5 w-3.5 text-spend" />
-							Net {" "}
-							<Money value={summary.totals.net} className="font-medium" />
+							Net <Money className="font-medium" value={summary.totals.net} />
 						</div>
 					</div>
 					<MonthlySpendChart data={summary.byMonth} />
 				</Card>
 
 				<Card className="p-5">
-					<h2 className="text-sm font-semibold text-foreground">
+					<h2 className="font-semibold text-foreground text-sm">
 						Spend by priority
 					</h2>
-					<p className="mb-4 text-xs text-muted-foreground">
+					<p className="mb-4 text-muted-foreground text-xs">
 						Where the money goes
 					</p>
 					<PriorityBreakdown
@@ -125,10 +123,10 @@ export default async function DashboardPage() {
 
 			<div className="mt-4">
 				<Card className="p-5">
-					<h2 className="text-sm font-semibold text-foreground">
+					<h2 className="font-semibold text-foreground text-sm">
 						Top categories
 					</h2>
-					<p className="mb-4 text-xs text-muted-foreground">
+					<p className="mb-4 text-muted-foreground text-xs">
 						Largest recorded spend across all transactions
 					</p>
 					<TopCategories data={summary.topCategories} />

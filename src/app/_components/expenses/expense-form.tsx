@@ -71,26 +71,26 @@ export function ExpenseForm({
 
 	return (
 		<Modal
-			open={open}
-			onClose={onClose}
-			title={expense ? "Edit expense" : "Add expense"}
 			description="Enter the amount on any cadence — we'll work out the rest."
+			onClose={onClose}
+			open={open}
+			title={expense ? "Edit expense" : "Add expense"}
 		>
-			<form onSubmit={onSubmit} className="flex flex-col gap-4">
-				<Field label="Name" htmlFor="exp-name">
+			<form className="flex flex-col gap-4" onSubmit={onSubmit}>
+				<Field htmlFor="exp-name" label="Name">
 					<Input
+						autoFocus
 						id="exp-name"
-						value={name}
 						onChange={(e) => setName(e.target.value)}
 						placeholder="e.g. Netflix"
-						autoFocus
+						value={name}
 					/>
 				</Field>
-				<Field label="Category" htmlFor="exp-cat">
+				<Field htmlFor="exp-cat" label="Category">
 					<Select
 						id="exp-cat"
-						value={category}
 						onChange={(e) => setCategory(e.target.value)}
+						value={category}
 					>
 						{EXPENSE_CATEGORIES.map((c) => (
 							<option key={c} value={c}>
@@ -100,25 +100,25 @@ export function ExpenseForm({
 					</Select>
 				</Field>
 				<div className="grid grid-cols-2 gap-3">
-					<Field label="Amount" htmlFor="exp-amt">
+					<Field htmlFor="exp-amt" label="Amount">
 						<Input
 							id="exp-amt"
-							type="number"
-							step="0.01"
-							min="0"
 							inputMode="decimal"
-							value={amount}
+							min="0"
 							onChange={(e) => setAmount(e.target.value)}
 							placeholder="0.00"
+							step="0.01"
+							type="number"
+							value={amount}
 						/>
 					</Field>
-					<Field label="Per" htmlFor="exp-basis">
+					<Field htmlFor="exp-basis" label="Per">
 						<Select
 							id="exp-basis"
-							value={basis}
 							onChange={(e) =>
 								setBasis(e.target.value as "fortnight" | "month" | "year")
 							}
+							value={basis}
 						>
 							<option value="fortnight">Fortnight</option>
 							<option value="month">Month</option>
@@ -134,10 +134,10 @@ export function ExpenseForm({
 				)}
 
 				<div className="mt-1 flex justify-end gap-2">
-					<Button type="button" variant="outline" onClick={onClose}>
+					<Button onClick={onClose} type="button" variant="outline">
 						Cancel
 					</Button>
-					<Button type="submit" disabled={isSaving}>
+					<Button disabled={isSaving} type="submit">
 						{isSaving ? "Saving…" : expense ? "Save changes" : "Add expense"}
 					</Button>
 				</div>

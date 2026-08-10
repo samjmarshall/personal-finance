@@ -18,20 +18,20 @@ export function AuthShell({
 					<span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-accent">
 						<Wallet className="h-5 w-5 text-sidebar-foreground" />
 					</span>
-					<span className="text-lg font-semibold tracking-tight">Ledger</span>
+					<span className="font-semibold text-lg tracking-tight">Ledger</span>
 				</div>
 
 				<div className="max-w-md">
-					<p className="text-2xl font-medium leading-relaxed text-balance">
+					<p className="text-balance font-medium text-2xl leading-relaxed">
 						Every dollar accounted for.
 					</p>
-					<p className="mt-3 text-sm leading-relaxed text-sidebar-muted text-pretty">
+					<p className="mt-3 text-pretty text-sidebar-muted text-sm leading-relaxed">
 						A calm, private home for your household budget — expenses, income
 						and a full transaction history in one place.
 					</p>
 				</div>
 
-				<p className="text-xs text-sidebar-muted">
+				<p className="text-sidebar-muted text-xs">
 					Household finance · shared securely
 				</p>
 			</div>
@@ -43,12 +43,12 @@ export function AuthShell({
 						<span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
 							<Wallet className="h-5 w-5 text-primary-foreground" />
 						</span>
-						<span className="text-lg font-semibold tracking-tight">Ledger</span>
+						<span className="font-semibold text-lg tracking-tight">Ledger</span>
 					</div>
-					<h1 className="text-2xl font-semibold tracking-tight text-balance">
+					<h1 className="text-balance font-semibold text-2xl tracking-tight">
 						{title}
 					</h1>
-					<p className="mt-1.5 mb-8 text-sm text-muted-foreground text-pretty">
+					<p className="mt-1.5 mb-8 text-pretty text-muted-foreground text-sm">
 						{subtitle}
 					</p>
 					{children}

@@ -42,39 +42,39 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 	}
 
 	return (
-		<form onSubmit={onSubmit} className="flex flex-col gap-4">
+		<form className="flex flex-col gap-4" onSubmit={onSubmit}>
 			{isSignUp && (
-				<Field label="Name" htmlFor="name">
+				<Field htmlFor="name" label="Name">
 					<Input
+						autoComplete="name"
 						id="name"
-						value={name}
 						onChange={(e) => setName(e.target.value)}
 						placeholder="Sam"
-						autoComplete="name"
+						value={name}
 					/>
 				</Field>
 			)}
-			<Field label="Email" htmlFor="email">
+			<Field htmlFor="email" label="Email">
 				<Input
+					autoComplete="email"
 					id="email"
-					type="email"
-					required
-					value={email}
 					onChange={(e) => setEmail(e.target.value)}
 					placeholder="you@example.com"
-					autoComplete="email"
+					required
+					type="email"
+					value={email}
 				/>
 			</Field>
-			<Field label="Password" htmlFor="password">
+			<Field htmlFor="password" label="Password">
 				<Input
+					autoComplete={isSignUp ? "new-password" : "current-password"}
 					id="password"
-					type="password"
-					required
 					minLength={8}
-					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 					placeholder="At least 8 characters"
-					autoComplete={isSignUp ? "new-password" : "current-password"}
+					required
+					type="password"
+					value={password}
 				/>
 			</Field>
 
@@ -84,19 +84,15 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 				</p>
 			)}
 
-			<Button type="submit" disabled={loading} className="mt-1">
-				{loading
-					? "Please wait…"
-					: isSignUp
-						? "Create account"
-						: "Sign in"}
+			<Button className="mt-1" disabled={loading} type="submit">
+				{loading ? "Please wait…" : isSignUp ? "Create account" : "Sign in"}
 			</Button>
 
-			<p className="text-center text-sm text-muted-foreground">
+			<p className="text-center text-muted-foreground text-sm">
 				{isSignUp ? "Already have an account? " : "Need an account? "}
 				<Link
-					href={isSignUp ? "/sign-in" : "/sign-up"}
 					className="font-medium text-primary hover:underline"
+					href={isSignUp ? "/sign-in" : "/sign-up"}
 				>
 					{isSignUp ? "Sign in" : "Create one"}
 				</Link>

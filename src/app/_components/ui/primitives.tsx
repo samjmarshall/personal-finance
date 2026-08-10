@@ -13,8 +13,7 @@ export function Button({
 	...props
 }: ButtonProps) {
 	const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
-		primary:
-			"bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+		primary: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
 		secondary: "bg-muted text-foreground hover:bg-muted/70",
 		outline: "border border-border bg-card text-foreground hover:bg-muted/60",
 		ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -44,11 +43,11 @@ export const Input = React.forwardRef<
 >(function Input({ className, ...props }, ref) {
 	return (
 		<input
-			ref={ref}
 			className={cn(
-				"h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring",
+				"h-10 w-full rounded-md border border-input bg-card px-3 text-foreground text-sm placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 				className,
 			)}
+			ref={ref}
 			{...props}
 		/>
 	);
@@ -60,11 +59,11 @@ export const Textarea = React.forwardRef<
 >(function Textarea({ className, ...props }, ref) {
 	return (
 		<textarea
-			ref={ref}
 			className={cn(
-				"min-h-20 w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring",
+				"min-h-20 w-full rounded-md border border-input bg-card px-3 py-2 text-foreground text-sm placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 				className,
 			)}
+			ref={ref}
 			{...props}
 		/>
 	);
@@ -76,11 +75,11 @@ export const Select = React.forwardRef<
 >(function Select({ className, children, ...props }, ref) {
 	return (
 		<select
-			ref={ref}
 			className={cn(
-				"h-10 w-full appearance-none rounded-md border border-input bg-card bg-[length:1rem] bg-[right_0.6rem_center] bg-no-repeat px-3 pr-9 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring",
+				"h-10 w-full appearance-none rounded-md border border-input bg-[length:1rem] bg-[right_0.6rem_center] bg-card bg-no-repeat px-3 pr-9 text-foreground text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 				className,
 			)}
+			ref={ref}
 			style={{
 				backgroundImage:
 					"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\")",
@@ -108,9 +107,9 @@ export function Field({
 	optional?: boolean;
 }) {
 	return (
-		<label htmlFor={htmlFor} className={cn("flex flex-col gap-1.5", className)}>
+		<label className={cn("flex flex-col gap-1.5", className)} htmlFor={htmlFor}>
 			<span className="flex items-baseline justify-between gap-2">
-				<span className="text-xs font-medium text-muted-foreground">
+				<span className="font-medium text-muted-foreground text-xs">
 					{label}
 				</span>
 				{optional && (
@@ -121,7 +120,7 @@ export function Field({
 			</span>
 			{children}
 			{hint && (
-				<span className="text-[0.65rem] leading-tight text-muted-foreground/60">
+				<span className="text-[0.65rem] text-muted-foreground/60 leading-tight">
 					{hint}
 				</span>
 			)}
@@ -139,7 +138,7 @@ export function Badge({
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+				"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium text-xs",
 				className,
 			)}
 		>

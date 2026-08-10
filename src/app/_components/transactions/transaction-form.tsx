@@ -80,46 +80,46 @@ export function TransactionForm({
 
 	return (
 		<Modal
-			open={open}
 			onClose={onClose}
+			open={open}
 			title={transaction ? "Edit transaction" : "Add transaction"}
 		>
-			<form onSubmit={submit} className="flex flex-col gap-4">
+			<form className="flex flex-col gap-4" onSubmit={submit}>
 				<div className="grid grid-cols-2 gap-4">
 					<Field label="Date">
 						<Input
-							type="date"
-							value={date}
 							onChange={(e) => setDate(e.target.value)}
 							required
+							type="date"
+							value={date}
 						/>
 					</Field>
-					<Field label="Amount" hint="Positive = spend, negative = refund">
+					<Field hint="Positive = spend, negative = refund" label="Amount">
 						<Input
-							type="number"
 							inputMode="decimal"
-							step="0.01"
-							value={amount}
 							onChange={(e) => setAmount(e.target.value)}
 							placeholder="0.00"
 							required
+							step="0.01"
+							type="number"
+							value={amount}
 						/>
 					</Field>
 				</div>
 				<Field label="Description">
 					<Input
-						value={description}
 						onChange={(e) => setDescription(e.target.value)}
 						placeholder="e.g. Woolworths"
 						required
+						value={description}
 					/>
 				</Field>
 				<Field label="Category">
 					<Input
-						value={category}
+						list="tx-categories"
 						onChange={(e) => setCategory(e.target.value)}
 						placeholder="e.g. Groceries"
-						list="tx-categories"
+						value={category}
 					/>
 					<datalist id="tx-categories">
 						{categories.map((c) => (
@@ -130,8 +130,8 @@ export function TransactionForm({
 				<div className="grid grid-cols-2 gap-4">
 					<Field label="Frequency">
 						<Select
-							value={frequency}
 							onChange={(e) => setFrequency(e.target.value)}
+							value={frequency}
 						>
 							{FREQUENCIES.map((f) => (
 								<option key={f} value={f}>
@@ -142,8 +142,8 @@ export function TransactionForm({
 					</Field>
 					<Field label="Priority">
 						<Select
-							value={priority}
 							onChange={(e) => setPriority(e.target.value)}
+							value={priority}
 						>
 							{PRIORITIES.map((p) => (
 								<option key={p} value={p}>
@@ -155,17 +155,17 @@ export function TransactionForm({
 				</div>
 				<Field label="Notes" optional>
 					<Textarea
-						value={notes}
 						onChange={(e) => setNotes(e.target.value)}
 						placeholder="Optional context"
 						rows={2}
+						value={notes}
 					/>
 				</Field>
 				<div className="mt-2 flex justify-end gap-2">
-					<Button type="button" variant="ghost" onClick={onClose}>
+					<Button onClick={onClose} type="button" variant="ghost">
 						Cancel
 					</Button>
-					<Button type="submit" disabled={pending}>
+					<Button disabled={pending} type="submit">
 						{pending
 							? "Saving..."
 							: transaction

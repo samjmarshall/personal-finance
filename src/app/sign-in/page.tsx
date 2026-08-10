@@ -10,8 +10,8 @@ export default async function SignInPage() {
 
 	return (
 		<AuthShell
-			title="Welcome back"
 			subtitle="Sign in to your household ledger."
+			title="Welcome back"
 		>
 			<AuthForm mode="sign-in" />
 		</AuthShell>

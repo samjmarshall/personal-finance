@@ -10,8 +10,8 @@ export default async function SignUpPage() {
 
 	return (
 		<AuthShell
-			title="Create your ledger"
 			subtitle="One shared budget for the whole household."
+			title="Create your ledger"
 		>
 			<AuthForm mode="sign-up" />
 		</AuthShell>

@@ -8,7 +8,7 @@ export function TopCategories({
 	const rows = data.filter((d) => d.total > 0);
 	if (!rows.length) {
 		return (
-			<p className="py-6 text-center text-sm text-muted-foreground">
+			<p className="py-6 text-center text-muted-foreground text-sm">
 				No categories to show yet.
 			</p>
 		);
@@ -18,14 +18,14 @@ export function TopCategories({
 	return (
 		<div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
 			{rows.map((row) => (
-				<div key={row.category} className="flex flex-col gap-1.5">
+				<div className="flex flex-col gap-1.5" key={row.category}>
 					<div className="flex items-center justify-between gap-3 text-sm">
 						<span className="truncate font-medium text-foreground">
 							{row.category}
 						</span>
 						<Money
+							className="shrink-0 font-medium text-foreground text-sm"
 							value={row.total}
-							className="shrink-0 text-sm font-medium text-foreground"
 						/>
 					</div>
 					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">

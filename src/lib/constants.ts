@@ -31,7 +31,8 @@ export const PRIORITY_STYLES: Record<string, PriorityStyle> = {
 	},
 	"Should Have": {
 		label: "Should Have",
-		badge: "bg-[oklch(0.95_0.03_175)] text-[oklch(0.4_0.07_178)] border-[oklch(0.85_0.05_178)]",
+		badge:
+			"bg-[oklch(0.95_0.03_175)] text-[oklch(0.4_0.07_178)] border-[oklch(0.85_0.05_178)]",
 		dot: "bg-[oklch(0.55_0.08_178)]",
 	},
 	"Nice to Have": {
@@ -41,7 +42,8 @@ export const PRIORITY_STYLES: Record<string, PriorityStyle> = {
 	},
 	Fix: {
 		label: "Fix",
-		badge: "bg-[oklch(0.95_0.06_75)] text-[oklch(0.45_0.1_60)] border-[oklch(0.85_0.09_75)]",
+		badge:
+			"bg-[oklch(0.95_0.06_75)] text-[oklch(0.45_0.1_60)] border-[oklch(0.85_0.09_75)]",
 		dot: "bg-warning",
 	},
 	"VERIFY - possible fraud": {

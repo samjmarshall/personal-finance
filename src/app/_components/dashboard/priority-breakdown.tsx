@@ -1,5 +1,5 @@
-import { priorityStyle } from "~/lib/constants";
 import { Money } from "~/app/_components/ui/money";
+import { priorityStyle } from "~/lib/constants";
 
 export function PriorityBreakdown({
 	data,
@@ -14,7 +14,7 @@ export function PriorityBreakdown({
 
 	if (!rows.length) {
 		return (
-			<p className="py-6 text-center text-sm text-muted-foreground">
+			<p className="py-6 text-center text-muted-foreground text-sm">
 				No spend to break down yet.
 			</p>
 		);
@@ -26,15 +26,15 @@ export function PriorityBreakdown({
 				const pct = total > 0 ? Math.round((row.total / total) * 100) : 0;
 				const style = priorityStyle(row.priority);
 				return (
-					<div key={row.priority} className="flex flex-col gap-1.5">
+					<div className="flex flex-col gap-1.5" key={row.priority}>
 						<div className="flex items-center justify-between text-sm">
 							<span className="flex items-center gap-2 font-medium text-foreground">
 								<span className={`h-2 w-2 rounded-full ${style.dot}`} />
 								{style.label}
 							</span>
 							<Money
+								className="font-medium text-foreground text-sm"
 								value={row.total}
-								className="text-sm font-medium text-foreground"
 							/>
 						</div>
 						<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -43,7 +43,7 @@ export function PriorityBreakdown({
 								style={{ width: `${Math.max(pct, 1)}%` }}
 							/>
 						</div>
-						<span className="text-xs text-muted-foreground">
+						<span className="text-muted-foreground text-xs">
 							{pct}% · {row.count} transactions
 						</span>
 					</div>

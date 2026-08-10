@@ -57,47 +57,47 @@ export function IncomeForm({
 
 	return (
 		<Modal
-			open={open}
 			onClose={onClose}
+			open={open}
 			title={income ? "Edit income" : "Add income"}
 		>
-			<form onSubmit={submit} className="flex flex-col gap-4">
+			<form className="flex flex-col gap-4" onSubmit={submit}>
 				<Field label="Person">
 					<Input
-						value={person}
 						onChange={(e) => setPerson(e.target.value)}
 						placeholder="e.g. Sam"
 						required
+						value={person}
 					/>
 				</Field>
 				<Field label="Source">
 					<Input
-						value={source}
 						onChange={(e) => setSource(e.target.value)}
 						placeholder="e.g. Salary"
 						required
+						value={source}
 					/>
 				</Field>
 				<Field
-					label="Amount per fortnight"
 					hint="Monthly and yearly figures are calculated automatically."
+					label="Amount per fortnight"
 				>
 					<Input
-						type="number"
 						inputMode="decimal"
-						step="0.01"
 						min="0"
-						value={fortnight}
 						onChange={(e) => setFortnight(e.target.value)}
 						placeholder="0.00"
 						required
+						step="0.01"
+						type="number"
+						value={fortnight}
 					/>
 				</Field>
 				<div className="mt-2 flex justify-end gap-2">
-					<Button type="button" variant="ghost" onClick={onClose}>
+					<Button onClick={onClose} type="button" variant="ghost">
 						Cancel
 					</Button>
-					<Button type="submit" disabled={pending}>
+					<Button disabled={pending} type="submit">
 						{pending ? "Saving..." : income ? "Save changes" : "Add income"}
 					</Button>
 				</div>

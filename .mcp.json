@@ -1,36 +1,36 @@
 {
-  "mcpServers": {
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp@latest"]
-    },
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
-    },
-    "playwright-2": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--isolated", "--headless"]
-    },
-    "playwright-3": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--isolated", "--headless"]
-    },
-    "playwright-4": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--isolated", "--headless"]
-    },
-    "posthog": {
-      "type": "http",
-      "url": "https://mcp.posthog.com/mcp"
-    },
-    "shadcn": {
-      "command": "npx",
-      "args": ["shadcn@latest", "mcp"]
-    },
-    "vercel": {
-      "type": "http",
-      "url": "https://mcp.vercel.com"
-    }
-  }
+	"mcpServers": {
+		"chrome-devtools": {
+			"command": "npx",
+			"args": ["-y", "chrome-devtools-mcp@latest"]
+		},
+		"playwright": {
+			"command": "npx",
+			"args": ["@playwright/mcp@latest"]
+		},
+		"playwright-2": {
+			"command": "npx",
+			"args": ["@playwright/mcp@latest", "--isolated", "--headless"]
+		},
+		"playwright-3": {
+			"command": "npx",
+			"args": ["@playwright/mcp@latest", "--isolated", "--headless"]
+		},
+		"playwright-4": {
+			"command": "npx",
+			"args": ["@playwright/mcp@latest", "--isolated", "--headless"]
+		},
+		"posthog": {
+			"type": "http",
+			"url": "https://mcp.posthog.com/mcp"
+		},
+		"shadcn": {
+			"command": "npx",
+			"args": ["shadcn@latest", "mcp"]
+		},
+		"vercel": {
+			"type": "http",
+			"url": "https://mcp.vercel.com"
+		}
+	}
 }
