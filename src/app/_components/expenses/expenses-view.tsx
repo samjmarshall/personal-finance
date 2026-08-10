@@ -1,11 +1,12 @@
 "use client";
 
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
 import { Button, Card } from "~/app/_components/ui/primitives";
 import { Money } from "~/app/_components/ui/money";
+import { cn } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ExpenseForm } from "./expense-form";
 
@@ -20,6 +21,16 @@ export function ExpensesView() {
 
 	const [formOpen, setFormOpen] = useState(false);
 	const [editing, setEditing] = useState<Expense | null>(null);
+	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+	function toggleCategory(category: string) {
+		setCollapsed((prev) => {
+			const next = new Set(prev);
+			if (next.has(category)) next.delete(category);
+			else next.add(category);
+			return next;
+		});
+	}
 
 	const groups = useMemo(() => {
 		const map = new Map<string, Expense[]>();
@@ -83,17 +94,40 @@ export function ExpensesView() {
 			<div className="mt-6 flex flex-col gap-6">
 				{groups.map(([category, items]) => {
 					const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
+					const isCollapsed = collapsed.has(category);
+					const panelId = `expense-group-${category.replace(/\s+/g, "-")}`;
 					return (
 						<Card key={category} className="overflow-hidden">
-							<div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
-								<h2 className="text-sm font-semibold text-foreground">
-									{category}
-								</h2>
+							<button
+								type="button"
+								onClick={() => toggleCategory(category)}
+								aria-expanded={!isCollapsed}
+								aria-controls={panelId}
+								className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
+							>
+								<span className="flex items-center gap-2">
+									<ChevronDown
+										className={cn(
+											"h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+											isCollapsed && "-rotate-90",
+										)}
+									/>
+									<span className="text-sm font-semibold text-foreground">
+										{category}
+									</span>
+									<span className="text-xs text-muted-foreground">
+										({items.length})
+									</span>
+								</span>
 								<span className="text-xs text-muted-foreground">
 									<Money value={groupTotal} className="font-medium" /> / mo
 								</span>
-							</div>
-							<div className="divide-y divide-border">
+							</button>
+							<div
+								id={panelId}
+								className="divide-y divide-border"
+								hidden={isCollapsed}
+							>
 								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
 									<span>Item</span>
 									<span className="text-right">Fortnight</span>
@@ -161,6 +195,7 @@ export function ExpensesView() {
 			</div>
 
 			<ExpenseForm
+				key={editing ? `edit-${editing.id}` : "add"}
 				open={formOpen}
 				onClose={() => setFormOpen(false)}
 				expense={editing}

@@ -26,9 +26,11 @@ export function ExpenseForm({
 		expense?.category ?? EXPENSE_CATEGORIES[1],
 	);
 	const [basis, setBasis] = useState<"fortnight" | "month" | "year">("month");
-	const [amount, setAmount] = useState(
-		expense ? String(expense.month || expense.fortnight || expense.year) : "",
-	);
+	const [amount, setAmount] = useState(() => {
+		if (!expense) return "";
+		const value = expense.month || expense.fortnight || expense.year;
+		return value ? String(Number(value.toFixed(2))) : "";
+	});
 	const [error, setError] = useState<string | null>(null);
 
 	const onSuccess = async () => {
