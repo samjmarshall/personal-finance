@@ -16,7 +16,7 @@ export function MonthlySpendChart({
 	const max = Math.max(...data.map((d) => d.total), 1);
 
 	return (
-		<div className="flex h-56 items-end gap-2">
+		<div className="flex h-56 items-stretch gap-2">
 			{data.map((d) => {
 				const heightPct = Math.max((d.total / max) * 100, 1.5);
 				return (

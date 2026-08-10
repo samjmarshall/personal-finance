@@ -50,7 +50,7 @@ export const PRIORITY_STYLES: Record<string, PriorityStyle> = {
 		dot: "bg-spend",
 	},
 	"n/a": {
-		label: "n/a",
+		label: "Unassigned",
 		badge: "bg-muted text-muted-foreground/70 border-border",
 		dot: "bg-border",
 	},
