@@ -97,16 +97,34 @@ export function Field({
 	htmlFor,
 	children,
 	className,
+	hint,
+	optional,
 }: {
 	label: string;
 	htmlFor?: string;
 	children: React.ReactNode;
 	className?: string;
+	hint?: string;
+	optional?: boolean;
 }) {
 	return (
 		<label htmlFor={htmlFor} className={cn("flex flex-col gap-1.5", className)}>
-			<span className="text-xs font-medium text-muted-foreground">{label}</span>
+			<span className="flex items-baseline justify-between gap-2">
+				<span className="text-xs font-medium text-muted-foreground">
+					{label}
+				</span>
+				{optional && (
+					<span className="text-[0.65rem] text-muted-foreground/60">
+						Optional
+					</span>
+				)}
+			</span>
 			{children}
+			{hint && (
+				<span className="text-[0.65rem] leading-tight text-muted-foreground/60">
+					{hint}
+				</span>
+			)}
 		</label>
 	);
 }
