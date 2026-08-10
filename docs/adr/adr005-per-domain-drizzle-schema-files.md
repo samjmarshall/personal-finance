@@ -69,7 +69,15 @@ No architecture diagram for this ADR: the decision is a file-layout delta with n
 
 ### Implementation status
 
-Not started, and **ordering matters**: the glob and the spread-merge barrel must be wired *before* the first per-domain schema file moves and before the first migration is generated, or `drizzle-kit` will generate a migration that drops every table it can no longer see.
+Implemented 2026-08-10. The glob and the spread-merge barrel were wired first, as required: **ordering matters** — the glob and the barrel must be wired *before* the first per-domain schema file moves and before the first migration is generated, or `drizzle-kit` will generate a migration that drops every table it can no longer see.
+
+Baseline is `drizzle/0000_small_joseph.sql` — seven tables, no prefix, no `post` — applied to a dropped-and-recreated database and recorded as the single row in `drizzle.__drizzle_migrations`. Financial data reseeded from `docs/budget.xlsx`.
+
+Three notes for anyone reading this later:
+
+- The Context above says "there is no `drizzle/` directory at all". True when this was written; a `drizzle/` had since been generated but was never committed or applied, so the decision was unaffected. It was discarded and regenerated.
+- `src/server/db/table.ts` was **not** created. With the prefix retired it would hold nothing; deferred until there is a helper to put in it.
+- The drop uncovered a `pg-drizzle_category` table (5 rows) present in neither the schema nor any migration — orphaned by an earlier push. Nothing read it: expense categories are hardcoded in `src/lib/constants.ts`. Dropped, so `public` now holds exactly the seven tables in the baseline.
 
 ### Positive Consequences
 
