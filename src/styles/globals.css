@@ -4,4 +4,56 @@
 	--font-sans:
 		var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
 		"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	--font-mono:
+		var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Neutrals - cool paper */
+	--color-background: oklch(0.985 0.003 240);
+	--color-foreground: oklch(0.24 0.015 255);
+	--color-card: oklch(1 0 0);
+	--color-card-foreground: oklch(0.24 0.015 255);
+	--color-muted: oklch(0.955 0.006 240);
+	--color-muted-foreground: oklch(0.52 0.014 255);
+	--color-border: oklch(0.9 0.006 250);
+	--color-input: oklch(0.9 0.006 250);
+	--color-ring: oklch(0.52 0.09 175);
+
+	/* Brand - deep ledger teal/emerald */
+	--color-primary: oklch(0.46 0.086 178);
+	--color-primary-foreground: oklch(0.99 0.005 180);
+	--color-accent: oklch(0.95 0.02 175);
+	--color-accent-foreground: oklch(0.35 0.07 178);
+
+	/* Semantic money colors */
+	--color-positive: oklch(0.55 0.11 165);
+	--color-positive-foreground: oklch(0.99 0.005 165);
+	--color-spend: oklch(0.52 0.14 32);
+	--color-spend-foreground: oklch(0.99 0.01 40);
+	--color-warning: oklch(0.72 0.13 75);
+
+	--color-sidebar: oklch(0.22 0.018 235);
+	--color-sidebar-foreground: oklch(0.9 0.01 240);
+	--color-sidebar-muted: oklch(0.62 0.015 240);
+	--color-sidebar-accent: oklch(0.4 0.07 178);
+
+	--radius: 0.625rem;
+}
+
+* {
+	border-color: var(--color-border);
+}
+
+html {
+	background-color: var(--color-background);
+}
+
+body {
+	color: var(--color-foreground);
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures for all money/number cells */
+.tabular {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum";
 }
