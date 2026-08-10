@@ -21,6 +21,10 @@ export function ExpenseForm({
 	expense: Expense | null;
 }) {
 	const utils = api.useUtils();
+	const { data: managedCategories } = api.category.list.useQuery();
+	const categoryOptions = managedCategories?.length
+		? managedCategories.map((c) => c.name)
+		: [...EXPENSE_CATEGORIES];
 	const [name, setName] = useState(expense?.name ?? "");
 	const [category, setCategory] = useState(
 		expense?.category ?? EXPENSE_CATEGORIES[1],
@@ -92,7 +96,10 @@ export function ExpenseForm({
 						onChange={(e) => setCategory(e.target.value)}
 						value={category}
 					>
-						{EXPENSE_CATEGORIES.map((c) => (
+						{(categoryOptions.includes(category)
+							? categoryOptions
+							: [category, ...categoryOptions]
+						).map((c) => (
 							<option key={c} value={c}>
 								{c}
 							</option>

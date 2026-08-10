@@ -4,6 +4,7 @@ import {
 	LayoutDashboard,
 	LogOut,
 	Receipt,
+	Tags,
 	TrendingUp,
 	Wallet,
 } from "lucide-react";
@@ -16,17 +17,31 @@ import { authClient } from "~/server/better-auth/client";
 const links = [
 	{ href: "/", label: "Overview", icon: LayoutDashboard },
 	{ href: "/expenses", label: "Planned Expenses", icon: Wallet },
+	{ href: "/expenses/categories", label: "Categories", icon: Tags },
 	{ href: "/income", label: "Income", icon: TrendingUp },
 	{ href: "/transactions", label: "Transactions", icon: Receipt },
 ];
 
+/** Returns the href of the most specific link matching the current pathname. */
+function activeHref(pathname: string) {
+	let best = "";
+	for (const link of links) {
+		const matches =
+			link.href === "/"
+				? pathname === "/"
+				: pathname === link.href || pathname.startsWith(`${link.href}/`);
+		if (matches && link.href.length > best.length) best = link.href;
+	}
+	return best;
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 	const pathname = usePathname();
+	const current = activeHref(pathname);
 	return (
 		<nav className="flex flex-col gap-1">
 			{links.map((link) => {
-				const active =
-					link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+				const active = link.href === current;
 				const Icon = link.icon;
 				return (
 					<Link
@@ -114,11 +129,11 @@ export function MobileNav({ userName }: { userName: string }) {
 
 function MobileLinks() {
 	const pathname = usePathname();
+	const current = activeHref(pathname);
 	return (
 		<>
 			{links.map((link) => {
-				const active =
-					link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+				const active = link.href === current;
 				const Icon = link.icon;
 				return (
 					<Link
