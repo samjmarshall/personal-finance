@@ -1,6 +1,6 @@
 ---
 name: pull-request
-description: Create or update a Pull Request with a description tailored to its conventional-commit type (feat, fix, refactor, chore, perf, or trivial). Auto-detects whether to create or update based on branch state, detects type from branch/commits/issues, fills the matching bundled template, and runs verification only for what CI does not cover. Use when invoking /pull-request, when the user asks to open or update a PR, or after pushing work that needs a PR.
+description: Create or update a Pull Request with a short bullet-point description tailored to its conventional-commit type (feat, fix, refactor, chore, perf, or trivial). Auto-detects whether to create or update based on branch state, detects type from branch/commits/issues, and fills the matching bundled template. Use when invoking /pull-request, when the user asks to open or update a PR, or after pushing work that needs a PR.
 argument-hint: '[create|update] [type|#number] [draft]'
 model: sonnet
 effort: high
@@ -9,6 +9,14 @@ effort: high
 # Pull Request
 
 Be extremely concise and sacrifice grammar for the sake of concision. Write the description to be easy to understand and read (3rd grader level language). Clear and concise.
+
+This is a solo personal project, not an enterprise repo. PR bodies are flat bullet lists — no headings, no checklists, no ceremony. Reference shape:
+
+```
+- Added the `expense_category` database table to support structured expense management.
+- Included snapshot metadata files for database schema versioning.
+- Implemented category-based sorting functionality within the expenses view component.
+```
 
 ## Quick start
 
@@ -56,18 +64,18 @@ Be extremely concise and sacrifice grammar for the sake of concision. Write the 
 
    **Universal fill rules:**
    - Strip guidance HTML comments (`<!-- ... -->`) before saving the body.
-   - Always populate "Out of scope" where the section exists — forces explicit scope on AI-authored PRs.
-   - When an issue is linked, keep prose terse — only deltas/deviations from the issue.
-   - Surface architectural decisions, not line-by-line diff narration.
+   - No headings. Flat bullets only, max 5, one line each.
+   - Plain English, past tense. Say what changed, not how the diff did it.
+   - Skip anything obvious from the diff. A 2-bullet PR is fine.
+   - When an issue is linked, only note deltas from the issue.
+   - Needs a hand-check before merge? Say it in a bullet. No checkboxes.
 
    **Auto-injections:**
-   - **Linked issue.** If branch encodes an issue and `gh issue view <n>` returns `state: OPEN`, inject `Closes #<n>`. If `CLOSED` or missing, skip and surface in the HITL gate. Update mode: only inject when the existing body's "Linked issue" section is empty.
+   - **Linked issue.** If branch encodes an issue and `gh issue view <n>` returns `state: OPEN`, put `Closes #<n>` on its own first line, blank line, then bullets. If `CLOSED` or missing, skip and surface in the HITL gate. Update mode: only inject when the existing body has no `Closes #` line.
    - **Multi-issue.** When ≥2 issue references found across commits/branch, inject `Closes #129, #130` (comma-separated).
-   - **Breaking changes.** When commits contain `!` after type or `BREAKING CHANGE:` footer, inject `## Breaking changes` into `feat`/`fix`/`refactor` templates with one paragraph on what breaks + migration guidance. Omit the section entirely when no breaking change is detected.
+   - **Breaking changes.** When commits contain `!` after type or `BREAKING CHANGE:` footer, add one bullet: `**Breaking:** <what breaks, what to do>`. No bullet when nothing breaks.
 
-   **Verification.** Verification checkboxes are for manual steps only — UI/UX checks, external service interactions, things a reviewer must do by hand. Never list project build/test/lint commands; CI reports those itself. If a PR has no manual steps, omit the verification section entirely. Only run local verification for what CI cannot validate (third-party integrations, external system state); on failure, stop and surface to the user before updating the PR.
-
-   **Update mode: preserve checked verification boxes.** Read existing PR body via `gh pr view <n> --json body`. For each `- [x] <text>` whose text appears unchanged in the new body, apply `- [x]`. Drop any check whose text is no longer present and note in the post-update summary.
+   **Update mode: preserve trailing links.** Read existing body via `gh pr view <n> --json body`. Keep any trailing link line (e.g. `[v0 Session](…)`) — v0 writes it and a rewrite would drop it. Re-append it after the bullets.
 
    **Create mode: generate title.** Format `<type>: <subject>` or `<type>(<scope>): <subject>` — prefix matches body type. Subject source priority: linked-issue title (strip leading type prefix) → top commit subject (strip prefix) → synthesized from diff (ask user if fallback hit). Scope lifted from commits when consistent across history; omitted when mixed. Length ≤72 chars; truncate subject, never prefix.
 
@@ -100,9 +108,10 @@ Be extremely concise and sacrifice grammar for the sake of concision. Write the 
 9. **Execute.**
    - Create: `git push -u origin <branch>` (if unpushed) → `gh pr create --base <base> --title <title> --body-file <file>` (add `--draft` if draft mode). Rename the artifact to `{number}_description.md`.
    - Update: `gh pr edit {number} --body-file thoughts/prs/{number}_description.md`.
-   - Surface URL, any unchecked manual-verification steps, and any dropped checked items (update mode).
+   - Surface the URL, plus any hand-check bullets the user still needs to run.
 
 ## Notes
 
 - **Portable:** templates live in `templates/` next to this file. Drop the skill into any repo and it works — no `.github/` or `docs/` setup required.
 - Be extremely concise and sacrifice grammar for the sake of concision.
+- Short beats complete. Nobody but the author reads these.
