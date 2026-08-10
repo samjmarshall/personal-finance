@@ -44,3 +44,14 @@ yarn-error.log*
 
 # idea files
 .idea
+
+# Claude
+!.claude/
+!CLAUDE.md
+!.mcp.json
+
+# claude local settings (machine-specific)
+.claude/settings.local.json
+.claude/skills.log
+.claude/scheduled_tasks.lock
+.env*.local

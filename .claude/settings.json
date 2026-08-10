@@ -1,0 +1,131 @@
+{
+	"model": "opus",
+	"tui": "default",
+	"enableAllProjectMcpServers": false,
+	"enabledMcpjsonServers": [
+		"chrome-devtools",
+		"playwright",
+		"playwright-2",
+		"playwright-3",
+		"playwright-4",
+		"posthog",
+		"shadcn",
+		"vercel"
+	],
+	"env": {
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
+		"CLAUDE_CODE_DISABLE_MOUSE": "1",
+		"CLAUDE_CODE_DISABLE_MOUSE_CLICKS": "1",
+		"CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
+		"CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN": "1"
+	},
+	"permissions": {
+		"deny": [
+			"EnterPlanMode",
+			"ExitPlanMode",
+			"DesignSync",
+			"NotebookEdit",
+			"SendMessage",
+			"PushNotification",
+			"RemoteTrigger",
+			"ReportFindings",
+			"ScheduleWakeup",
+			"AskUserQuestion",
+			"CronCreate",
+			"CronDelete",
+			"CronList"
+		]
+	},
+	"disableWorkflows": true,
+	"disableRemoteControl": true,
+	"disableClaudeAiConnectors": true,
+	"disableArtifact": true,
+	"hooks": {
+		"PreToolUse": [
+			{
+				"matcher": "Skill",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "jq -c '{event:\"invoke\",ts:(now|todate),session_id:.session_id,skill:.tool_input.skill,args:(.tool_input.args // null)}' >> \"$CLAUDE_PROJECT_DIR/.claude/skills.log\""
+					},
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/route-bulky-docs.sh"
+					}
+				]
+			},
+			{
+				"matcher": "mcp__context7__resolve-library-id|mcp__context7__query-docs",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/route-bulky-docs.sh"
+					}
+				]
+			},
+			{
+				"matcher": "Bash",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/block-dangerous-git.sh"
+					},
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/block-env-file-read.sh"
+					},
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/block-drizzle-push.sh"
+					}
+				]
+			},
+			{
+				"matcher": "Read",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/block-env-file-read.sh"
+					}
+				]
+			}
+		],
+		"PostToolUse": [
+			{
+				"matcher": "Edit|Write|MultiEdit",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/biome-check.sh"
+					},
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/tsc-check.sh"
+					}
+				]
+			}
+		],
+		"Notification": [
+			{
+				"matcher": "permission_prompt|idle_prompt",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/notify-hitl.sh"
+					}
+				]
+			}
+		],
+		"SubagentStop": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/eval/harvest_hook.py\""
+					}
+				]
+			}
+		]
+	}
+}
