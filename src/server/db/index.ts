@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import { env } from "~/env";
+import * as expenseCategoriesSchema from "~/server/expenses/categories.schema";
 import * as expensesSchema from "~/server/expenses/expenses.schema";
 import * as incomeSchema from "~/server/income/income.schema";
 import * as transactionsSchema from "~/server/transactions/transactions.schema";
@@ -9,6 +10,7 @@ import * as sharedSchema from "./shared.schema";
 
 /** Merged table set backing `db.query.*`; every domain schema module must appear here. */
 const schema = {
+	...expenseCategoriesSchema,
 	...expensesSchema,
 	...incomeSchema,
 	...transactionsSchema,
