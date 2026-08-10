@@ -1,9 +1,6 @@
-<!-- TEMPLATE: trivial — collapsed bucket for docs, ci, build, style, test changes. One-line PRs. -->
+<!--
+TEMPLATE: trivial — docs, ci, build, style, test.
 
-## Linked issue
-
-<!-- `Closes #N` if linked, otherwise delete this section entirely. -->
-
-## What & why
-
-<!-- One sentence. For test-only changes, you may add a "What's now tested" bullet list when meaningful. -->
+No headings, no bullets. One sentence on what changed and why.
+`Closes #N` on its own first line when an issue is linked, then a blank line, then the sentence.
+-->
