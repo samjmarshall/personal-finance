@@ -11,12 +11,12 @@ export const env = createEnv({
 			process.env.NODE_ENV === "production"
 				? z.string()
 				: z.string().optional(),
-		DATABASE_URL: z.string().url(),
+		DATABASE_URL: z.url(),
 		/**
 		 * Direct (non-PgBouncer) connection, used by drizzle-kit for DDL. Optional
 		 * because local dev runs Docker Postgres, which has no pooler.
 		 */
-		DATABASE_URL_UNPOOLED: z.string().url().optional(),
+		DATABASE_URL_UNPOOLED: z.url().optional(),
 		NODE_ENV: z
 			.enum(["development", "test", "production"])
 			.default("development"),
