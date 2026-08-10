@@ -14,6 +14,7 @@ type Expense = RouterOutputs["expense"]["list"][number];
 
 export function ExpensesView() {
 	const [list] = api.expense.list.useSuspenseQuery();
+	const { data: categories } = api.category.list.useQuery();
 	const utils = api.useUtils();
 	const remove = api.expense.delete.useMutation({
 		onSuccess: () => utils.expense.list.invalidate(),
@@ -39,8 +40,16 @@ export function ExpensesView() {
 			arr.push(item);
 			map.set(item.category, arr);
 		}
-		return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-	}, [list]);
+		// Rank each category by its managed sortOrder; categories without a
+		// managed record fall to the end and are broken by name.
+		const order = new Map(
+			(categories ?? []).map((c, i) => [c.name, c.sortOrder * 1000 + i]),
+		);
+		const rank = (name: string) => order.get(name) ?? Number.MAX_SAFE_INTEGER;
+		return [...map.entries()].sort(
+			(a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]),
+		);
+	}, [list, categories]);
 
 	const totals = useMemo(
 		() => ({
