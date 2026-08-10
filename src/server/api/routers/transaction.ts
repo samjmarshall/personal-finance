@@ -1,8 +1,18 @@
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	gte,
+	ilike,
+	lte,
+	or,
+	type SQL,
+	sql,
+} from "drizzle-orm";
 import { z } from "zod";
-
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { transactions } from "~/server/db/schema";
-import { and, asc, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
+import { transactions } from "~/server/transactions/transactions.schema";
 
 const sortableColumns = {
 	date: transactions.date,
@@ -29,7 +39,9 @@ const listInput = z.object({
 	category: z.string().optional(),
 	from: z.date().optional(),
 	to: z.date().optional(),
-	sortBy: z.enum(["date", "description", "amount", "category", "priority"]).default("date"),
+	sortBy: z
+		.enum(["date", "description", "amount", "category", "priority"])
+		.default("date"),
 	sortDir: z.enum(["asc", "desc"]).default("desc"),
 	limit: z.number().min(1).max(200).default(50),
 	offset: z.number().min(0).default(0),
@@ -47,7 +59,8 @@ function buildFilters(input: z.infer<typeof listInput>): SQL[] {
 		if (clause) filters.push(clause);
 	}
 	if (input.priority) filters.push(eq(transactions.priority, input.priority));
-	if (input.frequency) filters.push(eq(transactions.frequency, input.frequency));
+	if (input.frequency)
+		filters.push(eq(transactions.frequency, input.frequency));
 	if (input.category) filters.push(eq(transactions.category, input.category));
 	if (input.from) filters.push(gte(transactions.date, input.from));
 	if (input.to) filters.push(lte(transactions.date, input.to));
@@ -134,7 +147,11 @@ export const transactionRouter = createTRPCRouter({
 			})
 			.from(transactions)
 			.groupBy(transactions.category)
-			.orderBy(desc(sql`sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end)`))
+			.orderBy(
+				desc(
+					sql`sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end)`,
+				),
+			)
 			.limit(8);
 
 		return {

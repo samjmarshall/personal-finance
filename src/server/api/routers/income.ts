@@ -1,8 +1,7 @@
-import { z } from "zod";
-
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { income } from "~/server/db/schema";
 import { asc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { income } from "~/server/income/income.schema";
 
 const incomeInput = z.object({
 	person: z.string().min(1, "Person is required"),

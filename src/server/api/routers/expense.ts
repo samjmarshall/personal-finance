@@ -1,8 +1,7 @@
-import { z } from "zod";
-
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { expenses } from "~/server/db/schema";
 import { asc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { expenses } from "~/server/expenses/expenses.schema";
 
 const expenseInput = z.object({
 	name: z.string().min(1, "Name is required"),
@@ -17,7 +16,11 @@ export const expenseRouter = createTRPCRouter({
 		return ctx.db
 			.select()
 			.from(expenses)
-			.orderBy(asc(expenses.category), asc(expenses.sortOrder), asc(expenses.name));
+			.orderBy(
+				asc(expenses.category),
+				asc(expenses.sortOrder),
+				asc(expenses.name),
+			);
 	}),
 
 	create: protectedProcedure
