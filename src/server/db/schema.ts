@@ -31,6 +31,60 @@ export const posts = createTable(
 	],
 );
 
+export const expenses = createTable("expense", (d) => ({
+	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+	name: d.text().notNull(),
+	category: d.text().notNull(),
+	fortnight: d.doublePrecision().notNull().default(0),
+	month: d.doublePrecision().notNull().default(0),
+	year: d.doublePrecision().notNull().default(0),
+	sortOrder: d.integer().notNull().default(0),
+	createdAt: d
+		.timestamp({ withTimezone: true })
+		.$defaultFn(() => new Date())
+		.notNull(),
+	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+}));
+
+export const income = createTable("income", (d) => ({
+	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+	person: d.text().notNull(),
+	source: d.text().notNull(),
+	fortnight: d.doublePrecision().notNull().default(0),
+	month: d.doublePrecision().notNull().default(0),
+	year: d.doublePrecision().notNull().default(0),
+	sortOrder: d.integer().notNull().default(0),
+	createdAt: d
+		.timestamp({ withTimezone: true })
+		.$defaultFn(() => new Date())
+		.notNull(),
+	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+}));
+
+export const transactions = createTable(
+	"transaction",
+	(d) => ({
+		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		date: d.timestamp({ withTimezone: true }).notNull(),
+		description: d.text().notNull(),
+		receiptDescription: d.text(),
+		amount: d.doublePrecision().notNull().default(0),
+		category: d.text().notNull().default("Uncategorised"),
+		frequency: d.text().notNull().default("One-off"),
+		priority: d.text().notNull().default("Nice to Have"),
+		notes: d.text(),
+		createdAt: d
+			.timestamp({ withTimezone: true })
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+	}),
+	(t) => [
+		index("transaction_date_idx").on(t.date),
+		index("transaction_priority_idx").on(t.priority),
+	],
+);
+
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
