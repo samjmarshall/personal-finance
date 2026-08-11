@@ -96,7 +96,15 @@ export const auth = betterAuth({
 			if (!token) return;
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
-			} catch {
+			} catch (error) {
+				// Name only. The adapter already logged its own redacted reason, and a
+				// Postgres failure here carries the session token in the query params —
+				// the thing adr007 keeps out of runtime logs. The name is still enough
+				// to tell a Redis outage from a database one.
+				console.error(
+					"[auth] sign-out revocation failed",
+					error instanceof Error ? error.name : typeof error,
+				);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: "Could not sign out. Please try again.",
 				});
