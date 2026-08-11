@@ -42,7 +42,7 @@ Parse the prompt to extract the ordered list of make targets. Run them sequentia
 
 When a target fails, extract the relevant error region from the captured output using these heuristics, in priority order:
 
-- **`make test`** (Rstest): find the first `FAIL` or `✗` block; capture from that line through the end of its assertion/stack (~30-60 lines typical).
+- **`make test`** (unit/integration test): find the first `FAIL` or `✗` block; capture from that line through the end of its assertion/stack (~30-60 lines typical).
 - **`make check`** (lint + typecheck): capture TypeScript `error TS####` lines or ESLint/Biome diagnostic blocks with their `file:line:col` prefix.
 - **`make build`** (Next.js): capture the first `Failed to compile` or `Error:` block with file path and stack.
 - **`make test_e2e`** (Playwright): capture the first failing spec's `Error:` block plus the `file:line` locator info.
