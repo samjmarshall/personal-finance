@@ -1,16 +1,17 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+/** @type {<T extends z.ZodType>(schema: T) => T | z.ZodOptional<T>} */
+const requiredInProd = (schema) =>
+	process.env.NODE_ENV === "production" ? schema : schema.optional();
+
 export const env = createEnv({
 	/**
 	 * Specify your server-side environment variables schema here. This way you can ensure the app
 	 * isn't built with invalid env vars.
 	 */
 	server: {
-		BETTER_AUTH_SECRET:
-			process.env.NODE_ENV === "production"
-				? z.string()
-				: z.string().optional(),
+		BETTER_AUTH_SECRET: requiredInProd(z.string()),
 		DATABASE_URL: z.url(),
 		/**
 		 * Direct (non-PgBouncer) connection, used by drizzle-kit for DDL. Optional
@@ -23,12 +24,8 @@ export const env = createEnv({
 		 * without them each lambda rate-limits against its own memory, which a
 		 * cold start resets.
 		 */
-		KV_REST_API_TOKEN:
-			process.env.NODE_ENV === "production"
-				? z.string()
-				: z.string().optional(),
-		KV_REST_API_URL:
-			process.env.NODE_ENV === "production" ? z.url() : z.url().optional(),
+		KV_REST_API_TOKEN: requiredInProd(z.string()),
+		KV_REST_API_URL: requiredInProd(z.url()),
 		NODE_ENV: z
 			.enum(["development", "test", "production"])
 			.default("development"),

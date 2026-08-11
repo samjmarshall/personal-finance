@@ -66,22 +66,43 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 function SignOutButton() {
 	const router = useRouter();
+	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	return (
-		<button
-			className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground disabled:opacity-50"
-			disabled={loading}
-			onClick={async () => {
-				setLoading(true);
-				await authClient.signOut();
-				router.push("/sign-in");
-				router.refresh();
-			}}
-			type="button"
-		>
-			<LogOut className="h-[18px] w-[18px]" />
-			{loading ? "Signing out…" : "Sign out"}
-		</button>
+		<>
+			<button
+				className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground disabled:opacity-50"
+				disabled={loading}
+				onClick={async () => {
+					setError(null);
+					setLoading(true);
+					// Sign-out fails closed while Redis is down (adr007), which leaves the
+					// session live. Routing on regardless would land on /sign-in, which
+					// redirects a live session straight back here — the silent
+					// still-signed-out lie the fail-closed delete exists to prevent.
+					const { error } = await authClient.signOut();
+					if (error) {
+						setError(error.message ?? "Could not sign out. Please try again.");
+						setLoading(false);
+						return;
+					}
+					router.push("/sign-in");
+					router.refresh();
+				}}
+				type="button"
+			>
+				<LogOut className="h-[18px] w-[18px]" />
+				{loading ? "Signing out…" : "Sign out"}
+			</button>
+			{error && (
+				<p
+					className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend"
+					role="alert"
+				>
+					{error}
+				</p>
+			)}
+		</>
 	);
 }
 
