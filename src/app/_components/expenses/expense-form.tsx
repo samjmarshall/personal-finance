@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 
-import { Modal } from "~/app/_components/ui/modal";
 import { Select } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { EXPENSE_CATEGORIES } from "~/lib/constants";
@@ -77,85 +84,87 @@ export function ExpenseForm({
 	}
 
 	return (
-		<Modal
-			description="Enter the amount on any cadence — we'll work out the rest."
-			onClose={onClose}
-			open={open}
-			title={expense ? "Edit expense" : "Add expense"}
-		>
-			<form className="flex flex-col gap-4" onSubmit={onSubmit}>
-				<Field>
-					<FieldLabel htmlFor="exp-name">Name</FieldLabel>
-					<Input
-						autoFocus
-						id="exp-name"
-						onChange={(e) => setName(e.target.value)}
-						placeholder="e.g. Netflix"
-						value={name}
-					/>
-				</Field>
-				<Field>
-					<FieldLabel htmlFor="exp-cat">Category</FieldLabel>
-					<Select
-						id="exp-cat"
-						onChange={(e) => setCategory(e.target.value)}
-						value={category}
-					>
-						{(categoryOptions.includes(category)
-							? categoryOptions
-							: [category, ...categoryOptions]
-						).map((c) => (
-							<option key={c} value={c}>
-								{c}
-							</option>
-						))}
-					</Select>
-				</Field>
-				<div className="grid grid-cols-2 gap-3">
+		<Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>{expense ? "Edit expense" : "Add expense"}</DialogTitle>
+					<DialogDescription>
+						Enter the amount on any cadence — we'll work out the rest.
+					</DialogDescription>
+				</DialogHeader>
+				<form className="flex flex-col gap-4" onSubmit={onSubmit}>
 					<Field>
-						<FieldLabel htmlFor="exp-amt">Amount</FieldLabel>
+						<FieldLabel htmlFor="exp-name">Name</FieldLabel>
 						<Input
-							id="exp-amt"
-							inputMode="decimal"
-							min="0"
-							onChange={(e) => setAmount(e.target.value)}
-							placeholder="0.00"
-							step="0.01"
-							type="number"
-							value={amount}
+							id="exp-name"
+							onChange={(e) => setName(e.target.value)}
+							placeholder="e.g. Netflix"
+							value={name}
 						/>
 					</Field>
 					<Field>
-						<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
+						<FieldLabel htmlFor="exp-cat">Category</FieldLabel>
 						<Select
-							id="exp-basis"
-							onChange={(e) =>
-								setBasis(e.target.value as "fortnight" | "month" | "year")
-							}
-							value={basis}
+							id="exp-cat"
+							onChange={(e) => setCategory(e.target.value)}
+							value={category}
 						>
-							<option value="fortnight">Fortnight</option>
-							<option value="month">Month</option>
-							<option value="year">Year</option>
+							{(categoryOptions.includes(category)
+								? categoryOptions
+								: [category, ...categoryOptions]
+							).map((c) => (
+								<option key={c} value={c}>
+									{c}
+								</option>
+							))}
 						</Select>
 					</Field>
-				</div>
+					<div className="grid grid-cols-2 gap-3">
+						<Field>
+							<FieldLabel htmlFor="exp-amt">Amount</FieldLabel>
+							<Input
+								id="exp-amt"
+								inputMode="decimal"
+								min="0"
+								onChange={(e) => setAmount(e.target.value)}
+								placeholder="0.00"
+								step="0.01"
+								type="number"
+								value={amount}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
+							<Select
+								id="exp-basis"
+								onChange={(e) =>
+									setBasis(e.target.value as "fortnight" | "month" | "year")
+								}
+								value={basis}
+							>
+								<option value="fortnight">Fortnight</option>
+								<option value="month">Month</option>
+								<option value="year">Year</option>
+							</Select>
+						</Field>
+					</div>
 
-				{error && (
-					<p className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend">
-						{error}
-					</p>
-				)}
+					{error && (
+						<p className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend">
+							{error}
+						</p>
+					)}
 
-				<div className="mt-1 flex justify-end gap-2">
-					<Button onClick={onClose} type="button" variant="outline">
-						Cancel
-					</Button>
-					<Button disabled={isSaving} type="submit">
-						{isSaving ? "Saving…" : expense ? "Save changes" : "Add expense"}
-					</Button>
-				</div>
-			</form>
-		</Modal>
+					<DialogFooter>
+						<Button onClick={onClose} type="button" variant="outline">
+							Cancel
+						</Button>
+						<Button disabled={isSaving} type="submit">
+							{isSaving ? "Saving…" : expense ? "Save changes" : "Add expense"}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
 	);
 }

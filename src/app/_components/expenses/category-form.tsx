@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 
-import { Modal } from "~/app/_components/ui/modal";
 import { Button } from "~/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "~/components/ui/dialog";
 import {
 	Field,
 	FieldDescription,
@@ -60,67 +67,75 @@ export function CategoryForm({
 	}
 
 	return (
-		<Modal
-			description="Categories group your budgeted expenses."
-			onClose={onClose}
-			open={open}
-			title={category ? "Edit category" : "Add category"}
-		>
-			<form className="flex flex-col gap-4" onSubmit={onSubmit}>
-				<Field>
-					<FieldLabel htmlFor="cat-name">Name</FieldLabel>
-					<Input
-						autoFocus
-						id="cat-name"
-						onChange={(e) => setName(e.target.value)}
-						placeholder="e.g. Utilities"
-						value={name}
-					/>
-				</Field>
-				<Field>
-					<FieldLabel htmlFor="cat-desc">
-						Description
-						<FieldOptional />
-					</FieldLabel>
-					<Textarea
-						id="cat-desc"
-						onChange={(e) => setDescription(e.target.value)}
-						placeholder="What belongs in this category?"
-						value={description}
-					/>
-				</Field>
-				<Field>
-					<FieldLabel htmlFor="cat-sort">Sort order</FieldLabel>
-					<Input
-						aria-describedby="cat-sort-hint"
-						id="cat-sort"
-						inputMode="numeric"
-						onChange={(e) => setSortOrder(e.target.value)}
-						placeholder="0"
-						step="1"
-						type="number"
-						value={sortOrder}
-					/>
-					<FieldDescription id="cat-sort-hint">
-						Lower numbers appear first.
-					</FieldDescription>
-				</Field>
+		<Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>
+						{category ? "Edit category" : "Add category"}
+					</DialogTitle>
+					<DialogDescription>
+						Categories group your budgeted expenses.
+					</DialogDescription>
+				</DialogHeader>
+				<form className="flex flex-col gap-4" onSubmit={onSubmit}>
+					<Field>
+						<FieldLabel htmlFor="cat-name">Name</FieldLabel>
+						<Input
+							id="cat-name"
+							onChange={(e) => setName(e.target.value)}
+							placeholder="e.g. Utilities"
+							value={name}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="cat-desc">
+							Description
+							<FieldOptional />
+						</FieldLabel>
+						<Textarea
+							id="cat-desc"
+							onChange={(e) => setDescription(e.target.value)}
+							placeholder="What belongs in this category?"
+							value={description}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="cat-sort">Sort order</FieldLabel>
+						<Input
+							aria-describedby="cat-sort-hint"
+							id="cat-sort"
+							inputMode="numeric"
+							onChange={(e) => setSortOrder(e.target.value)}
+							placeholder="0"
+							step="1"
+							type="number"
+							value={sortOrder}
+						/>
+						<FieldDescription id="cat-sort-hint">
+							Lower numbers appear first.
+						</FieldDescription>
+					</Field>
 
-				{error && (
-					<p className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend">
-						{error}
-					</p>
-				)}
+					{error && (
+						<p className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend">
+							{error}
+						</p>
+					)}
 
-				<div className="mt-1 flex justify-end gap-2">
-					<Button onClick={onClose} type="button" variant="outline">
-						Cancel
-					</Button>
-					<Button disabled={isSaving} type="submit">
-						{isSaving ? "Saving…" : category ? "Save changes" : "Add category"}
-					</Button>
-				</div>
-			</form>
-		</Modal>
+					<DialogFooter>
+						<Button onClick={onClose} type="button" variant="outline">
+							Cancel
+						</Button>
+						<Button disabled={isSaving} type="submit">
+							{isSaving
+								? "Saving…"
+								: category
+									? "Save changes"
+									: "Add category"}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
 	);
 }

@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-import { Modal } from "~/app/_components/ui/modal";
 import { Select } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "~/components/ui/dialog";
 import {
 	Field,
 	FieldDescription,
@@ -82,122 +88,125 @@ export function TransactionForm({
 	}
 
 	return (
-		<Modal
-			onClose={onClose}
-			open={open}
-			title={transaction ? "Edit transaction" : "Add transaction"}
-		>
-			<form className="flex flex-col gap-4" onSubmit={submit}>
-				<div className="grid grid-cols-2 gap-4">
+		<Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>
+						{transaction ? "Edit transaction" : "Add transaction"}
+					</DialogTitle>
+				</DialogHeader>
+				<form className="flex flex-col gap-4" onSubmit={submit}>
+					<div className="grid grid-cols-2 gap-4">
+						<Field>
+							<FieldLabel htmlFor="tx-date">Date</FieldLabel>
+							<Input
+								id="tx-date"
+								onChange={(e) => setDate(e.target.value)}
+								required
+								type="date"
+								value={date}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
+							<Input
+								aria-describedby="tx-amount-hint"
+								id="tx-amount"
+								inputMode="decimal"
+								onChange={(e) => setAmount(e.target.value)}
+								placeholder="0.00"
+								required
+								step="0.01"
+								type="number"
+								value={amount}
+							/>
+							<FieldDescription id="tx-amount-hint">
+								Positive = spend, negative = refund
+							</FieldDescription>
+						</Field>
+					</div>
 					<Field>
-						<FieldLabel htmlFor="tx-date">Date</FieldLabel>
+						<FieldLabel htmlFor="tx-description">Description</FieldLabel>
 						<Input
-							id="tx-date"
-							onChange={(e) => setDate(e.target.value)}
+							id="tx-description"
+							onChange={(e) => setDescription(e.target.value)}
+							placeholder="e.g. Woolworths"
 							required
-							type="date"
-							value={date}
+							value={description}
 						/>
 					</Field>
 					<Field>
-						<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
+						<FieldLabel htmlFor="tx-category">Category</FieldLabel>
 						<Input
-							aria-describedby="tx-amount-hint"
-							id="tx-amount"
-							inputMode="decimal"
-							onChange={(e) => setAmount(e.target.value)}
-							placeholder="0.00"
-							required
-							step="0.01"
-							type="number"
-							value={amount}
+							id="tx-category"
+							list="tx-categories"
+							onChange={(e) => setCategory(e.target.value)}
+							placeholder="e.g. Groceries"
+							value={category}
 						/>
-						<FieldDescription id="tx-amount-hint">
-							Positive = spend, negative = refund
-						</FieldDescription>
-					</Field>
-				</div>
-				<Field>
-					<FieldLabel htmlFor="tx-description">Description</FieldLabel>
-					<Input
-						id="tx-description"
-						onChange={(e) => setDescription(e.target.value)}
-						placeholder="e.g. Woolworths"
-						required
-						value={description}
-					/>
-				</Field>
-				<Field>
-					<FieldLabel htmlFor="tx-category">Category</FieldLabel>
-					<Input
-						id="tx-category"
-						list="tx-categories"
-						onChange={(e) => setCategory(e.target.value)}
-						placeholder="e.g. Groceries"
-						value={category}
-					/>
-					<datalist id="tx-categories">
-						{categories.map((c) => (
-							<option key={c} value={c} />
-						))}
-					</datalist>
-				</Field>
-				<div className="grid grid-cols-2 gap-4">
-					<Field>
-						<FieldLabel htmlFor="tx-frequency">Frequency</FieldLabel>
-						<Select
-							id="tx-frequency"
-							onChange={(e) => setFrequency(e.target.value)}
-							value={frequency}
-						>
-							{FREQUENCIES.map((f) => (
-								<option key={f} value={f}>
-									{f}
-								</option>
+						<datalist id="tx-categories">
+							{categories.map((c) => (
+								<option key={c} value={c} />
 							))}
-						</Select>
+						</datalist>
 					</Field>
+					<div className="grid grid-cols-2 gap-4">
+						<Field>
+							<FieldLabel htmlFor="tx-frequency">Frequency</FieldLabel>
+							<Select
+								id="tx-frequency"
+								onChange={(e) => setFrequency(e.target.value)}
+								value={frequency}
+							>
+								{FREQUENCIES.map((f) => (
+									<option key={f} value={f}>
+										{f}
+									</option>
+								))}
+							</Select>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="tx-priority">Priority</FieldLabel>
+							<Select
+								id="tx-priority"
+								onChange={(e) => setPriority(e.target.value)}
+								value={priority}
+							>
+								{PRIORITIES.map((p) => (
+									<option key={p} value={p}>
+										{p}
+									</option>
+								))}
+							</Select>
+						</Field>
+					</div>
 					<Field>
-						<FieldLabel htmlFor="tx-priority">Priority</FieldLabel>
-						<Select
-							id="tx-priority"
-							onChange={(e) => setPriority(e.target.value)}
-							value={priority}
-						>
-							{PRIORITIES.map((p) => (
-								<option key={p} value={p}>
-									{p}
-								</option>
-							))}
-						</Select>
+						<FieldLabel htmlFor="tx-notes">
+							Notes
+							<FieldOptional />
+						</FieldLabel>
+						<Textarea
+							id="tx-notes"
+							onChange={(e) => setNotes(e.target.value)}
+							placeholder="Optional context"
+							rows={2}
+							value={notes}
+						/>
 					</Field>
-				</div>
-				<Field>
-					<FieldLabel htmlFor="tx-notes">
-						Notes
-						<FieldOptional />
-					</FieldLabel>
-					<Textarea
-						id="tx-notes"
-						onChange={(e) => setNotes(e.target.value)}
-						placeholder="Optional context"
-						rows={2}
-						value={notes}
-					/>
-				</Field>
-				<div className="mt-2 flex justify-end gap-2">
-					<Button onClick={onClose} type="button" variant="ghost">
-						Cancel
-					</Button>
-					<Button disabled={pending} type="submit">
-						{pending
-							? "Saving..."
-							: transaction
-								? "Save changes"
-								: "Add transaction"}
-					</Button>
-				</div>
-			</form>
-		</Modal>
+					<DialogFooter>
+						<Button onClick={onClose} type="button" variant="ghost">
+							Cancel
+						</Button>
+						<Button disabled={pending} type="submit">
+							{pending
+								? "Saving..."
+								: transaction
+									? "Save changes"
+									: "Add transaction"}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
 	);
 }
