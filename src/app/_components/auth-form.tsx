@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { authClient } from "~/server/auth/client";
-import { Button, Field, Input } from "./ui/primitives";
+import { Field } from "./ui/primitives";
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 	const router = useRouter();

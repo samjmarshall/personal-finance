@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
-import { Button, Card } from "~/app/_components/ui/primitives";
+import { Card } from "~/app/_components/ui/primitives";
+import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ExpenseForm } from "./expense-form";

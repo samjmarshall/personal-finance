@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
-import { Button, Field, Input } from "~/app/_components/ui/primitives";
+import { Field } from "~/app/_components/ui/primitives";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Income = RouterOutputs["income"]["list"][number];

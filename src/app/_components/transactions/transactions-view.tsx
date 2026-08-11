@@ -15,13 +15,10 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
-import {
-	Badge,
-	Button,
-	Card,
-	Input,
-	Select,
-} from "~/app/_components/ui/primitives";
+import { Card, Select } from "~/app/_components/ui/primitives";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { FREQUENCIES, PRIORITIES, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";

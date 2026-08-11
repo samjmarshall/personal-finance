@@ -4,7 +4,9 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
-import { Badge, Button, Card } from "~/app/_components/ui/primitives";
+import { Card } from "~/app/_components/ui/primitives";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { CategoryForm } from "./category-form";
 

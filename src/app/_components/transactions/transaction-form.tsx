@@ -3,13 +3,10 @@
 import { useEffect, useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
-import {
-	Button,
-	Field,
-	Input,
-	Select,
-	Textarea,
-} from "~/app/_components/ui/primitives";
+import { Field, Select } from "~/app/_components/ui/primitives";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Textarea } from "~/components/ui/textarea";
 import { FREQUENCIES, PRIORITIES } from "~/lib/constants";
 import { api, type RouterOutputs } from "~/trpc/react";
 

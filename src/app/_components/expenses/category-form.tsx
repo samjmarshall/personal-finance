@@ -3,12 +3,10 @@
 import { useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
-import {
-	Button,
-	Field,
-	Input,
-	Textarea,
-} from "~/app/_components/ui/primitives";
+import { Field } from "~/app/_components/ui/primitives";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Textarea } from "~/components/ui/textarea";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Category = RouterOutputs["category"]["list"][number];
