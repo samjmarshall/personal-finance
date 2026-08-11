@@ -35,18 +35,58 @@ mask_url() {
   echo "$1" | sed -E 's|(://[^:]+:)[^@]+(@)|\1****\2|'
 }
 
+# ERE matching an assignment line for a variable, allowing leading whitespace
+# and an `export ` prefix.
+env_var_pattern() {
+  printf '^[[:space:]]*(export[[:space:]]+)?%s=' "$1"
+}
+
+# Read a variable from .env.
+# Handles an optional `export ` prefix, surrounding single/double quotes
+# (needed when the value has special characters), and trailing CR.
+# Last assignment wins, matching how dotenv resolves duplicate keys.
+read_env_var() {
+  local var="$1" line value
+  [[ -f "$ENV_FILE" ]] || return 0
+
+  line=$(grep -E "$(env_var_pattern "$var")" "$ENV_FILE" | tail -1) || return 0
+  value="${line#*=}"
+  value="${value%$'\r'}"
+
+  if [[ ${#value} -ge 2 && "$value" == \"*\" ]]; then
+    value="${value:1:${#value}-2}"
+    value="${value//\\\"/\"}"
+  elif [[ ${#value} -ge 2 && "$value" == \'*\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+
+  printf '%s' "$value"
+}
+
 # Update or append a variable in .env
-# Uses awk to replace in-place, avoiding sed metacharacter issues with URLs
+# Writes the value double-quoted so special characters survive; read_env_var
+# strips the quotes back off. Uses awk to replace in-place, avoiding sed
+# metacharacter issues with URLs.
 update_env_var() {
   local var="$1" value="$2"
-  if grep -q "^${var}=" "$ENV_FILE" 2>/dev/null; then
+  local line_out="${var}=\"${value//\"/\\\"}\""
+
+  if grep -Eq "$(env_var_pattern "$var")" "$ENV_FILE" 2>/dev/null; then
     local tmp="${ENV_FILE}.tmp"
-    awk -v var="$var" -v val="$value" \
-      'BEGIN{FS=OFS=""} $0 ~ "^"var"=" {print var"="val; next} {print}' \
-      "$ENV_FILE" > "$tmp"
+    # Compare the key literally (index, not a regex) so a var name is never
+    # interpreted as a pattern.
+    awk -v key="$var" -v out="$line_out" '
+      {
+        line = $0
+        sub(/^[[:space:]]*/, "", line)
+        sub(/^export[[:space:]]+/, "", line)
+        if (index(line, key "=") == 1) { print out; next }
+        print
+      }
+    ' "$ENV_FILE" > "$tmp"
     mv "$tmp" "$ENV_FILE"
   else
-    echo "${var}=${value}" >> "$ENV_FILE"
+    printf '%s\n' "$line_out" >> "$ENV_FILE"
   fi
 }
 
@@ -103,11 +143,11 @@ apply_branch_urls() {
 
 load_credentials() {
   # Fall back to .env if not already in environment
-  if [[ -z "${NEON_API_KEY:-}" ]] && [[ -f "$ENV_FILE" ]]; then
-    NEON_API_KEY=$(grep -E '^NEON_API_KEY=' "$ENV_FILE" | cut -d= -f2- || true)
+  if [[ -z "${NEON_API_KEY:-}" ]]; then
+    NEON_API_KEY=$(read_env_var NEON_API_KEY)
   fi
-  if [[ -z "${NEON_PROJECT_ID:-}" ]] && [[ -f "$ENV_FILE" ]]; then
-    NEON_PROJECT_ID=$(grep -E '^NEON_PROJECT_ID=' "$ENV_FILE" | cut -d= -f2- || true)
+  if [[ -z "${NEON_PROJECT_ID:-}" ]]; then
+    NEON_PROJECT_ID=$(read_env_var NEON_PROJECT_ID)
   fi
 
   if [[ -z "${NEON_API_KEY:-}" ]] || [[ -z "${NEON_PROJECT_ID:-}" ]]; then
@@ -264,12 +304,10 @@ cmd_status() {
   fi
 
   # Show current .env DATABASE_URL
-  if [[ -f "$ENV_FILE" ]]; then
-    local current_url
-    current_url=$(grep -E '^DATABASE_URL=' "$ENV_FILE" | cut -d= -f2- || true)
-    if [[ -n "$current_url" ]]; then
-      log ".env DATABASE_URL=$(mask_url "$current_url")"
-    fi
+  local current_url
+  current_url=$(read_env_var DATABASE_URL)
+  if [[ -n "$current_url" ]]; then
+    log ".env DATABASE_URL=$(mask_url "$current_url")"
   fi
 }
 
