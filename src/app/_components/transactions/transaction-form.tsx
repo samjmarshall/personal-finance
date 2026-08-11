@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
-import { Field, Select } from "~/app/_components/ui/primitives";
+import { Select } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { FREQUENCIES, PRIORITIES } from "~/lib/constants";
@@ -83,16 +84,20 @@ export function TransactionForm({
 		>
 			<form className="flex flex-col gap-4" onSubmit={submit}>
 				<div className="grid grid-cols-2 gap-4">
-					<Field label="Date">
+					<Field>
+						<FieldLabel htmlFor="tx-date">Date</FieldLabel>
 						<Input
+							id="tx-date"
 							onChange={(e) => setDate(e.target.value)}
 							required
 							type="date"
 							value={date}
 						/>
 					</Field>
-					<Field hint="Positive = spend, negative = refund" label="Amount">
+					<Field>
+						<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
 						<Input
+							id="tx-amount"
 							inputMode="decimal"
 							onChange={(e) => setAmount(e.target.value)}
 							placeholder="0.00"
@@ -101,18 +106,25 @@ export function TransactionForm({
 							type="number"
 							value={amount}
 						/>
+						<FieldDescription>
+							Positive = spend, negative = refund
+						</FieldDescription>
 					</Field>
 				</div>
-				<Field label="Description">
+				<Field>
+					<FieldLabel htmlFor="tx-description">Description</FieldLabel>
 					<Input
+						id="tx-description"
 						onChange={(e) => setDescription(e.target.value)}
 						placeholder="e.g. Woolworths"
 						required
 						value={description}
 					/>
 				</Field>
-				<Field label="Category">
+				<Field>
+					<FieldLabel htmlFor="tx-category">Category</FieldLabel>
 					<Input
+						id="tx-category"
 						list="tx-categories"
 						onChange={(e) => setCategory(e.target.value)}
 						placeholder="e.g. Groceries"
@@ -125,8 +137,10 @@ export function TransactionForm({
 					</datalist>
 				</Field>
 				<div className="grid grid-cols-2 gap-4">
-					<Field label="Frequency">
+					<Field>
+						<FieldLabel htmlFor="tx-frequency">Frequency</FieldLabel>
 						<Select
+							id="tx-frequency"
 							onChange={(e) => setFrequency(e.target.value)}
 							value={frequency}
 						>
@@ -137,8 +151,10 @@ export function TransactionForm({
 							))}
 						</Select>
 					</Field>
-					<Field label="Priority">
+					<Field>
+						<FieldLabel htmlFor="tx-priority">Priority</FieldLabel>
 						<Select
+							id="tx-priority"
 							onChange={(e) => setPriority(e.target.value)}
 							value={priority}
 						>
@@ -150,8 +166,15 @@ export function TransactionForm({
 						</Select>
 					</Field>
 				</div>
-				<Field label="Notes" optional>
+				<Field>
+					<FieldLabel htmlFor="tx-notes">
+						Notes
+						<span className="font-normal text-muted-foreground text-xs">
+							Optional
+						</span>
+					</FieldLabel>
 					<Textarea
+						id="tx-notes"
 						onChange={(e) => setNotes(e.target.value)}
 						placeholder="Optional context"
 						rows={2}

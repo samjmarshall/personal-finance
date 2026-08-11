@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
-import { Field } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -64,27 +64,32 @@ export function IncomeForm({
 			title={income ? "Edit income" : "Add income"}
 		>
 			<form className="flex flex-col gap-4" onSubmit={submit}>
-				<Field label="Person">
+				<Field>
+					<FieldLabel htmlFor="income-person">Person</FieldLabel>
 					<Input
+						id="income-person"
 						onChange={(e) => setPerson(e.target.value)}
 						placeholder="e.g. Sam"
 						required
 						value={person}
 					/>
 				</Field>
-				<Field label="Source">
+				<Field>
+					<FieldLabel htmlFor="income-source">Source</FieldLabel>
 					<Input
+						id="income-source"
 						onChange={(e) => setSource(e.target.value)}
 						placeholder="e.g. Salary"
 						required
 						value={source}
 					/>
 				</Field>
-				<Field
-					hint="Monthly and yearly figures are calculated automatically."
-					label="Amount per fortnight"
-				>
+				<Field>
+					<FieldLabel htmlFor="income-fortnight">
+						Amount per fortnight
+					</FieldLabel>
 					<Input
+						id="income-fortnight"
 						inputMode="decimal"
 						min="0"
 						onChange={(e) => setFortnight(e.target.value)}
@@ -94,6 +99,9 @@ export function IncomeForm({
 						type="number"
 						value={fortnight}
 					/>
+					<FieldDescription>
+						Monthly and yearly figures are calculated automatically.
+					</FieldDescription>
 				</Field>
 				<div className="mt-2 flex justify-end gap-2">
 					<Button onClick={onClose} type="button" variant="ghost">

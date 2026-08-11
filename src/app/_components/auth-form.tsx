@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { authClient } from "~/server/auth/client";
-import { Field } from "./ui/primitives";
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 	const router = useRouter();
@@ -46,7 +46,8 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 	return (
 		<form className="flex flex-col gap-4" onSubmit={onSubmit}>
 			{isSignUp && (
-				<Field htmlFor="name" label="Name">
+				<Field>
+					<FieldLabel htmlFor="name">Name</FieldLabel>
 					<Input
 						autoComplete="name"
 						id="name"
@@ -56,7 +57,8 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 					/>
 				</Field>
 			)}
-			<Field htmlFor="email" label="Email">
+			<Field>
+				<FieldLabel htmlFor="email">Email</FieldLabel>
 				<Input
 					autoComplete="email"
 					id="email"
@@ -67,7 +69,8 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 					value={email}
 				/>
 			</Field>
-			<Field htmlFor="password" label="Password">
+			<Field>
+				<FieldLabel htmlFor="password">Password</FieldLabel>
 				<Input
 					autoComplete={isSignUp ? "new-password" : "current-password"}
 					id="password"

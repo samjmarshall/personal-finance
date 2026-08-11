@@ -3,8 +3,8 @@
 import { useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
-import { Field } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -62,7 +62,8 @@ export function CategoryForm({
 			title={category ? "Edit category" : "Add category"}
 		>
 			<form className="flex flex-col gap-4" onSubmit={onSubmit}>
-				<Field htmlFor="cat-name" label="Name">
+				<Field>
+					<FieldLabel htmlFor="cat-name">Name</FieldLabel>
 					<Input
 						autoFocus
 						id="cat-name"
@@ -71,7 +72,13 @@ export function CategoryForm({
 						value={name}
 					/>
 				</Field>
-				<Field htmlFor="cat-desc" label="Description" optional>
+				<Field>
+					<FieldLabel htmlFor="cat-desc">
+						Description
+						<span className="font-normal text-muted-foreground text-xs">
+							Optional
+						</span>
+					</FieldLabel>
 					<Textarea
 						id="cat-desc"
 						onChange={(e) => setDescription(e.target.value)}
@@ -79,11 +86,8 @@ export function CategoryForm({
 						value={description}
 					/>
 				</Field>
-				<Field
-					hint="Lower numbers appear first."
-					htmlFor="cat-sort"
-					label="Sort order"
-				>
+				<Field>
+					<FieldLabel htmlFor="cat-sort">Sort order</FieldLabel>
 					<Input
 						id="cat-sort"
 						inputMode="numeric"
@@ -93,6 +97,7 @@ export function CategoryForm({
 						type="number"
 						value={sortOrder}
 					/>
+					<FieldDescription>Lower numbers appear first.</FieldDescription>
 				</Field>
 
 				{error && (

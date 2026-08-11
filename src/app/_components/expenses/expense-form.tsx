@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
-import { Field, Select } from "~/app/_components/ui/primitives";
+import { Select } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { EXPENSE_CATEGORIES } from "~/lib/constants";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -83,7 +84,8 @@ export function ExpenseForm({
 			title={expense ? "Edit expense" : "Add expense"}
 		>
 			<form className="flex flex-col gap-4" onSubmit={onSubmit}>
-				<Field htmlFor="exp-name" label="Name">
+				<Field>
+					<FieldLabel htmlFor="exp-name">Name</FieldLabel>
 					<Input
 						autoFocus
 						id="exp-name"
@@ -92,7 +94,8 @@ export function ExpenseForm({
 						value={name}
 					/>
 				</Field>
-				<Field htmlFor="exp-cat" label="Category">
+				<Field>
+					<FieldLabel htmlFor="exp-cat">Category</FieldLabel>
 					<Select
 						id="exp-cat"
 						onChange={(e) => setCategory(e.target.value)}
@@ -109,7 +112,8 @@ export function ExpenseForm({
 					</Select>
 				</Field>
 				<div className="grid grid-cols-2 gap-3">
-					<Field htmlFor="exp-amt" label="Amount">
+					<Field>
+						<FieldLabel htmlFor="exp-amt">Amount</FieldLabel>
 						<Input
 							id="exp-amt"
 							inputMode="decimal"
@@ -121,7 +125,8 @@ export function ExpenseForm({
 							value={amount}
 						/>
 					</Field>
-					<Field htmlFor="exp-basis" label="Per">
+					<Field>
+						<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
 						<Select
 							id="exp-basis"
 							onChange={(e) =>
