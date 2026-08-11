@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
-import { Card } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent } from "~/components/ui/card";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { IncomeForm } from "./income-form";
 
@@ -63,7 +63,7 @@ export function IncomeView() {
 				title="Income"
 			/>
 
-			<div className="mt-6 grid grid-cols-3 gap-4">
+			<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
 				{(
 					[
 						["Per fortnight", totals.fortnight],
@@ -71,13 +71,17 @@ export function IncomeView() {
 						["Per year", totals.year],
 					] as const
 				).map(([label, value]) => (
-					<Card className="p-4" key={label}>
-						<p className="font-medium text-muted-foreground text-xs">{label}</p>
-						<Money
-							className="mt-1.5 block font-semibold text-lg sm:text-xl"
-							tone="income"
-							value={value}
-						/>
+					<Card key={label}>
+						<CardContent>
+							<p className="font-medium text-muted-foreground text-xs">
+								{label}
+							</p>
+							<Money
+								className="mt-1.5 block font-semibold text-lg sm:text-xl"
+								tone="income"
+								value={value}
+							/>
+						</CardContent>
 					</Card>
 				))}
 			</div>
@@ -86,7 +90,7 @@ export function IncomeView() {
 				{groups.map(([person, items]) => {
 					const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
 					return (
-						<Card className="overflow-hidden" key={person}>
+						<Card className="[--card-spacing:0px]" key={person}>
 							<div className="flex items-center justify-between border-border border-b bg-muted/40 px-4 py-3">
 								<h2 className="font-semibold text-foreground text-sm">
 									{person}
@@ -160,14 +164,16 @@ export function IncomeView() {
 				})}
 
 				{!groups.length && (
-					<Card className="p-10 text-center">
-						<p className="text-muted-foreground text-sm">
-							No income sources yet. Add one to get started.
-						</p>
-						<Button className="mt-4" onClick={openAdd} size="sm">
-							<Plus className="h-4 w-4" />
-							Add income
-						</Button>
+					<Card className="text-center [--card-spacing:--spacing(10)]">
+						<CardContent>
+							<p className="text-muted-foreground text-sm">
+								No income sources yet. Add one to get started.
+							</p>
+							<Button className="mt-4" onClick={openAdd} size="sm">
+								<Plus className="h-4 w-4" />
+								Add income
+							</Button>
+						</CardContent>
 					</Card>
 				)}
 			</div>

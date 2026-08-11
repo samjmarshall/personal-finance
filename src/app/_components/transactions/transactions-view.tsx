@@ -15,9 +15,10 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
-import { Card, Select } from "~/app/_components/ui/primitives";
+import { Select } from "~/app/_components/ui/primitives";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { FREQUENCIES, PRIORITIES, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
@@ -142,8 +143,8 @@ export function TransactionsView() {
 				title="Transaction History"
 			/>
 
-			<Card className="mt-6 p-3">
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+			<Card className="mt-6">
+				<CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
 					<div className="relative flex-1">
 						<Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
 						<Input
@@ -194,10 +195,10 @@ export function TransactionsView() {
 							</Button>
 						)}
 					</div>
-				</div>
+				</CardContent>
 			</Card>
 
-			<Card className="mt-4 overflow-hidden">
+			<Card className="mt-4 [--card-spacing:0px]">
 				<div className="overflow-x-auto">
 					<table className="w-full min-w-[52rem] border-collapse text-sm">
 						<thead>

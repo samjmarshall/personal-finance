@@ -10,7 +10,7 @@ import { PriorityBreakdown } from "~/app/_components/dashboard/priority-breakdow
 import { TopCategories } from "~/app/_components/dashboard/top-categories";
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
-import { Card } from "~/app/_components/ui/primitives";
+import { Card, CardContent } from "~/components/ui/card";
 import { cn, formatCurrency } from "~/lib/utils";
 import { api } from "~/trpc/server";
 
@@ -67,69 +67,79 @@ export default async function DashboardPage() {
 				{stats.map((stat) => {
 					const Icon = stat.icon;
 					return (
-						<Card className="p-5" key={stat.label}>
-							<div className="flex items-center justify-between">
-								<span className="font-medium text-muted-foreground text-sm">
-									{stat.label}
-								</span>
-								<Icon className={cn("h-4 w-4", stat.accent)} />
-							</div>
-							<p
-								className={cn(
-									"tabular mt-3 font-semibold text-2xl tracking-tight",
-									stat.accent,
-								)}
-							>
-								{stat.value}
-							</p>
-							<p className="mt-1 text-muted-foreground text-xs">{stat.hint}</p>
+						<Card key={stat.label}>
+							<CardContent>
+								<div className="flex items-center justify-between">
+									<span className="font-medium text-muted-foreground text-sm">
+										{stat.label}
+									</span>
+									<Icon className={cn("h-4 w-4", stat.accent)} />
+								</div>
+								<p
+									className={cn(
+										"tabular mt-3 font-semibold text-2xl tracking-tight",
+										stat.accent,
+									)}
+								>
+									{stat.value}
+								</p>
+								<p className="mt-1 text-muted-foreground text-xs">
+									{stat.hint}
+								</p>
+							</CardContent>
 						</Card>
 					);
 				})}
 			</div>
 
 			<div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-				<Card className="p-5 lg:col-span-2">
-					<div className="mb-4 flex items-center justify-between">
-						<div>
-							<h2 className="font-semibold text-foreground text-sm">
-								Monthly spend
-							</h2>
-							<p className="text-muted-foreground text-xs">
-								Recorded outgoings by month
-							</p>
+				<Card className="lg:col-span-2">
+					<CardContent>
+						<div className="mb-4 flex items-center justify-between">
+							<div>
+								<h2 className="font-semibold text-foreground text-sm">
+									Monthly spend
+								</h2>
+								<p className="text-muted-foreground text-xs">
+									Recorded outgoings by month
+								</p>
+							</div>
+							<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+								<ArrowDownRight className="h-3.5 w-3.5 text-spend" />
+								Net <Money className="font-medium" value={summary.totals.net} />
+							</div>
 						</div>
-						<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-							<ArrowDownRight className="h-3.5 w-3.5 text-spend" />
-							Net <Money className="font-medium" value={summary.totals.net} />
-						</div>
-					</div>
-					<MonthlySpendChart data={summary.byMonth} />
+						<MonthlySpendChart data={summary.byMonth} />
+					</CardContent>
 				</Card>
 
-				<Card className="p-5">
-					<h2 className="font-semibold text-foreground text-sm">
-						Spend by priority
-					</h2>
-					<p className="mb-4 text-muted-foreground text-xs">
-						Where the money goes
-					</p>
-					<PriorityBreakdown
-						data={summary.byPriority}
-						total={summary.totals.spend}
-					/>
+				<Card>
+					<CardContent>
+						<h2 className="font-semibold text-foreground text-sm">
+							Spend by priority
+						</h2>
+						<p className="mb-4 text-muted-foreground text-xs">
+							Where the money goes
+						</p>
+						<PriorityBreakdown
+							data={summary.byPriority}
+							total={summary.totals.spend}
+						/>
+					</CardContent>
 				</Card>
 			</div>
 
 			<div className="mt-4">
-				<Card className="p-5">
-					<h2 className="font-semibold text-foreground text-sm">
-						Top categories
-					</h2>
-					<p className="mb-4 text-muted-foreground text-xs">
-						Largest recorded spend across all transactions
-					</p>
-					<TopCategories data={summary.topCategories} />
+				<Card>
+					<CardContent>
+						<h2 className="font-semibold text-foreground text-sm">
+							Top categories
+						</h2>
+						<p className="mb-4 text-muted-foreground text-xs">
+							Largest recorded spend across all transactions
+						</p>
+						<TopCategories data={summary.topCategories} />
+					</CardContent>
 				</Card>
 			</div>
 		</div>

@@ -59,22 +59,3 @@ export function Field({
 		</label>
 	);
 }
-
-export function Card({
-	className,
-	children,
-}: {
-	className?: string;
-	children: React.ReactNode;
-}) {
-	return (
-		<div
-			className={cn(
-				"rounded-xl border border-border bg-card shadow-[0_1px_2px_oklch(0.2_0.02_255/0.04)]",
-				className,
-			)}
-		>
-			{children}
-		</div>
-	);
-}

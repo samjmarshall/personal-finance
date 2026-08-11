@@ -4,9 +4,9 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
-import { Card } from "~/app/_components/ui/primitives";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent } from "~/components/ui/card";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { CategoryForm } from "./category-form";
 
@@ -49,59 +49,60 @@ export function CategoriesView() {
 
 			<div className="mt-6 flex flex-col gap-3">
 				{list.map((category) => (
-					<Card
-						className="flex items-center justify-between gap-4 p-4"
-						key={category.id}
-					>
-						<div className="min-w-0">
-							<div className="flex items-center gap-2">
-								<span className="truncate font-semibold text-foreground text-sm">
-									{category.name}
-								</span>
-								<Badge className="border-border bg-muted text-muted-foreground">
-									{category.expenseCount} item
-									{category.expenseCount === 1 ? "" : "s"}
-								</Badge>
+					<Card key={category.id}>
+						<CardContent className="flex items-center justify-between gap-4">
+							<div className="min-w-0">
+								<div className="flex items-center gap-2">
+									<span className="truncate font-semibold text-foreground text-sm">
+										{category.name}
+									</span>
+									<Badge className="border-border bg-muted text-muted-foreground">
+										{category.expenseCount} item
+										{category.expenseCount === 1 ? "" : "s"}
+									</Badge>
+								</div>
+								{category.description && (
+									<p className="mt-1 truncate text-muted-foreground text-sm">
+										{category.description}
+									</p>
+								)}
 							</div>
-							{category.description && (
-								<p className="mt-1 truncate text-muted-foreground text-sm">
-									{category.description}
-								</p>
-							)}
-						</div>
-						<div className="flex shrink-0 gap-0.5">
-							<button
-								aria-label={`Edit ${category.name}`}
-								className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-								onClick={() => openEdit(category)}
-								type="button"
-							>
-								<Pencil className="h-4 w-4" />
-							</button>
-							<button
-								aria-label={`Delete ${category.name}`}
-								className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
-								onClick={() => {
-									if (confirm(`Delete "${category.name}"?`))
-										remove.mutate({ id: category.id });
-								}}
-								type="button"
-							>
-								<Trash2 className="h-4 w-4" />
-							</button>
-						</div>
+							<div className="flex shrink-0 gap-0.5">
+								<button
+									aria-label={`Edit ${category.name}`}
+									className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+									onClick={() => openEdit(category)}
+									type="button"
+								>
+									<Pencil className="h-4 w-4" />
+								</button>
+								<button
+									aria-label={`Delete ${category.name}`}
+									className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
+									onClick={() => {
+										if (confirm(`Delete "${category.name}"?`))
+											remove.mutate({ id: category.id });
+									}}
+									type="button"
+								>
+									<Trash2 className="h-4 w-4" />
+								</button>
+							</div>
+						</CardContent>
 					</Card>
 				))}
 
 				{!list.length && (
-					<Card className="p-10 text-center">
-						<p className="text-muted-foreground text-sm">
-							No categories yet. Add your first category to get started.
-						</p>
-						<Button className="mt-4" onClick={openAdd} size="sm">
-							<Plus className="h-4 w-4" />
-							Add category
-						</Button>
+					<Card className="text-center [--card-spacing:--spacing(10)]">
+						<CardContent>
+							<p className="text-muted-foreground text-sm">
+								No categories yet. Add your first category to get started.
+							</p>
+							<Button className="mt-4" onClick={openAdd} size="sm">
+								<Plus className="h-4 w-4" />
+								Add category
+							</Button>
+						</CardContent>
 					</Card>
 				)}
 			</div>

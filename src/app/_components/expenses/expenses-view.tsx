@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
-import { Card } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ExpenseForm } from "./expense-form";
@@ -83,7 +83,7 @@ export function ExpensesView() {
 				title="Expenses"
 			/>
 
-			<div className="mt-6 grid grid-cols-3 gap-4">
+			<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
 				{(
 					[
 						["Per fortnight", totals.fortnight],
@@ -91,12 +91,16 @@ export function ExpensesView() {
 						["Per year", totals.year],
 					] as const
 				).map(([label, value]) => (
-					<Card className="p-4" key={label}>
-						<p className="font-medium text-muted-foreground text-xs">{label}</p>
-						<Money
-							className="mt-1.5 block font-semibold text-foreground text-lg sm:text-xl"
-							value={value}
-						/>
+					<Card key={label}>
+						<CardContent>
+							<p className="font-medium text-muted-foreground text-xs">
+								{label}
+							</p>
+							<Money
+								className="mt-1.5 block font-semibold text-foreground text-lg sm:text-xl"
+								value={value}
+							/>
+						</CardContent>
 					</Card>
 				))}
 			</div>
@@ -107,7 +111,7 @@ export function ExpensesView() {
 					const isCollapsed = collapsed.has(category);
 					const panelId = `expense-group-${category.replace(/\s+/g, "-")}`;
 					return (
-						<Card className="overflow-hidden" key={category}>
+						<Card className="[--card-spacing:0px]" key={category}>
 							<button
 								aria-controls={panelId}
 								aria-expanded={!isCollapsed}
@@ -194,14 +198,16 @@ export function ExpensesView() {
 				})}
 
 				{!groups.length && (
-					<Card className="p-10 text-center">
-						<p className="text-muted-foreground text-sm">
-							No expenses yet. Add your first budgeted item to get started.
-						</p>
-						<Button className="mt-4" onClick={openAdd} size="sm">
-							<Plus className="h-4 w-4" />
-							Add expense
-						</Button>
+					<Card className="text-center [--card-spacing:--spacing(10)]">
+						<CardContent>
+							<p className="text-muted-foreground text-sm">
+								No expenses yet. Add your first budgeted item to get started.
+							</p>
+							<Button className="mt-4" onClick={openAdd} size="sm">
+								<Plus className="h-4 w-4" />
+								Add expense
+							</Button>
+						</CardContent>
 					</Card>
 				)}
 			</div>
