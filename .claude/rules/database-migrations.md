@@ -16,11 +16,11 @@ Tables are authored per-domain in `src/server/<domain>/<domain>.schema.ts`, plus
 
 Always use this two-step process:
 
-1. `yarn db:generate` — generate a migration SQL file in `drizzle/`
-2. `yarn db:migrate` — apply pending migrations and record them in `__drizzle_migrations`
+1. `make db_generate` — generate a migration SQL file in `drizzle/`
+2. `make db_migrate` — apply pending migrations and record them in `__drizzle_migrations`
 
 ## Data migrations
 
-Data changes coupled to a schema change (back-fill, cutover, seed) belong in a SQL migration alongside it, not in a one-off script someone must remember to run. Generate the file with `yarn db:custom name=<slug>`, write the `INSERT`/`UPDATE`/`DELETE`, then `yarn db:migrate`.
+Data changes coupled to a schema change (back-fill, cutover, seed) belong in a SQL migration alongside it, not in a one-off script someone must remember to run. Generate the file with `make db_custom name=<slug>`, write the `INSERT`/`UPDATE`/`DELETE`, then `make db_migrate`.
 
 Drizzle migrations are pure SQL — no JS hooks. To trigger an Inngest workflow from one, `INSERT` a row into `outbox` instead of calling `inngest.send` from a script; the `outbox-sweep` cron delivers it at-least-once, idempotent on row id ([adr002](../../docs/adr/adr002-canonical-postgres-store-transactional-outbox.md)). Put rollback notes in a comment at the top of the file.
