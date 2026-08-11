@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AuthForm } from "~/app/_components/auth-form";
 import { AuthShell } from "~/app/_components/auth-shell";
-import { getSession } from "~/server/better-auth/server";
+import { getSession } from "~/server/auth/server";
 
 export default async function SignUpPage() {
 	const session = await getSession();

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { authClient } from "~/server/better-auth/client";
+import { authClient } from "~/server/auth/client";
 import { Button, Field, Input } from "./ui/primitives";
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {

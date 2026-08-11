@@ -12,7 +12,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
-import { authClient } from "~/server/better-auth/client";
+import { authClient } from "~/server/auth/client";
 
 const links = [
 	{ href: "/", label: "Overview", icon: LayoutDashboard },

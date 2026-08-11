@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AppNav, MobileNav } from "~/app/_components/app-nav";
-import { getSession } from "~/server/better-auth/server";
+import { getSession } from "~/server/auth/server";
 
 export default async function DashboardLayout({
 	children,
