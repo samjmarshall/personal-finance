@@ -1,5 +1,5 @@
 ---
-model: opus
+model: fable
 effort: xhigh
 ---
 # Validate Plan
