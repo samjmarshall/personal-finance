@@ -4,7 +4,12 @@ import { useState } from "react";
 
 import { Modal } from "~/app/_components/ui/modal";
 import { Button } from "~/components/ui/button";
-import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import {
+	Field,
+	FieldDescription,
+	FieldLabel,
+	FieldOptional,
+} from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -75,9 +80,7 @@ export function CategoryForm({
 				<Field>
 					<FieldLabel htmlFor="cat-desc">
 						Description
-						<span className="font-normal text-muted-foreground text-xs">
-							Optional
-						</span>
+						<FieldOptional />
 					</FieldLabel>
 					<Textarea
 						id="cat-desc"
@@ -89,6 +92,7 @@ export function CategoryForm({
 				<Field>
 					<FieldLabel htmlFor="cat-sort">Sort order</FieldLabel>
 					<Input
+						aria-describedby="cat-sort-hint"
 						id="cat-sort"
 						inputMode="numeric"
 						onChange={(e) => setSortOrder(e.target.value)}
@@ -97,7 +101,9 @@ export function CategoryForm({
 						type="number"
 						value={sortOrder}
 					/>
-					<FieldDescription>Lower numbers appear first.</FieldDescription>
+					<FieldDescription id="cat-sort-hint">
+						Lower numbers appear first.
+					</FieldDescription>
 				</Field>
 
 				{error && (

@@ -143,6 +143,17 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
 	);
 }
 
+function FieldOptional({ className }: { className?: string }) {
+	return (
+		<span
+			className={cn("font-normal text-muted-foreground text-xs", className)}
+			data-slot="field-optional"
+		>
+			Optional
+		</span>
+	);
+}
+
 function FieldSeparator({
 	children,
 	className,
@@ -232,6 +243,7 @@ export {
 	FieldGroup,
 	FieldLabel,
 	FieldLegend,
+	FieldOptional,
 	FieldSeparator,
 	FieldSet,
 	FieldTitle,

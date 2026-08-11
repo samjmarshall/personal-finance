@@ -89,6 +89,7 @@ export function IncomeForm({
 						Amount per fortnight
 					</FieldLabel>
 					<Input
+						aria-describedby="income-fortnight-hint"
 						id="income-fortnight"
 						inputMode="decimal"
 						min="0"
@@ -99,7 +100,7 @@ export function IncomeForm({
 						type="number"
 						value={fortnight}
 					/>
-					<FieldDescription>
+					<FieldDescription id="income-fortnight-hint">
 						Monthly and yearly figures are calculated automatically.
 					</FieldDescription>
 				</Field>

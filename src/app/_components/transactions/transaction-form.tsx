@@ -5,7 +5,12 @@ import { useEffect, useState } from "react";
 import { Modal } from "~/app/_components/ui/modal";
 import { Select } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
-import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import {
+	Field,
+	FieldDescription,
+	FieldLabel,
+	FieldOptional,
+} from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { FREQUENCIES, PRIORITIES } from "~/lib/constants";
@@ -97,6 +102,7 @@ export function TransactionForm({
 					<Field>
 						<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
 						<Input
+							aria-describedby="tx-amount-hint"
 							id="tx-amount"
 							inputMode="decimal"
 							onChange={(e) => setAmount(e.target.value)}
@@ -106,7 +112,7 @@ export function TransactionForm({
 							type="number"
 							value={amount}
 						/>
-						<FieldDescription>
+						<FieldDescription id="tx-amount-hint">
 							Positive = spend, negative = refund
 						</FieldDescription>
 					</Field>
@@ -169,9 +175,7 @@ export function TransactionForm({
 				<Field>
 					<FieldLabel htmlFor="tx-notes">
 						Notes
-						<span className="font-normal text-muted-foreground text-xs">
-							Optional
-						</span>
+						<FieldOptional />
 					</FieldLabel>
 					<Textarea
 						id="tx-notes"
