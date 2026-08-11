@@ -48,6 +48,7 @@ Chosen option: **"2. Dual-write, Redis-first reads"**, because it is the only co
 Two settings follow from it and are part of this decision:
 
 - `verification: { storeInDatabase: true }`. Without it, `internal-adapter.mjs:593-600` skips the Postgres write for verification records and `:618` returns `null` rather than falling back, leaving single-use credentials Redis-only. No flow writes one today, but password reset would inherit the gap silently.
+- `rateLimit.storage` tracks whether an adapter was actually built: `secondaryStorage ? "secondary-storage" : "memory"`. Naming `"secondary-storage"` unconditionally overrides Better Auth's own selection (`create-context.mjs:174`) and does **not** degrade to memory when none is wired — the backend reads through `ctx.options.secondaryStorage?.get`, which is always `undefined`, so `decideConsume(null, …)` returns `allowed: true` every time (`api/rate-limiter/index.mjs:25-35`). The limiter would be off, not degraded, in any runtime started with `SKIP_ENV_VALIDATION` and no KV credentials.
 - The Redis key prefix is `ba:${VERCEL_ENV ?? "development"}:${dbFingerprint}:`, where `dbFingerprint` is a truncated SHA-256 of `DATABASE_URL`. Better Auth uses the raw session token as its key with no namespace, and `scripts/neon-branch.sh:130-139` gives every git branch its own database. Keying the namespace to the database makes it structurally impossible to read a cached session alongside a database that did not create it.
 
 ### Positive Consequences
