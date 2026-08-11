@@ -1,7 +1,7 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
-/** Required in production, optional everywhere else. @type {<T extends z.ZodType>(schema: T) => T | z.ZodOptional<T>} */
+/** @type {<T extends z.ZodType>(schema: T) => T | z.ZodOptional<T>} */
 const requiredInProd = (schema) =>
 	process.env.NODE_ENV === "production" ? schema : schema.optional();
 
