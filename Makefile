@@ -35,11 +35,11 @@ fix:
 audit:
 	yarn audit --groups dependencies --level high
 
-# No unit/e2e runner is wired up yet. These exist so .claude/agents/codebase-verification.md
-# and /validate don't hard-fail on a missing target. Replace when a runner lands.
 test:
-	@echo "skip: no unit test runner configured"
+	yarn run test
 
+# No e2e runner is wired up yet. This exists so .claude/agents/codebase-verification.md
+# and /validate don't hard-fail on a missing target. Replace when a runner lands.
 test_e2e:
 	@echo "skip: no e2e test runner configured"
 
