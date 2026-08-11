@@ -17,6 +17,18 @@ export const env = createEnv({
 		 * because local dev runs Docker Postgres, which has no pooler.
 		 */
 		DATABASE_URL_UNPOOLED: z.url().optional(),
+		/**
+		 * Upstash Redis REST credentials. Names are fixed by Vercel's Upstash
+		 * integration, which injects them under `KV_`. Required in production:
+		 * without them each lambda rate-limits against its own memory, which a
+		 * cold start resets.
+		 */
+		KV_REST_API_TOKEN:
+			process.env.NODE_ENV === "production"
+				? z.string()
+				: z.string().optional(),
+		KV_REST_API_URL:
+			process.env.NODE_ENV === "production" ? z.url() : z.url().optional(),
 		NODE_ENV: z
 			.enum(["development", "test", "production"])
 			.default("development"),
@@ -39,6 +51,8 @@ export const env = createEnv({
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		DATABASE_URL: process.env.DATABASE_URL,
 		DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
+		KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
+		KV_REST_API_URL: process.env.KV_REST_API_URL,
 		NODE_ENV: process.env.NODE_ENV,
 	},
 	/**
