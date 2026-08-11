@@ -1,14 +1,5 @@
 SHELL := /bin/bash -euo pipefail
 
-# `server-only` throws at import unless the `react-server` export condition is set.
-# `next build` sets it; `tsx`/`drizzle-kit` don't. See .claude/rules/server-only-boundary.md.
-export NODE_OPTIONS=--conditions=react-server
-
-# Exception: under the react-server condition Node resolves `react` to its
-# react-server build (no createContext/useLayoutEffect), breaking component
-# tests. Test targets must not inherit the condition.
-test test_e2e: NODE_OPTIONS=
-
 .PHONY: install build dev check fix audit test test_e2e \
 	db_generate db_custom db_migrate db_studio db_check \
 	db_branch db_branch_delete db_branch_delete_all db_branch_status clean
