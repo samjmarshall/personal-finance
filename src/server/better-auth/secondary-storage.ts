@@ -85,9 +85,14 @@ export function createSecondaryStorage({ url, token, prefix }: Options) {
 		},
 
 		set: async (key: string, value: string, ttl?: number) => {
+			// A TTL of 0 means already expired, not "keep forever": `getTTLSeconds`
+			// floors at 0 and callers pass it straight through (`internal-adapter.mjs:37`).
+			// Writing it without `ex` leaves a key nothing ever reclaims — eviction is
+			// disabled on the instance, and only the TTL removes session keys.
+			if (ttl !== undefined && ttl <= 0) return;
 			try {
-				if (ttl) await redis.set(k(key), value, { ex: ttl });
-				else await redis.set(k(key), value);
+				if (ttl === undefined) await redis.set(k(key), value);
+				else await redis.set(k(key), value, { ex: ttl });
 			} catch (error) {
 				const failure = fail("set", error);
 				if (isRevocationManifest(key)) throw failure;

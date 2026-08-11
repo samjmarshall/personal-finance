@@ -95,6 +95,14 @@ describe("set", () => {
 		expect(client.set).toHaveBeenCalledWith("ba:test:token", "value");
 	});
 
+	// The one input where a truthiness check diverges from intent: 0 is an expired
+	// session, and writing it without `ex` leaves a key that never expires.
+	it("skips the write entirely when the TTL has already run out", async () => {
+		await storage().set("token", "value", 0);
+
+		expect(client.set).not.toHaveBeenCalled();
+	});
+
 	it("swallows a throw — Postgres already holds the durable row", async () => {
 		client.set.mockRejectedValue(new Error("upstash down"));
 
