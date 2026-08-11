@@ -23,6 +23,26 @@ To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the fo
 
 You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
 
+## Environment variables
+
+Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them per-environment in the Vercel project.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | always | Pooled Postgres connection. |
+| `DATABASE_URL_UNPOOLED` | optional | Direct connection for drizzle-kit DDL. Local Docker Postgres has no pooler. |
+| `BETTER_AUTH_SECRET` | production | Signs session cookies. |
+| `KV_REST_API_URL` | production | Upstash Redis REST endpoint. |
+| `KV_REST_API_TOKEN` | production | Upstash Redis REST token. |
+
+`next build` runs with `NODE_ENV=production`, so `make build` and `yarn preview` fail locally unless the production-required variables are in `.env`.
+
+### Upstash Redis
+
+Better Auth secondary storage — sessions and verification records dual-write to Redis and Postgres and read Redis-first, with Postgres as the durable copy. Rate-limit counters live here so they are shared across lambdas. See [adr006](adr/adr006-redis-session-cache-with-postgres-durable-copy.md) and [adr007](adr/adr007-asymmetric-failure-posture-in-the-redis-adapter.md).
+
+The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `ba:<VERCEL_ENV>:<db-fingerprint>:`, so environments and Neon branches sharing one Upstash database cannot authenticate each other's sessions.
+
 ## How do I deploy this?
 
 Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
