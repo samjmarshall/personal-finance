@@ -1,14 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { errors } from "@upstash/redis";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const pipeline = vi.hoisted(() => ({
+	incr: vi.fn(),
+	expire: vi.fn(),
+	exec: vi.fn(),
+}));
 
 const client = vi.hoisted(() => ({
 	get: vi.fn(),
 	set: vi.fn(),
 	del: vi.fn(),
-	incr: vi.fn(),
-	expire: vi.fn(),
+	pipeline: vi.fn(),
 }));
 
-vi.mock("@upstash/redis", () => ({
+vi.mock("@upstash/redis", async (importOriginal) => ({
+	// The real error classes: the redaction below must stay pinned to the messages the
+	// installed client actually produces, not to a string this file made up.
+	errors: (await importOriginal<typeof import("@upstash/redis")>()).errors,
 	Redis: vi.fn(function Redis() {
 		return client;
 	}),
@@ -21,7 +30,21 @@ const storage = () =>
 
 beforeEach(() => {
 	for (const fn of Object.values(client)) fn.mockReset();
+	for (const fn of Object.values(pipeline)) fn.mockReset();
+	client.pipeline.mockReturnValue(pipeline);
+	pipeline.incr.mockReturnValue(pipeline);
+	pipeline.expire.mockReturnValue(pipeline);
+	pipeline.exec.mockResolvedValue([1, 1]);
+	// Restored in afterEach so one failed assertion cannot leak the stub into the
+	// rest of the file, and so the fail-open cases stop printing to real stderr.
+	vi.spyOn(console, "error").mockImplementation(() => {});
 });
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
+const loggedOutput = () => vi.mocked(console.error).mock.calls.flat().join(" ");
 
 describe("get", () => {
 	it("re-stringifies an object the REST client already parsed", async () => {
@@ -30,6 +53,14 @@ describe("get", () => {
 		await expect(storage().get("token")).resolves.toBe(
 			'{"session":{"id":"abc"}}',
 		);
+	});
+
+	// The branch adr006's durability promise rests on: a miss must read as a miss so
+	// Better Auth falls through to Postgres instead of resolving the user signed-out.
+	it("returns null on a plain cache miss", async () => {
+		client.get.mockResolvedValue(null);
+
+		await expect(storage().get("token")).resolves.toBeNull();
 	});
 
 	it("returns null when the client throws, so Postgres fallback runs", async () => {
@@ -44,7 +75,7 @@ describe("get", () => {
 		client.get.mockRejectedValue(new Error("upstash down"));
 
 		await expect(storage().get("active-sessions-usr_42")).rejects.toThrow(
-			"upstash down",
+			"get failed",
 		);
 	});
 });
@@ -77,7 +108,7 @@ describe("set", () => {
 
 		await expect(
 			storage().set("active-sessions-usr_42", "[]", 60),
-		).rejects.toThrow("upstash down");
+		).rejects.toThrow("set failed");
 	});
 });
 
@@ -87,67 +118,84 @@ describe("delete", () => {
 	it("propagates a throw rather than failing open", async () => {
 		client.del.mockRejectedValue(new Error("upstash down"));
 
-		await expect(storage().delete("token")).rejects.toThrow("upstash down");
+		await expect(storage().delete("token")).rejects.toThrow("delete failed");
 	});
 });
 
 describe("increment", () => {
-	it("sets the TTL on the first count only, so the window does not slide", async () => {
-		client.incr.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
-		const store = storage();
+	// Two round trips would leave the counter with no TTL if EXPIRE failed after INCR,
+	// permanently 429-ing that IP. `NX` also stops a later call sliding the window.
+	it("issues INCR and EXPIRE NX as one pipelined round trip", async () => {
+		pipeline.exec.mockResolvedValue([7, 0]);
 
-		await expect(store.increment("ip", 60)).resolves.toBe(1);
-		expect(client.expire).toHaveBeenCalledWith("ba:test:ip", 60);
-
-		await expect(store.increment("ip", 60)).resolves.toBe(2);
-		expect(client.expire).toHaveBeenCalledTimes(1);
+		await expect(storage().increment("ip", 60)).resolves.toBe(7);
+		expect(pipeline.incr).toHaveBeenCalledWith("ba:test:ip");
+		expect(pipeline.expire).toHaveBeenCalledWith("ba:test:ip", 60, "NX");
+		expect(pipeline.exec).toHaveBeenCalledTimes(1);
 	});
 
 	// 0 reads as under the limit. A throw would 500 every /api/auth/* request.
-	it("returns 0 when the client throws", async () => {
-		client.incr.mockRejectedValue(new Error("upstash down"));
+	it("returns 0 when the pipeline throws", async () => {
+		pipeline.exec.mockRejectedValue(new Error("upstash down"));
 
 		await expect(storage().increment("ip", 60)).resolves.toBe(0);
 	});
 });
 
-describe("failure logging", () => {
-	// @upstash/redis builds its message as `${body.error}, command was: ${JSON.stringify(
-	// req.body)}` — the command carries the raw session token and the user record.
+describe("failure redaction", () => {
+	// Built by the installed client, not by hand: `${body.error}, command was:
+	// ${JSON.stringify(req.body)}` carries the raw session token and the user record.
 	const upstashError = () =>
-		new Error(
+		new errors.UpstashError(
 			'ERR max daily request limit exceeded, command was: [["set","ba:test:sess_tok_SECRET","{\\"user\\":{\\"email\\":\\"victim@example.com\\"}}","ex",604800]]',
 		);
 
 	it("logs the reason without the command body Upstash appends", async () => {
-		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 		client.get.mockRejectedValue(upstashError());
 
 		await storage().get("sess_tok_SECRET");
 
-		const output = logged.mock.calls.flat().join(" ");
-		expect(output).toContain("max daily request limit exceeded");
-		expect(output).not.toContain("sess_tok_SECRET");
-		expect(output).not.toContain("victim@example.com");
-		logged.mockRestore();
+		expect(loggedOutput()).toContain("max daily request limit exceeded");
+		expect(loggedOutput()).not.toContain("sess_tok_SECRET");
+		expect(loggedOutput()).not.toContain("victim@example.com");
 	});
 
-	// UpstashJSONParseError's message is `Unable to parse response body: <200 chars>`,
-	// and on a successful GET that body is the stored session. Nothing here is safe.
+	// UpstashJSONParseError quotes 200 chars of the response body, and on a successful
+	// GET that body is the stored session. Nothing in the message is safe to print.
 	it("logs nothing but the name for a response-body parse failure", async () => {
-		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-		const parseError = new Error(
-			'Unable to parse response body: {"result":"{\\"session\\":{\\"token\\":\\"sess_tok_SECRET\\"}}"}',
+		client.get.mockRejectedValue(
+			new errors.UpstashJSONParseError(
+				'{"result":"{\\"session\\":{\\"token\\":\\"sess_tok_SECRET\\"}}"}',
+			),
 		);
-		parseError.name = "UpstashJSONParseError";
-		client.get.mockRejectedValue(parseError);
 
 		await storage().get("sess_tok_SECRET");
 
-		const output = logged.mock.calls.flat().join(" ");
-		expect(output).toContain("UpstashJSONParseError");
-		expect(output).not.toContain("sess_tok_SECRET");
-		logged.mockRestore();
+		expect(loggedOutput()).toContain("UpstashJSONParseError");
+		expect(loggedOutput()).not.toContain("sess_tok_SECRET");
+	});
+
+	// Better Auth logs whatever we throw as a whole error object, straight to
+	// console.error — so the rethrown error has to be redacted too, not just the log.
+	it("rethrows a redacted error, never the client's own", async () => {
+		client.del.mockRejectedValue(upstashError());
+
+		await expect(storage().delete("sess_tok_SECRET")).rejects.toThrow(
+			expect.objectContaining({
+				name: "RedisUnavailableError",
+				message: expect.not.stringContaining("sess_tok_SECRET"),
+			}),
+		);
+	});
+
+	it("rethrows a redacted error on the manifest paths too", async () => {
+		client.get.mockRejectedValue(upstashError());
+
+		await expect(storage().get("active-sessions-usr_42")).rejects.toThrow(
+			expect.objectContaining({
+				message: expect.not.stringContaining("victim@example.com"),
+			}),
+		);
 	});
 });
 
@@ -155,7 +203,6 @@ describe("failure logging", () => {
 // skips it reads a neighbouring deployment's sessions.
 describe("prefixing", () => {
 	it("applies the injected prefix to every method", async () => {
-		client.incr.mockResolvedValue(1);
 		const store = createSecondaryStorage({
 			url: "https://kv",
 			token: "t",
@@ -171,8 +218,8 @@ describe("prefixing", () => {
 			client.get,
 			client.set,
 			client.del,
-			client.incr,
-			client.expire,
+			pipeline.incr,
+			pipeline.expire,
 		];
 		for (const fn of keyed) {
 			expect(fn.mock.calls[0]?.[0]).toBe("ba:preview:deadbeef:k");

@@ -19,21 +19,43 @@ const isRevocationManifest = (key: string) =>
 	key.startsWith("active-sessions-");
 
 /**
- * Logs why a call failed, never what it carried.
+ * Upstash's reason for a failure, with our data stripped out.
  *
- * Our keys are raw session tokens and our values are serialised user records, and the
- * Upstash client puts both into error messages: `UpstashError` appends the whole
- * command, and `UpstashJSONParseError` quotes 200 chars of the response body — which on
- * a successful GET *is* the session. So a parse failure yields nothing safe to print.
+ * `UpstashError` appends the whole command — the key is a raw session token, the
+ * value a serialised user record. `UpstashJSONParseError` quotes 200 chars of the
+ * response body and is thrown on the *success* path too, where that body is the
+ * session itself, so nothing in it is safe and only the name survives.
  */
-function logFailure(operation: string, error: unknown) {
+function redactReason(error: unknown) {
 	const name = error instanceof Error ? error.name : typeof error;
+	if (name === "UpstashJSONParseError") return name;
 	const message = error instanceof Error ? error.message : String(error);
-	const reason =
-		name === "UpstashJSONParseError"
-			? name
-			: message.split(", command was:")[0];
+	return message.split(", command was:")[0];
+}
+
+/**
+ * Redacted stand-in, safe to throw out of this module.
+ *
+ * Better Auth logs whatever we throw as a whole error object (`api/index.mjs:210`,
+ * `routes/sign-out.mjs:24`), and its logger hands that to `console.error` — so
+ * rethrowing Upstash's own error would put the session token and user record into
+ * Vercel's runtime logs and defeat the redaction above. Carries no `cause`: Node's
+ * inspector prints that too.
+ */
+class RedisUnavailableError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "RedisUnavailableError";
+	}
+}
+
+/** Logs the redacted reason; returns the error to rethrow on fail-closed paths. */
+function fail(operation: string, error: unknown) {
+	const reason = redactReason(error);
 	console.error(`[auth:redis] ${operation} failed`, reason);
+	return new RedisUnavailableError(
+		`[auth:redis] ${operation} failed: ${reason}`,
+	);
 }
 
 /**
@@ -46,46 +68,56 @@ function logFailure(operation: string, error: unknown) {
  */
 export function createSecondaryStorage({ url, token, prefix }: Options) {
 	const redis = new Redis({ url, token });
+	const k = (key: string) => prefix + key;
 
 	return {
 		get: async (key: string) => {
 			try {
-				const value = await redis.get(prefix + key);
+				const value = await redis.get(k(key));
 				if (value === null || value === undefined) return null;
 				// The Upstash REST client parses JSON for us; Better Auth expects a string.
-				if (typeof value === "string") return value;
-				if (typeof value === "object") return JSON.stringify(value);
-				return String(value);
+				return typeof value === "string" ? value : JSON.stringify(value);
 			} catch (error) {
-				logFailure("get", error);
-				if (isRevocationManifest(key)) throw error;
+				const failure = fail("get", error);
+				if (isRevocationManifest(key)) throw failure;
 				return null; // Presents as a miss, so the Postgres fallback runs.
 			}
 		},
 
 		set: async (key: string, value: string, ttl?: number) => {
 			try {
-				if (ttl) await redis.set(prefix + key, value, { ex: ttl });
-				else await redis.set(prefix + key, value);
+				if (ttl) await redis.set(k(key), value, { ex: ttl });
+				else await redis.set(k(key), value);
 			} catch (error) {
-				logFailure("set", error);
-				if (isRevocationManifest(key)) throw error;
+				const failure = fail("set", error);
+				if (isRevocationManifest(key)) throw failure;
 			}
 		},
 
-		// No catch. Swallowing this lets Better Auth delete the Postgres row, leaving an
-		// orphan key that authenticates for up to 7 days. See adr007.
+		// This catch RETHROWS. It exists only to redact the error, never to swallow it —
+		// letting Better Auth delete the Postgres row after a failed Redis delete leaves
+		// an orphan key that authenticates for up to 7 days. See adr007.
 		delete: async (key: string) => {
-			await redis.del(prefix + key);
+			try {
+				await redis.del(k(key));
+			} catch (error) {
+				throw fail("delete", error);
+			}
 		},
 
 		increment: async (key: string, ttl: number) => {
 			try {
-				const count = await redis.incr(prefix + key);
-				if (count === 1) await redis.expire(prefix + key, ttl);
+				// One round trip, and `NX` sets the TTL whenever it is missing. Issuing
+				// EXPIRE separately leaks a TTL-less counter if it fails after the INCR,
+				// which 429s that IP forever — nothing else deletes rate-limit keys.
+				const [count] = await redis
+					.pipeline()
+					.incr(k(key))
+					.expire(k(key), ttl, "NX")
+					.exec<[number, 0 | 1]>();
 				return count;
 			} catch (error) {
-				logFailure("increment", error);
+				fail("increment", error);
 				return 0; // Allowed. A throw 500s every /api/auth/* request.
 			}
 		},
