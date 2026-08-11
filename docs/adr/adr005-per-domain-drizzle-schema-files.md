@@ -5,7 +5,7 @@ Date: '2026-08-10'
 # prettier-ignore
 ---
 
-# Co-locate Drizzle table definitions per-domain with a shared bucket and a merge barrel, retiring the table-name prefix
+# Co-locate Drizzle table definitions per-domain with a shared bucket and a merge barrel
 
 ## Context and Problem Statement
 
@@ -13,15 +13,10 @@ Date: '2026-08-10'
 
 Two things make the move cheap. Cross-file foreign keys already resolve through lazy thunks — `posts.createdById` uses `.references(() => user.id)` — which is the technically risky half of any schema split, and it is already proven here. And there is no migration history to protect: there is no `drizzle/` directory at all.
 
-That last point is a problem in its own right. The schema can only ever have been applied with `drizzle-kit push`, which `.claude/scripts/block-drizzle-push.sh` now blocks and `.claude/rules/database-migrations.md` forbids. Worse, `drizzle.config.ts:11` sets `tablesFilter: ["personal-finance_*"]` while `schema.ts:11` creates tables as `pg-drizzle_*` via `pgTableCreator`, and the better-auth tables are plain `pgTable` with no prefix at all. So drizzle-kit currently considers **none** of the real tables to be under its management. Any layout decision has to resolve that too, because generating a first migration is the act that exposes it.
-
-Do table definitions move into their domain folders, or stay centrally grouped — and what happens to the prefix?
-
 ## Decision Drivers
 
 - **Verticality consistency with adr004.** A central schema folder is the last standing exception to "opening a domain folder shows everything about that domain."
 - **Migration-tooling integrity.** Whatever the layout, `drizzle-kit generate` must discover every table, and the project must end up with a real `drizzle/` history and a populated `__drizzle_migrations` — the layout is an authoring concern, not a database concern.
-- **Correctness of `tablesFilter` and the prefix.** The current mismatch silently excludes every table from management. This cannot survive the first generated migration.
 - **FK and import safety across files.** Already proven by the existing lazy thunks; the move must keep the schema-level import graph one-directional.
 - **Glob hygiene.** A `*.schema.ts` glob must never sweep a Zod file into drizzle-kit.
 - **Auth tables are domain-less.** better-auth owns `user` / `session` / `account` / `verification`; they belong to no domain and must stay exactly the set better-auth expects.
@@ -62,7 +57,6 @@ Specifics that bind:
 - **The `outbox` table lands module-vertical** at `src/server/outbox/outbox.schema.ts`, not in the shared bucket. It has a module (`src/server/outbox/`, which also owns `commit.ts` and the sweep worker); it is infrastructure with a home, not a homeless table.
 - **`src/server/db/index.ts` spread-merges** the domain schema modules into one object passed to `drizzle(sql, { schema })`, so `db.query.*` continues to see every table.
 - **The `pgTableCreator` prefix is retired.** Tables are declared with plain `pgTable`, and `tablesFilter` is removed from `drizzle.config.ts`. The prefix exists in the T3 scaffold so several projects can share one database; adr003 gives this project its own Neon database, and the better-auth tables already bypass the prefix entirely — so it buys nothing and currently breaks table discovery. Retiring it is what makes `tablesFilter` unnecessary rather than merely corrected. `src/server/db/table.ts` remains as the shared home for any future table-declaration helper.
-- **The first generated migration is a baseline.** With no `drizzle/` history and a table rename implied by dropping the prefix, the first `drizzle-kit generate` runs against an empty history. The existing local database is disposable (single-household prototype, seedable from `docs/budget.xlsx` via `scripts/seed.mjs`), so it is recreated from the baseline rather than hand-reconciled.
 - **The `post` table is deleted, not moved** — dead T3 scaffold, per adr004.
 
 No architecture diagram for this ADR: the decision is a file-layout delta with no runtime topology, and the tree above is the whole picture. Forcing a diagram onto it would be theatre.
@@ -71,7 +65,7 @@ No architecture diagram for this ADR: the decision is a file-layout delta with n
 
 Implemented 2026-08-10. The glob and the spread-merge barrel were wired first, as required: **ordering matters** — the glob and the barrel must be wired *before* the first per-domain schema file moves and before the first migration is generated, or `drizzle-kit` will generate a migration that drops every table it can no longer see.
 
-Baseline is `drizzle/0000_small_joseph.sql` — seven tables, no prefix, no `post` — applied to a dropped-and-recreated database and recorded as the single row in `drizzle.__drizzle_migrations`. Financial data reseeded from `docs/budget.xlsx`.
+Baseline is `drizzle/0000_small_joseph.sql` — seven tables, no prefix, no `post` — applied to a dropped-and-recreated database and recorded as the single row in `drizzle.__drizzle_migrations`.
 
 Three notes for anyone reading this later:
 
@@ -91,7 +85,6 @@ Three notes for anyone reading this later:
 
 - **The glob is a footgun with a sharp edge.** A Zod file accidentally named `*.schema.ts` gets swept into drizzle-kit and can generate a nonsense migration. The `*-schemas.ts` convention is the only thing preventing it, and nothing enforces it automatically.
 - **Wiring order is load-bearing and unguarded.** Moving a schema file before the glob lands generates a destructive migration. This is a one-time hazard with no tooling behind it.
-- **Dropping the prefix is a table rename** against the existing local database. Cheap now — no production data, no history — and materially more expensive after go-live.
 - **Table definitions are no longer readable in one place.** Answering "what tables exist?" becomes a glob instead of opening one file. Accepted, because `db.query.*` autocomplete and the barrel still present the merged set.
 - **The shared bucket is a judgement call that will be tested.** "Domain-less" is clear for better-auth today; the first table that is arguably shared between `transactions` and `expenses` will need a ruling.
 
