@@ -1,6 +1,6 @@
 "use client";
 
-import { Combobox as ComboboxPrimitive } from "@base-ui/react";
+import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import * as React from "react";
 import { Button } from "~/components/ui/button";
@@ -192,8 +192,11 @@ function ComboboxCollection({ ...props }: ComboboxPrimitive.Collection.Props) {
 function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
 	return (
 		<ComboboxPrimitive.Empty
+			// Keep the live-region root mounted (Base UI renders its children only
+			// when empty); toggle padding, not display, so screen readers still
+			// announce — the root must never be `display:none`/`hidden`.
 			className={cn(
-				"hidden w-full justify-center py-2 text-center text-muted-foreground text-sm group-data-empty/combobox-content:flex",
+				"flex w-full justify-center py-0 text-center text-muted-foreground text-sm group-data-empty/combobox-content:py-2",
 				className,
 			)}
 			data-slot="combobox-empty"
@@ -215,11 +218,7 @@ function ComboboxSeparator({
 	);
 }
 
-function ComboboxChips({
-	className,
-	...props
-}: React.ComponentPropsWithRef<typeof ComboboxPrimitive.Chips> &
-	ComboboxPrimitive.Chips.Props) {
+function ComboboxChips({ className, ...props }: ComboboxPrimitive.Chips.Props) {
 	return (
 		<ComboboxPrimitive.Chips
 			className={cn(

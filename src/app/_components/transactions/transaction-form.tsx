@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -60,9 +60,17 @@ export function TransactionForm({
 	const [description, setDescription] = useState("");
 	const [amount, setAmount] = useState("");
 	const [category, setCategory] = useState("");
-	// Combobox input text is controlled so the selected category shows on edit and
-	// stale filter text can't linger; kept in sync with `category` below.
+	// Combobox input text is controlled: cleared on open so the full list shows,
+	// restored to the committed label on close so abandoned filter text can't linger.
 	const [categoryInput, setCategoryInput] = useState("");
+	// Mirrors `category` synchronously so the close handler restores the label
+	// without reading a stale closure of the state value.
+	const categoryRef = useRef("");
+	const commitCategory = useCallback((value: string) => {
+		setCategory(value);
+		setCategoryInput(value);
+		categoryRef.current = value;
+	}, []);
 	const [frequency, setFrequency] = useState<string>("One-off");
 	const [priority, setPriority] = useState<string>("Nice to Have");
 	const [notes, setNotes] = useState("");
@@ -72,12 +80,11 @@ export function TransactionForm({
 		setDate(toDateInput(transaction?.date ?? new Date()));
 		setDescription(transaction?.description ?? "");
 		setAmount(transaction ? String(transaction.amount) : "");
-		setCategory(transaction?.category ?? "");
-		setCategoryInput(transaction?.category ?? "");
+		commitCategory(transaction?.category ?? "");
 		setFrequency(transaction?.frequency ?? "One-off");
 		setPriority(transaction?.priority ?? "Nice to Have");
 		setNotes(transaction?.notes ?? "");
-	}, [open, transaction]);
+	}, [open, transaction, commitCategory]);
 
 	const onSuccess = async () => {
 		await Promise.all([
@@ -166,15 +173,13 @@ export function TransactionForm({
 							inputValue={categoryInput}
 							items={categoryOptions}
 							onInputValueChange={setCategoryInput}
-							onOpenChange={(next) => {
-								// Revert the query to the selected label on close so partial
-								// filter text left by an abandoned search doesn't stick.
-								if (!next) setCategoryInput(category);
+							onOpenChange={(isOpen) => {
+								// Base UI filters items by the input text, so open with an
+								// empty query to show the full list; on close restore the
+								// committed label (from the ref, to dodge a stale closure).
+								setCategoryInput(isOpen ? "" : categoryRef.current);
 							}}
-							onValueChange={(next) => {
-								setCategory(next ?? "");
-								setCategoryInput(next ?? "");
-							}}
+							onValueChange={(next) => commitCategory(next ?? "")}
 							value={category || null}
 						>
 							<ComboboxInput
