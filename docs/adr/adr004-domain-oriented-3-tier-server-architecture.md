@@ -41,7 +41,7 @@ How should server code be organised so that every read and write has one obvious
 
 Chosen option: "1. By-domain vertical modules, named 3-tier with dotted suffixes, factory-closure DI, universal `commit(writes, outboxEvents)` primitive with pure `decide()` only where earned", because it makes adr002's atomicity a property of the repository's only write signature, gives Inngest workers a home beside the domain they serve, and — unlike option 2 — spends ceremony only where a flow's write complexity earns it, which on a three-table CRUD app is nowhere yet.
 
-This adopts the **converged** convention from both sibling projects, not their starting positions. Both executed this migration and then amended it; the amendments are folded in below as the decision rather than re-derived through the same drift. `.claude/rules/server-architecture.md` is already written against this converged shape.
+The conventions below are the **converged** form of this decision, with known refinements folded in as the decision rather than left to be re-derived through drift. `.claude/rules/server-architecture.md` is already written against this converged shape.
 
 Specifics that bind:
 
@@ -51,14 +51,14 @@ Specifics that bind:
 - **Module surface is `{ service }`.** Not `{ router, workers, service }`. Entry-point adapters are wired by their host registries — routers in `src/server/api/root.ts`, workers in `<domain>.workers.ts` feeding the Inngest functions registry — so a service-only consumer never drags the tRPC/auth or Inngest adapter graph in behind it. **The repository is never exported.** Cross-domain access is service-port to service-port, wired module to module, and the module graph stays acyclic.
 - **`commit(writes, outboxEvents)` is the only write door — the heart of this ADR.** Plural: a discriminated-union list of write descriptors plus typed outbox event descriptors, executed as one `db.batch` ([adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)) by a shared `makeCommitWithOutbox` helper in `src/server/outbox/commit.ts`. The outbox rides the signature, which is what turns adr002's code-review rule into a structural one. Emit-only surfaces with no canonical rows use the outbox's write-less `publish`; a bare `inngest.send` from a handler is a violation.
 - **`decide()` is earned, not default.** Pure cores (input + current state + injected `ctx`/`now` → write descriptors + event descriptors) are introduced only on write-heavy flows. **No flow in this app earns one today** — every current mutation is a single-row create, update or delete. The first candidate is statement import, which will fan a parsed batch into inserts, dedupe decisions and categorisation-request events. Until then, services make imperative repository calls that still terminate in `commit`. Uniform domain-object write-sets are explicitly not adopted; see option 2.
-- **Reads pass through all three tiers**, even as one-line pass-throughs — they are the designated home for future scoping and must not be optimised away. Importing a sibling domain's `*.schema.ts` tables for **read** joins is allowed; cross-domain **writes** go through service ports only.
+- **Reads pass through all three tiers**, even as one-line pass-throughs — they are the designated home for future scoping and must not be optimised away. Importing another domain's `*.schema.ts` tables for **read** joins is allowed; cross-domain **writes** go through service ports only.
 - **Hard server/isomorphic boundary.** Every non-test file under `src/server/**` carries `import "server-only"` as its first line. `src/domain/` is the isomorphic kernel and is **isomorphic-by-need**: it starts empty and gains a resident only when client code genuinely shares something. `src/lib/constants.ts` (the priority, frequency and category vocabularies) stays where it is — `src/lib/**` is the existing client-safe surface. `decide()` functions are server-side and `server-only`-marked; purity alone does not buy a kernel seat.
 - **Event and identifier authority.** `src/server/inngest/events.ts` (`EVENT_REGISTRY`) is the single naming and payload authority per adr002 clause 7. Inngest function ids, `step.run` ids and event names are byte-stable external identifiers — Inngest memoisation and replay keys — and renaming one is a deliberate act recorded in an ADR consequence note.
 - **Migration shape.** Strangler, one domain per change, green at every step. `transactions/` first as the reference domain, since it is both the largest surface and the one adr002's machinery attaches to. Delete the `post` router and table rather than migrating them.
 
 ### Implementation status
 
-Not started. No domain module, service, repository, worker, `src/domain/`, or `server-only` marker exists outside `src/trpc/server.ts`. Recorded as **Accepted** because `.claude/rules/server-architecture.md` already binds new code to exactly this shape, and because both sibling projects have executed it end to end.
+Not started. No domain module, service, repository, worker, `src/domain/`, or `server-only` marker exists outside `src/trpc/server.ts`. Recorded as **Accepted** because `.claude/rules/server-architecture.md` already binds new code to exactly this shape.
 
 Two pieces of tooling this decision assumes do not exist in this repo and must land with it: a way to run `drizzle-kit`, `tsx` and any test runner under `--conditions=react-server` (or to stub the marker), because `server-only` throws at import time otherwise; and a test framework, since there is none. `.claude/rules/server-only-boundary.md` describes a Makefile-based mechanism this project does not have.
 
@@ -93,14 +93,13 @@ Vertical domain folders with named tiers; two thin adapters over one service; th
 | One home per concern; greppable tier suffixes; workers co-located with their domain      | Real ceremony on single-row CRUD — three indirections for one `UPDATE`            |
 | Compiler-enforced server/client boundary                                                 | Two write styles to hold once `decide()` lands; needs the rule documented         |
 | Injectable seams ready for a test suite that does not exist yet                          | Manual cross-domain wiring; more files per domain                                 |
-| Matches both sibling projects' converged shape — their code and conventions transfer     | Requires `--conditions=react-server` tooling this repo lacks                      |
+|                                                                                          | Requires `--conditions=react-server` tooling this repo lacks                      |
 
 ### 2. Same 3-tier with uniform domain-object write-sets
 
-The `ai-insurance-claims` shape verbatim: every service method returns a domain-object write-set, every domain gets a pure decision core, and the repository maps domain objects to rows uniformly.
+Uniform domain-object write-sets: every service method returns a domain-object write-set, every domain gets a pure decision core, and the repository maps domain objects to rows uniformly.
 
 - Good, because one uniform mental model — every write everywhere reads the same way, and service purity is maximal.
-- Good, because it matches a production-proven template with no adaptation risk.
 - Bad, because that shape earns its keep on a multi-child append-only aggregate. There is no such aggregate here: `transaction`, `expense` and `income` are flat, independent, single-row entities with no children.
 - Bad, because every current mutation would assemble a one-element write-set — pure ceremony, directly against the ceremony-budget driver.
 - Bad, because `commit(writes, outboxEvents)` already captures the entire atomicity payoff. The extra fidelity buys uniformity, not safety.
@@ -123,7 +122,7 @@ The `ai-insurance-claims` shape verbatim: every service method returns a domain-
 
 - Good, because zero migration cost, and it is entirely adequate for the app as it stands today.
 - Bad, because adr002's atomicity becomes a rule remembered at every mutation, which is precisely the failure mode adr002 exists to eliminate.
-- Bad, because Inngest workers have no home, and the default landing spot is a parallel `src/inngest/` tree — the split both sibling projects had to undo.
+- Bad, because Inngest workers have no home, and the default landing spot is a parallel `src/inngest/` tree divorced from the domains it serves.
 - Bad, because router-inlined SQL cannot be shared with a worker, so the first piece of logic both entry points need gets duplicated.
 
 ## Links
@@ -132,4 +131,3 @@ The `ai-insurance-claims` shape verbatim: every service method returns a domain-
 - Atomicity mechanism: [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) — `commit` is a single `db.batch`; no interactive transactions exist anywhere in the system
 - Refined by: [adr005](adr005-per-domain-drizzle-schema-files.md) — the schema-location sub-decision within this architecture
 - Operational statement: `.claude/rules/server-architecture.md` — the tier map, module surface and frozen-identifier rules; `.claude/rules/server-only-boundary.md` for the boundary mechanism
-- Prior art (sibling `rekurve` and `ai-insurance-claims` projects, Accepted in both — named for provenance, deliberately not cross-repo linked): their `adr020` / `adr010` are the proven template. This ADR adopts their post-migration converged conventions directly, and follows rekurve in rejecting uniform write-sets.

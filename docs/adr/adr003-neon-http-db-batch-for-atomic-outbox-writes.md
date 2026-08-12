@@ -11,7 +11,7 @@ Date: '2026-08-10'
 
 [adr002](adr002-canonical-postgres-store-transactional-outbox.md) clause 2 requires that outbox rows commit in the same transaction as the canonical rows, and defers the mechanism to this ADR.
 
-Unlike the sibling projects that pattern came from, this project runs the **`postgres-js`** driver (`src/server/db/index.ts:1-18`, with an HMR connection cache on `globalThis`) against Neon Postgres. `postgres-js` supports real interactive transactions — `db.transaction(async tx => …)` — so adr002's atomicity requirement is, today, already satisfiable with the simplest possible code.
+This project runs the **`postgres-js`** driver (`src/server/db/index.ts:1-18`, with an HMR connection cache on `globalThis`) against Neon Postgres. `postgres-js` supports real interactive transactions — `db.transaction(async tx => …)` — so adr002's atomicity requirement is, today, already satisfiable with the simplest possible code.
 
 Two pressures bear on the driver choice. The deployment target is Vercel (better-auth trusts `*.vercel.run` and `*.v0.build`, and reads `VERCEL_PROJECT_PRODUCTION_URL`), where each concurrent function instance opens its own connection to a directly-connected Postgres. Separately, the tooling copied into `.claude/` already assumes Neon: `.claude/rules/preview-teardown.md` describes deleting `local/<branch>` Neon branches, and the `worktree` skill is built around `scripts/neon-branch.sh` giving each worktree its own database branch.
 
@@ -24,7 +24,6 @@ Which driver does this project run, and which mechanism satisfies adr002's same-
 - **Cost at zero traffic.** This is a single-household prototype that will sit idle most of the day. Scale-to-zero compute is worth real money here, and it interacts with adr002 clause 4 — per-minute polling would pin compute open and defeat it.
 - **Branch-per-preview and branch-per-worktree ergonomics.** The copied `preview-teardown` rule and `worktree` skill are already written against Neon branching. Choosing a different host means rewriting both, or dropping the workflow.
 - **Simplicity of the write path.** Interactive transactions are the more familiar and more capable primitive. Giving them up needs to buy something.
-- **Parity with the sibling projects.** Both run `neon-http` + `db.batch()` in production. Matching them makes their outbox code, their worker shapes and their operational experience directly transferable.
 
 ## Considered Options
 
@@ -44,7 +43,7 @@ Option 2 is rejected reluctantly and on grounds that are about the platform, not
 
 The one real limitation: **no statement-to-statement data flow**. Statement 1's generated id cannot feed statement 2's values. All ids must be resolved before the batch is built, with `crypto.randomUUID()`.
 
-This has a concrete migration cost here that it did not have in the sibling projects, and it is the sharpest edge of this decision. Every app table currently uses a database-generated integer identity PK:
+This has a concrete migration cost here, and it is the sharpest edge of this decision. Every app table currently uses a database-generated integer identity PK:
 
 ```ts
 id: integer().primaryKey().generatedByDefaultAsIdentity()
@@ -67,14 +66,13 @@ Remaining:
 - Drop `postgres` from dependencies.
 - Migrate `transaction` to a `uuid` PK (see above).
 
-Recorded as **Accepted** on the same basis as [adr002](adr002-canonical-postgres-store-transactional-outbox.md): the rules layer already assumes it, and it is proven on the same stack in two sibling projects.
+Recorded as **Accepted** on the same basis as [adr002](adr002-canonical-postgres-store-transactional-outbox.md): the rules layer already assumes it.
 
 ### Positive Consequences
 
 - **adr002 clause 2 is satisfied with no pool lifecycle.** One HTTP request per mutation; no zombie sockets or connection multiplication under concurrent Vercel invocations.
 - **Compute scales to zero between imports.** Directly enables adr002's hourly sweep cadence rather than fighting it.
 - **`preview-teardown.md` and the `worktree` skill become true instead of aspirational.** Branch-per-preview and branch-per-worktree are the reason those files were copied in; this is what makes them work.
-- **Sibling outbox code transfers directly.** `buildOutboxEvent` / `sendPostCommit` / the sweep worker are all written against this exact driver surface.
 - **Client-generated UUID PKs are independently useful.** An importer can build a whole batch of rows, with their ids, before touching the database — which is exactly the shape the statement-import pipeline wants.
 
 ### Negative Consequences
@@ -95,7 +93,7 @@ Recorded as **Accepted** on the same basis as [adr002](adr002-canonical-postgres
 | Atomic array-transaction in one HTTP round-trip                          | Forces a `uuid` PK migration on any table referenced by an event payload  |
 | Scale-to-zero compute; matches adr002's hourly sweep                     | Local development needs a network Neon branch — no offline database       |
 | Neon branching makes the copied preview/worktree tooling work            | Lock-in to a Neon-specific endpoint                                       |
-| Identical to both sibling projects — code and operational experience transfer | No interactive transactions available anywhere in the system           |
+|                                                                          | No interactive transactions available anywhere in the system             |
 
 ### 2. Keep `postgres-js` + interactive `db.transaction()`
 
@@ -106,7 +104,7 @@ Stay on the current `postgres-js` driver against Neon. Wrap the canonical write 
 | Simplest possible write path; the familiar transaction primitive           | Each Vercel function instance holds its own TCP connection — the classic serverless exhaustion problem, needing a pooler in front |
 | Real statement-to-statement data flow; identity PKs can stay as they are   | No branch-per-preview or branch-per-worktree; `preview-teardown.md` and the `worktree` skill would have to be rewritten or dropped |
 | Zero migration work — it is what runs today                                | A always-on Postgres has a floor cost for an app that is idle most of the day                  |
-| No vendor lock-in; portable to any Postgres                                | Diverges from both sibling projects, so none of their outbox code transfers                    |
+| No vendor lock-in; portable to any Postgres                                |                                                                          |
 
 ### 3. Neon + `neon-serverless` `Pool` + interactive `db.transaction()`
 
@@ -121,6 +119,5 @@ Use Neon, but over the WebSocket driver, to keep interactive transactions.
 - Refinement of: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) — specifies the atomicity mechanism clause 2 requires
 - Enforced by: [adr004](adr004-domain-oriented-3-tier-server-architecture.md) — `commit(writes, outboxEvents)` is the single `db.batch` boundary in the system
 - Assumed by: `.claude/rules/preview-teardown.md` and the `worktree` skill — both are written against Neon branching
-- Prior art (sibling `rekurve` and `ai-insurance-claims` projects, Accepted in both — named for provenance, deliberately not cross-repo linked): rekurve's `adr017` rejects the same `neon-serverless` swap; ai-insurance-claims folds the identical mechanism into its `adr008`. Neither had to argue the host choice, because both were already on Neon.
 - Vendor docs: https://neon.com/docs/serverless/serverless-driver
 - Vendor docs: https://orm.drizzle.team/docs/batch-api

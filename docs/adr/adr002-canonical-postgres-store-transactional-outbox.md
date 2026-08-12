@@ -27,7 +27,6 @@ How does this app persist household finance state and guarantee its side effects
 - **The UI reads canonical rows, never the event tape.** Screens stay simple SQL reads regardless of what asynchronous machinery lands behind them.
 - **Serverless-friendly.** No long-running listener; scheduled work must fit Inngest crons on Vercel.
 - **A single fan-out seam.** Adding a new follow-up behaviour should be a new worker on an existing event, not an edit at every write site.
-- **Proven prior art on an identical stack.** Both sibling projects run this exact pattern on Next.js + Drizzle + Neon + Inngest in production. Re-deriving it from scratch buys nothing.
 
 ## Considered Options
 
@@ -45,7 +44,7 @@ The posture, stated once — the clauses that bind:
 1. **Canonical store.** Neon Postgres rows own all durable domain state — `transaction`, `expense`, `income` and every table after them. Derived values (a category assigned by a worker, a `Recurring` frequency flag, a detected subscription link) are written back onto those rows as output state, not accumulated in a log.
 2. **Atomic write.** Every write with side effects commits its canonical rows and its outbox rows in **one** transaction boundary. The mechanism is specified in [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md).
 3. **Delivery.** After the commit, the writer attempts `inngest.send()` for each new outbox row. On success it stamps `processed_at`; on failure it logs and **swallows** — the mutation's success contract is "the canonical rows were committed," not "every downstream worker was notified." An Inngest cron sweeps rows where `processed_at IS NULL` and re-delivers them. The sweep is the durable backstop, not the fast path.
-4. **Sweep cadence: hourly, with a 30-second row-age floor.** The cron runs `0 * * * *`; its filter carries `created_at < now() - interval '30 seconds'` so it cannot race the post-commit send. Under any real load every event is delivered by the post-commit send and never reaches the sweep, so the hourly cadence trades worst-case backstop latency for letting Neon's compute scale to zero instead of being pinned open by per-minute polling. Both sibling projects converged on exactly this after shipping a 30-second cron first; this ADR records the converged value rather than repeating their drift.
+4. **Sweep cadence: hourly, with a 30-second row-age floor.** The cron runs `0 * * * *`; its filter carries `created_at < now() - interval '30 seconds'` so it cannot race the post-commit send. Under any real load every event is delivered by the post-commit send and never reaches the sweep, so the hourly cadence trades worst-case backstop latency for letting Neon's compute scale to zero instead of being pinned open by per-minute polling.
 5. **Idempotency.** The outbox row `id` **is** the Inngest idempotency key. A sweep racing the post-commit send is a guaranteed no-op. This is an infrastructure guarantee, not per-worker application logic.
 6. **Control state vs output state.** Inngest owns live run state (an in-flight categorisation pass over an import batch). The DB owns the canonical output rows the dashboard reads. **The UI never reads the event tape.**
 7. **Typed event surface.** A single Zod `EVENT_REGISTRY` in `src/server/inngest/events.ts` maps event name → payload schema and is the sole naming authority, deriving `EventName`, `EventPayload<K>` and `OutboxEventDescriptor`. `buildOutboxEvent(name, payload)` parses the payload against the registry and returns `{ id, name, data, insert }` — an **un-awaited** insert for the caller to include in its own atomic write. The registry is the outbox delivery catalogue only; a direct `inngest.send` with no canonical row to attach to (a dev tracer ping, a manual reconcile trigger) is deliberately excluded.
@@ -107,7 +106,7 @@ The decision outruns the code, deliberately and visibly:
 - **Present today:** Postgres via Drizzle, tRPC v11, the canonical `transaction` / `expense` / `income` tables.
 - **Not yet present:** Inngest is not a dependency, there is no `outbox` table, no `src/server/inngest/`, no `src/server/outbox/`, and no import pipeline to trigger any of it. The database is a Neon Postgres branch over `postgres-js` — `scripts/neon-branch.sh` gives each non-`main` git branch its own `local/<branch>` branch, and `main` targets production; the `postgres-js` → `neon-http` swap in [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) is still pending.
 
-This is recorded as **Accepted** rather than Proposed because `.claude/rules/server-architecture.md` and `.claude/rules/database-migrations.md` already bind new code to this contract, and because the shape is proven in two sibling projects on the same stack. Recording it as Proposed would leave the rules citing a decision the project had not made.
+This is recorded as **Accepted** rather than Proposed because `.claude/rules/server-architecture.md` and `.claude/rules/database-migrations.md` already bind new code to this contract. Recording it as Proposed would leave the rules citing a decision the project had not made.
 
 ### Positive Consequences
 
@@ -173,5 +172,4 @@ The send happens inside the canonical transaction; a send failure rolls the writ
 - Atomicity mechanism: [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) — how clause 2's "one transaction" is actually achieved
 - Enforced by: [adr004](adr004-domain-oriented-3-tier-server-architecture.md) — the repository `commit(writes, outboxEvents)` primitive makes the outbox structurally unavoidable at every write site
 - Table home: [adr005](adr005-per-domain-drizzle-schema-files.md) — the `outbox` table lands module-vertical at `src/server/outbox/outbox.schema.ts`
-- Prior art (sibling `rekurve` and `ai-insurance-claims` projects, Accepted in both — named for provenance, deliberately not cross-repo linked): rekurve's `adr013` canonical local store, `adr014` transactional outbox + cron sweep, `adr010` durable worker owns control state, `adr017` batch atomicity, consolidated by its `adr019`; ai-insurance-claims consolidated the same four into its `adr008`. This ADR adapts that synthesis to the household-finance domain.
 - Runbook (TBD): alert rules for stuck outbox rows (`processed_at IS NULL AND attempts > N`) and persistent `inngest.send` failures. This project has no observability backend yet.

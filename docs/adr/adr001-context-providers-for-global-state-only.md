@@ -108,6 +108,5 @@ Encode the allowlist in a lint rule that fails CI when `createContext` is added 
 ## Links
 
 - Enforced by: `.claude/rules/frontend.md` — the one-line rule that cites this ADR
-- Prior art (sibling `rekurve` and `ai-insurance-claims` projects, Accepted in both — named for provenance, deliberately not cross-repo linked): their `adr012` / `adr009` state the same rule; this ADR re-derives it against this project's allowlist and screens.
 - React docs: https://react.dev/learn/passing-data-deeply-with-context
 - Next.js docs: https://nextjs.org/docs/app/getting-started/server-and-client-components

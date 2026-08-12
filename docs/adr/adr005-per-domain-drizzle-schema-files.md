@@ -98,7 +98,6 @@ Three notes for anyone reading this later:
 | Tables sit beside the repository that writes them                           | The `*.schema.ts` glob can sweep a misnamed Zod file                    |
 | Adding a domain adds one auto-discovered file                               | Wiring order is load-bearing and unguarded                              |
 | Lazy-thunk FKs already prove cross-file references work here                | The shared bucket's boundary is a judgement call                        |
-| Matches both sibling projects, so their layout and tooling transfer         |                                                                         |
 
 ### 2. Status quo — single central `src/server/db/schema.ts`
 
@@ -110,7 +109,6 @@ Three notes for anyone reading this later:
 ### 3. Central `db/schema/` folder, one file per entity, plus a barrel
 
 - Good, because it splits the file without touching the domain modules, and is the smallest step from the status quo.
-- Good, because it is a proven intermediate — `rekurve` ran this layout for nine entities before moving to per-domain files.
 - Bad, because it buys the cost of a split without the payoff: tables still live away from the code that writes them, so a domain change still spans two distant folders.
 - Bad, because it is a strictly intermediate stop. Having decided adr004, this option means doing the same migration twice.
 
@@ -119,4 +117,3 @@ Three notes for anyone reading this later:
 - Refines: [adr004](adr004-domain-oriented-3-tier-server-architecture.md) — the schema-location sub-decision within that architecture
 - Table home for: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) — the `outbox` table lands at `src/server/outbox/outbox.schema.ts`
 - Operational statement: `.claude/rules/database-migrations.md` — the two-step generate/migrate workflow and the `drizzle-kit push` ban this layout finally makes workable
-- Prior art (sibling `rekurve` and `ai-insurance-claims` projects, Accepted in both — named for provenance, deliberately not cross-repo linked): their `adr021` / `adr011` reach the same layout. This project's starting point matches ai-insurance-claims' most closely — one central `schema.ts` mixing auth and domain tables.
