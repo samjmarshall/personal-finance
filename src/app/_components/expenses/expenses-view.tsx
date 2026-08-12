@@ -3,6 +3,7 @@
 import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { ConfirmDialog } from "~/app/_components/confirm-dialog";
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
 import { Button } from "~/components/ui/button";
@@ -23,6 +24,8 @@ export function ExpensesView() {
 
 	const [formOpen, setFormOpen] = useState(false);
 	const [editing, setEditing] = useState<Expense | null>(null);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
 	function toggleCategory(category: string) {
@@ -169,7 +172,7 @@ export function ExpensesView() {
 											className="hidden text-right text-muted-foreground sm:block"
 											value={item.year}
 										/>
-										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
+										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
 											<button
 												aria-label={`Edit ${item.name}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -182,8 +185,8 @@ export function ExpensesView() {
 												aria-label={`Delete ${item.name}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
 												onClick={() => {
-													if (confirm(`Delete "${item.name}"?`))
-														remove.mutate({ id: item.id });
+													setDeleteTarget(item);
+													setConfirmOpen(true);
 												}}
 												type="button"
 											>
@@ -217,6 +220,18 @@ export function ExpensesView() {
 				key={editing ? `edit-${editing.id}` : "add"}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
+			/>
+
+			<ConfirmDialog
+				confirmLabel="Delete"
+				description="This can't be undone."
+				destructive
+				onConfirm={() => {
+					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
+				}}
+				onOpenChange={setConfirmOpen}
+				open={confirmOpen}
+				title={deleteTarget ? `Delete "${deleteTarget.name}"?` : ""}
 			/>
 		</div>
 	);

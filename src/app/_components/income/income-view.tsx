@@ -3,6 +3,7 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { ConfirmDialog } from "~/app/_components/confirm-dialog";
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
 import { Button } from "~/components/ui/button";
@@ -21,6 +22,8 @@ export function IncomeView() {
 
 	const [formOpen, setFormOpen] = useState(false);
 	const [editing, setEditing] = useState<Income | null>(null);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
 
 	const groups = useMemo(() => {
 		const map = new Map<string, Income[]>();
@@ -135,7 +138,7 @@ export function IncomeView() {
 											tone="income"
 											value={item.year}
 										/>
-										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 max-sm:opacity-100">
+										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
 											<button
 												aria-label={`Edit ${item.source}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -148,8 +151,8 @@ export function IncomeView() {
 												aria-label={`Delete ${item.source}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
 												onClick={() => {
-													if (confirm(`Delete "${item.source}"?`))
-														remove.mutate({ id: item.id });
+													setDeleteTarget(item);
+													setConfirmOpen(true);
 												}}
 												type="button"
 											>
@@ -182,6 +185,18 @@ export function IncomeView() {
 				income={editing}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
+			/>
+
+			<ConfirmDialog
+				confirmLabel="Delete"
+				description="This can't be undone."
+				destructive
+				onConfirm={() => {
+					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
+				}}
+				onOpenChange={setConfirmOpen}
+				open={confirmOpen}
+				title={deleteTarget ? `Delete "${deleteTarget.source}"?` : ""}
 			/>
 		</div>
 	);

@@ -3,6 +3,7 @@ import "~/styles/globals.css";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { Toaster } from "~/components/ui/sonner";
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
 		>
 			<body className="font-sans">
 				<TRPCReactProvider>{children}</TRPCReactProvider>
+				<Toaster />
 			</body>
 		</html>
 	);

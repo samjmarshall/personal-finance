@@ -3,6 +3,7 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { ConfirmDialog } from "~/app/_components/confirm-dialog";
 import { PageHeader } from "~/app/_components/page-header";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,11 +20,12 @@ export function CategoriesView() {
 		onSuccess: async () => {
 			await utils.category.list.invalidate();
 		},
-		onError: (err) => alert(err.message),
 	});
 
 	const [formOpen, setFormOpen] = useState(false);
 	const [editing, setEditing] = useState<Category | null>(null);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
 	function openAdd() {
 		setEditing(null);
@@ -80,8 +82,8 @@ export function CategoriesView() {
 									aria-label={`Delete ${category.name}`}
 									className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
 									onClick={() => {
-										if (confirm(`Delete "${category.name}"?`))
-											remove.mutate({ id: category.id });
+										setDeleteTarget(category);
+										setConfirmOpen(true);
 									}}
 									type="button"
 								>
@@ -112,6 +114,18 @@ export function CategoriesView() {
 				key={editing ? `edit-${editing.id}` : "add"}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
+			/>
+
+			<ConfirmDialog
+				confirmLabel="Delete"
+				description="This can't be undone."
+				destructive
+				onConfirm={() => {
+					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
+				}}
+				onOpenChange={setConfirmOpen}
+				open={confirmOpen}
+				title={deleteTarget ? `Delete "${deleteTarget.name}"?` : ""}
 			/>
 		</div>
 	);
