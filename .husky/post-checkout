@@ -1,5 +1,5 @@
 # Auto-provision Neon DB branch for local development
 # $3 = 1 for branch checkout, 0 for file checkout
 if [ "$3" = "1" ]; then
-  NODE_OPTIONS=--conditions=react-server scripts/neon-branch.sh create
+  scripts/neon-branch.sh create
 fi
