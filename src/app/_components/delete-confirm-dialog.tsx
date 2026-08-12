@@ -3,9 +3,8 @@
 import { ConfirmDialog } from "~/app/_components/confirm-dialog";
 
 // Delete-specific wrapper over ConfirmDialog: the fixed copy and destructive
-// styling live here once, so the list views share one source of truth for how a
-// delete prompt reads. Prop-taking, not a hook — the owning view keeps the
-// open/target state and passes it down (adr001).
+// styling live here once, so every list view shares one consistent delete
+// prompt. Prop-taking; see adr001.
 export function DeleteConfirmDialog({
 	open,
 	onOpenChange,
