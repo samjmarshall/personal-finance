@@ -57,7 +57,13 @@ export function TransactionsView() {
 	const [formOpen, setFormOpen] = useState(false);
 	const [editing, setEditing] = useState<Transaction | null>(null);
 
-	const [categories] = api.transaction.categories.useSuspenseQuery();
+	// Category picker is constrained to the managed expense_category list, not the
+	// distinct labels already on transactions (which can't seed a new category).
+	const [categoryRows] = api.category.list.useSuspenseQuery();
+	const categories = useMemo(
+		() => categoryRows.map((c) => c.name),
+		[categoryRows],
+	);
 
 	const queryInput = {
 		search: search || undefined,

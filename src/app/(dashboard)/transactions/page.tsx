@@ -2,7 +2,7 @@ import { TransactionsView } from "~/app/_components/transactions/transactions-vi
 import { api, HydrateClient } from "~/trpc/server";
 
 export default async function TransactionsPage() {
-	void api.transaction.categories.prefetch();
+	void api.category.list.prefetch();
 	void api.transaction.list.prefetch({
 		sortBy: "date",
 		sortDir: "desc",

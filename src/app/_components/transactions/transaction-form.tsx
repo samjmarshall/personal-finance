@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
+	Combobox,
+	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxList,
+} from "~/components/ui/combobox";
+import {
 	Dialog,
 	DialogContent,
 	DialogFooter,
@@ -52,6 +60,9 @@ export function TransactionForm({
 	const [description, setDescription] = useState("");
 	const [amount, setAmount] = useState("");
 	const [category, setCategory] = useState("");
+	// Combobox input text is controlled so the selected category shows on edit and
+	// stale filter text can't linger; kept in sync with `category` below.
+	const [categoryInput, setCategoryInput] = useState("");
 	const [frequency, setFrequency] = useState<string>("One-off");
 	const [priority, setPriority] = useState<string>("Nice to Have");
 	const [notes, setNotes] = useState("");
@@ -62,6 +73,7 @@ export function TransactionForm({
 		setDescription(transaction?.description ?? "");
 		setAmount(transaction ? String(transaction.amount) : "");
 		setCategory(transaction?.category ?? "");
+		setCategoryInput(transaction?.category ?? "");
 		setFrequency(transaction?.frequency ?? "One-off");
 		setPriority(transaction?.priority ?? "Nice to Have");
 		setNotes(transaction?.notes ?? "");
@@ -71,13 +83,19 @@ export function TransactionForm({
 		await Promise.all([
 			utils.transaction.list.invalidate(),
 			utils.transaction.summary.invalidate(),
-			utils.transaction.categories.invalidate(),
 		]);
 		onClose();
 	};
 	const create = api.transaction.create.useMutation({ onSuccess });
 	const update = api.transaction.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
+
+	// A saved transaction can hold a category since deleted from the managed list
+	// (or the "Uncategorised" default); inject it so the picker can display it.
+	const categoryOptions =
+		category && !categories.includes(category)
+			? [category, ...categories]
+			: categories;
 
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
@@ -144,18 +162,38 @@ export function TransactionForm({
 					</Field>
 					<Field>
 						<FieldLabel htmlFor="tx-category">Category</FieldLabel>
-						<Input
-							id="tx-category"
-							list="tx-categories"
-							onChange={(e) => setCategory(e.target.value)}
-							placeholder="e.g. Groceries"
-							value={category}
-						/>
-						<datalist id="tx-categories">
-							{categories.map((c) => (
-								<option key={c} value={c} />
-							))}
-						</datalist>
+						<Combobox
+							inputValue={categoryInput}
+							items={categoryOptions}
+							onInputValueChange={setCategoryInput}
+							onOpenChange={(next) => {
+								// Revert the query to the selected label on close so partial
+								// filter text left by an abandoned search doesn't stick.
+								if (!next) setCategoryInput(category);
+							}}
+							onValueChange={(next) => {
+								setCategory(next ?? "");
+								setCategoryInput(next ?? "");
+							}}
+							value={category || null}
+						>
+							<ComboboxInput
+								className="w-full"
+								id="tx-category"
+								placeholder="e.g. Groceries"
+								showClear
+							/>
+							<ComboboxContent>
+								<ComboboxEmpty>No categories</ComboboxEmpty>
+								<ComboboxList>
+									{(item: string) => (
+										<ComboboxItem key={item} value={item}>
+											{item}
+										</ComboboxItem>
+									)}
+								</ComboboxList>
+							</ComboboxContent>
+						</Combobox>
 					</Field>
 					<div className="grid grid-cols-2 gap-4">
 						<Field>

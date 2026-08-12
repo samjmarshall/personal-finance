@@ -94,14 +94,6 @@ export const transactionRouter = createTRPCRouter({
 		};
 	}),
 
-	categories: protectedProcedure.query(async ({ ctx }) => {
-		const rows = await ctx.db
-			.selectDistinct({ category: transactions.category })
-			.from(transactions)
-			.orderBy(asc(transactions.category));
-		return rows.map((r) => r.category);
-	}),
-
 	summary: protectedProcedure.query(async ({ ctx }) => {
 		const [totals] = await ctx.db
 			.select({
