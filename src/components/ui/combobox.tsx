@@ -38,6 +38,7 @@ function ComboboxTrigger({
 function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
 	return (
 		<ComboboxPrimitive.Clear
+			aria-label="Clear"
 			className={cn(className)}
 			data-slot="combobox-clear"
 			render={<InputGroupButton size="icon-xs" variant="ghost" />}

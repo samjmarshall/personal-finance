@@ -189,7 +189,7 @@ export function TransactionForm({
 								showClear
 							/>
 							<ComboboxContent>
-								<ComboboxEmpty>No categories</ComboboxEmpty>
+								<ComboboxEmpty>No matching categories</ComboboxEmpty>
 								<ComboboxList>
 									{(item: string) => (
 										<ComboboxItem key={item} value={item}>
