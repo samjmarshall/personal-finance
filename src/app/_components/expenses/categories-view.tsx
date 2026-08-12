@@ -3,7 +3,7 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { ConfirmDialog } from "~/app/_components/confirm-dialog";
+import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
 import { PageHeader } from "~/app/_components/page-header";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -116,16 +116,13 @@ export function CategoriesView() {
 				open={formOpen}
 			/>
 
-			<ConfirmDialog
-				confirmLabel="Delete"
-				description="This can't be undone."
-				destructive
+			<DeleteConfirmDialog
+				label={deleteTarget?.name}
 				onConfirm={() => {
 					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
-				title={deleteTarget ? `Delete "${deleteTarget.name}"?` : ""}
 			/>
 		</div>
 	);

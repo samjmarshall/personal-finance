@@ -45,10 +45,7 @@ export function ConfirmDialog({
 				<AlertDialogFooter>
 					<AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
 					<AlertDialogAction
-						onClick={() => {
-							onConfirm();
-							onOpenChange(false);
-						}}
+						onClick={onConfirm}
 						variant={destructive ? "destructive" : "default"}
 					>
 						{confirmLabel}

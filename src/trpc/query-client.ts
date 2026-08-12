@@ -3,8 +3,30 @@ import {
 	MutationCache,
 	QueryClient,
 } from "@tanstack/react-query";
+import { TRPCClientError } from "@trpc/client";
 import { toast } from "sonner";
 import SuperJSON from "superjson";
+
+// A server-side Zod failure arrives with its raw issues array as `message`; pull
+// the first field/form message so the toast reads plainly instead of showing
+// JSON. Anything else keeps its own message.
+function toToastMessage(error: unknown): string {
+	if (error instanceof TRPCClientError) {
+		const zodError = (
+			error.data as {
+				zodError?: {
+					formErrors: string[];
+					fieldErrors: Record<string, string[]>;
+				} | null;
+			} | null
+		)?.zodError;
+		const first =
+			zodError?.formErrors[0] ??
+			Object.values(zodError?.fieldErrors ?? {}).flat()[0];
+		if (first) return first;
+	}
+	return error instanceof Error ? error.message : "Something went wrong.";
+}
 
 export const createQueryClient = () =>
 	new QueryClient({
@@ -12,7 +34,7 @@ export const createQueryClient = () =>
 		// permitted global transport client). Fires client-side only — mutations
 		// never run through the server prefetch client.
 		mutationCache: new MutationCache({
-			onError: (error) => toast.error(error.message),
+			onError: (error) => toast.error(toToastMessage(error)),
 		}),
 		defaultOptions: {
 			queries: {

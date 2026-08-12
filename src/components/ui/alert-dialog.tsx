@@ -49,7 +49,9 @@ function AlertDialogContent({
 			<AlertDialogOverlay />
 			<AlertDialogPrimitive.Popup
 				className={cn(
-					"group/alert-dialog-content data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-popover-foreground outline-none ring-1 ring-foreground/10 duration-100 data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-closed:animate-out data-open:animate-in data-[size=default]:sm:max-w-sm",
+					// Nova ships no height bound; cap + scroll so a long title/description
+					// can't push the footer buttons off a short viewport (mirrors dialog.tsx).
+					"group/alert-dialog-content data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-popover-foreground outline-none ring-1 ring-foreground/10 duration-100 data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-closed:animate-out data-open:animate-in data-[size=default]:sm:max-w-sm",
 					className,
 				)}
 				data-size={size}
@@ -142,12 +144,18 @@ function AlertDialogDescription({
 
 function AlertDialogAction({
 	className,
+	variant = "default",
+	size = "default",
 	...props
-}: React.ComponentProps<typeof Button>) {
+}: AlertDialogPrimitive.Close.Props &
+	Pick<React.ComponentProps<typeof Button>, "variant" | "size">) {
+	// Built on Close (like Cancel) so the action dismisses the dialog itself,
+	// rather than relying on the caller to also flip the open state.
 	return (
-		<Button
+		<AlertDialogPrimitive.Close
 			className={cn(className)}
 			data-slot="alert-dialog-action"
+			render={<Button size={size} variant={variant} />}
 			{...props}
 		/>
 	);

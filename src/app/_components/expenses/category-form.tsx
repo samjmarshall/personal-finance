@@ -45,10 +45,10 @@ export function CategoryForm({
 		await utils.expense.list.invalidate();
 		onClose();
 	};
-	const onError = (err: { message: string }) => setError(err.message);
-
-	const create = api.category.create.useMutation({ onSuccess, onError });
-	const update = api.category.update.useMutation({ onSuccess, onError });
+	// Server/mutation failures surface via the global MutationCache toast
+	// (query-client.ts); `error` here is client-side validation only.
+	const create = api.category.create.useMutation({ onSuccess });
+	const update = api.category.update.useMutation({ onSuccess });
 	const isSaving = create.isPending || update.isPending;
 
 	function onSubmit(e: React.FormEvent) {

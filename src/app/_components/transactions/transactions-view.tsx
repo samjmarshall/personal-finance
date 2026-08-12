@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { ConfirmDialog } from "~/app/_components/confirm-dialog";
+import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
 import { Badge } from "~/components/ui/badge";
@@ -362,16 +362,13 @@ export function TransactionsView() {
 				transaction={editing}
 			/>
 
-			<ConfirmDialog
-				confirmLabel="Delete"
-				description="This can't be undone."
-				destructive
+			<DeleteConfirmDialog
+				label={deleteTarget?.description}
 				onConfirm={() => {
 					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
-				title={deleteTarget ? `Delete "${deleteTarget.description}"?` : ""}
 			/>
 		</div>
 	);
