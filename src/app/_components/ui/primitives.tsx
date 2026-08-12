@@ -1,2 +1,2 @@
-// All primitives migrated to src/components/ui/*; file removed in Phase 10 cleanup.
+// Primitives moved to ~/components/ui/*; this empty stub is deleted when the Base UI migration finishes.
 export {};

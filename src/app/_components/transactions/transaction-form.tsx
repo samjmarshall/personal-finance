@@ -17,18 +17,19 @@ import {
 	FieldOptional,
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { FREQUENCIES, PRIORITIES } from "~/lib/constants";
 import { api, type RouterOutputs } from "~/trpc/react";
+import {
+	SelectField,
+	type SelectFieldOption,
+	toOptions,
+} from "../select-field";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
+
+const FREQUENCY_OPTIONS: SelectFieldOption<string>[] = toOptions(FREQUENCIES);
+const PRIORITY_OPTIONS: SelectFieldOption<string>[] = toOptions(PRIORITIES);
 
 function toDateInput(d: Date | string) {
 	const date = typeof d === "string" ? new Date(d) : d;
@@ -159,39 +160,23 @@ export function TransactionForm({
 					<div className="grid grid-cols-2 gap-4">
 						<Field>
 							<FieldLabel htmlFor="tx-frequency">Frequency</FieldLabel>
-							<Select
-								onValueChange={(v) => setFrequency(v as string)}
+							<SelectField
+								className="w-full"
+								id="tx-frequency"
+								items={FREQUENCY_OPTIONS}
+								onValueChange={(v) => v && setFrequency(v)}
 								value={frequency}
-							>
-								<SelectTrigger className="w-full" id="tx-frequency">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{FREQUENCIES.map((f) => (
-										<SelectItem key={f} value={f}>
-											{f}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+							/>
 						</Field>
 						<Field>
 							<FieldLabel htmlFor="tx-priority">Priority</FieldLabel>
-							<Select
-								onValueChange={(v) => setPriority(v as string)}
+							<SelectField
+								className="w-full"
+								id="tx-priority"
+								items={PRIORITY_OPTIONS}
+								onValueChange={(v) => v && setPriority(v)}
 								value={priority}
-							>
-								<SelectTrigger className="w-full" id="tx-priority">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{PRIORITIES.map((p) => (
-										<SelectItem key={p} value={p}>
-											{p}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+							/>
 						</Field>
 					</div>
 					<Field>

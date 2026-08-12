@@ -57,6 +57,7 @@ function SelectTrigger({
 
 function SelectContent({
 	className,
+	positionerClassName,
 	children,
 	side = "bottom",
 	sideOffset = 4,
@@ -68,15 +69,18 @@ function SelectContent({
 	Pick<
 		SelectPrimitive.Positioner.Props,
 		"align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-	>) {
+	> & {
+		// Overrides the positioner (e.g. its z-index); the popup gets `className`.
+		positionerClassName?: string;
+	}) {
 	return (
 		<SelectPrimitive.Portal>
 			<SelectPrimitive.Positioner
 				align={align}
 				alignItemWithTrigger={alignItemWithTrigger}
 				alignOffset={alignOffset}
-				// Above dialogs (z-50): a select opened inside a dialog must paint over it.
-				className="isolate z-[100]"
+				// Default z-100 clears dialogs (z-50); override via positionerClassName.
+				className={cn("isolate z-[100]", positionerClassName)}
 				side={side}
 				sideOffset={sideOffset}
 			>

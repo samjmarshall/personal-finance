@@ -13,15 +13,9 @@ import {
 } from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select";
 import { EXPENSE_CATEGORIES } from "~/lib/constants";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { SelectField, toOptions } from "../select-field";
 
 type Expense = RouterOutputs["expense"]["list"][number];
 
@@ -116,24 +110,17 @@ export function ExpenseForm({
 					</Field>
 					<Field>
 						<FieldLabel htmlFor="exp-cat">Category</FieldLabel>
-						<Select
-							onValueChange={(v) => setCategory(v as string)}
-							value={category}
-						>
-							<SelectTrigger className="w-full" id="exp-cat">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{(categoryOptions.includes(category)
+						<SelectField
+							className="w-full"
+							id="exp-cat"
+							items={toOptions(
+								categoryOptions.includes(category)
 									? categoryOptions
-									: [category, ...categoryOptions]
-								).map((c) => (
-									<SelectItem key={c} value={c}>
-										{c}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+									: [category, ...categoryOptions],
+							)}
+							onValueChange={(v) => v && setCategory(v)}
+							value={category}
+						/>
 					</Field>
 					<div className="grid grid-cols-2 gap-3">
 						<Field>
@@ -151,24 +138,13 @@ export function ExpenseForm({
 						</Field>
 						<Field>
 							<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
-							<Select
+							<SelectField
+								className="w-full"
+								id="exp-basis"
 								items={BASIS_OPTIONS}
-								onValueChange={(v) =>
-									setBasis(v as "fortnight" | "month" | "year")
-								}
+								onValueChange={(v) => v && setBasis(v)}
 								value={basis}
-							>
-								<SelectTrigger className="w-full" id="exp-basis">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{BASIS_OPTIONS.map((o) => (
-										<SelectItem key={o.value} value={o.value}>
-											{o.label}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+							/>
 						</Field>
 					</div>
 

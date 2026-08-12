@@ -19,16 +19,14 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select";
 import { FREQUENCIES, PRIORITIES, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
+import {
+	SelectField,
+	type SelectFieldOption,
+	toOptions,
+} from "../select-field";
 import { TransactionForm } from "./transaction-form";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
@@ -36,16 +34,17 @@ type SortBy = "date" | "description" | "amount" | "category" | "priority";
 
 const PAGE_SIZE = 50;
 
-// Base UI select uses null for "no filter"; the null-valued item resolves the
-// trigger label and gives the user a way to clear back to "all".
-const PRIORITY_FILTER_ITEMS = [
-	{ value: null, label: "All priorities" },
-	...PRIORITIES.map((p) => ({ value: p, label: p })),
-];
-const FREQUENCY_FILTER_ITEMS = [
-	{ value: null, label: "All frequency" },
-	...FREQUENCIES.map((f) => ({ value: f, label: f })),
-];
+// Filters use null (not "") for "no selection"; the null-valued option both
+// labels the trigger and lets the user clear back to "all".
+function withAllOption(
+	allLabel: string,
+	values: readonly string[],
+): SelectFieldOption<string | null>[] {
+	return [{ value: null, label: allLabel }, ...toOptions(values)];
+}
+
+const PRIORITY_FILTER_ITEMS = withAllOption("All priorities", PRIORITIES);
+const FREQUENCY_FILTER_ITEMS = withAllOption("All frequency", FREQUENCIES);
 
 export function TransactionsView() {
 	const [search, setSearch] = useState("");
@@ -175,50 +174,26 @@ export function TransactionsView() {
 						/>
 					</div>
 					<div className="flex flex-wrap gap-2">
-						<Select
+						<SelectField
+							aria-label={`Filter by priority, currently ${priority ?? "all priorities"}`}
+							className="min-w-36"
 							items={PRIORITY_FILTER_ITEMS}
 							onValueChange={(v) => {
 								setPriority(v);
 								setPage(0);
 							}}
 							value={priority}
-						>
-							<SelectTrigger
-								aria-label="Filter by priority"
-								className="min-w-36"
-							>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{PRIORITY_FILTER_ITEMS.map((o) => (
-									<SelectItem key={o.label} value={o.value}>
-										{o.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-						<Select
+						/>
+						<SelectField
+							aria-label={`Filter by frequency, currently ${frequency ?? "all frequency"}`}
+							className="min-w-32"
 							items={FREQUENCY_FILTER_ITEMS}
 							onValueChange={(v) => {
 								setFrequency(v);
 								setPage(0);
 							}}
 							value={frequency}
-						>
-							<SelectTrigger
-								aria-label="Filter by frequency"
-								className="min-w-32"
-							>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{FREQUENCY_FILTER_ITEMS.map((o) => (
-									<SelectItem key={o.label} value={o.value}>
-										{o.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						/>
 						{hasFilters && (
 							<Button onClick={clearFilters} size="sm" variant="ghost">
 								<X className="h-4 w-4" />
