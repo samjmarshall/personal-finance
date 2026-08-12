@@ -42,7 +42,7 @@ Chosen option: "1. Canonical Postgres rows + transactional outbox + durable work
 
 The posture, stated once — the clauses that bind:
 
-1. **Canonical store.** Local Postgres rows own all durable domain state — `transaction`, `expense`, `income` and every table after them. Derived values (a category assigned by a worker, a `Recurring` frequency flag, a detected subscription link) are written back onto those rows as output state, not accumulated in a log.
+1. **Canonical store.** Neon Postgres rows own all durable domain state — `transaction`, `expense`, `income` and every table after them. Derived values (a category assigned by a worker, a `Recurring` frequency flag, a detected subscription link) are written back onto those rows as output state, not accumulated in a log.
 2. **Atomic write.** Every write with side effects commits its canonical rows and its outbox rows in **one** transaction boundary. The mechanism is specified in [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md).
 3. **Delivery.** After the commit, the writer attempts `inngest.send()` for each new outbox row. On success it stamps `processed_at`; on failure it logs and **swallows** — the mutation's success contract is "the canonical rows were committed," not "every downstream worker was notified." An Inngest cron sweeps rows where `processed_at IS NULL` and re-delivers them. The sweep is the durable backstop, not the fast path.
 4. **Sweep cadence: hourly, with a 30-second row-age floor.** The cron runs `0 * * * *`; its filter carries `created_at < now() - interval '30 seconds'` so it cannot race the post-commit send. Under any real load every event is delivered by the post-commit send and never reaches the sweep, so the hourly cadence trades worst-case backstop latency for letting Neon's compute scale to zero instead of being pinned open by per-minute polling. Both sibling projects converged on exactly this after shipping a 30-second cron first; this ADR records the converged value rather than repeating their drift.
@@ -105,7 +105,7 @@ A companion `outbox-prune` cron (`0 3 * * *`) deletes rows with `processed_at < 
 The decision outruns the code, deliberately and visibly:
 
 - **Present today:** Postgres via Drizzle, tRPC v11, the canonical `transaction` / `expense` / `income` tables.
-- **Not yet present:** Inngest is not a dependency, there is no `outbox` table, no `src/server/inngest/`, no `src/server/outbox/`, and no import pipeline to trigger any of it. The database is currently local Docker Postgres over `postgres-js`, which [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) changes.
+- **Not yet present:** Inngest is not a dependency, there is no `outbox` table, no `src/server/inngest/`, no `src/server/outbox/`, and no import pipeline to trigger any of it. The database is a Neon Postgres branch over `postgres-js` — `scripts/neon-branch.sh` gives each non-`main` git branch its own `local/<branch>` branch, and `main` targets production; the `postgres-js` → `neon-http` swap in [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) is still pending.
 
 This is recorded as **Accepted** rather than Proposed because `.claude/rules/server-architecture.md` and `.claude/rules/database-migrations.md` already bind new code to this contract, and because the shape is proven in two sibling projects on the same stack. Recording it as Proposed would leave the rules citing a decision the project had not made.
 

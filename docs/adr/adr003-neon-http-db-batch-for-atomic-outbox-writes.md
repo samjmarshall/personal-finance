@@ -11,11 +11,11 @@ Date: '2026-08-10'
 
 [adr002](adr002-canonical-postgres-store-transactional-outbox.md) clause 2 requires that outbox rows commit in the same transaction as the canonical rows, and defers the mechanism to this ADR.
 
-Unlike the sibling projects that pattern came from, this project has not already chosen its Postgres host. It runs **local Docker Postgres** (`start-database.sh` spins up a `docker.io/postgres` container) through the **`postgres-js`** driver (`src/server/db/index.ts:1-18`, with an HMR connection cache on `globalThis`). That driver supports real interactive transactions — `db.transaction(async tx => …)` — so the atomicity requirement is, today, already satisfiable with the simplest possible code. There is no production database at all yet.
+Unlike the sibling projects that pattern came from, this project runs the **`postgres-js`** driver (`src/server/db/index.ts:1-18`, with an HMR connection cache on `globalThis`) against Neon Postgres. `postgres-js` supports real interactive transactions — `db.transaction(async tx => …)` — so adr002's atomicity requirement is, today, already satisfiable with the simplest possible code.
 
-That makes this two entangled questions rather than one. The deployment target is Vercel (better-auth trusts `*.vercel.run` and `*.v0.build`, and reads `VERCEL_PROJECT_PRODUCTION_URL`), where each concurrent function instance opens its own connection to a directly-connected Postgres. Separately, the tooling copied into `.claude/` already assumes Neon: `.claude/rules/preview-teardown.md` describes deleting `local/<branch>` Neon branches, and the `worktree` skill is built around `scripts/neon-branch.sh` giving each worktree its own database branch.
+Two pressures bear on the driver choice. The deployment target is Vercel (better-auth trusts `*.vercel.run` and `*.v0.build`, and reads `VERCEL_PROJECT_PRODUCTION_URL`), where each concurrent function instance opens its own connection to a directly-connected Postgres. Separately, the tooling copied into `.claude/` already assumes Neon: `.claude/rules/preview-teardown.md` describes deleting `local/<branch>` Neon branches, and the `worktree` skill is built around `scripts/neon-branch.sh` giving each worktree its own database branch.
 
-Which Postgres host and driver does this project run on, and which mechanism satisfies adr002's same-transaction requirement?
+Which driver does this project run, and which mechanism satisfies adr002's same-transaction requirement?
 
 ## Decision Drivers
 
@@ -29,7 +29,7 @@ Which Postgres host and driver does this project run on, and which mechanism sat
 ## Considered Options
 
 1. Neon + `drizzle-orm/neon-http` + `db.batch([canonicalStmt, outboxInsert])`
-2. Keep `postgres-js` (Docker in dev, a managed Postgres in prod) + interactive `db.transaction()`
+2. Keep `postgres-js` (the current driver, against Neon) + interactive `db.transaction()`
 3. Neon + `drizzle-orm/neon-serverless` `Pool` + interactive `db.transaction()`
 
 ## Decision Outcome
@@ -54,13 +54,18 @@ Under a batch, a canonical insert and an outbox row referencing that new row's i
 
 ### Implementation status
 
-Not yet started. The change is:
+The Neon **host** move has landed; the **driver** swap has not.
 
-- Add `@neondatabase/serverless`; swap `src/server/db/index.ts` from `drizzle-orm/postgres-js` to `drizzle-orm/neon-http`. The `globalThis` connection cache exists to survive HMR with a stateful driver and is no longer needed — `neon-http` is stateless per request.
+Done (2026-08-12):
+
+- Provisioned a Neon project. Production runs on it (`main` → production); `DATABASE_URL` in `src/env.js` is unchanged in shape.
+- Local dev runs per-branch: `scripts/neon-branch.sh` provisions a `local/<branch>` Neon branch for each non-`main` git branch (the same tooling `.claude/rules/preview-teardown.md` and the `worktree` skill assume). This landed driver-independently, ahead of the swap below.
+
+Remaining:
+
+- Add `@neondatabase/serverless`; swap `src/server/db/index.ts` from `drizzle-orm/postgres-js` to `drizzle-orm/neon-http`. The `globalThis` connection cache exists to survive HMR with a stateful driver and is no longer needed — `neon-http` is stateless per request. `DATABASE_URL` keeps its shape, so it is a drop-in.
 - Drop `postgres` from dependencies.
-- Provision a Neon project; `DATABASE_URL` in `src/env.js` is unchanged in shape.
 - Migrate `transaction` to a `uuid` PK (see above).
-- `start-database.sh` becomes dev-only, or is retired in favour of a Neon dev branch.
 
 Recorded as **Accepted** on the same basis as [adr002](adr002-canonical-postgres-store-transactional-outbox.md): the rules layer already assumes it, and it is proven on the same stack in two sibling projects.
 
@@ -75,9 +80,9 @@ Recorded as **Accepted** on the same basis as [adr002](adr002-canonical-postgres
 ### Negative Consequences
 
 - **Interactive transactions are given up everywhere, not just in the outbox path.** Any future flow genuinely needing mid-transaction `.returning()` threading has to restructure around pre-resolved ids, or carve out a second driver for that path. This ADR rejects `neon-serverless` for the current use case only; it does not preclude a controlled, documented exception later.
-- **A PK migration is now on the critical path.** `transaction` must move from integer identity to `uuid` before the first outbox event references it. Cheap now (no production data, no `drizzle/` history); expensive if deferred until after go-live.
+- **A PK migration is now on the critical path.** `transaction` must move from integer identity to `uuid` before the first outbox event references it. With a `drizzle/` history and a live production database now in place, this ships as a real migration — an `ALTER` to `uuid` plus a back-fill of any existing `transaction` rows — not the free pre-history schema edit it once was. Still cheap while the table is small; costlier the longer it is deferred.
 - **A theoretical TOCTOU window on any pre-read.** Where an id is resolved by reading before the batch rather than minting a UUID, a concurrent write could intervene. At single-household scale this cannot happen in practice; it is recorded so a future multi-user deployment revisits it.
-- **Local development now depends on a network service.** Offline work against a Docker container stops being the default. A Neon dev branch replaces it, and `neon-http` cannot talk to a plain local Postgres without a proxy.
+- **Local development depends on a network service.** There is no offline database — local dev is a Neon branch, and `neon-http` cannot talk to a plain local Postgres without a proxy.
 - **Vendor lock-in to Neon's array-transaction endpoint.** `db.batch()` is not portable to a plain Postgres driver. Moving off Neon means revisiting every write site — mitigated by the fact that adr004 funnels them all through one `commit()` function.
 
 ## Pros and Cons of the Options
@@ -88,13 +93,13 @@ Recorded as **Accepted** on the same basis as [adr002](adr002-canonical-postgres
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | Stateless per request — no pool lifecycle on serverless                  | No statement-to-statement data flow; ids must be pre-resolved             |
 | Atomic array-transaction in one HTTP round-trip                          | Forces a `uuid` PK migration on any table referenced by an event payload  |
-| Scale-to-zero compute; matches adr002's hourly sweep                     | Local offline development needs a Neon branch, not Docker                 |
+| Scale-to-zero compute; matches adr002's hourly sweep                     | Local development needs a network Neon branch — no offline database       |
 | Neon branching makes the copied preview/worktree tooling work            | Lock-in to a Neon-specific endpoint                                       |
 | Identical to both sibling projects — code and operational experience transfer | No interactive transactions available anywhere in the system           |
 
 ### 2. Keep `postgres-js` + interactive `db.transaction()`
 
-Stay on the current driver: Docker Postgres locally, any managed Postgres in production. Wrap the canonical write and the outbox insert in a normal `db.transaction()`.
+Stay on the current `postgres-js` driver against Neon. Wrap the canonical write and the outbox insert in a normal `db.transaction()`.
 
 | Pros                                                                       | Cons                                                                                           |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |

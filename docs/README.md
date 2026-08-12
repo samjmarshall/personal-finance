@@ -30,7 +30,7 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | always | Pooled Postgres connection. |
-| `DATABASE_URL_UNPOOLED` | optional | Direct connection for drizzle-kit DDL. Local Docker Postgres has no pooler. |
+| `DATABASE_URL_UNPOOLED` | optional | Direct connection for drizzle-kit DDL. |
 | `BETTER_AUTH_SECRET` | production | Signs session cookies. |
 | `KV_REST_API_URL` | production | Upstash Redis REST endpoint. |
 | `KV_REST_API_TOKEN` | production | Upstash Redis REST token. |
@@ -45,4 +45,4 @@ The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `
 
 ## How do I deploy this?
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel).
