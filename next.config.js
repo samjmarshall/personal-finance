@@ -1,11 +1,14 @@
-/**
- * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful
- * for Docker builds.
- */
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
+	// Portless serves the dev app from https://personal-finance.localhost (and
+	// <branch>.personal-finance.localhost per worktree) — a different origin than the
+	// localhost:PORT the dev server binds, so Next must trust it.
+	allowedDevOrigins: [
+		"personal-finance.localhost",
+		"*.personal-finance.localhost",
+	],
 	async headers() {
 		return [
 			{

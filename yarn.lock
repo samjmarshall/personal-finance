@@ -3228,6 +3228,11 @@ pkg-up@^3.1.0:
   dependencies:
     find-up "^3.0.0"
 
+portless@^0.15.5:
+  version "0.15.5"
+  resolved "https://registry.yarnpkg.com/portless/-/portless-0.15.5.tgz#42afb938d2a8657f8f539cc6a99a662f26d8ff0d"
+  integrity sha512-zmJu4Q8/fY54oVUT/5NnmF4Ih8wTdCvCf6JCN783dRYl9mXkJBzXSckX2lztGCLIbM70varDjCudAbGKT73XPg==
+
 postcss-selector-parser@^7.1.0:
   version "7.1.5"
   resolved "https://registry.yarnpkg.com/postcss-selector-parser/-/postcss-selector-parser-7.1.5.tgz#ee7b090724eb60739b530660e5b402200e694a97"

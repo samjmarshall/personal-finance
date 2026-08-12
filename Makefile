@@ -1,6 +1,6 @@
 SHELL := /bin/bash -euo pipefail
 
-.PHONY: install build dev check fix audit test test_e2e \
+.PHONY: install build start check fix audit test test_e2e \
 	db_generate db_custom db_migrate db_studio db_check \
 	db_branch db_branch_delete db_branch_delete_all db_branch_status clean
 
@@ -11,7 +11,7 @@ build:
 	rm -rf .next
 	yarn run build
 
-dev: install
+start: install
 	yarn run dev
 
 check:
