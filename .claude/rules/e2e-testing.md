@@ -56,7 +56,6 @@ separate sign-in call needed when seeding.
 
 Programmatic sign-in (script or API call, not the UI) **must send an `Origin` header** matching a
 `trustedOrigins` entry in `src/server/auth/config.ts`. better-auth returns 403 without it.
-`http://localhost:3000` is trusted.
 
 ## Locators
 

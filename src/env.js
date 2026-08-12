@@ -12,12 +12,32 @@ export const env = createEnv({
 	 */
 	server: {
 		BETTER_AUTH_SECRET: requiredInProd(z.string()),
+		BETTER_AUTH_URL: z.preprocess(
+			(str) =>
+				process.env.VERCEL
+					? process.env.VERCEL_ENV === "production"
+						? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+						: `https://${process.env.VERCEL_BRANCH_URL}`
+					: process.env.PORTLESS_URL
+						? process.env.PORTLESS_URL
+						: str,
+			requiredInProd(z.url()),
+		),
 		DATABASE_URL: z.url(),
 		/**
-		 * Direct (non-PgBouncer) connection, used by drizzle-kit for DDL. Optional
-		 * because local dev runs Docker Postgres, which has no pooler.
+		 * Direct (non-PgBouncer) connection, used by drizzle-kit for DDL.
 		 */
 		DATABASE_URL_UNPOOLED: z.url().optional(),
+		// The URL of the deployment version, allowing e2e testing against precise deployments.
+		DEPLOYMENT_URL: z.preprocess(
+			(str) =>
+				process.env.VERCEL
+					? `https://${process.env.VERCEL_URL}`
+					: process.env.PORTLESS_URL
+						? process.env.PORTLESS_URL
+						: str,
+			requiredInProd(z.url()),
+		),
 		/**
 		 * Upstash Redis REST credentials. Names are fixed by Vercel's Upstash
 		 * integration, which injects them under `KV_`. Required in production:
@@ -46,15 +66,16 @@ export const env = createEnv({
 	 */
 	runtimeEnv: {
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+		BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
 		DATABASE_URL: process.env.DATABASE_URL,
 		DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
+		DEPLOYMENT_URL: process.env.DEPLOYMENT_URL,
 		KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
 		KV_REST_API_URL: process.env.KV_REST_API_URL,
 		NODE_ENV: process.env.NODE_ENV,
 	},
 	/**
-	 * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
-	 * useful for Docker builds.
+	 * Use `SKIP_ENV_VALIDATION` when skipping env validation is required.
 	 */
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,
 	/**

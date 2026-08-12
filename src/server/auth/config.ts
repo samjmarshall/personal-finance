@@ -7,14 +7,6 @@ import { env } from "~/env";
 import { db } from "~/server/db";
 import { createSecondaryStorage } from "./secondary-storage";
 
-const runtimeUrl = process.env.V0_RUNTIME_URL;
-const vercelUrl = process.env.VERCEL_URL
-	? `https://${process.env.VERCEL_URL}`
-	: undefined;
-const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-	? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-	: undefined;
-
 /**
  * Binds cached sessions to the database that issued them. Every environment and
  * every Neon branch shares one Upstash database, so without this a session token
@@ -50,17 +42,9 @@ export const auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
 	}),
-	baseURL:
-		process.env.BETTER_AUTH_URL ?? productionUrl ?? vercelUrl ?? runtimeUrl,
-	trustedOrigins: [
-		"http://localhost:3000",
-		// v0 preview + build sandboxes are served from dynamic subdomains.
-		"https://*.vercel.run",
-		"https://*.v0.build",
-		...(runtimeUrl ? [runtimeUrl] : []),
-		...(vercelUrl ? [vercelUrl] : []),
-		...(productionUrl ? [productionUrl] : []),
-	],
+	baseURL: env.BETTER_AUTH_URL,
+	// The deployment URL is used for e2e testing as it is an exact version of the app.
+	trustedOrigins: env.DEPLOYMENT_URL ? [env.DEPLOYMENT_URL] : [],
 	emailAndPassword: {
 		enabled: true,
 		autoSignIn: true,
