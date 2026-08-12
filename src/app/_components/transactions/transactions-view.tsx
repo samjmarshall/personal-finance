@@ -14,8 +14,8 @@ import {
 import { useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
+import { Money } from "~/app/_components/money";
 import { PageHeader } from "~/app/_components/page-header";
-import { Money } from "~/app/_components/ui/money";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";

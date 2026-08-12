@@ -1,4 +1,4 @@
-import { Money } from "~/app/_components/ui/money";
+import { Money } from "~/app/_components/money";
 
 export function TopCategories({
 	data,

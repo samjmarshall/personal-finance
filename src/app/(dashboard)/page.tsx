@@ -8,8 +8,8 @@ import {
 import { MonthlySpendChart } from "~/app/_components/dashboard/monthly-spend-chart";
 import { PriorityBreakdown } from "~/app/_components/dashboard/priority-breakdown";
 import { TopCategories } from "~/app/_components/dashboard/top-categories";
+import { Money } from "~/app/_components/money";
 import { PageHeader } from "~/app/_components/page-header";
-import { Money } from "~/app/_components/ui/money";
 import { Card, CardContent } from "~/components/ui/card";
 import { cn, formatCurrency } from "~/lib/utils";
 import { api } from "~/trpc/server";

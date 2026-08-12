@@ -4,8 +4,8 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
+import { Money } from "~/app/_components/money";
 import { PageHeader } from "~/app/_components/page-header";
-import { Money } from "~/app/_components/ui/money";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { api, type RouterOutputs } from "~/trpc/react";
