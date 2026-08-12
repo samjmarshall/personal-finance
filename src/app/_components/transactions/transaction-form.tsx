@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import { Select } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
 import {
 	Dialog,
@@ -18,6 +17,13 @@ import {
 	FieldOptional,
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { FREQUENCIES, PRIORITIES } from "~/lib/constants";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -154,29 +160,37 @@ export function TransactionForm({
 						<Field>
 							<FieldLabel htmlFor="tx-frequency">Frequency</FieldLabel>
 							<Select
-								id="tx-frequency"
-								onChange={(e) => setFrequency(e.target.value)}
+								onValueChange={(v) => setFrequency(v as string)}
 								value={frequency}
 							>
-								{FREQUENCIES.map((f) => (
-									<option key={f} value={f}>
-										{f}
-									</option>
-								))}
+								<SelectTrigger className="w-full" id="tx-frequency">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{FREQUENCIES.map((f) => (
+										<SelectItem key={f} value={f}>
+											{f}
+										</SelectItem>
+									))}
+								</SelectContent>
 							</Select>
 						</Field>
 						<Field>
 							<FieldLabel htmlFor="tx-priority">Priority</FieldLabel>
 							<Select
-								id="tx-priority"
-								onChange={(e) => setPriority(e.target.value)}
+								onValueChange={(v) => setPriority(v as string)}
 								value={priority}
 							>
-								{PRIORITIES.map((p) => (
-									<option key={p} value={p}>
-										{p}
-									</option>
-								))}
+								<SelectTrigger className="w-full" id="tx-priority">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{PRIORITIES.map((p) => (
+										<SelectItem key={p} value={p}>
+											{p}
+										</SelectItem>
+									))}
+								</SelectContent>
 							</Select>
 						</Field>
 					</div>

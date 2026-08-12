@@ -15,11 +15,17 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "~/app/_components/page-header";
 import { Money } from "~/app/_components/ui/money";
-import { Select } from "~/app/_components/ui/primitives";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select";
 import { FREQUENCIES, PRIORITIES, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -30,10 +36,21 @@ type SortBy = "date" | "description" | "amount" | "category" | "priority";
 
 const PAGE_SIZE = 50;
 
+// Base UI select uses null for "no filter"; the null-valued item resolves the
+// trigger label and gives the user a way to clear back to "all".
+const PRIORITY_FILTER_ITEMS = [
+	{ value: null, label: "All priorities" },
+	...PRIORITIES.map((p) => ({ value: p, label: p })),
+];
+const FREQUENCY_FILTER_ITEMS = [
+	{ value: null, label: "All frequency" },
+	...FREQUENCIES.map((f) => ({ value: f, label: f })),
+];
+
 export function TransactionsView() {
 	const [search, setSearch] = useState("");
-	const [priority, setPriority] = useState("");
-	const [frequency, setFrequency] = useState("");
+	const [priority, setPriority] = useState<string | null>(null);
+	const [frequency, setFrequency] = useState<string | null>(null);
 	const [sortBy, setSortBy] = useState<SortBy>("date");
 	const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(0);
@@ -45,8 +62,8 @@ export function TransactionsView() {
 
 	const queryInput = {
 		search: search || undefined,
-		priority: priority || undefined,
-		frequency: frequency || undefined,
+		priority: priority ?? undefined,
+		frequency: frequency ?? undefined,
 		sortBy,
 		sortDir,
 		limit: PAGE_SIZE,
@@ -89,8 +106,8 @@ export function TransactionsView() {
 
 	function clearFilters() {
 		setSearch("");
-		setPriority("");
-		setFrequency("");
+		setPriority(null);
+		setFrequency(null);
 		setPage(0);
 	}
 
@@ -157,36 +174,50 @@ export function TransactionsView() {
 							value={search}
 						/>
 					</div>
-					<div className="flex gap-2">
+					<div className="flex flex-wrap gap-2">
 						<Select
-							className="w-auto min-w-36"
-							onChange={(e) => {
-								setPriority(e.target.value);
+							items={PRIORITY_FILTER_ITEMS}
+							onValueChange={(v) => {
+								setPriority(v);
 								setPage(0);
 							}}
 							value={priority}
 						>
-							<option value="">All priorities</option>
-							{PRIORITIES.map((p) => (
-								<option key={p} value={p}>
-									{p}
-								</option>
-							))}
+							<SelectTrigger
+								aria-label="Filter by priority"
+								className="min-w-36"
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{PRIORITY_FILTER_ITEMS.map((o) => (
+									<SelectItem key={o.label} value={o.value}>
+										{o.label}
+									</SelectItem>
+								))}
+							</SelectContent>
 						</Select>
 						<Select
-							className="w-auto min-w-32"
-							onChange={(e) => {
-								setFrequency(e.target.value);
+							items={FREQUENCY_FILTER_ITEMS}
+							onValueChange={(v) => {
+								setFrequency(v);
 								setPage(0);
 							}}
 							value={frequency}
 						>
-							<option value="">All frequency</option>
-							{FREQUENCIES.map((f) => (
-								<option key={f} value={f}>
-									{f}
-								</option>
-							))}
+							<SelectTrigger
+								aria-label="Filter by frequency"
+								className="min-w-32"
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{FREQUENCY_FILTER_ITEMS.map((o) => (
+									<SelectItem key={o.label} value={o.value}>
+										{o.label}
+									</SelectItem>
+								))}
+							</SelectContent>
 						</Select>
 						{hasFilters && (
 							<Button onClick={clearFilters} size="sm" variant="ghost">

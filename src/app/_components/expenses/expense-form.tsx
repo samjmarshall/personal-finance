@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 
-import { Select } from "~/app/_components/ui/primitives";
 import { Button } from "~/components/ui/button";
 import {
 	Dialog,
@@ -14,12 +13,25 @@ import {
 } from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select";
 import { EXPENSE_CATEGORIES } from "~/lib/constants";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Expense = RouterOutputs["expense"]["list"][number];
 
 const FORTNIGHTS_PER_MONTH = 26 / 12;
+
+const BASIS_OPTIONS = [
+	{ value: "fortnight", label: "Fortnight" },
+	{ value: "month", label: "Month" },
+	{ value: "year", label: "Year" },
+] as const;
 
 export function ExpenseForm({
 	open,
@@ -105,18 +117,22 @@ export function ExpenseForm({
 					<Field>
 						<FieldLabel htmlFor="exp-cat">Category</FieldLabel>
 						<Select
-							id="exp-cat"
-							onChange={(e) => setCategory(e.target.value)}
+							onValueChange={(v) => setCategory(v as string)}
 							value={category}
 						>
-							{(categoryOptions.includes(category)
-								? categoryOptions
-								: [category, ...categoryOptions]
-							).map((c) => (
-								<option key={c} value={c}>
-									{c}
-								</option>
-							))}
+							<SelectTrigger className="w-full" id="exp-cat">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{(categoryOptions.includes(category)
+									? categoryOptions
+									: [category, ...categoryOptions]
+								).map((c) => (
+									<SelectItem key={c} value={c}>
+										{c}
+									</SelectItem>
+								))}
+							</SelectContent>
 						</Select>
 					</Field>
 					<div className="grid grid-cols-2 gap-3">
@@ -136,15 +152,22 @@ export function ExpenseForm({
 						<Field>
 							<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
 							<Select
-								id="exp-basis"
-								onChange={(e) =>
-									setBasis(e.target.value as "fortnight" | "month" | "year")
+								items={BASIS_OPTIONS}
+								onValueChange={(v) =>
+									setBasis(v as "fortnight" | "month" | "year")
 								}
 								value={basis}
 							>
-								<option value="fortnight">Fortnight</option>
-								<option value="month">Month</option>
-								<option value="year">Year</option>
+								<SelectTrigger className="w-full" id="exp-basis">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{BASIS_OPTIONS.map((o) => (
+										<SelectItem key={o.value} value={o.value}>
+											{o.label}
+										</SelectItem>
+									))}
+								</SelectContent>
 							</Select>
 						</Field>
 					</div>
