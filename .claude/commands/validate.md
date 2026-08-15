@@ -1,6 +1,6 @@
 ---
 model: fable
-effort: xhigh
+effort: ultracode
 ---
 # Validate Plan
 
