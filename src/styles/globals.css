@@ -65,6 +65,16 @@
 	--sidebar-primary-foreground: oklch(0.99 0.005 180);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.52 0.09 175);
+
+	/* Priority badges - bespoke teal/amber; no bg/text/border token pair fits.
+	   Kept here (not inline) so light+dark stay adjacent and .dark just swaps. */
+	--badge-info-bg: oklch(0.95 0.03 175);
+	--badge-info-fg: oklch(0.4 0.07 178);
+	--badge-info-border: oklch(0.85 0.05 178);
+	--badge-info-dot: oklch(0.55 0.08 178);
+	--badge-warn-bg: oklch(0.95 0.06 75);
+	--badge-warn-fg: oklch(0.45 0.1 60);
+	--badge-warn-border: oklch(0.85 0.09 75);
 }
 
 .dark {
@@ -108,17 +118,28 @@
 	--chart-4: oklch(0.371 0 0);
 	--chart-5: oklch(0.269 0 0);
 
-	/* Sidebar - dark rail is unchanged from light; only the active
-	   accent lifts slightly for contrast against the same ground */
+	/* Sidebar - dark rail unchanged from light. The active pill (bg-sidebar-accent)
+	   carries text-sidebar-foreground, so it must stay dark enough to clear AA on
+	   that label (~5:1) while still lifting off the rail. */
 	--sidebar: oklch(0.22 0.018 235);
 	--sidebar-foreground: oklch(0.9 0.01 240);
 	--sidebar-muted: oklch(0.62 0.015 240);
-	--sidebar-accent: oklch(0.5 0.08 178);
+	--sidebar-accent: oklch(0.46 0.08 178);
 	--sidebar-accent-foreground: oklch(0.9 0.01 240);
 	--sidebar-primary: oklch(0.46 0.086 178);
 	--sidebar-primary-foreground: oklch(0.99 0.005 180);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.52 0.09 175);
+
+	/* Priority badges - darkened so they read as tinted chips, not near-white
+	   pills glowing on the dark ground. */
+	--badge-info-bg: oklch(0.28 0.04 178);
+	--badge-info-fg: oklch(0.85 0.05 178);
+	--badge-info-border: oklch(0.4 0.06 178);
+	--badge-info-dot: oklch(0.65 0.1 178);
+	--badge-warn-bg: oklch(0.3 0.05 75);
+	--badge-warn-fg: oklch(0.82 0.1 75);
+	--badge-warn-border: oklch(0.42 0.07 75);
 }
 
 @theme inline {
