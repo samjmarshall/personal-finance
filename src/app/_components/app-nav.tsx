@@ -6,6 +6,7 @@ import {
 	Moon,
 	Receipt,
 	Sun,
+	SunMoon,
 	Tags,
 	TrendingUp,
 	Wallet,
@@ -13,7 +14,8 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMounted } from "~/hooks/use-mounted";
 import { cn } from "~/lib/utils";
 import { authClient } from "~/server/auth/client";
 
@@ -111,24 +113,29 @@ function SignOutButton() {
 
 function ThemeToggle() {
 	const { resolvedTheme, setTheme } = useTheme();
-	const [mounted, setMounted] = useState(false);
-	// resolvedTheme is undefined during SSR; gate the label/icon so first client
-	// render matches server HTML, then correct after mount.
-	useEffect(() => setMounted(true), []);
-	const isDark = mounted && resolvedTheme === "dark";
+	// resolvedTheme is unknown until next-themes resolves it post-mount; show a
+	// neutral affordance until then so a dark-resolved user never sees the
+	// inverted "switch to dark" label/icon for a frame.
+	const mounted = useMounted();
+	const isDark = resolvedTheme === "dark";
+
+	let Icon = SunMoon;
+	let label = "Toggle theme";
+	let ariaLabel = "Toggle theme";
+	if (mounted) {
+		Icon = isDark ? Sun : Moon;
+		label = isDark ? "Light mode" : "Dark mode";
+		ariaLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
+	}
 	return (
 		<button
-			aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+			aria-label={ariaLabel}
 			className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
 			onClick={() => setTheme(isDark ? "light" : "dark")}
 			type="button"
 		>
-			{isDark ? (
-				<Sun className="h-[18px] w-[18px]" />
-			) : (
-				<Moon className="h-[18px] w-[18px]" />
-			)}
-			{isDark ? "Light mode" : "Dark mode"}
+			<Icon className="h-[18px] w-[18px]" />
+			{label}
 		</button>
 	);
 }

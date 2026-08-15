@@ -8,15 +8,15 @@ import {
 	TriangleAlertIcon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { type CSSProperties, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { useMounted } from "~/hooks/use-mounted";
 
 const Toaster = ({ ...props }: ToasterProps) => {
 	const { theme = "system" } = useTheme();
-	const [mounted, setMounted] = useState(false);
 	// theme is the SSR default until mount; gate it so the first client render
 	// matches server HTML and sonner's container doesn't hydration-mismatch.
-	useEffect(() => setMounted(true), []);
+	const mounted = useMounted();
 	return (
 		<Sonner
 			className="toaster group"
