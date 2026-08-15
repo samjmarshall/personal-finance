@@ -7,12 +7,12 @@ import {
 	OctagonXIcon,
 	TriangleAlertIcon,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import type { CSSProperties } from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-// Registry ships `theme={useTheme()}` from next-themes; dark mode (and next-themes)
-// lands in Phase 11. Until then the app is light-only, so pin the toaster to light.
 const Toaster = ({ ...props }: ToasterProps) => {
+	const { theme = "system" } = useTheme();
 	return (
 		<Sonner
 			className="toaster group"
@@ -31,7 +31,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
 					"--border-radius": "var(--radius)",
 				} as CSSProperties
 			}
-			theme="light"
+			theme={theme as ToasterProps["theme"]}
 			{...props}
 		/>
 	);

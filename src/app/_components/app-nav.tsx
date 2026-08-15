@@ -3,14 +3,17 @@
 import {
 	LayoutDashboard,
 	LogOut,
+	Moon,
 	Receipt,
+	Sun,
 	Tags,
 	TrendingUp,
 	Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 import { authClient } from "~/server/auth/client";
 
@@ -106,6 +109,30 @@ function SignOutButton() {
 	);
 }
 
+function ThemeToggle() {
+	const { resolvedTheme, setTheme } = useTheme();
+	const [mounted, setMounted] = useState(false);
+	// resolvedTheme is undefined during SSR; gate the label/icon so first client
+	// render matches server HTML, then correct after mount.
+	useEffect(() => setMounted(true), []);
+	const isDark = mounted && resolvedTheme === "dark";
+	return (
+		<button
+			aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+			className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
+			onClick={() => setTheme(isDark ? "light" : "dark")}
+			type="button"
+		>
+			{isDark ? (
+				<Sun className="h-[18px] w-[18px]" />
+			) : (
+				<Moon className="h-[18px] w-[18px]" />
+			)}
+			{isDark ? "Light mode" : "Dark mode"}
+		</button>
+	);
+}
+
 export function AppNav({ userName }: { userName: string }) {
 	return (
 		<aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-4 text-sidebar-foreground lg:flex">
@@ -125,6 +152,7 @@ export function AppNav({ userName }: { userName: string }) {
 						{userName}
 					</p>
 				</div>
+				<ThemeToggle />
 				<SignOutButton />
 			</div>
 		</aside>

@@ -31,9 +31,11 @@ export const PRIORITY_STYLES: Record<string, PriorityStyle> = {
 	},
 	"Should Have": {
 		label: "Should Have",
+		// Arbitrary teal (no token pair fits); dark variants keep it legible on
+		// the dark ground instead of glowing as a near-white pill.
 		badge:
-			"bg-[oklch(0.95_0.03_175)] text-[oklch(0.4_0.07_178)] border-[oklch(0.85_0.05_178)]",
-		dot: "bg-[oklch(0.55_0.08_178)]",
+			"bg-[oklch(0.95_0.03_175)] text-[oklch(0.4_0.07_178)] border-[oklch(0.85_0.05_178)] dark:bg-[oklch(0.28_0.04_178)] dark:text-[oklch(0.85_0.05_178)] dark:border-[oklch(0.4_0.06_178)]",
+		dot: "bg-[oklch(0.55_0.08_178)] dark:bg-[oklch(0.65_0.1_178)]",
 	},
 	"Nice to Have": {
 		label: "Nice to Have",
@@ -42,8 +44,10 @@ export const PRIORITY_STYLES: Record<string, PriorityStyle> = {
 	},
 	Fix: {
 		label: "Fix",
+		// Arbitrary amber (no token pair fits); dark variants keep it legible on
+		// the dark ground instead of glowing as a near-white pill.
 		badge:
-			"bg-[oklch(0.95_0.06_75)] text-[oklch(0.45_0.1_60)] border-[oklch(0.85_0.09_75)]",
+			"bg-[oklch(0.95_0.06_75)] text-[oklch(0.45_0.1_60)] border-[oklch(0.85_0.09_75)] dark:bg-[oklch(0.3_0.05_75)] dark:text-[oklch(0.82_0.1_75)] dark:border-[oklch(0.42_0.07_75)]",
 		dot: "bg-warning",
 	},
 	"VERIFY - possible fraud": {

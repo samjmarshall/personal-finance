@@ -3,6 +3,7 @@ import "~/styles/globals.css";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { ThemeProvider } from "~/app/_components/theme-provider";
 import { Toaster } from "~/components/ui/sonner";
 import { TRPCReactProvider } from "~/trpc/react";
 
@@ -14,7 +15,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-	themeColor: "#2b6e63",
+	themeColor: [
+		{ media: "(prefers-color-scheme: light)", color: "#2b6e63" },
+		{ media: "(prefers-color-scheme: dark)", color: "#11171b" },
+	],
 };
 
 const geistSans = Geist({
@@ -34,10 +38,13 @@ export default function RootLayout({
 		<html
 			className={`${geistSans.variable} ${geistMono.variable} bg-background`}
 			lang="en"
+			suppressHydrationWarning
 		>
 			<body className="font-sans">
-				<TRPCReactProvider>{children}</TRPCReactProvider>
-				<Toaster />
+				<ThemeProvider>
+					<TRPCReactProvider>{children}</TRPCReactProvider>
+					<Toaster />
+				</ThemeProvider>
 			</body>
 		</html>
 	);
