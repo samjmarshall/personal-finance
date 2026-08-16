@@ -1,27 +1,12 @@
-# Create T3 App
+# Personal Finance
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+This project is for tracking and managing personal/household finances. Allowing you to see where you are spending, what you have overspent on, identifying where you can save/reduce expenses on the "should haves" and "nice to haves".
 
-## What's next? How do I make an app with this?
-
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
-
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
-
-- [Next.js](https://nextjs.org)
-- [Better Auth](https://better-auth.com)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
-
-## Learn More
-
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
-
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
-
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+Stretch goal for this project:
+- Monthly income/expense report generator - Where we overspent or underspent (i.e. saved money) and where we have opportunities for improvement. Also highlighting unplanned expenses that need review, which could simply be spontanious purchases, unexpected transaction fees (FX), possible fraudulent transactions etc..
+- Once we have automated transaction sync with invoice/receipt line item analysis and planned / unplanned expense mapping; I would like to build an "Opportunity / Deal finder" engine. A set of solutions that can find/alert on cheaper alternatives to recurring expenses, grocery items in a shopping list like steak on special (e.g. 20-50% discounts at Woolworths) or cheaper alternative at ALDI etc...
+- Utilities provider analysis - A solution that can read utilities usage from a CDR recipient for Gas and Electricity (Or I manually upload my Smart Meter usage data and Gas bill usage details) and the solution find current rates from each utilities provider once a month and compares the estimated monthly spend based on current household usage data.
+- Home loan analysis - A solution that assess current rates from other lenders once a month and reports load products from lenders that would provide a lower repayment if we refinance our current home loan.
 
 ## Environment variables
 
@@ -42,7 +27,3 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 Better Auth secondary storage — sessions and verification records dual-write to Redis and Postgres and read Redis-first, with Postgres as the durable copy. Rate-limit counters live here so they are shared across lambdas. See [adr006](adr/adr006-redis-session-cache-with-postgres-durable-copy.md) and [adr007](adr/adr007-asymmetric-failure-posture-in-the-redis-adapter.md).
 
 The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `ba:<VERCEL_ENV>:<db-fingerprint>:`, so environments and Neon branches sharing one Upstash database cannot authenticate each other's sessions.
-
-## How do I deploy this?
-
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel).
