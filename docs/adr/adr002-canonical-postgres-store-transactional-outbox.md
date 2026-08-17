@@ -172,4 +172,5 @@ The send happens inside the canonical transaction; a send failure rolls the writ
 - Atomicity mechanism: [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) — how clause 2's "one transaction" is actually achieved
 - Enforced by: [adr004](adr004-domain-oriented-3-tier-server-architecture.md) — the repository `commit(writes, outboxEvents)` primitive makes the outbox structurally unavoidable at every write site
 - Table home: [adr005](adr005-per-domain-drizzle-schema-files.md) — the `outbox` table lands module-vertical at `src/server/outbox/outbox.schema.ts`
+- Reaffirmed: [2026-08-16 expense-linking/receipts/cashflow design](../../thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md) — first real implementation (receipt pipeline); re-weighed against inline processing and Vercel Workflow in 2026-08 and the decision stands
 - Runbook (TBD): alert rules for stuck outbox rows (`processed_at IS NULL AND attempts > N`) and persistent `inngest.send` failures. This project has no observability backend yet.

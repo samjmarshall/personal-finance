@@ -130,4 +130,5 @@ Uniform domain-object write-sets: every service method returns a domain-object w
 - Enforces: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) — `commit(writes, outboxEvents)` is the structural enforcement of the atomic write-plus-outbox clause
 - Atomicity mechanism: [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) — `commit` is a single `db.batch`; no interactive transactions exist anywhere in the system
 - Refined by: [adr005](adr005-per-domain-drizzle-schema-files.md) — the schema-location sub-decision within this architecture
+- Refined by: [adr012](adr012-defer-adr004-plain-routers-for-feature-work.md) — feature work stays plain-router; executing this architecture is deferred, deliberately
 - Operational statement: `.claude/rules/server-architecture.md` — the tier map, module surface and frozen-identifier rules; `.claude/rules/server-only-boundary.md` for the boundary mechanism

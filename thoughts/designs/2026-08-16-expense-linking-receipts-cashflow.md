@@ -27,7 +27,7 @@ Both unexecuted 2026-08-11 plans are still valid and are **adopted as written**:
 6. **Async platform: outbox + Inngest per ADR002/ADR003** — first real implementation of the ADR. Chosen over inline processing and Vercel Workflow because future workloads (CDR sync, PayPal sync) ride the same rails.
 7. **Receipt↔transaction matching: auto-suggest, human confirms.** Never silent auto-link (wrong links poison budget attribution invisibly; receipt amounts ≠ settled amounts often enough). Suggestions computed **at read time**, not stored — always fresh as imports land.
 8. **Email ingestion: strict sender allowlist, drop unknowns** (logged, no receipt row, no Claude spend). Rejected quarantine: spam-review chore for a ~2-entry allowlist.
-9. **Transaction provenance columns now** (`source`, `externalId`, `accountName`) — dedup pays off immediately for manual statement imports; it's the entire schema cost of CDR/PayPal later.
+9. **Transaction provenance columns now** (`provenance`, `externalId`, `accountName`) — dedup pays off immediately for manual statement imports; it's the entire schema cost of CDR/PayPal later. Column named `provenance`, not `source` — "source" is reserved for Income's named payer (glossary).
 10. **Income mirrors expense shape** (`kind`, `amount`, `expectedDate`, `dueDay`/`dueMonth`) but **no `transaction.incomeId`**. Reconciliation wasn't an ask, and combined salary+commission deposits would force one-to-many transaction→income — not worth it.
 11. **Category FK plan rides along** — Unplanned grouping, receipt-item categorisation, and cash-flow drill-down all inherit reliable FK grouping instead of the "groceries"/"Groceries" soft join.
 
@@ -38,8 +38,8 @@ Both unexecuted 2026-08-11 plans are still valid and are **adopted as written**:
 **`transaction`**
 - `expenseId` int null, FK → `expense.id`, `ON DELETE SET NULL` (plan 1)
 - `expenseCategoryId` int null, FK → `expense_category.id`, `ON DELETE SET NULL`, indexed (plan 2)
-- `source` text not null default `'manual'` — `manual | import | cdr | paypal`
-- `externalId` text null; `accountName` text null; unique index `(source, externalId)`
+- `provenance` text not null default `'manual'` — `manual | import | cdr | paypal`
+- `externalId` text null; `accountName` text null; unique index `(provenance, externalId)`
 - Free-text `category` stays.
 
 **`expense`**
@@ -52,11 +52,11 @@ Both unexecuted 2026-08-11 plans are still valid and are **adopted as written**:
 
 ### New tables
 
-- **`balance_snapshot`** — `amount`, `asOf`. Latest row anchors the projection line.
-- **`receipt`** — `status` (`pending | processed | failed`), `source` (`upload | email`), `userId` FK (member), blob pathname/URL, `contentHash` (dup detect), extracted `vendor` / `receiptDate` / `total` / `currency`, `rawJson`, `error`, `transactionId` int null FK (the confirmed match), timestamps. **No expiry** — receipts keep forever (tax).
+- **`balance_snapshot`** — `amount`, `asOf`. Latest row anchors the projection line. One household-wide number (owner sums across accounts when updating); per-account rows are CDR-era machinery, additive later if ever.
+- **`receipt`** — `status` (`pending | processed | failed | duplicate`), `channel` (`upload | email` — how it arrived; receipts have a Channel, not a Provenance), `userId` FK (member), blob pathname/URL, `contentHash` (dup detect), extracted `vendor` / `receiptDate` / `total` / `currency`, `rawJson`, `error`, `transactionId` int null FK (the confirmed match), **unique index** — one receipt per transaction; a blocked second match is the dup-photo detector `contentHash` can't be (two photos of one docket hash differently), timestamps. **No expiry** — receipts keep forever (tax) as household *practice*, not a lock: Destructive delete exists for junk (blurry photos, mis-uploads, duplicates) on any status — removes the blob, cascades `receipt_item` rows, a matched transaction is simply unmatched.
 - **`receipt_item`** — `receiptId` FK cascade, `name`, `price`, `quantity`, `expenseId` null FK (per-item budget attribution), `expenseCategoryId` null FK.
 - **`allowed_sender`** — `email` unique, `userId` FK.
-- **`app_setting`** — key/value; holds `fortnightAnchor` (household pay-cycle grid anchor — `dueDay` can't encode fortnightly cadence).
+- **`app_setting`** — key/value; holds `fortnightAnchor` (household pay-cycle grid anchor — `dueDay` can't encode fortnightly cadence). Seeded once (migration/manual row), no settings UI — set-once for a two-person household doesn't earn one. Single household-wide grid: the anchor defines chart buckets, not paydays; individual paydays are Timing on each Income.
 - **`outbox`** — per ADR002/ADR003 (event name, payload, delivered markers).
 
 Household scoping: all new tables follow the current unscoped pattern; `householdId` remains a separate future effort and nothing here blocks it.
@@ -64,7 +64,7 @@ Household scoping: all new tables follow the current unscoped pattern; `househol
 ## Navigation & pages
 
 **Nav** (`src/app/_components/app-nav.tsx`): "Expenses" becomes a parent —
-Planned/Budgeted → `/expenses` (default, existing) · Unplanned → `/expenses/unplanned` (new) · Categories → `/expenses/categories` (existing). "Receipts" → `/receipts` top-level (new). Transactions, Income, Dashboard unchanged.
+Planned → `/expenses` (default, existing; label is "Planned", not "Budgeted" — glossary) · Unplanned → `/expenses/unplanned` (new) · Categories → `/expenses/categories` (existing). "Receipts" → `/receipts` top-level (new). Transactions, Income, Dashboard unchanged.
 
 **Planned page** — each expense row gains an **actual** column (sum of linked transactions in the viewed period) beside budget, over-budget highlighted. New "One-time" section: name, amount, expected date, consumed (linked-transaction sum), remaining. Past-date one-timers collapse into a "past" group — date does the work, no archive flag.
 
@@ -72,7 +72,7 @@ Planned/Budgeted → `/expenses` (default, existing) · Unplanned → `/expenses
 
 **Transactions page** — form gains expense picker + category picker per plans 1 & 2 (list-driven; categories never invented mid-entry, honoring the glossary rule). List shows linked expense name via leftJoin.
 
-**Receipts page** — history table: thumbnail, vendor, total, date, member, status + retry button on failed. Detail: image beside extracted items; match-suggestion banner with one-click confirm; after matching, per-item expense/category pickers. Filter for processed-but-unmatched = the to-do queue.
+**Receipts page** — history table: thumbnail, vendor, total, date, member, status + retry button on failed; duplicate rows link to their original, no retry; Destructive delete (confirm dialog) on any row. Detail: image beside extracted items; match-suggestion banner with one-click confirm; after matching, per-item expense/category pickers. Filter for processed-but-unmatched = the to-do queue.
 
 **Dashboard** — cash flow chart as top panel; balance snapshot beside it with inline "update balance" field.
 
@@ -90,11 +90,11 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 
 ## Receipt pipeline
 
-**Upload path:** Receipts page uses Vercel Blob client upload (`handleUpload` route; token generation checks session). On complete: one batch writes `receipt` row (`pending`, `source: upload`, member from session) + `receipt/uploaded` outbox event.
+**Upload path:** Receipts page uses Vercel Blob client upload (`handleUpload` route; token generation checks session). On complete: one batch writes `receipt` row (`pending`, `channel: upload`, member from session) + `receipt/uploaded` outbox event.
 
-**Email path:** one Resend inbound address; each member forwards from their personal email. Webhook route → verify signature → sender lookup in `allowed_sender`. Unknown: log, drop, 200. Known: each attachment (PDF/JPG/PNG) stored to Blob, one receipt row per attachment; no attachment → the HTML body is the payload (Uber/Amazon e-receipts). Same batch write + event, `source: email`, member from sender.
+**Email path:** one Resend inbound address; each member forwards from their personal email. Webhook route → verify signature → sender lookup in `allowed_sender`. Unknown: log, drop, 200. Known: each attachment (PDF/JPG/PNG) stored to Blob, one receipt row per attachment; no attachment → the HTML body is the payload (Uber/Amazon e-receipts). Same batch write + event, `channel: email`, member from sender.
 
-**Worker `process-receipt`:** fetch payload → `contentHash`; hash match on an existing receipt → `failed` "duplicate of #id" (no Claude spend). Otherwise Claude via AI SDK `generateObject` (Sonnet, vision; PDF supported) against a Zod schema: metadata (vendor, date, total, currency) + line items. Prompt includes the household's category list so items arrive with prefilled `expenseCategoryId` — user-correctable, never invented (unknown → null). Writes receipt fields + `receipt_item` rows → `processed`. Failure → `failed` + `error`; retry button emits `receipt/retry` → same worker.
+**Worker `process-receipt`:** fetch payload → `contentHash`; hash match on an existing receipt → status `duplicate`, pointing at the original's id (no Claude spend). A duplicate is a verdict, not a failure — it gets no retry button. Otherwise Claude via AI SDK `generateObject` (Sonnet, vision; PDF supported) against a Zod schema: metadata (vendor, date, total, currency) + line items. Prompt includes the household's category list so items arrive with prefilled `expenseCategoryId` — user-correctable, never invented (unknown → null). Writes receipt fields + `receipt_item` rows → `processed`. Failure → `failed` + `error`; retry button emits `receipt/retry` → same worker.
 
 **Matching & attribution (read-time):** receipt detail queries candidate transactions — amount exact or ±2%, date ±4 days, not already receipt-linked — ranked. Confirm sets `receipt.transactionId`. Per-item `expenseId` pickers then answer "*what* pushed Groceries over."
 
@@ -109,9 +109,12 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 *Projected* — expenses + income walked forward:
 
 - fortnight-basis → every grid fortnight
-- month-basis + `dueDay` → spike in that date's bucket; untimed → smeared
+- month-basis + `dueDay` → spike in that date's bucket (`dueDay` 29–31 clamps to month end — never rolls into next month); untimed → smeared
 - year-basis + `dueMonth` (+`dueDay`) → annual spike; untimed → smeared
-- one-time → **remaining** (amount − linked spend) in `expectedDate`'s bucket; past-date rows drop out
+- one-time expense → **remaining** (amount − linked spend) in `expectedDate`'s bucket; past-date + unconsumed → remaining rolls into the **current** bucket until consumed, re-dated or deleted (never silently drops — an overdue committed purchase is still upcoming spend, and the phantom in "now" is the nudge to clean up a dead budget)
+- one-time income → full amount in `expectedDate`'s bucket; past-date → **drops out** (assume received — the deposit is already in the historic actuals; genuinely late → re-date it). **Deliberately asymmetric** with the expense roll-forward above: expense consumption is measurable via `expenseId`, income receipt has no FK to measure (decision 10), so roll-forward would pin phantom income in "now" forever.
+
+*Today-straddling bucket* — **date-split**: actuals for elapsed days + projected items landing strictly after today. Conventions: fortnight-basis lumps land on the grid day (= `fortnightAnchor`, the payday — so a bucket-start lump that has landed counts as past, killing the salary double-count); untimed smears prorate to remaining days; timed spikes compare their landing date to today (rent due later this bucket stays visible).
 
 **Balance line** — latest `balance_snapshot` is the pivot: forward = anchor + cumulative projected net; backward = anchor − actual transaction net. Continuous across today; no snapshot → bars only.
 
@@ -128,7 +131,7 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 
 ## Testing (`make test`)
 
-- Projection bucketing = pure function, table-driven tests (fortnight anchor math, dueDay spikes, one-time remaining, smear fallback) — highest-risk logic.
+- Projection bucketing = pure function, table-driven tests (fortnight anchor math, dueDay spikes incl. 29–31 month-end clamp, one-time expense remaining incl. overdue roll-forward into current bucket, one-time income past-date drop-out, smear fallback, today-straddling bucket date-split incl. smear proration) — highest-risk logic.
 - Match-candidate filter = pure function + tests (tolerance, date window, already-linked exclusion).
 - Zod input schemas per plan 2's TDD pattern; workers via `makeRun*(fakeDeps)` — no Inngest in tests.
 - Manual eval: ~10 real household receipts run through the worker before trusting category prefill.
@@ -141,23 +144,11 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 4. Outbox + Inngest rails
 5. Receipts: upload → worker → page → matching
 6. Email ingestion
-7. **Future (designed-for, not built):** CDR (Redbark) + PayPal = new `source` values + sync workers on stage-4 rails; income-reconciliation FK only if the itch ever appears
+7. **Future (designed-for, not built):** CDR (Redbark) + PayPal = new `provenance` values + sync workers on stage-4 rails; income-reconciliation FK only if the itch ever appears
 
-## ADR Candidates
+## Related ADRs
 
-Run `/domain-model thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md` to capture these as Proposed ADRs.
-
-- **Adopt outbox + Inngest as the async execution platform** — weighed against inline processing and Vercel Workflow; long-lived infra choice that future workloads (CDR, PayPal) depend on; also converts ADR002 from paper to practice.
-- **Transaction→expense linking is a single nullable FK; per-item granularity via receipt line items** — weighed against an allocation/split table; the data-model spine every feature here sits on.
-- **One-time budgets live in `expense` behind a `kind` discriminator** — weighed against a separate table; shapes the FK model and every planned-vs-actual query.
-- **Feature code stays plain-router style; ADR004's 3-tier ceremony deferred** — a decision *about* an Accepted ADR the codebase never implemented; needs recording so the gap is deliberate, not drift.
-
-## Terminology TODO
-
-Run `/domain-model thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md` to persist these to `CONTEXT.md`.
-
-- **Expense** — widened: "standing commitment" → "a commitment to Spend, either standing (Basis figures) or one-time (amount + expected consumption date)".
-- **Unplanned** — new term: a Spend Transaction not linked to any Expense; defined by absence, never a stored record type.
-- **Receipt** — new term: an evidence document (image/PDF/e-receipt) attributed to a member, holding line items, matched to at most one Transaction.
-- **Timing vs Basis** — Basis stays "the cadence a figure was entered at"; timing (`dueDay`, `dueMonth`, fortnight anchor) is *when it lands*, a separate optional attribute.
-- **Provenance / source** — where a Transaction came from (`manual | import | cdr | paypal`), distinct from Frequency and Priority.
+- [adr010](../../docs/adr/adr010-single-nullable-fk-transaction-expense-link.md) — single nullable FK for transaction→expense linking; per-item granularity via receipt line items
+- [adr011](../../docs/adr/adr011-one-time-budgets-as-expense-kind.md) — one-time budgets as `expense` rows behind a `kind` discriminator
+- [adr012](../../docs/adr/adr012-defer-adr004-plain-routers-for-feature-work.md) — feature work stays plain-router; executing adr004 deferred
+- [adr002](../../docs/adr/adr002-canonical-postgres-store-transactional-outbox.md) — already covers outbox + Inngest; reaffirmed against Vercel Workflow here, no new ADR
