@@ -26,11 +26,32 @@ _Avoid_: danger, danger-zone
 A dated record of money that actually moved.
 
 **Expense**:
-A standing commitment to Spend, held as a per-fortnight, per-month and per-year figure at once.
-_Avoid_: bill, cost, outgoing
+A commitment to Spend — either recurring (held as a per-fortnight, per-month and per-year
+figure at once) or one-time (a single amount with an expected consumption date).
+_Avoid_: bill, cost, outgoing, standing
+
+**Unplanned**:
+A Spend Transaction not linked to any Expense — a classification by absence, never a stored
+record.
+_Avoid_: unbudgeted, untracked, uncategorised
+
+**Receipt**:
+An evidence document — image, PDF or e-receipt — attributed to a Member, holding line items
+and matched to at most one Transaction.
+_Avoid_: invoice, attachment, upload
+
+**Member**:
+A person in the Household with a login; Receipts and allowed sender addresses belong to a
+Member. (An Income's "person" is a name, not a login — not the same thing.)
+_Avoid_: user, account
+
+**Planned**:
+A Spend Transaction linked to an Expense — the opposite of Unplanned; the Expenses page
+carries this label in the nav.
+_Avoid_: budgeted
 
 **Income**:
-A standing expectation of Inflow, attributed to a person and a named source.
+An expectation of Inflow — recurring or one-time — attributed to a person and a named source.
 _Avoid_: salary, earnings
 
 **Expense Category**:
@@ -45,6 +66,11 @@ The cadence a figure was entered at — fortnight, month or year. An Expense or 
 entered against one Basis, and the other two figures are derived from it.
 _Avoid_: period, interval, term
 
+**Timing**:
+When a commitment lands — an optional due day and due month on an Expense or Income, distinct
+from Basis; an untimed commitment is treated as spread evenly.
+_Avoid_: schedule
+
 **Priority**:
 How essential a Transaction was, from "Must Have" down to "Nice to Have", plus two
 non-ranking values: "Fix" for something to correct, and "VERIFY - possible fraud" for
@@ -54,14 +80,31 @@ _Avoid_: importance, severity
 **Frequency**:
 Whether a Transaction is "Recurring" or "One-off".
 
+**Provenance**:
+Which system a Transaction lives in — hand-entered, statement import, bank sync or PayPal.
+One purchase can surface in several systems (a PayPal purchase also lands as a bank
+transaction), so consolidation keys on Provenance.
+_Avoid_: source, origin
+
+**Channel**:
+How a Receipt arrived — upload or email. A Receipt lives only here, so it has a Channel,
+not a Provenance.
+_Avoid_: source
+
 ## Relationships
 
-- A **Household** owns every **Expense**, **Income**, **Transaction** and **Expense Category**
+- A **Household** owns every **Expense**, **Income**, **Transaction**, **Expense Category**
+  and **Receipt**
 - An **Expense** is filed under exactly one **Expense Category**
 - A **Transaction** is filed under exactly one **Expense Category**
 - An **Income** belongs to exactly one person
 - A **Transaction** carries one **Priority** and one **Frequency**
-- An **Expense** and an **Income** each carry three figures derived from a single **Basis**
+- A recurring **Expense** or **Income** carries three figures derived from a single **Basis**;
+  a one-time one carries a single amount and an expected date
+- A **Transaction** may link to at most one **Expense**; a Spend **Transaction** with no link
+  is **Unplanned**
+- A **Receipt** belongs to one **Member** and matches at most one **Transaction**; a
+  **Transaction** has at most one **Receipt**
 
 ## Example dialogue
 
@@ -103,6 +146,14 @@ Whether a Transaction is "Recurring" or "One-off".
 - **"amount"** on an **Expense** or **Income** is three figures, not one. Resolved: they are
   derived from a single entered figure and its **Basis**, so they never disagree; there is no
   independent "fortnightly amount" to set.
+- **"recurring"** appears on two records — a **Transaction**'s Frequency ("Recurring") and an
+  **Expense**'s kind (`recurring`). Deliberate, not a collision: it is the same everyday
+  adjective ("this repeats") applied to different records. "Standing" was rejected as the
+  Expense-kind word — not user-friendly language for an expense.
+- **"source"** was heading for three meanings: an **Income**'s named payer, which system a
+  **Transaction** lives in, and how a **Receipt** arrived. Resolved: **Provenance** for
+  Transactions (column `provenance`), **Channel** for Receipts (column `channel`); "source"
+  survives only as the Income payer attribute.
 - **Household** is domain language today, not a boundary in the data — the records are
   unscoped, and household scoping is planned. Resolved: use the term freely in conversation;
   do not assume it is enforced.
