@@ -3,6 +3,7 @@ import {
 	asc,
 	desc,
 	eq,
+	getTableColumns,
 	gte,
 	ilike,
 	lte,
@@ -12,7 +13,9 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
+import { transactionInput } from "~/server/transactions/transactions-schemas";
 
 const sortableColumns = {
 	date: transactions.date,
@@ -21,16 +24,6 @@ const sortableColumns = {
 	category: transactions.category,
 	priority: transactions.priority,
 } as const;
-
-const transactionInput = z.object({
-	date: z.date(),
-	description: z.string().min(1, "Description is required"),
-	amount: z.number(),
-	category: z.string().min(1).default("Uncategorised"),
-	frequency: z.string().min(1).default("One-off"),
-	priority: z.string().min(1).default("Nice to Have"),
-	notes: z.string().nullable().optional(),
-});
 
 const listInput = z.object({
 	search: z.string().optional(),
@@ -76,8 +69,12 @@ export const transactionRouter = createTRPCRouter({
 
 		const [items, countResult] = await Promise.all([
 			ctx.db
-				.select()
+				.select({
+					...getTableColumns(transactions),
+					expenseName: expenses.name,
+				})
 				.from(transactions)
+				.leftJoin(expenses, eq(transactions.expenseId, expenses.id))
 				.where(where)
 				.orderBy(orderBy, desc(transactions.id))
 				.limit(input.limit)
@@ -160,7 +157,11 @@ export const transactionRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }) => {
 			const [row] = await ctx.db
 				.insert(transactions)
-				.values({ ...input, notes: input.notes ?? null })
+				.values({
+					...input,
+					notes: input.notes ?? null,
+					expenseId: input.expenseId ?? null,
+				})
 				.returning();
 			return row;
 		}),

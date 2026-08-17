@@ -1,9 +1,13 @@
 import { index, pgTable } from "drizzle-orm/pg-core";
+import { expenses } from "~/server/expenses/expenses.schema";
 
 export const transactions = pgTable(
 	"transaction",
 	(d) => ({
 		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		expenseId: d
+			.integer()
+			.references(() => expenses.id, { onDelete: "set null" }),
 		date: d.timestamp({ withTimezone: true }).notNull(),
 		description: d.text().notNull(),
 		receiptDescription: d.text(),
