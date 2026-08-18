@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import {
 	and,
 	asc,
@@ -21,6 +20,7 @@ import {
 	transactionListQueryDto,
 	transactionUpdateDto,
 } from "~/domain/transactions";
+import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
@@ -161,16 +161,7 @@ export const transactionRouter = createTRPCRouter({
 		.input(transactionCreateDto)
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
 			const [row] = await ctx.db.insert(transactions).values(input).returning();
-
-			if (!row) {
-				console.error("Failed to create transaction.", { input });
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to create transaction.",
-				});
-			}
-
-			return row;
+			return assertRow(row, "create transaction");
 		}),
 
 	update: protectedProcedure
@@ -182,16 +173,7 @@ export const transactionRouter = createTRPCRouter({
 				.set(values)
 				.where(eq(transactions.id, id))
 				.returning();
-
-			if (!row) {
-				console.error("Failed to update transaction.", { id, values });
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to update transaction.",
-				});
-			}
-
-			return row;
+			return assertRow(row, "update transaction");
 		}),
 
 	delete: protectedProcedure

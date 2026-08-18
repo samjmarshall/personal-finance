@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -6,6 +5,7 @@ import {
 	expenseCreateDto,
 	expenseUpdateDto,
 } from "~/domain/expenses";
+import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenses } from "~/server/expenses/expenses.schema";
 
@@ -25,16 +25,7 @@ export const expenseRouter = createTRPCRouter({
 		.input(expenseCreateDto)
 		.mutation(async ({ ctx, input }): Promise<Expense> => {
 			const [row] = await ctx.db.insert(expenses).values(input).returning();
-
-			if (!row) {
-				console.error("Failed to create expense.", { input });
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to create expense.",
-				});
-			}
-
-			return row;
+			return assertRow(row, "create expense");
 		}),
 
 	update: protectedProcedure
@@ -46,16 +37,7 @@ export const expenseRouter = createTRPCRouter({
 				.set(values)
 				.where(eq(expenses.id, id))
 				.returning();
-
-			if (!row) {
-				console.error("Failed to update expense.", { id, input });
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to update expense.",
-				});
-			}
-
-			return row;
+			return assertRow(row, "update expense");
 		}),
 
 	delete: protectedProcedure

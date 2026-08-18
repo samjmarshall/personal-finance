@@ -6,6 +6,7 @@ import {
 	categoryCreateDto,
 	categoryUpdateDto,
 } from "~/domain/categories";
+import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
@@ -53,15 +54,7 @@ export const categoryRouter = createTRPCRouter({
 					.values(values)
 					.returning();
 
-				if (!row) {
-					console.error("Failed to create category.", { values });
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create category.",
-					});
-				}
-
-				return row;
+				return assertRow(row, "create category");
 			} catch (error) {
 				if (isUniqueViolation(error)) {
 					throw new TRPCError({
@@ -111,15 +104,7 @@ export const categoryRouter = createTRPCRouter({
 						.returning();
 				});
 
-				if (!row) {
-					console.error("Failed to update category.", { id, values });
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to update category.",
-					});
-				}
-
-				return row;
+				return assertRow(row, "update category");
 			} catch (error) {
 				if (isUniqueViolation(error)) {
 					throw new TRPCError({
