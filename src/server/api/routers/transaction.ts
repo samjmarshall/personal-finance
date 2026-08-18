@@ -11,6 +11,7 @@ import {
 	type SQL,
 	sql,
 } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import {
 	type Transaction,
@@ -18,6 +19,7 @@ import {
 	type TransactionSummary,
 	transactionCreateDto,
 	transactionListQueryDto,
+	type transactionSortBy,
 	transactionUpdateDto,
 } from "~/domain/transactions";
 import { assertRow } from "~/server/api/lib/assert-row";
@@ -57,7 +59,10 @@ export const transactionRouter = createTRPCRouter({
 				const where = filters.length ? and(...filters) : undefined;
 
 				// Sorting
-				const sortableColumns = {
+				const sortableColumns: Record<
+					z.infer<typeof transactionSortBy>,
+					PgColumn
+				> = {
 					date: transactions.date,
 					description: transactions.description,
 					amount: transactions.amount,

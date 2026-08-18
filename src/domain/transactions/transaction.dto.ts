@@ -1,5 +1,17 @@
 import { z } from "zod";
 import { Frequency, Priority } from "~/lib/constants";
+import type { Transaction } from "./transaction.interface";
+
+// sortBy values must be real Transaction fields; `satisfies` makes tsc reject a
+// typo or non-field here. It preserves the literal tuple, so z.enum keeps its
+// narrow union and the router can key a column map off it.
+export const transactionSortBy = z.enum([
+	"date",
+	"description",
+	"amount",
+	"category",
+	"priority",
+] satisfies readonly (keyof Transaction)[]);
 
 export const transactionListQueryDto = z.object({
 	search: z.string().optional(),
@@ -8,9 +20,7 @@ export const transactionListQueryDto = z.object({
 	category: z.string().optional(),
 	from: z.date().optional(),
 	to: z.date().optional(),
-	sortBy: z
-		.enum(["date", "description", "amount", "category", "priority"])
-		.default("date"),
+	sortBy: transactionSortBy.default("date"),
 	sortDir: z.enum(["asc", "desc"]).default("desc"),
 	limit: z.number().min(1).max(200).default(50),
 	offset: z.number().min(0).default(0),

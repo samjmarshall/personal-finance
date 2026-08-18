@@ -1,6 +1,7 @@
 import {
 	transactionCreateDto,
 	transactionListQueryDto,
+	type transactionSortBy,
 	transactionUpdateDto,
 } from "./transaction.dto";
 import type {
@@ -9,5 +10,10 @@ import type {
 	TransactionSummary,
 } from "./transaction.interface";
 
-export type { Transaction, TransactionListItem, TransactionSummary };
+export type {
+	Transaction,
+	TransactionListItem,
+	TransactionSummary,
+	transactionSortBy,
+};
 export { transactionCreateDto, transactionListQueryDto, transactionUpdateDto };
