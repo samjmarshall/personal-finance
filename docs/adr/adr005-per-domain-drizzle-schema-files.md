@@ -52,7 +52,7 @@ src/server/
 Specifics that bind:
 
 - **`drizzle.config.ts` discovers tables by glob**, `./src/server/**/*.schema.ts`, replacing the single-file path.
-- **`*.schema.ts` is reserved for Drizzle tables.** Sso the glob cannot sweep them.
+- **`*.schema.ts` is reserved for Drizzle tables** — So the glob sweeps only tables.
 - **`src/server/db/shared.schema.ts` is the auth-only bucket.** Per-domain plus one honest shared bucket, not 100% per-domain. New domain-less tables go here rather than into a stray new file.
 - **The `outbox` table lands module-vertical** at `src/server/outbox/outbox.schema.ts`, not in the shared bucket. It has a module (`src/server/outbox/`, which also owns `commit.ts` and the sweep worker); it is infrastructure with a home, not a homeless table.
 - **`src/server/db/index.ts` spread-merges** the domain schema modules into one object passed to `drizzle(sql, { schema })`, so `db.query.*` continues to see every table.
