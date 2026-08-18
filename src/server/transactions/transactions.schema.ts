@@ -25,5 +25,6 @@ export const transactions = pgTable(
 	(t) => [
 		index("transaction_date_idx").on(t.date),
 		index("transaction_priority_idx").on(t.priority),
+		index("transaction_expense_idx").on(t.expenseId),
 	],
 );

@@ -22,6 +22,13 @@
 			"when": 1786937266950,
 			"tag": "0002_silly_terror",
 			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1786974216836,
+			"tag": "0003_smooth_jamie_braddock",
+			"breakpoints": true
 		}
 	]
 }
