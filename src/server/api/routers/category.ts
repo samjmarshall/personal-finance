@@ -1,18 +1,17 @@
 import { TRPCError } from "@trpc/server";
 import { asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+	type Category,
+	categoryCreate,
+	categoryUpdate,
+} from "~/domain/categories";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 
-const categoryInput = z.object({
-	name: z.string().min(1, "Name is required"),
-	description: z.string().optional(),
-	sortOrder: z.number().int().default(0),
-});
-
 export const categoryRouter = createTRPCRouter({
-	list: protectedProcedure.query(async ({ ctx }) => {
+	list: protectedProcedure.query(async ({ ctx }): Promise<Category[]> => {
 		const rows = await ctx.db
 			.select({
 				id: expenseCategories.id,
@@ -31,8 +30,8 @@ export const categoryRouter = createTRPCRouter({
 	}),
 
 	create: protectedProcedure
-		.input(categoryInput)
-		.mutation(async ({ ctx, input }) => {
+		.input(categoryCreate)
+		.mutation(async ({ ctx, input }): Promise<Category> => {
 			const values = {
 				name: input.name.trim(),
 				description: input.description?.trim() || null,
@@ -43,6 +42,15 @@ export const categoryRouter = createTRPCRouter({
 					.insert(expenseCategories)
 					.values(values)
 					.returning();
+
+				if (!row) {
+					console.error("Failed to create category.", { values });
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Failed to create category.",
+					});
+				}
+
 				return row;
 			} catch {
 				throw new TRPCError({
@@ -53,8 +61,8 @@ export const categoryRouter = createTRPCRouter({
 		}),
 
 	update: protectedProcedure
-		.input(categoryInput.extend({ id: z.number() }))
-		.mutation(async ({ ctx, input }) => {
+		.input(categoryUpdate)
+		.mutation(async ({ ctx, input }): Promise<Category> => {
 			const { id, name, description, sortOrder } = input;
 
 			const [existing] = await ctx.db
@@ -68,9 +76,8 @@ export const categoryRouter = createTRPCRouter({
 				});
 			}
 
-			const nextName = name.trim();
 			const values = {
-				name: nextName,
+				name: name.trim(),
 				description: description?.trim() || null,
 				sortOrder,
 			};
@@ -78,10 +85,10 @@ export const categoryRouter = createTRPCRouter({
 			try {
 				const [row] = await ctx.db.transaction(async (tx) => {
 					// Keep expenses referencing this category in sync when renamed.
-					if (existing.name !== nextName) {
+					if (existing.name !== values.name) {
 						await tx
 							.update(expenses)
-							.set({ category: nextName })
+							.set({ category: values.name })
 							.where(eq(expenses.category, existing.name));
 					}
 					return tx
@@ -90,6 +97,15 @@ export const categoryRouter = createTRPCRouter({
 						.where(eq(expenseCategories.id, id))
 						.returning();
 				});
+
+				if (!row) {
+					console.error("Failed to update category.", { id, values });
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Failed to update category.",
+					});
+				}
+
 				return row;
 			} catch {
 				throw new TRPCError({

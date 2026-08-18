@@ -9,6 +9,9 @@ export const PRIORITIES = [
 
 export const FREQUENCIES = ["Recurring", "One-off"] as const;
 
+export type Priority = (typeof PRIORITIES)[number];
+export type Frequency = (typeof FREQUENCIES)[number];
+
 export const EXPENSE_CATEGORIES = [
 	"Home Loan",
 	"Bills & Subscriptions",
