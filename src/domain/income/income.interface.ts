@@ -5,4 +5,7 @@ export interface Income {
 	fortnight: number;
 	month: number;
 	year: number;
+	sortOrder: number;
+	createdAt: Date;
+	updatedAt: Date | null;
 }

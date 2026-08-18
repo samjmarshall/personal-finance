@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { transactionCreateDto } from "./transaction.dto";
+import { Frequency, Priority } from "~/lib/constants";
+import { transactionCreateDto, transactionUpdateDto } from "./transaction.dto";
 
 const base = { date: new Date(), description: "Coffee", amount: 5 };
 
@@ -53,5 +54,47 @@ describe("transactionCreateDto vocab fields", () => {
 		expect(
 			transactionCreateDto.safeParse({ ...base, priority: "Someday" }).success,
 		).toBe(false);
+	});
+
+	it("defaults category, frequency and priority when omitted", () => {
+		const parsed = transactionCreateDto.parse(base);
+		expect(parsed.category).toBe("Uncategorised");
+		expect(parsed.frequency).toBe(Frequency.OneOff);
+		expect(parsed.priority).toBe(Priority.NiceToHave);
+	});
+});
+
+describe("transactionUpdateDto", () => {
+	const baseUpdate = { ...base, id: 1 };
+
+	// The regression this guards: update must NOT re-apply create's defaults. An
+	// omitted category/frequency/priority has to parse to undefined so .set() skips
+	// it and the stored value survives a partial update instead of being reset.
+	it("leaves omitted category, frequency and priority undefined", () => {
+		const parsed = transactionUpdateDto.parse(baseUpdate);
+		expect(parsed.category).toBe(undefined);
+		expect(parsed.frequency).toBe(undefined);
+		expect(parsed.priority).toBe(undefined);
+	});
+
+	it("accepts managed vocab values", () => {
+		expect(
+			transactionUpdateDto.safeParse({
+				...baseUpdate,
+				frequency: Frequency.Recurring,
+				priority: Priority.MustHave,
+			}).success,
+		).toBe(true);
+	});
+
+	it("rejects a frequency outside the managed set", () => {
+		expect(
+			transactionUpdateDto.safeParse({ ...baseUpdate, frequency: "Whenever" })
+				.success,
+		).toBe(false);
+	});
+
+	it("requires an id", () => {
+		expect(transactionUpdateDto.safeParse(base).success).toBe(false);
 	});
 });

@@ -20,7 +20,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { FREQUENCIES, PRIORITIES, priorityStyle } from "~/lib/constants";
+import { Frequency, Priority, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import {
@@ -44,8 +44,14 @@ function withAllOption(
 	return [{ value: null, label: allLabel }, ...toOptions(values)];
 }
 
-const PRIORITY_FILTER_ITEMS = withAllOption("All priorities", PRIORITIES);
-const FREQUENCY_FILTER_ITEMS = withAllOption("All frequency", FREQUENCIES);
+const PRIORITY_FILTER_ITEMS = withAllOption(
+	"All priorities",
+	Object.values(Priority),
+);
+const FREQUENCY_FILTER_ITEMS = withAllOption(
+	"All frequency",
+	Object.values(Frequency),
+);
 
 export function TransactionsView() {
 	const [search, setSearch] = useState("");

@@ -26,12 +26,7 @@ import {
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import {
-	FREQUENCIES,
-	type Frequency,
-	PRIORITIES,
-	type Priority,
-} from "~/lib/constants";
+import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
 import { api, type RouterOutputs } from "~/trpc/react";
 import {
 	SelectField,
@@ -41,9 +36,12 @@ import {
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
 
-const FREQUENCY_OPTIONS: SelectFieldOption<Frequency>[] =
-	toOptions(FREQUENCIES);
-const PRIORITY_OPTIONS: SelectFieldOption<Priority>[] = toOptions(PRIORITIES);
+const FREQUENCY_OPTIONS: SelectFieldOption<Frequency>[] = toOptions(
+	Object.values(Frequency),
+);
+const PRIORITY_OPTIONS: SelectFieldOption<Priority>[] = toOptions(
+	Object.values(Priority),
+);
 
 function toDateInput(d: Date | string) {
 	const date = typeof d === "string" ? new Date(d) : d;
@@ -77,8 +75,8 @@ export function TransactionForm({
 		setCategoryInput(value);
 		categoryRef.current = value;
 	}, []);
-	const [frequency, setFrequency] = useState<Frequency>("One-off");
-	const [priority, setPriority] = useState<Priority>("Nice to Have");
+	const [frequency, setFrequency] = useState<Frequency>(Frequency.OneOff);
+	const [priority, setPriority] = useState<Priority>(Priority.NiceToHave);
 	const [notes, setNotes] = useState("");
 
 	useEffect(() => {
@@ -87,8 +85,8 @@ export function TransactionForm({
 		setDescription(transaction?.description ?? "");
 		setAmount(transaction ? String(transaction.amount) : "");
 		commitCategory(transaction?.category ?? "");
-		setFrequency((transaction?.frequency as Frequency) ?? "One-off");
-		setPriority((transaction?.priority as Priority) ?? "Nice to Have");
+		setFrequency(toFrequency(transaction?.frequency));
+		setPriority(toPriority(transaction?.priority));
 		setNotes(transaction?.notes ?? "");
 	}, [open, transaction, commitCategory]);
 
