@@ -1,18 +1,19 @@
 SHELL := /bin/bash -euo pipefail
 
-.PHONY: install build start check fix audit test test_e2e \
+.PHONY: install build start check fix audit test test_e2e nvm \
 	db_generate db_custom db_migrate db_studio db_check \
 	db_branch db_branch_delete db_branch_delete_all db_branch_status clean
 
 NVMRC_MAJOR := $(shell cut -d. -f1 .nvmrc)
 NODE_MAJOR := $(shell node --version | cut -d. -f1)
 
+# make runs each recipe line in its own shell, so `nvm use` here can't switch the
+# node used by dependent targets. This gate can only verify: fail loud on a major
+# mismatch and tell the developer to switch.
 nvm:
-ifneq ($(CI),true)
 ifneq ($(NVMRC_MAJOR),$(NODE_MAJOR))
-	@[ -f ~/.nvm/nvm.sh ] || { echo "Error: ~/.nvm/nvm.sh not found. Install nvm: https://github.com/nvm-sh/nvm" >&2; exit 1; }
-	source ~/.nvm/nvm.sh >/dev/null 2>&1 && >/dev/null 2>&1;
-endif
+	@echo "Error: Node $(NODE_MAJOR) active but .nvmrc wants $(NVMRC_MAJOR). Run: nvm use" >&2
+	@exit 1
 endif
 
 install: nvm
