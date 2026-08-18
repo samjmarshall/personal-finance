@@ -3,12 +3,22 @@ import { asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
 	type Category,
-	categoryCreate,
-	categoryUpdate,
+	categoryCreateDto,
+	categoryUpdateDto,
 } from "~/domain/categories";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
+
+// postgres.js raises a PostgresError carrying the SQLSTATE code; 23505 = unique_violation
+function isUniqueViolation(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as { code: unknown }).code === "23505"
+	);
+}
 
 export const categoryRouter = createTRPCRouter({
 	list: protectedProcedure.query(async ({ ctx }): Promise<Category[]> => {
@@ -30,7 +40,7 @@ export const categoryRouter = createTRPCRouter({
 	}),
 
 	create: protectedProcedure
-		.input(categoryCreate)
+		.input(categoryCreateDto)
 		.mutation(async ({ ctx, input }): Promise<Category> => {
 			const values = {
 				name: input.name.trim(),
@@ -52,16 +62,19 @@ export const categoryRouter = createTRPCRouter({
 				}
 
 				return row;
-			} catch {
-				throw new TRPCError({
-					code: "CONFLICT",
-					message: "A category with that name already exists.",
-				});
+			} catch (error) {
+				if (isUniqueViolation(error)) {
+					throw new TRPCError({
+						code: "CONFLICT",
+						message: "A category with that name already exists.",
+					});
+				}
+				throw error;
 			}
 		}),
 
 	update: protectedProcedure
-		.input(categoryUpdate)
+		.input(categoryUpdateDto)
 		.mutation(async ({ ctx, input }): Promise<Category> => {
 			const { id, name, description, sortOrder } = input;
 
@@ -107,11 +120,14 @@ export const categoryRouter = createTRPCRouter({
 				}
 
 				return row;
-			} catch {
-				throw new TRPCError({
-					code: "CONFLICT",
-					message: "A category with that name already exists.",
-				});
+			} catch (error) {
+				if (isUniqueViolation(error)) {
+					throw new TRPCError({
+						code: "CONFLICT",
+						message: "A category with that name already exists.",
+					});
+				}
+				throw error;
 			}
 		}),
 
