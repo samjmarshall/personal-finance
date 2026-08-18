@@ -34,7 +34,7 @@ What is the canonical shape of the Transaction→Expense link?
 
 Chosen option: "1. Single nullable FK", because it keeps "planned?" a one-column predicate and actual-vs-budget a single leftJoin, and the genuinely mixed basket is served by Receipt line items — evidence that arrives itemised — rather than by amounts a human retypes into a split editor (see the diagram under option 1).
 
-Adopted mechanics, from the unexecuted [2026-08-11 plan](../../thoughts/plans/2026-08-11-transaction-expense-mapping.md), adopted as written: nullable `transaction.expenseId` int FK → `expense.id`, `ON DELETE SET NULL`, leftJoin reads (no `relations()`), Zod input in `transactions-schemas.ts`, expense picker in the transaction form.
+Adopted mechanics, from the unexecuted [2026-08-11 plan](../../thoughts/plans/2026-08-11-transaction-expense-mapping.md), adopted as written: nullable `transaction.expenseId` int FK → `expense.id`, `ON DELETE SET NULL`, leftJoin reads (no `relations()`), Zod input in `transactions.dto.ts`, expense picker in the transaction form.
 
 **Attribution rule (double-count guard):** the Transaction-level FK is the accounting link — every actual / consumed / remaining sum reads it alone. `receipt_item.expenseId` is explanatory drill-down ("*what* pushed Groceries over"), never a second input to the sums.
 

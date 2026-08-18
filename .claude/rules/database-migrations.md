@@ -12,7 +12,7 @@ paths:
 
 ## Schema layout ([adr005](../../docs/adr/adr005-per-domain-drizzle-schema-files.md))
 
-Tables are authored per-domain in `src/server/<domain>/<domain>.schema.ts`, plus `src/server/db/shared.schema.ts` for domain-less tables (auth). `drizzle-kit` discovers them via the `./src/server/**/*.schema.ts` glob in `drizzle.config.ts`; `src/server/db/index.ts` spread-merges the domain modules into the `db.query.*` schema. New domain-less tables go in the shared bucket — never a stray file. The `*.schema.ts` suffix is reserved for Drizzle table files; Zod schema files use `*-schemas.ts`.
+Tables are authored per-domain in `src/server/<domain>/<domain>.schema.ts`, plus `src/server/db/shared.schema.ts` for domain-less tables (auth). `drizzle-kit` discovers them via the `./src/server/**/*.schema.ts` glob in `drizzle.config.ts`; `src/server/db/index.ts` spread-merges the domain modules into the `db.query.*` schema. New domain-less tables go in the shared bucket — never a stray file. The `*.schema.ts` suffix is reserved for Drizzle table files; Zod schema files use `*.dto.ts`.
 
 Always use this two-step process:
 

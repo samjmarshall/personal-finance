@@ -25,20 +25,20 @@ Transactions and planned expenses are unrelated tables today — a real transact
 - The future uuid-PK migration noted in ADR003 — the FK is `integer` to match today's `expense.id`; it migrates with the PK if/when that lands.
 
 ## Approach
-Vertical data slice first (schema column → migration → router persistence → list join → one Zod unit test), then the UI slice (form picker → list column). The FK is a lazy-thunk cross-file reference per ADR005; the input Zod schema is extracted to a `transactions-schemas.ts` file (dash suffix, per the documented Zod-file convention) so it can be unit-tested without importing the tRPC/env graph.
+Vertical data slice first (schema column → migration → router persistence → list join → one Zod unit test), then the UI slice (form picker → list column). The FK is a lazy-thunk cross-file reference per ADR005; the input Zod schema is extracted to a `transactions.dto.ts` file so it can be unit-tested without importing the tRPC/env graph.
 
 ## Phase 1: Data layer — FK column, migration, persistence, list join
 
 ### Changes
 - `src/server/transactions/transactions.schema.ts` — add `expenseId: d.integer().references(() => expenses.id, { onDelete: "set null" })` (nullable). Import `expenses` from `~/server/expenses/expenses.schema` (cross-domain schema import for the FK thunk — allowed by ADR005).
 - `drizzle/` — run `make db_generate` to emit the next migration (`0002_*.sql`), then `make db_migrate` to apply it. Review the generated SQL: it must only `ADD COLUMN` on `transaction` plus the FK constraint (`ON DELETE set null`) and touch nothing else.
-- `src/server/transactions/transactions-schemas.ts` — new file; move `transactionInput` here (`transaction.ts:25-33`) and add `expenseId: z.number().int().nullable().optional()`. Export it. (`listInput` stays inline in the router — list-specific.)
-- `src/server/api/routers/transaction.ts` — import `transactionInput` from `./…/transactions-schemas`; in `create` set `expenseId: input.expenseId ?? null`; in `update` carry `expenseId` through the `set(...)`. In `list`, project `{ ...getTableColumns(transactions), expenseName: expenses.name }` and `leftJoin(expenses, eq(transactions.expenseId, expenses.id))` so each row carries `expenseId` + `expenseName` (import `getTableColumns` from `drizzle-orm` and `expenses` from the expenses schema). The count query is unchanged.
-- `src/server/transactions/transactions-schemas.test.ts` — new vitest unit test on `transactionInput` (TDD: write first, then wire the field): accepts a numeric `expenseId`; accepts `null` and omitted; rejects a non-numeric/float `expenseId`. Mirrors the pure-unit style of `src/lib/utils.test.ts`.
+- `src/domain/transactions/transactions.dto.ts` — new file; move `transactionInput` here (`transaction.ts:25-33`) and add `expenseId: z.number().int().nullable().optional()`. Export it. (`listInput` stays inline in the router — list-specific.)
+- `src/server/api/routers/transaction.ts` — import `transactionInput` from `./…/transactions.dto.ts`; in `create` set `expenseId: input.expenseId ?? null`; in `update` carry `expenseId` through the `set(...)`. In `list`, project `{ ...getTableColumns(transactions), expenseName: expenses.name }` and `leftJoin(expenses, eq(transactions.expenseId, expenses.id))` so each row carries `expenseId` + `expenseName` (import `getTableColumns` from `drizzle-orm` and `expenses` from the expenses schema). The count query is unchanged.
+- `src/domain/transactions/transactions.dto.test.ts` — new vitest unit test on `transactionInput` (TDD: write first, then wire the field): accepts a numeric `expenseId`; accepts `null` and omitted; rejects a non-numeric/float `expenseId`. Mirrors the pure-unit style of `src/lib/utils.test.ts`.
 
 ### Success
 **Automated**
-- [ ] `make test` passes (new `transactions-schemas.test.ts` green)
+- [ ] `make test` passes (new `transactions.dto.test.ts` green)
 - [ ] `make check` passes (biome + `tsc --noEmit` + `drizzle-kit check` — schema/migration consistent)
 - [ ] `make build` passes
 
@@ -66,7 +66,7 @@ Vertical data slice first (schema column → migration → router persistence �
 - Ticket: none supplied (feature request: `transaction.expense` → `expense.id`)
 - Design doc: none — no prior `thoughts/` work on transactions/expenses mapping
 - ADRs:
-  - `docs/adr/adr005-per-domain-drizzle-schema-files.md` (Accepted) — schema convention this plan follows: per-domain `*.schema.ts`, lazy-thunk cross-file FK `.references(() => table.id)`, `*-schemas.ts` (dash) for Zod files, `make db_generate`/`make db_migrate`
+  - `docs/adr/adr005-per-domain-drizzle-schema-files.md` (Accepted) — schema convention this plan follows: per-domain `*.schema.ts`, lazy-thunk cross-file FK `.references(() => table.id)`, `*.dto.ts` for Zod files, `make db_generate`/`make db_migrate`
   - `docs/adr/adr004-domain-oriented-3-tier-server-architecture.md` (Accepted, **Not started**) — composed with, not implemented; feature stays on the current flat router and does not begin the 3-tier migration
   - `docs/adr/adr002-canonical-postgres-store-transactional-outbox.md` / `adr003-*` (Accepted) — future uuid-PK / outbox posture; FK is `integer` today, out of scope
 - Related code: `src/server/transactions/transactions.schema.ts:3-25`, `src/server/expenses/expenses.schema.ts:3-16`, `src/server/db/shared.schema.ts:30-32` (FK precedent), `src/server/api/routers/category.ts:27` (manual-join precedent), `src/server/api/routers/transaction.ts:25-33,71-95,166-186`, `src/server/api/routers/expense.ts:15-24`, `src/app/_components/transactions/transaction-form.tsx`, `src/app/_components/transactions/transactions-view.tsx:43,342-347`

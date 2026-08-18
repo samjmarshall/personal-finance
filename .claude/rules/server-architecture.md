@@ -20,11 +20,12 @@ Files declare their tier in their name, with two sanctioned exceptions: entry ad
 | `<domain>.service.ts` | service | `make*Service(deps)`; throws domain errors, never transport errors |
 | `<domain>.repository.ts` | repository | `make*Repository({ db, commitWithOutbox })`; never exported from the module |
 | `<domain>.module.ts` | composition root | the only place real deps are wired (import-time singletons) |
-| `<domain>.schema.ts` | Drizzle tables | per-domain schema home (adr005) |
+| `<domain>.schema.ts` | Drizzle tables | per-domain entity schema home (adr005) |
+| `<domain>.dto.ts` | Zod schemas | Client/Server entity Zod validation schemas in `src/domain/<domain>/` |
+| `<domain>.interface.ts` | Typed interfaces | Client/Server entity TypeScript interfaces in `src/domain/<domain>/` |
 | `<domain>.decide.ts` | pure decision core | write-heavy flows only (see below) |
 | `<domain>.channels.ts` | realtime channel adapter | e.g. `leads.channels.ts` (Inngest Realtime publish) |
 | `<domain>.errors.ts` | domain errors | mapped to tRPC in `src/server/api/trpc-error-map.ts` |
-| `<domain>-schemas.ts` | Zod schemas | dash, not dot — Zod validation schemas, distinct from the Drizzle `.schema.ts` |
 
 ## Module surface
 
