@@ -15,6 +15,7 @@ import {
 import { z } from "zod";
 import {
 	type Transaction,
+	type TransactionListItem,
 	type TransactionSummary,
 	transactionCreateDto,
 	transactionListQueryDto,
@@ -31,7 +32,7 @@ export const transactionRouter = createTRPCRouter({
 			async ({
 				ctx,
 				input,
-			}): Promise<{ items: Transaction[]; total: number }> => {
+			}): Promise<{ items: TransactionListItem[]; total: number }> => {
 				// Filtering
 				const filters: SQL[] = [];
 

@@ -13,6 +13,11 @@ export interface Transaction {
 	updatedAt: Date | null;
 }
 
+// list rows leftJoin the linked expense; null when unlinked or the expense is gone
+export interface TransactionListItem extends Transaction {
+	expenseName: string | null;
+}
+
 export interface TransactionSummary {
 	totals: {
 		spend: number;

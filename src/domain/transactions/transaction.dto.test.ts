@@ -32,10 +32,12 @@ describe("transactionCreateDto.expenseId", () => {
 		).toBe(false);
 	});
 
-	it("defaults omitted expenseId and notes to null", () => {
+	// omitted must stay undefined, not null: update's .set() skips undefined so an
+	// omitted expenseId leaves the existing link intact; null would clear it.
+	it("leaves omitted expenseId and notes undefined (update preserves them)", () => {
 		const parsed = transactionCreateDto.parse(base);
-		expect(parsed.expenseId).toBe(null);
-		expect(parsed.notes).toBe(null);
+		expect(parsed.expenseId).toBe(undefined);
+		expect(parsed.notes).toBe(undefined);
 	});
 });
 

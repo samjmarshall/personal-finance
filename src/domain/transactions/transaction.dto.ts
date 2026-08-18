@@ -24,9 +24,11 @@ export const transactionCreateDto = z.object({
 	category: z.string().min(1).default("Uncategorised"),
 	frequency: z.enum(FREQUENCIES).default("One-off"),
 	priority: z.enum(PRIORITIES).default("Nice to Have"),
-	// default null so omitted == cleared: create and update coalesce identically
-	notes: z.string().nullable().default(null),
-	expenseId: z.number().int().nullable().default(null),
+	// nullable + optional, NOT default null: on update .set() skips undefined, so
+	// an omitted field is preserved; explicit null clears. default null would wipe
+	// the link on every partial update.
+	notes: z.string().nullable().optional(),
+	expenseId: z.number().int().nullable().optional(),
 });
 
 export const transactionUpdateDto = z
