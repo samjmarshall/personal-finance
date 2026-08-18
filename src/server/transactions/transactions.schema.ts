@@ -1,5 +1,15 @@
-import { index, pgTable } from "drizzle-orm/pg-core";
+import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
+import { Frequency, Priority } from "~/lib/constants";
 import { expenses } from "~/server/expenses/expenses.schema";
+
+export const transactionFrequency = pgEnum(
+	"transaction_frequency",
+	Object.values(Frequency) as [Frequency, ...Frequency[]],
+);
+export const transactionPriority = pgEnum(
+	"transaction_priority",
+	Object.values(Priority) as [Priority, ...Priority[]],
+);
 
 export const transactions = pgTable(
 	"transaction",
@@ -11,10 +21,10 @@ export const transactions = pgTable(
 		date: d.timestamp({ withTimezone: true }).notNull(),
 		description: d.text().notNull(),
 		receiptDescription: d.text(),
-		amount: d.doublePrecision().notNull().default(0),
+		amount: d.doublePrecision().notNull(),
 		category: d.text().notNull().default("Uncategorised"),
-		frequency: d.text().notNull().default("One-off"),
-		priority: d.text().notNull().default("Nice to Have"),
+		frequency: transactionFrequency().notNull().default(Frequency.OneOff),
+		priority: transactionPriority().notNull().default(Priority.NiceToHave),
 		notes: d.text(),
 		createdAt: d
 			.timestamp({ withTimezone: true })

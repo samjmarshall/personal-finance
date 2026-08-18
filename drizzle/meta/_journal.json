@@ -29,6 +29,13 @@
 			"when": 1786974216836,
 			"tag": "0003_smooth_jamie_braddock",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1787050110239,
+			"tag": "0004_regular_marvel_zombies",
+			"breakpoints": true
 		}
 	]
 }
