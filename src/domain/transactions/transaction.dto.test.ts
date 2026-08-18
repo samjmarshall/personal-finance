@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { z } from "zod";
 import { Frequency, Priority } from "~/lib/constants";
+import type { Expect, WritesInto } from "~/test/type-contracts";
 import { transactionCreateDto, transactionUpdateDto } from "./transaction.dto";
+import type { Transaction } from "./transaction.interface";
+
+type Contracts = [
+	Expect<WritesInto<z.infer<typeof transactionCreateDto>, Transaction>>,
+	Expect<WritesInto<z.infer<typeof transactionUpdateDto>, Transaction>>,
+];
 
 const base = { date: new Date(), description: "Coffee", amount: 5 };
 
@@ -89,5 +97,14 @@ describe("transactionUpdateDto", () => {
 
 	it("requires an id", () => {
 		expect(transactionUpdateDto.safeParse(base).success).toBe(false);
+	});
+});
+
+describe("transaction DTO ↔ interface contract", () => {
+	// Annotating with Contracts makes tsc evaluate every pair; the array is
+	// contextually typed to the tuple, so it stays a genuine compile-time gate.
+	it("keeps create and update DTOs writable into the Transaction interface", () => {
+		const aligned: Contracts = [true, true];
+		expect(aligned).toHaveLength(2);
 	});
 });

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
+import type { z } from "zod";
+import type { Expect, WritesInto } from "~/test/type-contracts";
 import { incomeCreateDto, incomeUpdateDto } from "./income.dto";
+import type { Income } from "./income.interface";
+
+type Contracts = [
+	Expect<WritesInto<z.infer<typeof incomeCreateDto>, Income>>,
+	Expect<WritesInto<z.infer<typeof incomeUpdateDto>, Income>>,
+];
 
 const base = { person: "Sam", source: "Salary" };
 
@@ -47,5 +55,14 @@ describe("incomeUpdateDto", () => {
 
 	it("requires an id", () => {
 		expect(incomeUpdateDto.safeParse(base).success).toBe(false);
+	});
+});
+
+describe("income DTO ↔ interface contract", () => {
+	// Annotating with Contracts makes tsc evaluate every pair; the array is
+	// contextually typed to the tuple, so it stays a genuine compile-time gate.
+	it("keeps create and update DTOs writable into the Income interface", () => {
+		const aligned: Contracts = [true, true];
+		expect(aligned).toHaveLength(2);
 	});
 });

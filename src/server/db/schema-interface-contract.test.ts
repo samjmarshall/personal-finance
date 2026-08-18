@@ -10,15 +10,7 @@ import type { expenseCategories } from "~/server/expenses/categories.schema";
 import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
 import type { transactions } from "~/server/transactions/transactions.schema";
-
-// Exact type-equality: resolves `false` on any structural or nullability drift
-// between the two sides. Distinguishes optional/nullable and extra/missing keys.
-type Equal<X, Y> =
-	(<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2
-		? true
-		: false;
-// Expect<false> violates the `extends true` constraint, so tsc --noEmit errors.
-type Expect<T extends true> = T;
+import type { Equal, Expect } from "~/test/type-contracts";
 
 // One `true` per aligned pair. A schema change that breaks an interface — or an
 // interface change that would need a column/migration — makes an element
