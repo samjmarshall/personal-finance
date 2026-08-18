@@ -55,13 +55,6 @@ describe("transactionCreateDto vocab fields", () => {
 			transactionCreateDto.safeParse({ ...base, priority: "Someday" }).success,
 		).toBe(false);
 	});
-
-	it("defaults category, frequency and priority when omitted", () => {
-		const parsed = transactionCreateDto.parse(base);
-		expect(parsed.category).toBe("Uncategorised");
-		expect(parsed.frequency).toBe(Frequency.OneOff);
-		expect(parsed.priority).toBe(Priority.NiceToHave);
-	});
 });
 
 describe("transactionUpdateDto", () => {

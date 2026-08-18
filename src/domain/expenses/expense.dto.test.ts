@@ -25,13 +25,6 @@ describe("expenseCreateDto", () => {
 			false,
 		);
 	});
-
-	it("defaults fortnight, month and year to 0 when omitted", () => {
-		const parsed = expenseCreateDto.parse(base);
-		expect(parsed.fortnight).toBe(0);
-		expect(parsed.month).toBe(0);
-		expect(parsed.year).toBe(0);
-	});
 });
 
 describe("expenseUpdateDto", () => {

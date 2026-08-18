@@ -24,9 +24,10 @@ describe("categoryCreateDto", () => {
 		).toBe(false);
 	});
 
-	it("defaults sortOrder to 0 when omitted", () => {
-		const parsed = categoryCreateDto.parse(base);
-		expect(parsed.sortOrder).toBe(0);
+	it("rejects a negative sortOrder", () => {
+		expect(
+			categoryCreateDto.safeParse({ ...base, sortOrder: -1 }).success,
+		).toBe(false);
 	});
 });
 
@@ -43,6 +44,12 @@ describe("categoryUpdateDto", () => {
 	it("rejects a non-integer sortOrder", () => {
 		expect(
 			categoryUpdateDto.safeParse({ ...baseUpdate, sortOrder: 1.5 }).success,
+		).toBe(false);
+	});
+
+	it("rejects a negative sortOrder", () => {
+		expect(
+			categoryUpdateDto.safeParse({ ...baseUpdate, sortOrder: -1 }).success,
 		).toBe(false);
 	});
 

@@ -1,3 +1,5 @@
+import type { Frequency, Priority } from "~/lib/constants";
+
 export interface Transaction {
 	id: number;
 	amount: number;
@@ -6,9 +8,9 @@ export interface Transaction {
 	date: Date;
 	description: string;
 	expenseId: number | null;
-	frequency: string;
+	frequency: Frequency;
 	notes: string | null;
-	priority: string;
+	priority: Priority;
 	receiptDescription: string | null;
 	updatedAt: Date | null;
 }
@@ -26,12 +28,12 @@ export interface TransactionSummary {
 		count: number;
 	};
 	byPriority: {
-		priority: string;
+		priority: Priority;
 		total: number;
 		count: number;
 	}[];
 	byFrequency: {
-		frequency: string;
+		frequency: Frequency;
 		total: number;
 		count: number;
 	}[];

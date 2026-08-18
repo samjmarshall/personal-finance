@@ -37,10 +37,10 @@ const PAGE_SIZE = 50;
 
 // Filters use null (not "") for "no selection"; the null-valued option both
 // labels the trigger and lets the user clear back to "all".
-function withAllOption(
+function withAllOption<T extends string>(
 	allLabel: string,
-	values: readonly string[],
-): SelectFieldOption<string | null>[] {
+	values: readonly T[],
+): SelectFieldOption<T | null>[] {
 	return [{ value: null, label: allLabel }, ...toOptions(values)];
 }
 
@@ -55,8 +55,8 @@ const FREQUENCY_FILTER_ITEMS = withAllOption(
 
 export function TransactionsView() {
 	const [search, setSearch] = useState("");
-	const [priority, setPriority] = useState<string | null>(null);
-	const [frequency, setFrequency] = useState<string | null>(null);
+	const [priority, setPriority] = useState<Priority | null>(null);
+	const [frequency, setFrequency] = useState<Frequency | null>(null);
 	const [sortBy, setSortBy] = useState<SortBy>("date");
 	const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(0);
