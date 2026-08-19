@@ -73,6 +73,7 @@ export function TransactionsView() {
 		() => categoryRows.map((c) => c.name),
 		[categoryRows],
 	);
+	const [expenses] = api.expense.list.useSuspenseQuery();
 
 	const queryInput = {
 		search: search || undefined,
@@ -234,6 +235,11 @@ export function TransactionsView() {
 									<SortHeader col="category">Category</SortHeader>
 								</th>
 								<th className="px-4 py-2.5">
+									<span className="font-medium text-muted-foreground">
+										Expense
+									</span>
+								</th>
+								<th className="px-4 py-2.5">
 									<SortHeader col="priority">Priority</SortHeader>
 								</th>
 								<th className="px-4 py-2.5 text-right">
@@ -269,6 +275,9 @@ export function TransactionsView() {
 										</td>
 										<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
 											{tx.category}
+										</td>
+										<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+											{tx.expenseName ?? "—"}
 										</td>
 										<td className="whitespace-nowrap px-4 py-3">
 											<Badge className={ps.badge}>
@@ -311,7 +320,7 @@ export function TransactionsView() {
 								<tr>
 									<td
 										className="px-4 py-16 text-center text-muted-foreground text-sm"
-										colSpan={6}
+										colSpan={7}
 									>
 										{hasFilters
 											? "No transactions match your filters."
@@ -363,6 +372,7 @@ export function TransactionsView() {
 
 			<TransactionForm
 				categories={categories}
+				expenses={expenses}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
 				transaction={editing}

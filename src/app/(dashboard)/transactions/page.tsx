@@ -3,6 +3,7 @@ import { api, HydrateClient } from "~/trpc/server";
 
 export default async function TransactionsPage() {
 	void api.category.list.prefetch();
+	void api.expense.list.prefetch();
 	void api.transaction.list.prefetch({
 		sortBy: "date",
 		sortDir: "desc",

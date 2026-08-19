@@ -53,11 +53,13 @@ export function TransactionForm({
 	onClose,
 	transaction,
 	categories,
+	expenses,
 }: {
 	open: boolean;
 	onClose: () => void;
 	transaction: Transaction | null;
 	categories: string[];
+	expenses: RouterOutputs["expense"]["list"];
 }) {
 	const utils = api.useUtils();
 	const [date, setDate] = useState(toDateInput(new Date()));
@@ -78,6 +80,8 @@ export function TransactionForm({
 	const [frequency, setFrequency] = useState<Frequency>(Frequency.OneOff);
 	const [priority, setPriority] = useState<Priority>(Priority.NiceToHave);
 	const [notes, setNotes] = useState("");
+	// Empty string is the "— None —" option; converted to null on submit.
+	const [expenseId, setExpenseId] = useState<number | null>(null);
 
 	useEffect(() => {
 		if (!open) return;
@@ -88,6 +92,7 @@ export function TransactionForm({
 		setFrequency(toFrequency(transaction?.frequency));
 		setPriority(toPriority(transaction?.priority));
 		setNotes(transaction?.notes ?? "");
+		setExpenseId(transaction?.expenseId ? transaction.expenseId : null);
 	}, [open, transaction, commitCategory]);
 
 	const onSuccess = async () => {
@@ -108,6 +113,11 @@ export function TransactionForm({
 			? [category, ...categories]
 			: categories;
 
+	const expenseOptions: SelectFieldOption<string>[] = [
+		{ value: "", label: "— None —" },
+		...expenses.map((e) => ({ value: String(e.id), label: e.name })),
+	];
+
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
 		const payload = {
@@ -118,6 +128,7 @@ export function TransactionForm({
 			frequency,
 			priority,
 			notes: notes.trim() || null,
+			expenseId,
 		};
 		if (transaction) update.mutate({ id: transaction.id, ...payload });
 		else create.mutate(payload);
@@ -203,6 +214,19 @@ export function TransactionForm({
 								</ComboboxList>
 							</ComboboxContent>
 						</Combobox>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="tx-expense">
+							Expense
+							<FieldOptional />
+						</FieldLabel>
+						<SelectField
+							className="w-full"
+							id="tx-expense"
+							items={expenseOptions}
+							onValueChange={(v) => setExpenseId(v ? Number(v) : null)}
+							value={expenseId ? String(expenseId) : ""}
+						/>
 					</Field>
 					<div className="grid grid-cols-2 gap-4">
 						<Field>
