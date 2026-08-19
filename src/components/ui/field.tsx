@@ -149,7 +149,9 @@ function FieldOptional({ className }: { className?: string }) {
 			className={cn("font-normal text-muted-foreground text-xs", className)}
 			data-slot="field-optional"
 		>
-			Optional
+			{/* Leading space: label text and this span concatenate into the control's
+			    accessible name — without it screen readers announce "…Optional". */}
+			{" Optional"}
 		</span>
 	);
 }
