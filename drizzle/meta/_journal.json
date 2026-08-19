@@ -36,6 +36,13 @@
 			"when": 1787050110239,
 			"tag": "0004_regular_marvel_zombies",
 			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1787101928255,
+			"tag": "0005_chunky_princess_powerful",
+			"breakpoints": true
 		}
 	]
 }
