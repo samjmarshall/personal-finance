@@ -33,6 +33,13 @@ describe("incomeCreateDto", () => {
 			false,
 		);
 	});
+
+	// fortnight/month/year are doublePrecision money columns — fractional dollars must pass.
+	it("accepts a fractional fortnight", () => {
+		expect(
+			incomeCreateDto.safeParse({ ...base, fortnight: 1500.5 }).success,
+		).toBe(true);
+	});
 });
 
 describe("incomeUpdateDto", () => {

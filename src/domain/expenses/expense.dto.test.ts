@@ -29,9 +29,28 @@ describe("expenseCreateDto", () => {
 	});
 
 	it("rejects a negative fortnight", () => {
+		expect(expenseCreateDto.safeParse({ ...base, year: -1 }).success).toBe(
+			false,
+		);
+		expect(expenseCreateDto.safeParse({ ...base, month: -1 }).success).toBe(
+			false,
+		);
 		expect(expenseCreateDto.safeParse({ ...base, fortnight: -1 }).success).toBe(
 			false,
 		);
+	});
+
+	// fortnight/month/year are doublePrecision money columns — fractional dollars must pass.
+	it("accepts a fractional fortnight", () => {
+		expect(expenseCreateDto.safeParse({ ...base, year: 1500.5 }).success).toBe(
+			true,
+		);
+		expect(expenseCreateDto.safeParse({ ...base, month: 1500.5 }).success).toBe(
+			true,
+		);
+		expect(
+			expenseCreateDto.safeParse({ ...base, fortnight: 1500.5 }).success,
+		).toBe(true);
 	});
 });
 
