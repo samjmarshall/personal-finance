@@ -41,6 +41,17 @@ describe("transactionCreateDto.expenseId", () => {
 		).toBe(false);
 	});
 
+	it("rejects a negative expenseId", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseId: -1 }).success,
+		).toBe(false);
+	});
+
+	it("rejects a 0 expenseId", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseId: 0 }).success,
+		).toBe(false);
+	});
 	// omitted must stay undefined, not null: update's .set() skips undefined so an
 	// omitted expenseId leaves the existing link intact; null would clear it.
 	it("leaves omitted expenseId and notes undefined (update preserves them)", () => {
@@ -97,6 +108,30 @@ describe("transactionUpdateDto", () => {
 
 	it("requires an id", () => {
 		expect(transactionUpdateDto.safeParse(base).success).toBe(false);
+	});
+
+	it("rejects a string expenseId", () => {
+		expect(
+			transactionUpdateDto.safeParse({ ...base, expenseId: "7" }).success,
+		).toBe(false);
+	});
+
+	it("rejects a non-integer expenseId", () => {
+		expect(
+			transactionUpdateDto.safeParse({ ...base, expenseId: 7.5 }).success,
+		).toBe(false);
+	});
+
+	it("rejects a negative expenseId", () => {
+		expect(
+			transactionUpdateDto.safeParse({ ...base, expenseId: -1 }).success,
+		).toBe(false);
+	});
+
+	it("rejects a 0 expenseId", () => {
+		expect(
+			transactionUpdateDto.safeParse({ ...base, expenseId: 0 }).success,
+		).toBe(false);
 	});
 });
 

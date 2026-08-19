@@ -34,7 +34,7 @@ const transactionFields = {
 	frequency: z.enum(Frequency).optional(),
 	priority: z.enum(Priority).optional(),
 	notes: z.string().nullable().optional(),
-	expenseId: z.number().int().nonnegative().nullable().optional(),
+	expenseId: z.number().int().positive().nullable().optional(),
 };
 
 export const transactionCreateDto = z.object({
