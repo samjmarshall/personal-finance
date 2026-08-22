@@ -43,6 +43,13 @@
 			"when": 1787101928255,
 			"tag": "0005_chunky_princess_powerful",
 			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1787121921823,
+			"tag": "0006_overrated_james_howlett",
+			"breakpoints": true
 		}
 	]
 }

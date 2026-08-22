@@ -61,6 +61,52 @@ describe("transactionCreateDto.expenseId", () => {
 	});
 });
 
+describe("transactionCreateDto.expenseCategoryId", () => {
+	it("accepts a positive integer expenseCategoryId", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseCategoryId: 3 }).success,
+		).toBe(true);
+	});
+
+	it("accepts null (uncategorised)", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseCategoryId: null })
+				.success,
+		).toBe(true);
+	});
+
+	it("accepts an omitted expenseCategoryId", () => {
+		expect(transactionCreateDto.safeParse(base).success).toBe(true);
+	});
+
+	it("rejects a string expenseCategoryId", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseCategoryId: "3" })
+				.success,
+		).toBe(false);
+	});
+
+	it("rejects a non-integer expenseCategoryId", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseCategoryId: 3.5 })
+				.success,
+		).toBe(false);
+	});
+
+	it("rejects a negative expenseCategoryId", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseCategoryId: -1 })
+				.success,
+		).toBe(false);
+	});
+
+	it("rejects a 0 expenseCategoryId", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, expenseCategoryId: 0 }).success,
+		).toBe(false);
+	});
+});
+
 describe("transactionCreateDto vocab fields", () => {
 	it("rejects a frequency outside the managed set", () => {
 		expect(

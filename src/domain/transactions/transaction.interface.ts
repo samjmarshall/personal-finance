@@ -8,6 +8,7 @@ export interface Transaction {
 	date: Date;
 	description: string;
 	expenseId: number | null;
+	expenseCategoryId: number | null;
 	frequency: Frequency;
 	notes: string | null;
 	priority: Priority;
@@ -15,9 +16,11 @@ export interface Transaction {
 	updatedAt: Date | null;
 }
 
-// list rows leftJoin the linked expense; null when unlinked or the expense is gone
+// list rows leftJoin the linked expense and managed category; null when unlinked
+// or the referenced row is gone
 export interface TransactionListItem extends Transaction {
 	expenseName: string | null;
+	expenseCategoryName: string | null;
 }
 
 export interface TransactionSummary {

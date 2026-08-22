@@ -1,5 +1,6 @@
 import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
 import { Frequency, Priority } from "~/lib/constants";
+import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 
 export const transactionFrequency = pgEnum(
@@ -18,6 +19,9 @@ export const transactions = pgTable(
 		expenseId: d
 			.integer()
 			.references(() => expenses.id, { onDelete: "set null" }),
+		expenseCategoryId: d
+			.integer()
+			.references(() => expenseCategories.id, { onDelete: "set null" }),
 		date: d.timestamp({ withTimezone: true }).notNull(),
 		description: d.text().notNull(),
 		receiptDescription: d.text(),
@@ -36,5 +40,6 @@ export const transactions = pgTable(
 		index("transaction_date_idx").on(t.date),
 		index("transaction_priority_idx").on(t.priority),
 		index("transaction_expense_idx").on(t.expenseId),
+		index("transaction_expense_category_idx").on(t.expenseCategoryId),
 	],
 );

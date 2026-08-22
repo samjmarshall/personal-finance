@@ -24,6 +24,7 @@ import {
 } from "~/domain/transactions";
 import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
 
@@ -79,9 +80,14 @@ export const transactionRouter = createTRPCRouter({
 						.select({
 							...getTableColumns(transactions),
 							expenseName: expenses.name,
+							expenseCategoryName: expenseCategories.name,
 						})
 						.from(transactions)
 						.leftJoin(expenses, eq(transactions.expenseId, expenses.id))
+						.leftJoin(
+							expenseCategories,
+							eq(transactions.expenseCategoryId, expenseCategories.id),
+						)
 						.where(where)
 						.orderBy(orderBy, desc(transactions.id))
 						.limit(input.limit)
