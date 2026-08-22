@@ -118,56 +118,56 @@ export const transactionRouter = createTRPCRouter({
 
 	summary: protectedProcedure.query(
 		async ({ ctx }): Promise<TransactionSummary> => {
-			const [totals] = await ctx.db
-				.select({
-					spend: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
-					refunds: sql<number>`coalesce(sum(case when ${transactions.amount} < 0 then ${transactions.amount} else 0 end), 0)`,
-					net: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-					count: sql<number>`cast(count(*) as int)`,
-				})
-				.from(transactions);
-
-			const byPriority = await ctx.db
-				.select({
-					priority: transactions.priority,
-					total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-					count: sql<number>`cast(count(*) as int)`,
-				})
-				.from(transactions)
-				.groupBy(transactions.priority);
-
-			const byFrequency = await ctx.db
-				.select({
-					frequency: transactions.frequency,
-					total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
-					count: sql<number>`cast(count(*) as int)`,
-				})
-				.from(transactions)
-				.groupBy(transactions.frequency);
-
-			const byMonth = await ctx.db
-				.select({
-					month: sql<string>`to_char(date_trunc('month', ${transactions.date}), 'YYYY-MM')`,
-					total: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
-				})
-				.from(transactions)
-				.groupBy(sql`date_trunc('month', ${transactions.date})`)
-				.orderBy(sql`date_trunc('month', ${transactions.date})`);
-
-			const topCategories = await ctx.db
-				.select({
-					category: transactions.category,
-					total: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
-					count: sql<number>`cast(count(*) as int)`,
-				})
-				.from(transactions)
-				.groupBy(transactions.category)
-				.orderBy(
-					desc(
-						sql`sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end)`,
-					),
-				)
-				.limit(8);
+			const [totalsRows, byPriority, byFrequency, byMonth, topCategories] =
+				await Promise.all([
+					ctx.db
+						.select({
+							spend: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
+							refunds: sql<number>`coalesce(sum(case when ${transactions.amount} < 0 then ${transactions.amount} else 0 end), 0)`,
+							net: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+							count: sql<number>`cast(count(*) as int)`,
+						})
+						.from(transactions),
+					ctx.db
+						.select({
+							priority: transactions.priority,
+							total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+							count: sql<number>`cast(count(*) as int)`,
+						})
+						.from(transactions)
+						.groupBy(transactions.priority),
+					ctx.db
+						.select({
+							frequency: transactions.frequency,
+							total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+							count: sql<number>`cast(count(*) as int)`,
+						})
+						.from(transactions)
+						.groupBy(transactions.frequency),
+					ctx.db
+						.select({
+							month: sql<string>`to_char(date_trunc('month', ${transactions.date}), 'YYYY-MM')`,
+							total: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
+						})
+						.from(transactions)
+						.groupBy(sql`date_trunc('month', ${transactions.date})`)
+						.orderBy(sql`date_trunc('month', ${transactions.date})`),
+					ctx.db
+						.select({
+							category: transactions.category,
+							total: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
+							count: sql<number>`cast(count(*) as int)`,
+						})
+						.from(transactions)
+						.groupBy(transactions.category)
+						.orderBy(
+							desc(
+								sql`sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end)`,
+							),
+						)
+						.limit(8),
+				]);
+			const totals = totalsRows[0];
 
 			return {
 				totals: totals ?? { spend: 0, refunds: 0, net: 0, count: 0 },
