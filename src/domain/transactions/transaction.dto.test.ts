@@ -107,6 +107,30 @@ describe("transactionCreateDto.expenseCategoryId", () => {
 	});
 });
 
+describe("transactionCreateDto.category", () => {
+	it("accepts a non-empty category", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, category: "Food" }).success,
+		).toBe(true);
+	});
+
+	it("accepts an omitted category (DB default fills it)", () => {
+		expect(transactionCreateDto.safeParse(base).success).toBe(true);
+	});
+
+	it("rejects an empty category", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, category: "" }).success,
+		).toBe(false);
+	});
+
+	it("rejects a whitespace-only category", () => {
+		expect(
+			transactionCreateDto.safeParse({ ...base, category: "   " }).success,
+		).toBe(false);
+	});
+});
+
 describe("transactionCreateDto vocab fields", () => {
 	it("rejects a frequency outside the managed set", () => {
 		expect(

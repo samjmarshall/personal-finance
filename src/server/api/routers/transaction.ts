@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import {
 	and,
 	asc,
@@ -27,6 +28,16 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
+
+// postgres.js raises a PostgresError carrying the SQLSTATE code; 23503 = foreign_key_violation
+function isForeignKeyViolation(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as { code: unknown }).code === "23503"
+	);
+}
 
 export const transactionRouter = createTRPCRouter({
 	list: protectedProcedure
@@ -171,20 +182,43 @@ export const transactionRouter = createTRPCRouter({
 	create: protectedProcedure
 		.input(transactionCreateDto)
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
-			const [row] = await ctx.db.insert(transactions).values(input).returning();
-			return assertRow(row, "create transaction");
+			try {
+				const [row] = await ctx.db
+					.insert(transactions)
+					.values(input)
+					.returning();
+				return assertRow(row, "create transaction");
+			} catch (error) {
+				if (isForeignKeyViolation(error)) {
+					throw new TRPCError({
+						code: "CONFLICT",
+						message: "The selected expense or category no longer exists.",
+					});
+				}
+				throw error;
+			}
 		}),
 
 	update: protectedProcedure
 		.input(transactionUpdateDto)
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
 			const { id, ...values } = input;
-			const [row] = await ctx.db
-				.update(transactions)
-				.set(values)
-				.where(eq(transactions.id, id))
-				.returning();
-			return assertRow(row, "update transaction");
+			try {
+				const [row] = await ctx.db
+					.update(transactions)
+					.set(values)
+					.where(eq(transactions.id, id))
+					.returning();
+				return assertRow(row, "update transaction");
+			} catch (error) {
+				if (isForeignKeyViolation(error)) {
+					throw new TRPCError({
+						code: "CONFLICT",
+						message: "The selected expense or category no longer exists.",
+					});
+				}
+				throw error;
+			}
 		}),
 
 	delete: protectedProcedure

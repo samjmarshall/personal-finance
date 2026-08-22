@@ -30,7 +30,7 @@ const transactionFields = {
 	date: z.date(),
 	description: z.string().min(1, "Description is required"),
 	amount: z.number(),
-	category: z.string().optional(),
+	category: z.string().trim().min(1, "Category is required").optional(),
 	frequency: z.enum(Frequency).optional(),
 	priority: z.enum(Priority).optional(),
 	notes: z.string().nullable().optional(),
