@@ -7,7 +7,7 @@ Stage 1 of the 2026-08-16 expense-linking/receipts/cashflow design: link Transac
 ## Current State
 
 - `transaction` table has no FK columns at all — columns at `src/server/transactions/transactions.schema.ts:6-19`, only date/priority indexes at `:21-24`. Free-text `category` (default `"Uncategorised"`) at `:11`.
-- `transactionInput` Zod schema is inline in the router at `src/server/api/routers/transaction.ts:25-33`; `list` at `:71-95` (items query `:78-84`, count `:85-88`), `create` at `:158-166`, `update` at `:168-178`. `src/domain/transactions/transactions.dto.ts` does not exist.
+- `transactionInput` Zod schema is inline in the router at `src/server/api/routers/transaction.ts:25-33`; `list` at `:71-95` (items query `:78-84`, count `:85-88`), `create` at `:158-166`, `update` at `:168-178`. `src/domain/transactions/transaction.dto.ts` does not exist.
 - Transaction form: props at `src/app/_components/transactions/transaction-form.tsx:47-57`, open-effect state seeding at `:78-87`, submit payload at `:107-120`. Pickers use `SelectField` (`:31-35`) and `Combobox` (`:6-13`) — no expense or category-FK picker.
 - Transactions view: category suspense query at `src/app/_components/transactions/transactions-view.tsx:65-69`, `<TransactionForm>` at `:358-363`, 6 `<th>`s at `:221-238`, row `<td>`s at `:251-300`, empty-state `colSpan={6}` at `:308`.
 - `expense.list` returns all columns, no join — `src/server/api/routers/expense.ts:15-24`. `category.list` returns id/name/description/sortOrder/timestamps/expenseCount — `src/server/api/routers/category.ts:15-31`; manual `leftJoin` precedent at `:27`.
@@ -38,15 +38,15 @@ Stage 1 of the 2026-08-16 expense-linking/receipts/cashflow design: link Transac
 
 ## Approach
 
-Six + one phases, each a shippable vertical slice in the repo's plain-router style (adr012). Phases 1–4 execute the two adopted 2026-08-11 plans: expenseId (schema → migration → router + Zod test → form UI), then expenseCategoryId likewise. Phase 5 builds the Unplanned server layer (app_setting + seeded anchor, period-window pure functions, `unplanned` query, `linkExpense` mutation), Phase 6 the page, Phase 7 the nav. Zod inputs live in a new `transactions.dto.ts` (adr005 dash convention) and are TDD'd; joins are manual `leftJoin` per the `category.ts:27` precedent. Vocabulary per `CONTEXT.md`: Planned/Unplanned, Spend/Inflow, Expense Category.
+Six + one phases, each a shippable vertical slice in the repo's plain-router style (adr012). Phases 1–4 execute the two adopted 2026-08-11 plans: expenseId (schema → migration → router + Zod test → form UI), then expenseCategoryId likewise. Phase 5 builds the Unplanned server layer (app_setting + seeded anchor, period-window pure functions, `unplanned` query, `linkExpense` mutation), Phase 6 the page, Phase 7 the nav. Zod inputs live in a new `transaction.dto.ts` (adr005 dash convention) and are TDD'd; joins are manual `leftJoin` per the `category.ts:27` precedent. Vocabulary per `CONTEXT.md`: Planned/Unplanned, Spend/Inflow, Expense Category.
 
 ## Phase 1: Data layer — `transaction.expenseId`
 
 Executes plan `2026-08-11-transaction-expense-mapping.md` Phase 1.
 
 ### Changes
-- `src/domain/transactions/transactions.dto.test.ts` — new, **written first** (TDD): `transactionInput` accepts an int `expenseId`, `null`, and omitted; rejects a string and a float. Mirrors pure-unit style of `src/lib/utils.test.ts`.
-- `src/domain/transactions/transactions.dto.ts` — new; move `transactionInput` here from `src/server/api/routers/transaction.ts:25-33`; add `expenseId: z.number().int().nullable().optional()`; export.
+- `src/domain/transactions/transaction.dto.test.ts` — new, **written first** (TDD): `transactionInput` accepts an int `expenseId`, `null`, and omitted; rejects a string and a float. Mirrors pure-unit style of `src/lib/utils.test.ts`.
+- `src/domain/transactions/transaction.dto.ts` — new; move `transactionInput` here from `src/server/api/routers/transaction.ts:25-33`; add `expenseId: z.number().int().nullable().optional()`; export.
 - `src/server/transactions/transactions.schema.ts` — import `expenses` from `~/server/expenses/expenses.schema` (lazy-thunk cross-file FK, adr005); add nullable `expenseId: d.integer().references(() => expenses.id, { onDelete: "set null" })` to the columns (`:6-19`).
 - `drizzle/0002_*.sql` — `make db_generate`; review: only `ADD COLUMN "expenseId"` + FK `ON DELETE set null`, nothing else; `make db_migrate`.
 - `src/server/api/routers/transaction.ts` — import `transactionInput` from `~/server/transactions/transactions-schemas`; `create` (`:158-166`) sets `expenseId: input.expenseId ?? null`; `update` (`:168-178`) carries it through `set(...)`; `list` items query (`:78-84`) becomes `.select({ ...getTableColumns(transactions), expenseName: expenses.name }).from(transactions).leftJoin(expenses, eq(transactions.expenseId, expenses.id))` keeping existing where/orderBy/limit/offset (`getTableColumns` from `drizzle-orm`). Count query (`:85-88`) unchanged.
@@ -85,21 +85,21 @@ Executes plan `2026-08-11-transaction-expense-mapping.md` Phase 2 (line numbers 
 Executes plan `2026-08-11-transaction-expense-category-fk.md` Phases 1–2.
 
 ### Changes
-- `src/domain/transactions/transactions.dto.test.ts` — **written first**: `transactionInput` accepts `expenseCategoryId` as positive int / `null` / omitted; rejects string and non-integer.
-- `src/domain/transactions/transactions.dto.ts` — add `expenseCategoryId: z.number().int().nullable().optional()`.
+- `src/domain/transactions/transaction.dto.test.ts` — **written first**: `transactionInput` accepts `expenseCategoryId` as positive int / `null` / omitted; rejects string and non-integer.
+- `src/domain/transactions/transaction.dto.ts` — add `expenseCategoryId: z.number().int().nullable().optional()`.
 - `src/server/transactions/transactions.schema.ts` — import `expenseCategories` from `~/server/expenses/categories.schema`; add nullable `expenseCategoryId: d.integer().references(() => expenseCategories.id, { onDelete: "set null" })`; add `index("transaction_expense_category_idx").on(t.expenseCategoryId)` to the index list (`:21-24`).
-- `drizzle/0003_*.sql` — `make db_generate` (add-column + FK + index only), review, `make db_migrate`.
+- `drizzle/0006_*.sql` — `make db_generate` (add-column + FK + index only), review, `make db_migrate`.
 - `src/server/api/routers/transaction.ts` — `create`/`update` need no extra handling (value flows through the input spread); `list` items query adds `expenseCategoryName: expenseCategories.name` to the projection and a second `.leftJoin(expenseCategories, eq(transactions.expenseCategoryId, expenseCategories.id))`.
 
 ### Success
 **Automated**
-- [ ] `make test` passes
-- [ ] `make check` passes
-- [ ] `make build` passes
+- [x] `make test` passes (7 new expenseCategoryId cases green — 93 total)
+- [x] `make check` passes (includes `db:check`; generated meta files formatted via `make fix`)
+- [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
 
 **Manual**
-- [ ] FK + index present; deleting a referenced category nulls `expenseCategoryId` (spot check on feature-branch DB)
-- [ ] `transaction.list` rows carry `expenseCategoryId` + `expenseCategoryName` (null when unset)
+- [x] FK + index present on feature-branch DB — `transaction_expenseCategoryId_expense_category_id_fk` (`confdeltype=n` = ON DELETE SET NULL) + `transaction_expense_category_idx`; migration `drizzle/0006_overrated_james_howlett.sql` (0003 was consumed by Phase 1's index)
+- [x] `transaction.list` projection carries `expenseCategoryId` (via `getTableColumns`) + `expenseCategoryName` (via second `leftJoin`); `TransactionListItem` interface + build type-check confirm both null when unset
 
 ## Phase 4: UI — managed category picker
 
@@ -126,8 +126,8 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 - Seed — manual one-time row `('fortnightAnchor', '<household payday ISO date>')` on the branch DB (and prod on release); no settings UI. A missing row degrades the picker to month-only (design: degrade, never error).
 - `src/lib/period.test.ts` — new, **written first**, table-driven: `monthWindow(ref)` start/end incl. year boundary; `fortnightWindow(anchor, ref)` grid math — ref on the anchor day, mid-window, before the anchor date, many fortnights later; windows are half-open `[from, to)`; `shiftWindow` prev/next stepping.
 - `src/lib/period.ts` — new pure functions used by client (and by stage-3 bucketing later): `monthWindow`, `fortnightWindow`, `shiftWindow`.
-- `src/domain/transactions/transactions.dto.test.ts` — **written first**: `unplannedInput` accepts `{from, to}` dates, rejects missing/invalid; `linkExpenseInput` accepts `{id: int, expenseId: int|null}`, rejects float/string ids.
-- `src/domain/transactions/transactions.dto.ts` — add `unplannedInput` (`{ from: z.date(), to: z.date() }`) and `linkExpenseInput` (`{ id: z.number().int(), expenseId: z.number().int().nullable() }`).
+- `src/domain/transactions/transaction.dto.test.ts` — **written first**: `unplannedInput` accepts `{from, to}` dates, rejects missing/invalid; `linkExpenseInput` accepts `{id: int, expenseId: int|null}`, rejects float/string ids.
+- `src/domain/transactions/transaction.dto.ts` — add `unplannedInput` (`{ from: z.date(), to: z.date() }`) and `linkExpenseInput` (`{ id: z.number().int(), expenseId: z.number().int().nullable() }`).
 - `src/server/api/routers/setting.ts` — new plain router: `fortnightAnchor` protected query → the `app_setting` row's value as a `Date`, or `null` when absent.
 - `src/server/api/root.ts` — register the `setting` router.
 - `src/server/api/routers/transaction.ts` — `unplanned` query (input `unplannedInput`): all columns where `isNull(transactions.expenseId)` and `date >= from AND date < to`, ordered `category` asc then `date` desc — returns unlinked rows of **both signs** (refunds net against group totals client-side); no pagination. `linkExpense` mutation (input `linkExpenseInput`): `update ... set({ expenseId })` by id.

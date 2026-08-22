@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+// Amounts optional (no .default): create falls through to the DB column's
+// .notNull().default(0); update omits them so .set() preserves stored values.
 const expenseFields = {
 	name: z.string().min(1, "Name is required"),
 	category: z.string().min(1, "Category is required"),
