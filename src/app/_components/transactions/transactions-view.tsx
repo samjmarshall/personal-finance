@@ -275,6 +275,11 @@ export function TransactionsView() {
 										</td>
 										<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
 											{tx.category}
+											{tx.expenseCategoryName && (
+												<span className="mt-0.5 block text-muted-foreground text-xs">
+													{tx.expenseCategoryName}
+												</span>
+											)}
 										</td>
 										<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
 											{tx.expenseName ?? "—"}
@@ -373,6 +378,7 @@ export function TransactionsView() {
 			<TransactionForm
 				categories={categories}
 				expenses={expenses}
+				managedCategories={categoryRows}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
 				transaction={editing}

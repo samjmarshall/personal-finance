@@ -111,12 +111,12 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make build` passes
+- [x] `make check` passes
+- [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
 
 **Manual**
-- [ ] Pick managed category → save → visible in list; edit preselects; "None" clears; empty managed list still submits
-- [ ] `/design-review`
+- [x] Pick managed category → save → visible in list; edit preselects; "None" clears; empty managed list still submits — verified live in `/design-review`
+- [x] `/design-review` — one High (list secondary text failed WCAG AA contrast) fixed by dropping `/70`; Medium loading-flash a non-issue (parent's `category.list` suspense query warms the cache); nitpicks systemic/pre-existing, left per scope
 
 ## Phase 5: Unplanned server layer — `app_setting`, period windows, queries
 
