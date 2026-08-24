@@ -4,8 +4,8 @@ SHELL := /bin/bash -euo pipefail
 	db_generate db_custom db_migrate db_studio db_check \
 	db_branch db_branch_delete db_branch_delete_all db_branch_status clean
 
-NVMRC_MAJOR := $(shell cut -d. -f1 .nvmrc)
-NODE_MAJOR := $(shell node --version | cut -d. -f1)
+NVMRC_MAJOR := $(shell cut -d. -f1 .nvmrc | sed 's/^v//')
+NODE_MAJOR := $(shell node --version | cut -d. -f1 | sed 's/^v//')
 
 # make runs each recipe line in its own shell, so `nvm use` here can't switch the
 # node used by dependent targets. This gate can only verify: fail loud on a major
