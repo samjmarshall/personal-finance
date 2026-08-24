@@ -24,20 +24,15 @@ import {
 	transactionUpdateDto,
 } from "~/domain/transactions";
 import { assertRow } from "~/server/api/lib/assert-row";
+import { isPgError } from "~/server/api/lib/pg-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
 
-// postgres.js raises a PostgresError carrying the SQLSTATE code; 23503 = foreign_key_violation
-function isForeignKeyViolation(error: unknown): boolean {
-	return (
-		typeof error === "object" &&
-		error !== null &&
-		"code" in error &&
-		(error as { code: unknown }).code === "23503"
-	);
-}
+// Either FK on the create/update DTO (expenseId, expenseCategoryId) can raise 23503.
+const FK_CONFLICT_MESSAGE =
+	"The selected expense or category no longer exists.";
 
 export const transactionRouter = createTRPCRouter({
 	list: protectedProcedure
@@ -189,10 +184,10 @@ export const transactionRouter = createTRPCRouter({
 					.returning();
 				return assertRow(row, "create transaction");
 			} catch (error) {
-				if (isForeignKeyViolation(error)) {
+				if (isPgError(error, "23503")) {
 					throw new TRPCError({
 						code: "CONFLICT",
-						message: "The selected expense or category no longer exists.",
+						message: FK_CONFLICT_MESSAGE,
 					});
 				}
 				throw error;
@@ -211,10 +206,10 @@ export const transactionRouter = createTRPCRouter({
 					.returning();
 				return assertRow(row, "update transaction");
 			} catch (error) {
-				if (isForeignKeyViolation(error)) {
+				if (isPgError(error, "23503")) {
 					throw new TRPCError({
 						code: "CONFLICT",
-						message: "The selected expense or category no longer exists.",
+						message: FK_CONFLICT_MESSAGE,
 					});
 				}
 				throw error;

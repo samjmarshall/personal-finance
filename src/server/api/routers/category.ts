@@ -7,19 +7,10 @@ import {
 	categoryUpdateDto,
 } from "~/domain/categories";
 import { assertRow } from "~/server/api/lib/assert-row";
+import { isPgError } from "~/server/api/lib/pg-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
-
-// postgres.js raises a PostgresError carrying the SQLSTATE code; 23505 = unique_violation
-function isUniqueViolation(error: unknown): boolean {
-	return (
-		typeof error === "object" &&
-		error !== null &&
-		"code" in error &&
-		(error as { code: unknown }).code === "23505"
-	);
-}
 
 export const categoryRouter = createTRPCRouter({
 	list: protectedProcedure.query(async ({ ctx }): Promise<Category[]> => {
@@ -56,7 +47,7 @@ export const categoryRouter = createTRPCRouter({
 
 				return assertRow(row, "create category");
 			} catch (error) {
-				if (isUniqueViolation(error)) {
+				if (isPgError(error, "23505")) {
 					throw new TRPCError({
 						code: "CONFLICT",
 						message: "A category with that name already exists.",
@@ -106,7 +97,7 @@ export const categoryRouter = createTRPCRouter({
 
 				return assertRow(row, "update category");
 			} catch (error) {
-				if (isUniqueViolation(error)) {
+				if (isPgError(error, "23505")) {
 					throw new TRPCError({
 						code: "CONFLICT",
 						message: "A category with that name already exists.",
