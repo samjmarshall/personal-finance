@@ -134,14 +134,14 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 
 ### Success
 **Automated**
-- [ ] `make test` passes (period tables + new input schemas green)
-- [ ] `make check` passes
-- [ ] `make build` passes
+- [x] `make test` passes (period tables + new input schemas green — 121 total)
+- [x] `make check` passes (generated drizzle meta formatted via `make fix`)
+- [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
 
 **Manual**
-- [ ] `unplanned` returns only unlinked rows inside the window; linked rows absent; refund rows present
-- [ ] `linkExpense` sets/clears `expenseId`
-- [ ] `/security-review` (phase touches `src/lib/**`)
+- [ ] `unplanned` returns only unlinked rows inside the window; linked rows absent; refund rows present — needs migration applied + seed on branch DB
+- [ ] `linkExpense` sets/clears `expenseId` — needs migration applied on branch DB
+- [x] `/security-review` (phase touches `src/lib/**`) — no findings; new paths are parameterized drizzle + Zod + `protectedProcedure`
 
 ## Phase 6: Unplanned page
 
