@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { Frequency, Priority } from "~/lib/constants";
 import type { Expect, WritesInto } from "~/test/type-contracts";
-import { transactionCreateDto, transactionUpdateDto } from "./transaction.dto";
+import {
+	linkExpenseDto,
+	transactionCreateDto,
+	transactionUpdateDto,
+	unplannedDto,
+} from "./transaction.dto";
 import type { Transaction } from "./transaction.interface";
 
 type Contracts = [
@@ -202,6 +207,97 @@ describe("transactionUpdateDto", () => {
 		expect(
 			transactionUpdateDto.safeParse({ ...base, expenseId: 0 }).success,
 		).toBe(false);
+	});
+});
+
+describe("unplannedDto", () => {
+	it("accepts a from/to date window", () => {
+		expect(
+			unplannedDto.safeParse({
+				from: new Date(2026, 7, 1),
+				to: new Date(2026, 8, 1),
+			}).success,
+		).toBe(true);
+	});
+
+	it("accepts an equal from/to (empty window)", () => {
+		const day = new Date(2026, 7, 1);
+		expect(unplannedDto.safeParse({ from: day, to: day }).success).toBe(true);
+	});
+
+	it("rejects an inverted window (from after to)", () => {
+		expect(
+			unplannedDto.safeParse({
+				from: new Date(2026, 8, 1),
+				to: new Date(2026, 7, 1),
+			}).success,
+		).toBe(false);
+	});
+
+	it("rejects a missing bound", () => {
+		expect(unplannedDto.safeParse({ from: new Date() }).success).toBe(false);
+	});
+
+	it("rejects a non-date bound", () => {
+		expect(
+			unplannedDto.safeParse({ from: "2026-08-01", to: new Date() }).success,
+		).toBe(false);
+	});
+});
+
+describe("linkExpenseDto", () => {
+	it("accepts an integer id linking to an expense", () => {
+		expect(linkExpenseDto.safeParse({ id: 1, expenseId: 7 }).success).toBe(
+			true,
+		);
+	});
+
+	it("accepts a null expenseId (clearing the link)", () => {
+		expect(linkExpenseDto.safeParse({ id: 1, expenseId: null }).success).toBe(
+			true,
+		);
+	});
+
+	it("rejects a float id", () => {
+		expect(linkExpenseDto.safeParse({ id: 1.5, expenseId: 7 }).success).toBe(
+			false,
+		);
+	});
+
+	it("rejects a string id", () => {
+		expect(linkExpenseDto.safeParse({ id: "1", expenseId: 7 }).success).toBe(
+			false,
+		);
+	});
+
+	it("rejects a zero or negative id", () => {
+		expect(linkExpenseDto.safeParse({ id: 0, expenseId: 7 }).success).toBe(
+			false,
+		);
+		expect(linkExpenseDto.safeParse({ id: -3, expenseId: 7 }).success).toBe(
+			false,
+		);
+	});
+
+	it("rejects a float expenseId", () => {
+		expect(linkExpenseDto.safeParse({ id: 1, expenseId: 7.5 }).success).toBe(
+			false,
+		);
+	});
+
+	it("rejects a zero or negative expenseId", () => {
+		expect(linkExpenseDto.safeParse({ id: 1, expenseId: 0 }).success).toBe(
+			false,
+		);
+		expect(linkExpenseDto.safeParse({ id: 1, expenseId: -3 }).success).toBe(
+			false,
+		);
+	});
+
+	// expenseId is required, not optional: clearing must pass null explicitly so an
+	// omitted value can't silently no-op the link.
+	it("rejects a missing expenseId", () => {
+		expect(linkExpenseDto.safeParse({ id: 1 }).success).toBe(false);
 	});
 });
 

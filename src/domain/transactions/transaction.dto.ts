@@ -46,3 +46,23 @@ export const transactionUpdateDto = z.object({
 	...transactionFields,
 	id: z.number(),
 });
+
+// Unplanned = unlinked Spend in a half-open [from, to) window (adr010). Reject an
+// inverted window up front so a bad range surfaces instead of silently matching
+// nothing.
+export const unplannedDto = z
+	.object({
+		from: z.date(),
+		to: z.date(),
+	})
+	.refine((w) => w.from <= w.to, {
+		message: "`from` must be on or before `to`.",
+	});
+
+// expenseId required, not optional: linking sets an int, clearing passes null
+// explicitly — an omitted value would be an ambiguous no-op. Positive ints only,
+// matching every other transaction FK.
+export const linkExpenseDto = z.object({
+	id: z.number().int().positive(),
+	expenseId: z.number().int().positive().nullable(),
+});

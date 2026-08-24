@@ -7,6 +7,8 @@ import {
 	getTableColumns,
 	gte,
 	ilike,
+	isNull,
+	lt,
 	lte,
 	or,
 	type SQL,
@@ -15,6 +17,7 @@ import {
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import {
+	linkExpenseDto,
 	type Transaction,
 	type TransactionListItem,
 	type TransactionSummary,
@@ -22,6 +25,7 @@ import {
 	transactionListQueryDto,
 	type transactionSortBy,
 	transactionUpdateDto,
+	unplannedDto,
 } from "~/domain/transactions";
 import { assertRow } from "~/server/api/lib/assert-row";
 import { isPgError } from "~/server/api/lib/pg-error";
@@ -33,6 +37,17 @@ import { transactions } from "~/server/transactions/transactions.schema";
 // Either FK on the create/update DTO (expenseId, expenseCategoryId) can raise 23503.
 const FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
+// linkExpense only writes expenseId, so it names just the expense.
+const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
+
+// Rethrow a Postgres FK violation (23503) as a CONFLICT with the given message;
+// pass anything else through untouched.
+function rethrowFkConflict(error: unknown, message: string): never {
+	if (isPgError(error, "23503")) {
+		throw new TRPCError({ code: "CONFLICT", message });
+	}
+	throw error;
+}
 
 export const transactionRouter = createTRPCRouter({
 	list: protectedProcedure
@@ -184,13 +199,7 @@ export const transactionRouter = createTRPCRouter({
 					.returning();
 				return assertRow(row, "create transaction");
 			} catch (error) {
-				if (isPgError(error, "23503")) {
-					throw new TRPCError({
-						code: "CONFLICT",
-						message: FK_CONFLICT_MESSAGE,
-					});
-				}
-				throw error;
+				rethrowFkConflict(error, FK_CONFLICT_MESSAGE);
 			}
 		}),
 
@@ -217,13 +226,58 @@ export const transactionRouter = createTRPCRouter({
 					.returning();
 				return assertRow(row, "update transaction");
 			} catch (error) {
-				if (isPgError(error, "23503")) {
-					throw new TRPCError({
-						code: "CONFLICT",
-						message: FK_CONFLICT_MESSAGE,
-					});
-				}
-				throw error;
+				rethrowFkConflict(error, FK_CONFLICT_MESSAGE);
+			}
+		}),
+
+	// Unplanned = unlinked Spend in the window. Returns rows of both signs (refunds
+	// net against group totals client-side); no pagination (period volume is small).
+	unplanned: protectedProcedure
+		.input(unplannedDto)
+		.query(async ({ ctx, input }): Promise<Transaction[]> => {
+			return (
+				ctx.db
+					.select()
+					.from(transactions)
+					.where(
+						and(
+							isNull(transactions.expenseId),
+							gte(transactions.date, input.from),
+							lt(transactions.date, input.to),
+						),
+					)
+					// desc(id) is a stable final tiebreaker so same-category/same-date
+					// rows keep a fixed order across refetches (matches `list`).
+					.orderBy(
+						asc(transactions.category),
+						desc(transactions.date),
+						desc(transactions.id),
+					)
+			);
+		}),
+
+	linkExpense: protectedProcedure
+		.input(linkExpenseDto)
+		.mutation(async ({ ctx, input }): Promise<Transaction> => {
+			const [existing] = await ctx.db
+				.select({ id: transactions.id })
+				.from(transactions)
+				.where(eq(transactions.id, input.id));
+			if (!existing)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found.",
+				});
+
+			try {
+				const [row] = await ctx.db
+					.update(transactions)
+					.set({ expenseId: input.expenseId })
+					.where(eq(transactions.id, input.id))
+					.returning();
+				return assertRow(row, "link expense");
+			} catch (error) {
+				rethrowFkConflict(error, LINK_EXPENSE_CONFLICT_MESSAGE);
 			}
 		}),
 
