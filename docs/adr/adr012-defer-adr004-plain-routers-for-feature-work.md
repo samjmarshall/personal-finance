@@ -1,7 +1,7 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-08-17'
+Date: '2026-08-22'
 # prettier-ignore
 ---
 
