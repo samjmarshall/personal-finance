@@ -198,6 +198,17 @@ export const transactionRouter = createTRPCRouter({
 		.input(transactionUpdateDto)
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
 			const { id, ...values } = input;
+
+			const [existing] = await ctx.db
+				.select({ id: transactions.id })
+				.from(transactions)
+				.where(eq(transactions.id, id));
+			if (!existing)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found.",
+				});
+
 			try {
 				const [row] = await ctx.db
 					.update(transactions)
