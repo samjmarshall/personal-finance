@@ -27,6 +27,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
+import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import {
 	SelectField,
@@ -42,11 +43,6 @@ const FREQUENCY_OPTIONS: SelectFieldOption<Frequency>[] = toOptions(
 const PRIORITY_OPTIONS: SelectFieldOption<Priority>[] = toOptions(
 	Object.values(Priority),
 );
-
-function toDateInput(d: Date | string) {
-	const date = typeof d === "string" ? new Date(d) : d;
-	return date.toISOString().slice(0, 10);
-}
 
 export function TransactionForm({
 	open,

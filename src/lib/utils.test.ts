@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { formatMonthKey } from "~/lib/utils";
+import { formatMonthKey, toDateInput } from "~/lib/utils";
+
+describe("toDateInput", () => {
+	it("formats a local date as YYYY-MM-DD", () => {
+		expect(toDateInput(new Date(2026, 7, 22, 0, 0))).toBe("2026-08-22");
+	});
+
+	it("keeps the local day for a late-evening time (no UTC roll-forward)", () => {
+		expect(toDateInput(new Date(2026, 7, 22, 23, 30))).toBe("2026-08-22");
+	});
+});
 
 describe("formatMonthKey", () => {
 	it("formats a YYYY-MM key as a short month and year", () => {

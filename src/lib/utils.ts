@@ -44,6 +44,17 @@ export function formatDate(value: Date | string | null | undefined) {
 	return dateFormatter.format(date);
 }
 
+// Local-time YYYY-MM-DD for <input type="date">. Must stay local (not UTC) so it
+// agrees with the local parse on submit and formatDate's local render — a UTC
+// serialise walks the date back a day for users behind UTC.
+export function toDateInput(value: Date | string) {
+	const date = typeof value === "string" ? new Date(value) : value;
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
 export function formatMonthKey(key: string) {
 	const [year, month] = key.split("-").map(Number);
 	if (!year || !month) return key;
