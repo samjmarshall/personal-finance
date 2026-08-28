@@ -37,7 +37,8 @@ import { transactions } from "~/server/transactions/transactions.schema";
 // Either FK on the create/update DTO (expenseId, expenseCategoryId) can raise 23503.
 const FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
-// linkExpense only writes expenseId, so it names just the expense.
+// linkExpense writes only expenseId, so a 23503 here can only be the expense FK —
+// the message names just the expense, not the category.
 const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
 
 // Rethrow a Postgres FK violation (23503) as a CONFLICT with the given message;
