@@ -122,7 +122,7 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 
 ### Changes
 - `src/server/settings/settings.schema.ts` — new domain schema (picked up by the `./src/server/**/*.schema.ts` glob): `app_setting` table — `key` text PK, `value` text not null.
-- `drizzle/0004_*.sql` — `make db_generate` (creates `app_setting` only), review, `make db_migrate`.
+- `drizzle/0007_hot_tempest.sql` — `make db_generate` (creates `app_setting` only), review, `make db_migrate`. (Landed as 0007, not 0004: intervening enum/index migrations consumed 0004–0006.)
 - Seed — manual one-time row `('fortnightAnchor', '<household payday ISO date>')` on the branch DB (and prod on release); no settings UI. A missing row degrades the picker to month-only (design: degrade, never error).
 - `src/lib/period.test.ts` — new, **written first**, table-driven: `monthWindow(ref)` start/end incl. year boundary; `fortnightWindow(anchor, ref)` grid math — ref on the anchor day, mid-window, before the anchor date, many fortnights later; windows are half-open `[from, to)`; `shiftWindow` prev/next stepping.
 - `src/lib/period.ts` — new pure functions used by client (and by stage-3 bucketing later): `monthWindow`, `fortnightWindow`, `shiftWindow`.
