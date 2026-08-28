@@ -156,8 +156,8 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make build` passes
+- [x] `make check` passes
+- [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase; `/expenses/unplanned` route registered)
 
 **Manual**
 - [ ] Unlinked Spend rows appear grouped with totals; linking a row removes it and the Planned expense now shows it in `transaction.list`
