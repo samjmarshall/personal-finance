@@ -57,6 +57,13 @@
 			"when": 1787579229373,
 			"tag": "0007_hot_tempest",
 			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1787956161400,
+			"tag": "0008_seed_fortnight_anchor",
+			"breakpoints": true
 		}
 	]
 }
