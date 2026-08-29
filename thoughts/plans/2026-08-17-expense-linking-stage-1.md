@@ -167,7 +167,7 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 
 ## Validate
 
-- [ ] `/code-review` over the whole branch
+- [x] `/code-review` over the whole branch — 6 findings, 4 fixed (TOCTOU 500→404 on update/linkExpense; kind/window desync; double anchor parse; `?? null` seed consistency). 2 dismissed as false positives: the "mutations lack `onError`" findings — the global `MutationCache.onError` already toasts every conflict message, so a local handler would double-toast.
 
 ## References
 
