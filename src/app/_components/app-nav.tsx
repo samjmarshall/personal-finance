@@ -68,6 +68,7 @@ function DesktopNavLink({ link, active }: { link: NavLeaf; active: boolean }) {
 	const Icon = link.icon;
 	return (
 		<Link
+			aria-current={active ? "page" : undefined}
 			className={cn(
 				navRowClass,
 				"rounded-lg transition-colors",
@@ -252,6 +253,7 @@ function MobileLinks() {
 				const Icon = link.icon;
 				return (
 					<Link
+						aria-current={active ? "page" : undefined}
 						aria-label={
 							link.group ? `${link.group}: ${link.label}` : link.label
 						}
