@@ -26,7 +26,8 @@ import {
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { FREQUENCIES, PRIORITIES } from "~/lib/constants";
+import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
+import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import {
 	SelectField,
@@ -36,24 +37,29 @@ import {
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
 
-const FREQUENCY_OPTIONS: SelectFieldOption<string>[] = toOptions(FREQUENCIES);
-const PRIORITY_OPTIONS: SelectFieldOption<string>[] = toOptions(PRIORITIES);
-
-function toDateInput(d: Date | string) {
-	const date = typeof d === "string" ? new Date(d) : d;
-	return date.toISOString().slice(0, 10);
-}
+const FREQUENCY_OPTIONS: SelectFieldOption<Frequency>[] = toOptions(
+	Object.values(Frequency),
+);
+const PRIORITY_OPTIONS: SelectFieldOption<Priority>[] = toOptions(
+	Object.values(Priority),
+);
 
 export function TransactionForm({
 	open,
 	onClose,
 	transaction,
 	categories,
+	managedCategories,
+	expenses,
 }: {
 	open: boolean;
 	onClose: () => void;
 	transaction: Transaction | null;
 	categories: string[];
+	// Managed rows with ids for the FK picker; `categories` above is name-only
+	// (the free-text combobox's options), so it can't feed the id-valued picker.
+	managedCategories: RouterOutputs["category"]["list"];
+	expenses: RouterOutputs["expense"]["list"];
 }) {
 	const utils = api.useUtils();
 	const [date, setDate] = useState(toDateInput(new Date()));
@@ -71,9 +77,14 @@ export function TransactionForm({
 		setCategoryInput(value);
 		categoryRef.current = value;
 	}, []);
-	const [frequency, setFrequency] = useState<string>("One-off");
-	const [priority, setPriority] = useState<string>("Nice to Have");
+	const [frequency, setFrequency] = useState<Frequency>(Frequency.OneOff);
+	const [priority, setPriority] = useState<Priority>(Priority.NiceToHave);
 	const [notes, setNotes] = useState("");
+	// Empty string is the "— None —" option; converted to null on submit.
+	const [expenseId, setExpenseId] = useState<number | null>(null);
+	const [expenseCategoryId, setExpenseCategoryId] = useState<number | null>(
+		null,
+	);
 
 	useEffect(() => {
 		if (!open) return;
@@ -81,9 +92,11 @@ export function TransactionForm({
 		setDescription(transaction?.description ?? "");
 		setAmount(transaction ? String(transaction.amount) : "");
 		commitCategory(transaction?.category ?? "");
-		setFrequency(transaction?.frequency ?? "One-off");
-		setPriority(transaction?.priority ?? "Nice to Have");
+		setFrequency(toFrequency(transaction?.frequency));
+		setPriority(toPriority(transaction?.priority));
 		setNotes(transaction?.notes ?? "");
+		setExpenseId(transaction?.expenseId ?? null);
+		setExpenseCategoryId(transaction?.expenseCategoryId ?? null);
 	}, [open, transaction, commitCategory]);
 
 	const onSuccess = async () => {
@@ -104,6 +117,20 @@ export function TransactionForm({
 			? [category, ...categories]
 			: categories;
 
+	const expenseOptions: SelectFieldOption<string>[] = [
+		{ value: "", label: "— None —" },
+		...expenses.map((e) => ({ value: String(e.id), label: e.name })),
+	];
+
+	// Categories are chosen from the managed list, never invented mid-entry.
+	const expenseCategoryOptions: SelectFieldOption<string>[] = [
+		{ value: "", label: "— None —" },
+		...managedCategories.map((c) => ({
+			value: String(c.id),
+			label: c.name,
+		})),
+	];
+
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
 		const payload = {
@@ -114,6 +141,8 @@ export function TransactionForm({
 			frequency,
 			priority,
 			notes: notes.trim() || null,
+			expenseId,
+			expenseCategoryId,
 		};
 		if (transaction) update.mutate({ id: transaction.id, ...payload });
 		else create.mutate(payload);
@@ -199,6 +228,32 @@ export function TransactionForm({
 								</ComboboxList>
 							</ComboboxContent>
 						</Combobox>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="tx-expense-category">
+							Expense category
+							<FieldOptional />
+						</FieldLabel>
+						<SelectField
+							className="w-full"
+							id="tx-expense-category"
+							items={expenseCategoryOptions}
+							onValueChange={(v) => setExpenseCategoryId(v ? Number(v) : null)}
+							value={expenseCategoryId ? String(expenseCategoryId) : ""}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="tx-expense">
+							Expense
+							<FieldOptional />
+						</FieldLabel>
+						<SelectField
+							className="w-full"
+							id="tx-expense"
+							items={expenseOptions}
+							onValueChange={(v) => setExpenseId(v ? Number(v) : null)}
+							value={expenseId ? String(expenseId) : ""}
+						/>
 					</Field>
 					<div className="grid grid-cols-2 gap-4">
 						<Field>

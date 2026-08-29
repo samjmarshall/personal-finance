@@ -636,7 +636,7 @@ chart.
   shadcn recipe wires `useForm` and `<Controller />` into `field`.
 - **Extract zod schemas.** `transactionInput` is inline and unexported at
   `transaction.ts:25`. Sharing schemas client-side needs them extracted first, into
-  `*-schemas.ts` files — `database-migrations.md` reserves `*.schema.ts` for Drizzle tables.
+  `*.dto.ts` files — `database-migrations.md` reserves `*.schema.ts` for Drizzle tables.
 - **`expense_category.name` uniqueness.** Globally unique today. Under the planned
   `householdId`, two households cannot both hold a "Groceries" category, so it needs a
   composite constraint.

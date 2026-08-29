@@ -14,7 +14,7 @@
 
 Both unexecuted 2026-08-11 plans are still valid and are **adopted as written**:
 
-- `thoughts/plans/2026-08-11-transaction-expense-mapping.md` — nullable `transaction.expenseId` FK → `expense.id`, `ON DELETE SET NULL`, leftJoin reads (no `relations()`), Zod input in `transactions-schemas.ts`, expense picker in transaction form.
+- `thoughts/plans/2026-08-11-transaction-expense-mapping.md` — nullable `transaction.expenseId` FK → `expense.id`, `ON DELETE SET NULL`, leftJoin reads (no `relations()`), Zod input in `transactions.dto.ts`, expense picker in transaction form.
 - `thoughts/plans/2026-08-11-transaction-expense-category-fk.md` — nullable `transaction.expenseCategoryId` FK → `expense_category.id`, `ON DELETE SET NULL` + index; free-text `category` column stays, no backfill.
 
 ## Decisions (interview outcomes)

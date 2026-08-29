@@ -1,18 +1,19 @@
 import { TRPCError } from "@trpc/server";
 import { asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+	type Category,
+	categoryCreateDto,
+	categoryUpdateDto,
+} from "~/domain/categories";
+import { assertRow } from "~/server/api/lib/assert-row";
+import { isPgError } from "~/server/api/lib/pg-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 
-const categoryInput = z.object({
-	name: z.string().min(1, "Name is required"),
-	description: z.string().optional(),
-	sortOrder: z.number().int().default(0),
-});
-
 export const categoryRouter = createTRPCRouter({
-	list: protectedProcedure.query(async ({ ctx }) => {
+	list: protectedProcedure.query(async ({ ctx }): Promise<Category[]> => {
 		const rows = await ctx.db
 			.select({
 				id: expenseCategories.id,
@@ -31,8 +32,8 @@ export const categoryRouter = createTRPCRouter({
 	}),
 
 	create: protectedProcedure
-		.input(categoryInput)
-		.mutation(async ({ ctx, input }) => {
+		.input(categoryCreateDto)
+		.mutation(async ({ ctx, input }): Promise<Category> => {
 			const values = {
 				name: input.name.trim(),
 				description: input.description?.trim() || null,
@@ -43,18 +44,22 @@ export const categoryRouter = createTRPCRouter({
 					.insert(expenseCategories)
 					.values(values)
 					.returning();
-				return row;
-			} catch {
-				throw new TRPCError({
-					code: "CONFLICT",
-					message: "A category with that name already exists.",
-				});
+
+				return assertRow(row, "create category");
+			} catch (error) {
+				if (isPgError(error, "23505")) {
+					throw new TRPCError({
+						code: "CONFLICT",
+						message: "A category with that name already exists.",
+					});
+				}
+				throw error;
 			}
 		}),
 
 	update: protectedProcedure
-		.input(categoryInput.extend({ id: z.number() }))
-		.mutation(async ({ ctx, input }) => {
+		.input(categoryUpdateDto)
+		.mutation(async ({ ctx, input }): Promise<Category> => {
 			const { id, name, description, sortOrder } = input;
 
 			const [existing] = await ctx.db
@@ -68,9 +73,8 @@ export const categoryRouter = createTRPCRouter({
 				});
 			}
 
-			const nextName = name.trim();
 			const values = {
-				name: nextName,
+				name: name.trim(),
 				description: description?.trim() || null,
 				sortOrder,
 			};
@@ -78,10 +82,10 @@ export const categoryRouter = createTRPCRouter({
 			try {
 				const [row] = await ctx.db.transaction(async (tx) => {
 					// Keep expenses referencing this category in sync when renamed.
-					if (existing.name !== nextName) {
+					if (existing.name !== values.name) {
 						await tx
 							.update(expenses)
-							.set({ category: nextName })
+							.set({ category: values.name })
 							.where(eq(expenses.category, existing.name));
 					}
 					return tx
@@ -90,12 +94,16 @@ export const categoryRouter = createTRPCRouter({
 						.where(eq(expenseCategories.id, id))
 						.returning();
 				});
-				return row;
-			} catch {
-				throw new TRPCError({
-					code: "CONFLICT",
-					message: "A category with that name already exists.",
-				});
+
+				return assertRow(row, "update category");
+			} catch (error) {
+				if (isPgError(error, "23505")) {
+					throw new TRPCError({
+						code: "CONFLICT",
+						message: "A category with that name already exists.",
+					});
+				}
+				throw error;
 			}
 		}),
 

@@ -20,7 +20,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { FREQUENCIES, PRIORITIES, priorityStyle } from "~/lib/constants";
+import { Frequency, Priority, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import {
@@ -37,20 +37,26 @@ const PAGE_SIZE = 50;
 
 // Filters use null (not "") for "no selection"; the null-valued option both
 // labels the trigger and lets the user clear back to "all".
-function withAllOption(
+function withAllOption<T extends string>(
 	allLabel: string,
-	values: readonly string[],
-): SelectFieldOption<string | null>[] {
+	values: readonly T[],
+): SelectFieldOption<T | null>[] {
 	return [{ value: null, label: allLabel }, ...toOptions(values)];
 }
 
-const PRIORITY_FILTER_ITEMS = withAllOption("All priorities", PRIORITIES);
-const FREQUENCY_FILTER_ITEMS = withAllOption("All frequency", FREQUENCIES);
+const PRIORITY_FILTER_ITEMS = withAllOption(
+	"All priorities",
+	Object.values(Priority),
+);
+const FREQUENCY_FILTER_ITEMS = withAllOption(
+	"All frequency",
+	Object.values(Frequency),
+);
 
 export function TransactionsView() {
 	const [search, setSearch] = useState("");
-	const [priority, setPriority] = useState<string | null>(null);
-	const [frequency, setFrequency] = useState<string | null>(null);
+	const [priority, setPriority] = useState<Priority | null>(null);
+	const [frequency, setFrequency] = useState<Frequency | null>(null);
 	const [sortBy, setSortBy] = useState<SortBy>("date");
 	const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(0);
@@ -67,6 +73,7 @@ export function TransactionsView() {
 		() => categoryRows.map((c) => c.name),
 		[categoryRows],
 	);
+	const [expenses] = api.expense.list.useSuspenseQuery();
 
 	const queryInput = {
 		search: search || undefined,
@@ -228,6 +235,11 @@ export function TransactionsView() {
 									<SortHeader col="category">Category</SortHeader>
 								</th>
 								<th className="px-4 py-2.5">
+									<span className="font-medium text-muted-foreground">
+										Expense
+									</span>
+								</th>
+								<th className="px-4 py-2.5">
 									<SortHeader col="priority">Priority</SortHeader>
 								</th>
 								<th className="px-4 py-2.5 text-right">
@@ -263,6 +275,14 @@ export function TransactionsView() {
 										</td>
 										<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
 											{tx.category}
+											{tx.expenseCategoryName && (
+												<span className="mt-0.5 block text-muted-foreground text-xs">
+													{tx.expenseCategoryName}
+												</span>
+											)}
+										</td>
+										<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+											{tx.expenseName ?? "—"}
 										</td>
 										<td className="whitespace-nowrap px-4 py-3">
 											<Badge className={ps.badge}>
@@ -305,7 +325,7 @@ export function TransactionsView() {
 								<tr>
 									<td
 										className="px-4 py-16 text-center text-muted-foreground text-sm"
-										colSpan={6}
+										colSpan={7}
 									>
 										{hasFilters
 											? "No transactions match your filters."
@@ -357,6 +377,8 @@ export function TransactionsView() {
 
 			<TransactionForm
 				categories={categories}
+				expenses={expenses}
+				managedCategories={categoryRows}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
 				transaction={editing}

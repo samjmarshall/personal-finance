@@ -52,7 +52,7 @@ src/server/
 Specifics that bind:
 
 - **`drizzle.config.ts` discovers tables by glob**, `./src/server/**/*.schema.ts`, replacing the single-file path.
-- **`*.schema.ts` is reserved for Drizzle tables.** Zod validation schemas use `*-schemas.ts` — dash, not dot — so the glob cannot sweep them. This is the same distinction adr004 draws in its tier map, and it is load-bearing here rather than cosmetic.
+- **`*.schema.ts` is reserved for Drizzle tables** — So the glob sweeps only tables.
 - **`src/server/db/shared.schema.ts` is the auth-only bucket.** Per-domain plus one honest shared bucket, not 100% per-domain. New domain-less tables go here rather than into a stray new file.
 - **The `outbox` table lands module-vertical** at `src/server/outbox/outbox.schema.ts`, not in the shared bucket. It has a module (`src/server/outbox/`, which also owns `commit.ts` and the sweep worker); it is infrastructure with a home, not a homeless table.
 - **`src/server/db/index.ts` spread-merges** the domain schema modules into one object passed to `drizzle(sql, { schema })`, so `db.query.*` continues to see every table.
@@ -83,7 +83,6 @@ Three notes for anyone reading this later:
 
 ### Negative Consequences
 
-- **The glob is a footgun with a sharp edge.** A Zod file accidentally named `*.schema.ts` gets swept into drizzle-kit and can generate a nonsense migration. The `*-schemas.ts` convention is the only thing preventing it, and nothing enforces it automatically.
 - **Wiring order is load-bearing and unguarded.** Moving a schema file before the glob lands generates a destructive migration. This is a one-time hazard with no tooling behind it.
 - **Table definitions are no longer readable in one place.** Answering "what tables exist?" becomes a glob instead of opening one file. Accepted, because `db.query.*` autocomplete and the barrel still present the merged set.
 - **The shared bucket is a judgement call that will be tested.** "Domain-less" is clear for better-auth today; the first table that is arguably shared between `transactions` and `expenses` will need a ruling.

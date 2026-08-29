@@ -1,18 +1,12 @@
 import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { type Income, incomeCreateDto, incomeUpdateDto } from "~/domain/income";
+import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { income } from "~/server/income/income.schema";
 
-const incomeInput = z.object({
-	person: z.string().min(1, "Person is required"),
-	source: z.string().min(1, "Source is required"),
-	fortnight: z.number().nonnegative().default(0),
-	month: z.number().nonnegative().default(0),
-	year: z.number().nonnegative().default(0),
-});
-
 export const incomeRouter = createTRPCRouter({
-	list: protectedProcedure.query(async ({ ctx }) => {
+	list: protectedProcedure.query(async ({ ctx }): Promise<Income[]> => {
 		return ctx.db
 			.select()
 			.from(income)
@@ -20,22 +14,22 @@ export const incomeRouter = createTRPCRouter({
 	}),
 
 	create: protectedProcedure
-		.input(incomeInput)
-		.mutation(async ({ ctx, input }) => {
+		.input(incomeCreateDto)
+		.mutation(async ({ ctx, input }): Promise<Income> => {
 			const [row] = await ctx.db.insert(income).values(input).returning();
-			return row;
+			return assertRow(row, "create income");
 		}),
 
 	update: protectedProcedure
-		.input(incomeInput.extend({ id: z.number() }))
-		.mutation(async ({ ctx, input }) => {
+		.input(incomeUpdateDto)
+		.mutation(async ({ ctx, input }): Promise<Income> => {
 			const { id, ...values } = input;
 			const [row] = await ctx.db
 				.update(income)
 				.set(values)
 				.where(eq(income.id, id))
 				.returning();
-			return row;
+			return assertRow(row, "update income");
 		}),
 
 	delete: protectedProcedure

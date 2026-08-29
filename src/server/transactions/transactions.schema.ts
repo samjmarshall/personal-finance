@@ -1,16 +1,34 @@
-import { index, pgTable } from "drizzle-orm/pg-core";
+import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
+import { Frequency, Priority } from "~/lib/constants";
+import { expenseCategories } from "~/server/expenses/categories.schema";
+import { expenses } from "~/server/expenses/expenses.schema";
+
+export const transactionFrequency = pgEnum(
+	"transaction_frequency",
+	Object.values(Frequency) as [Frequency, ...Frequency[]],
+);
+export const transactionPriority = pgEnum(
+	"transaction_priority",
+	Object.values(Priority) as [Priority, ...Priority[]],
+);
 
 export const transactions = pgTable(
 	"transaction",
 	(d) => ({
 		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		expenseId: d
+			.integer()
+			.references(() => expenses.id, { onDelete: "set null" }),
+		expenseCategoryId: d
+			.integer()
+			.references(() => expenseCategories.id, { onDelete: "set null" }),
 		date: d.timestamp({ withTimezone: true }).notNull(),
 		description: d.text().notNull(),
 		receiptDescription: d.text(),
-		amount: d.doublePrecision().notNull().default(0),
+		amount: d.doublePrecision().notNull(),
 		category: d.text().notNull().default("Uncategorised"),
-		frequency: d.text().notNull().default("One-off"),
-		priority: d.text().notNull().default("Nice to Have"),
+		frequency: transactionFrequency().notNull().default(Frequency.OneOff),
+		priority: transactionPriority().notNull().default(Priority.NiceToHave),
 		notes: d.text(),
 		createdAt: d
 			.timestamp({ withTimezone: true })
@@ -21,5 +39,7 @@ export const transactions = pgTable(
 	(t) => [
 		index("transaction_date_idx").on(t.date),
 		index("transaction_priority_idx").on(t.priority),
+		index("transaction_expense_idx").on(t.expenseId),
+		index("transaction_expense_category_idx").on(t.expenseCategoryId),
 	],
 );

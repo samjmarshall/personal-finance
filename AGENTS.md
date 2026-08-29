@@ -17,7 +17,7 @@ Prefer Makefile targets with `yarn` as a fallback — never use `npm` or `npx` d
 - `make build` — clean build (`rm -rf .next` + `yarn build`)
 - `make check` — lint + typecheck + db schema check (`yarn run check` + `yarn run typecheck` + `yarn run db:check`)
 - `make fix` - fix lint issues (`yarn run check:write`)
-- `make test` — run Rstest unit tests (`yarn test`)
+- `make test` — run Vitest unit tests (`yarn test`)
 - `make start` — local dev server (`yarn run dev`)
 - `make install` — install dependencies (`yarn`)
 - `make db_generate` - generate new schema migration files (`yarn db:generate`)
