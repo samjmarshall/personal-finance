@@ -106,6 +106,9 @@ export function UnplannedView() {
 	}, [rows, categories]);
 
 	function selectKind(next: PeriodKind) {
+		// Re-clicking the active length would reset the window back to today,
+		// discarding the user's prev/next navigation — only act on a real change.
+		if (next === kind) return;
 		setKind(next);
 		setRange(
 			next === "fortnight" && anchorDate
@@ -174,6 +177,29 @@ export function UnplannedView() {
 					isFetching && "opacity-60",
 				)}
 			>
+				{/* Above the groups, not gated on emptiness: placeholderData keeps the
+				    prior window's rows on a failed refetch, so a groups-length gate
+				    would hide the failure behind stale data. */}
+				{isError && (
+					<Card
+						className="text-center [--card-spacing:--spacing(10)]"
+						role="alert"
+					>
+						<CardContent className="flex flex-col items-center gap-3">
+							<p className="text-muted-foreground text-sm">
+								Couldn't load the latest unplanned Spend.
+							</p>
+							<Button
+								onClick={() => void refetch()}
+								size="sm"
+								variant="outline"
+							>
+								Try again
+							</Button>
+						</CardContent>
+					</Card>
+				)}
+
 				{groups.map(([category, rowsInGroup]) => {
 					const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
 					return (
@@ -215,9 +241,10 @@ export function UnplannedView() {
 										<SelectField
 											aria-label={`Link ${row.description} to an expense`}
 											className="w-full"
+											disabled={link.isPending}
 											items={expenseOptions}
 											onValueChange={(v) => {
-												if (v)
+												if (v && !link.isPending)
 													link.mutate({ id: row.id, expenseId: Number(v) });
 											}}
 											value=""
@@ -229,24 +256,11 @@ export function UnplannedView() {
 					);
 				})}
 
-				{isError && groups.length === 0 && (
-					<Card className="text-center [--card-spacing:--spacing(10)]">
-						<CardContent className="flex flex-col items-center gap-3">
-							<p className="text-muted-foreground text-sm">
-								Couldn't load unplanned Spend.
-							</p>
-							<Button
-								onClick={() => void refetch()}
-								size="sm"
-								variant="outline"
-							>
-								Try again
-							</Button>
-						</CardContent>
-					</Card>
-				)}
-				{isLoading && groups.length === 0 && (
-					<Card className="text-center [--card-spacing:--spacing(10)]">
+				{isLoading && (
+					<Card
+						className="text-center [--card-spacing:--spacing(10)]"
+						role="status"
+					>
 						<CardContent>
 							<p className="text-muted-foreground text-sm">
 								Loading unplanned Spend…
@@ -255,10 +269,15 @@ export function UnplannedView() {
 					</Card>
 				)}
 				{!isLoading && !isError && groups.length === 0 && (
-					<Card className="text-center [--card-spacing:--spacing(10)]">
+					<Card
+						className="text-center [--card-spacing:--spacing(10)]"
+						role="status"
+					>
 						<CardContent>
+							{/* Accurate whether the window holds no Spend at all or every
+							    row is already linked — the query can't tell them apart. */}
 							<p className="text-muted-foreground text-sm">
-								All Spend in this period is linked to a planned expense.
+								No unplanned Spend in this period.
 							</p>
 						</CardContent>
 					</Card>

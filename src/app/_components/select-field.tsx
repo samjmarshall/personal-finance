@@ -30,6 +30,7 @@ export function SelectField<T>({
 	onValueChange,
 	id,
 	className,
+	disabled,
 	"aria-label": ariaLabel,
 }: {
 	items: readonly SelectFieldOption<T>[];
@@ -39,10 +40,16 @@ export function SelectField<T>({
 	onValueChange: (value: T | null) => void;
 	id?: string;
 	className?: string;
+	disabled?: boolean;
 	"aria-label"?: string;
 }) {
 	return (
-		<Select items={items} onValueChange={onValueChange} value={value}>
+		<Select
+			disabled={disabled}
+			items={items}
+			onValueChange={onValueChange}
+			value={value}
+		>
 			<SelectTrigger aria-label={ariaLabel} className={className} id={id}>
 				<SelectValue />
 			</SelectTrigger>
