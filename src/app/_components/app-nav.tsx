@@ -61,26 +61,21 @@ function activeHref(pathname: string) {
 	return best;
 }
 
-function DesktopNavLink({
-	link,
-	active,
-	onNavigate,
-}: {
-	link: NavLeaf;
-	active: boolean;
-	onNavigate?: () => void;
-}) {
+/** Shared row layout for nav leaves and section headers. */
+const navRowClass = "flex items-center gap-3 px-3 py-2 font-medium text-sm";
+
+function DesktopNavLink({ link, active }: { link: NavLeaf; active: boolean }) {
 	const Icon = link.icon;
 	return (
 		<Link
 			className={cn(
-				"flex items-center gap-3 rounded-lg px-3 py-2 font-medium text-sm transition-colors",
+				navRowClass,
+				"rounded-lg transition-colors",
 				active
 					? "bg-sidebar-accent text-sidebar-foreground"
 					: "text-sidebar-muted hover:bg-sidebar-accent/40 hover:text-sidebar-foreground",
 			)}
 			href={link.href}
-			onClick={onNavigate}
 		>
 			<Icon className="h-[18px] w-[18px]" />
 			{link.label}
@@ -88,7 +83,7 @@ function DesktopNavLink({
 	);
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks() {
 	const pathname = usePathname();
 	const current = activeHref(pathname);
 	return (
@@ -101,7 +96,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 						<div aria-label={item.label} key={item.label} role="group">
 							<div
 								aria-hidden="true"
-								className="flex items-center gap-3 px-3 py-2 font-medium text-sidebar-muted text-sm"
+								className={cn(navRowClass, "text-sidebar-muted")}
 							>
 								<Icon className="h-[18px] w-[18px]" />
 								{item.label}
@@ -112,7 +107,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 										active={child.href === current}
 										key={child.href}
 										link={child}
-										onNavigate={onNavigate}
 									/>
 								))}
 							</div>
@@ -124,7 +118,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 						active={item.href === current}
 						key={item.href}
 						link={item}
-						onNavigate={onNavigate}
 					/>
 				);
 			})}
