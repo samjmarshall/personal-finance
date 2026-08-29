@@ -39,25 +39,30 @@ export function UnplannedView() {
 	const [expenses] = api.expense.list.useSuspenseQuery();
 	const { data: categories } = api.category.list.useQuery();
 
-	const anchorDate = anchor ? fromDateInput(anchor) : null;
+	// Memoised so it's a stable effect dependency (fromDateInput mints a fresh
+	// Date each call) and parsed once, not again in the seed effect below.
+	const anchorDate = useMemo(
+		() => (anchor ? fromDateInput(anchor) : null),
+		[anchor],
+	);
 
 	// Fortnight needs the anchor to seed its grid; without one the picker is
 	// month-only (design: degrade, never error).
 	const [kind, setKind] = useState<PeriodKind>(
 		anchorDate ? "fortnight" : "month",
 	);
-	// Seed the window from "today" only after mount. new Date() resolves to a
-	// different calendar day on the server (UTC) than in the browser (local
-	// tz), so computing it during render would mismatch hydration at a day
-	// boundary. Effects don't run server-side: the first client render matches
-	// the server's null window, then this fills it in.
+	// Seed kind + window from "today" only after mount. new Date() resolves to a
+	// different calendar day on the server (UTC) than in the browser (local tz),
+	// so computing it during render would mismatch hydration at a day boundary.
+	// Effects don't run server-side: the first client render matches the server's
+	// null window, then this fills it in. kind is seeded here too so it can't
+	// desync from the window if the anchor arrives after mount.
 	const [range, setRange] = useState<PeriodWindow | null>(null);
 	useEffect(() => {
-		const seed = anchor ? fromDateInput(anchor) : null;
-		setRange(
-			seed ? fortnightWindow(seed, new Date()) : monthWindow(new Date()),
-		);
-	}, [anchor]);
+		const now = new Date();
+		setKind(anchorDate ? "fortnight" : "month");
+		setRange(anchorDate ? fortnightWindow(anchorDate, now) : monthWindow(now));
+	}, [anchorDate]);
 
 	const {
 		data: rows,

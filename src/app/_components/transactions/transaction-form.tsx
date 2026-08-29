@@ -95,7 +95,7 @@ export function TransactionForm({
 		setFrequency(toFrequency(transaction?.frequency));
 		setPriority(toPriority(transaction?.priority));
 		setNotes(transaction?.notes ?? "");
-		setExpenseId(transaction?.expenseId ? transaction.expenseId : null);
+		setExpenseId(transaction?.expenseId ?? null);
 		setExpenseCategoryId(transaction?.expenseCategoryId ?? null);
 	}, [open, transaction, commitCategory]);
 

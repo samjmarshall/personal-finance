@@ -209,23 +209,21 @@ export const transactionRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
 			const { id, ...values } = input;
 
-			const [existing] = await ctx.db
-				.select({ id: transactions.id })
-				.from(transactions)
-				.where(eq(transactions.id, id));
-			if (!existing)
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Transaction not found.",
-				});
-
 			try {
+				// Update-or-404 in one statement: a missing id matches no row and
+				// returns [], mapped to NOT_FOUND. A pre-SELECT would add a round-trip
+				// and still race a concurrent delete into a 500.
 				const [row] = await ctx.db
 					.update(transactions)
 					.set(values)
 					.where(eq(transactions.id, id))
 					.returning();
-				return assertRow(row, "update transaction");
+				if (!row)
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Transaction not found.",
+					});
+				return row;
 			} catch (error) {
 				rethrowFkConflict(error, FK_CONFLICT_MESSAGE);
 			}
@@ -260,23 +258,20 @@ export const transactionRouter = createTRPCRouter({
 	linkExpense: protectedProcedure
 		.input(linkExpenseDto)
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
-			const [existing] = await ctx.db
-				.select({ id: transactions.id })
-				.from(transactions)
-				.where(eq(transactions.id, input.id));
-			if (!existing)
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Transaction not found.",
-				});
-
 			try {
+				// Update-or-404 in one statement (see `update`): a missing id returns
+				// no row; a pre-SELECT would only add a round-trip and a delete race.
 				const [row] = await ctx.db
 					.update(transactions)
 					.set({ expenseId: input.expenseId })
 					.where(eq(transactions.id, input.id))
 					.returning();
-				return assertRow(row, "link expense");
+				if (!row)
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Transaction not found.",
+					});
+				return row;
 			} catch (error) {
 				rethrowFkConflict(error, LINK_EXPENSE_CONFLICT_MESSAGE);
 			}
