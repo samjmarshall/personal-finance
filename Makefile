@@ -84,4 +84,4 @@ db_branch_status:
 
 clean:
 	test ! -d node_modules || yarn run portless clean
-	rm -rf .next/ next-env.d.ts tsconfig.tsbuildinfo node_modules
+	rm -rf .next/ next-env.d.ts tsconfig.tsbuildinfo node_modules .playwright-mcp
