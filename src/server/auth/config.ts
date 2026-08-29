@@ -48,8 +48,8 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 		autoSignIn: true,
-		// Sign up is disabled until data can be partitioned by household. The app is not yet multi-tenant, and the database is shared across all users.
-		disableSignUp: true,
+		// Sign up is disabled in production until data can be partitioned by household. The app is not yet multi-tenant, and the database is shared across all users.
+		disableSignUp: env.NODE_ENV === "production",
 	},
 	session: {
 		expiresIn: 60 * 60 * 24 * 7,
