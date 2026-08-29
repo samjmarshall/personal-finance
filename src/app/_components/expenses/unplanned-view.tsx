@@ -241,10 +241,13 @@ export function UnplannedView() {
 										<SelectField
 											aria-label={`Link ${row.description} to an expense`}
 											className="w-full"
-											disabled={link.isPending}
+											// Gate only the row whose link is in flight. The
+											// mutation is shared, so `link.isPending` alone would
+											// freeze every row's picker on any single link.
+											disabled={link.isPending && link.variables?.id === row.id}
 											items={expenseOptions}
 											onValueChange={(v) => {
-												if (v && !link.isPending)
+												if (v)
 													link.mutate({ id: row.id, expenseId: Number(v) });
 											}}
 											value=""
