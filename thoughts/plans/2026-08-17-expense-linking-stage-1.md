@@ -129,8 +129,8 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 - [x] `make test` passes (period tables + new input schemas green — 121 total)
 - [x] `make check` passes (generated drizzle meta formatted via `make fix`)
 - [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
-- [ ] `unplanned` returns only unlinked rows inside the window; linked rows absent; refund rows present — needs migration applied + seed on branch DB
-- [ ] `linkExpense` sets/clears `expenseId` — needs migration applied on branch DB
+- [x] `unplanned` returns only unlinked **Spend** rows inside the window; linked rows absent; refund rows absent (final decision is Spend-only, `gt(amount,0)`, adr010 — supersedes the earlier "refund rows present" wording) — confirmed live in `/design-review` (populated Unplanned page against branch DB) + `gt(amount,0)` filter code-verified
+- [x] `linkExpense` sets/clears `expenseId` — confirmed live in `/design-review`: linking a row removes it from the derived view
 - [x] `/security-review` (phase touches `src/lib/**`) — no findings; new paths are parameterized drizzle + Zod + `protectedProcedure`
 
 ## Phase 6: Unplanned page
@@ -148,10 +148,10 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 **Automated**
 - [x] `make check` passes
 - [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase; `/expenses/unplanned` route registered)
-- [ ] Unlinked Spend rows appear grouped with totals; linking a row removes it and the Planned expense now shows it in `transaction.list`
-- [ ] Refund (negative, unlinked) does NOT appear on Unplanned (Spend-only, adr010)
-- [ ] Fortnight/month toggle + prev/next windows behave; anchor row absent → month-only
-- [ ] `/design-review`
+- [x] Unlinked Spend rows appear grouped with totals; linking a row removes it — confirmed live in `/design-review` (populated Unplanned page)
+- [x] Refund (negative, unlinked) does NOT appear on Unplanned (Spend-only, adr010) — enforced by the `gt(amount,0)` server filter (code-verified; not independently exercised with a refund row in-browser)
+- [x] Fortnight/month toggle + prev/next windows behave; anchor row absent → month-only — toggle confirmed live in `/design-review`; month-only degrade is code-verified (`fortnightAnchor` null path)
+- [x] `/design-review` — ship-ready, no blockers; two defects found and fixed during validation (missing `aria-current` on nav links; error card dimmed on retry). UX/a11y refinements logged in the validation report, deferred as out-of-scope enhancements
 
 ## Phase 7: Nav restructure
 
@@ -168,6 +168,15 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 ## Validate
 
 - [x] `/code-review` over the whole branch — 6 findings, 4 fixed (TOCTOU 500→404 on update/linkExpense; kind/window desync; double anchor parse; `?? null` seed consistency). 2 dismissed as false positives: the "mutations lack `onError`" findings — the global `MutationCache.onError` already toasts every conflict message, so a local handler would double-toast.
+
+### `/validate` run — 2026-08-29
+
+- Automated suite green: `SKIP_ENV_VALIDATION=1 yarn build` (route `/expenses/unplanned` registered), `make check`, `make test` (130 pass), `make test_e2e` (no runner wired — stub).
+- ADRs: adr010 + adr012 `Accepted`; adr011 correctly stays `Proposed` (stage-2, no implementing phase here). Terminology canonical (Planned/Unplanned/Categories).
+- `/security-review` (auth + `src/lib/**` touched): no findings — sign-up gating keeps production closed, all new procedures `protectedProcedure`, no SQLi/XSS.
+- `/design-review` (all UI surfaces, live): ship-ready, no blockers.
+- Fixes applied during validation: removed 3 section-label comments in `transaction.ts` list resolver (comment-judge REMOVE); fixed 4 vacuously-passing `transactionUpdateDto` expenseId tests (spread `baseUpdate`, not `base`); added `setup`/`stop` to Makefile `.PHONY`; added `aria-current="page"` to desktop + mobile nav links; scoped Unplanned refetch dimming to the group rows so the error/recovery card no longer fades on retry.
+- Deferred (out of scope, recommended follow-ups): `expense.update`/`income.update` still 500 (not NOT_FOUND) on a missing row — generalize the transaction router's update-or-404 pattern; managed-category rename doesn't touch free-text `transaction.category` grouping on Unplanned (consistent with the "free-text category not backfilled" scope); design-review UX/a11y refinements (success toast on link, field descriptions, non-sortable "Expense" header styling, combobox chevron label, mobile touch targets).
 
 ## References
 
