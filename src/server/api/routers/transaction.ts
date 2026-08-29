@@ -5,6 +5,7 @@ import {
 	desc,
 	eq,
 	getTableColumns,
+	gt,
 	gte,
 	ilike,
 	isNull,
@@ -209,28 +210,31 @@ export const transactionRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
 			const { id, ...values } = input;
 
+			let row: Transaction | undefined;
 			try {
 				// Update-or-404 in one statement: a missing id matches no row and
-				// returns [], mapped to NOT_FOUND. A pre-SELECT would add a round-trip
-				// and still race a concurrent delete into a 500.
-				const [row] = await ctx.db
+				// returns [], mapped to NOT_FOUND below. A pre-SELECT would add a
+				// round-trip and still race a concurrent delete into a 500.
+				[row] = await ctx.db
 					.update(transactions)
 					.set(values)
 					.where(eq(transactions.id, id))
 					.returning();
-				if (!row)
-					throw new TRPCError({
-						code: "NOT_FOUND",
-						message: "Transaction not found.",
-					});
-				return row;
 			} catch (error) {
 				rethrowFkConflict(error, FK_CONFLICT_MESSAGE);
 			}
+			// Out of the try so the 404 path never routes through the FK catch.
+			if (!row)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found.",
+				});
+			return row;
 		}),
 
-	// Unplanned = unlinked Spend in the window. Returns rows of both signs (refunds
-	// net against group totals client-side); no pagination (period volume is small).
+	// Unplanned = unlinked Spend in the window: amount > 0 AND expenseId IS NULL
+	// (adr010). Refunds (amount < 0) are Inflow, not Spend, so they're excluded;
+	// no pagination (period volume is small).
 	unplanned: protectedProcedure
 		.input(unplannedDto)
 		.query(async ({ ctx, input }): Promise<Transaction[]> => {
@@ -240,6 +244,7 @@ export const transactionRouter = createTRPCRouter({
 					.from(transactions)
 					.where(
 						and(
+							gt(transactions.amount, 0),
 							isNull(transactions.expenseId),
 							gte(transactions.date, input.from),
 							lt(transactions.date, input.to),
@@ -258,23 +263,23 @@ export const transactionRouter = createTRPCRouter({
 	linkExpense: protectedProcedure
 		.input(linkExpenseDto)
 		.mutation(async ({ ctx, input }): Promise<Transaction> => {
+			// Same update-or-404 pattern as `update` — see that handler.
+			let row: Transaction | undefined;
 			try {
-				// Update-or-404 in one statement (see `update`): a missing id returns
-				// no row; a pre-SELECT would only add a round-trip and a delete race.
-				const [row] = await ctx.db
+				[row] = await ctx.db
 					.update(transactions)
 					.set({ expenseId: input.expenseId })
 					.where(eq(transactions.id, input.id))
 					.returning();
-				if (!row)
-					throw new TRPCError({
-						code: "NOT_FOUND",
-						message: "Transaction not found.",
-					});
-				return row;
 			} catch (error) {
 				rethrowFkConflict(error, LINK_EXPENSE_CONFLICT_MESSAGE);
 			}
+			if (!row)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found.",
+				});
+			return row;
 		}),
 
 	delete: protectedProcedure

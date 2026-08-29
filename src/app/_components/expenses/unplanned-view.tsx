@@ -51,12 +51,10 @@ export function UnplannedView() {
 	const [kind, setKind] = useState<PeriodKind>(
 		anchorDate ? "fortnight" : "month",
 	);
-	// Seed kind + window from "today" only after mount. new Date() resolves to a
-	// different calendar day on the server (UTC) than in the browser (local tz),
-	// so computing it during render would mismatch hydration at a day boundary.
-	// Effects don't run server-side: the first client render matches the server's
-	// null window, then this fills it in. kind is seeded here too so it can't
-	// desync from the window if the anchor arrives after mount.
+	// Defer to effect: new Date() is UTC on the server but local-tz in the browser,
+	// so seeding during render causes a hydration mismatch at day boundaries.
+	// kind is co-seeded here so it can't desync from the window if the anchor
+	// arrives after mount.
 	const [range, setRange] = useState<PeriodWindow | null>(null);
 	useEffect(() => {
 		const now = new Date();

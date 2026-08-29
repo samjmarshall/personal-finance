@@ -122,7 +122,7 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 - `src/domain/transactions/transaction.dto.ts` — add `unplannedInput` (`{ from: z.date(), to: z.date() }`) and `linkExpenseInput` (`{ id: z.number().int(), expenseId: z.number().int().nullable() }`).
 - `src/server/api/routers/setting.ts` — new plain router: `fortnightAnchor` protected query → the `app_setting` row's value as a validated `YYYY-MM-DD` **string** (client parses to local midnight via `fromDateInput`), or `null` when absent/malformed. Returns a string, not a `Date`: a `Date` serialises to a UTC instant and the client re-reads its calendar date in the browser tz, walking behind-UTC users a day early — the same drift `toDateInput` avoids.
 - `src/server/api/root.ts` — register the `setting` router.
-- `src/server/api/routers/transaction.ts` — `unplanned` query (input `unplannedInput`): all columns where `isNull(transactions.expenseId)` and `date >= from AND date < to`, ordered `category` asc then `date` desc — returns unlinked rows of **both signs** (refunds net against group totals client-side); no pagination. `linkExpense` mutation (input `linkExpenseInput`): `update ... set({ expenseId })` by id.
+- `src/server/api/routers/transaction.ts` — `unplanned` query (input `unplannedInput`): all columns where `isNull(transactions.expenseId)` and `date >= from AND date < to`, ordered `category` asc then `date` desc — returns unlinked **Spend** only (`amount > 0 AND expenseId IS NULL`, per adr010; refunds are Inflow, excluded); no pagination. `linkExpense` mutation (input `linkExpenseInput`): `update ... set({ expenseId })` by id.
 
 ### Success
 **Automated**
@@ -140,7 +140,7 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 - `src/app/(dashboard)/expenses/unplanned/page.tsx` — new; mirrors `src/app/(dashboard)/expenses/page.tsx:4-11`: `void api.expense.list.prefetch()` + `void api.setting.fortnightAnchor.prefetch()`, then `<HydrateClient><UnplannedView /></HydrateClient>`. The `transaction.unplanned` query itself is a client `useQuery` (date-valued input; server prefetch can't reliably match the client-computed window).
 - `src/app/_components/expenses/unplanned-view.tsx` — new client view:
   - anchor via `api.setting.fortnightAnchor.useSuspenseQuery()` (a `YYYY-MM-DD` string or null); parse it to a local-midnight `Date` with `fromDateInput` before feeding `fortnightWindow`; period state defaults to fortnight when anchor exists, else month (fortnight option hidden without anchor); window computed with `src/lib/period.ts`; prev/next via `shiftWindow`.
-  - `api.transaction.unplanned.useQuery({ from, to })`; group rows by free-text `category` mirroring the `groups` memo at `src/app/_components/expenses/expenses-view.tsx:40-56` (managed `sortOrder` ordering); group total = `sum(amount)` so unlinked refunds net in.
+  - `api.transaction.unplanned.useQuery({ from, to })`; group rows by free-text `category` mirroring the `groups` memo at `src/app/_components/expenses/expenses-view.tsx:40-56` (managed `sortOrder` ordering); group total = `sum(amount)` (all rows are Spend, so the sum is a plain positive total).
   - rows: date, description, amount, inline "link to expense" `SelectField` fed by `api.expense.list.useSuspenseQuery()` → `linkExpense.mutate`; `onSuccess` invalidates `transaction.unplanned` and `transaction.list` — the linked row leaves the view by definition (Unplanned is derived, adr010).
   - empty states: no unlinked rows in window ("all Spend is planned"); no anchor → month-only picker.
 
@@ -149,7 +149,7 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 - [x] `make check` passes
 - [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase; `/expenses/unplanned` route registered)
 - [ ] Unlinked Spend rows appear grouped with totals; linking a row removes it and the Planned expense now shows it in `transaction.list`
-- [ ] Refund (negative, unlinked) reduces its category group total
+- [ ] Refund (negative, unlinked) does NOT appear on Unplanned (Spend-only, adr010)
 - [ ] Fortnight/month toggle + prev/next windows behave; anchor row absent → month-only
 - [ ] `/design-review`
 
