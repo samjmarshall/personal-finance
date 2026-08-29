@@ -23,8 +23,16 @@ build: nvm
 	rm -rf .next
 	yarn run build
 
+setup: install
+	yarn run portless proxy start
+	yarn run portless trust
+
 start: install
 	yarn run dev
+
+stop:
+	yarn run portless proxy stop
+	yarn run portless prune
 
 check: nvm
 	yarn run check
@@ -74,4 +82,5 @@ db_branch_status:
 	scripts/neon-branch.sh status
 
 clean:
+	test ! -d node_modules || yarn run portless clean
 	rm -rf .next/ next-env.d.ts tsconfig.tsbuildinfo node_modules
