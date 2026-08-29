@@ -187,25 +187,25 @@ describe("transactionUpdateDto", () => {
 
 	it("rejects a string expenseId", () => {
 		expect(
-			transactionUpdateDto.safeParse({ ...base, expenseId: "7" }).success,
+			transactionUpdateDto.safeParse({ ...baseUpdate, expenseId: "7" }).success,
 		).toBe(false);
 	});
 
 	it("rejects a non-integer expenseId", () => {
 		expect(
-			transactionUpdateDto.safeParse({ ...base, expenseId: 7.5 }).success,
+			transactionUpdateDto.safeParse({ ...baseUpdate, expenseId: 7.5 }).success,
 		).toBe(false);
 	});
 
 	it("rejects a negative expenseId", () => {
 		expect(
-			transactionUpdateDto.safeParse({ ...base, expenseId: -1 }).success,
+			transactionUpdateDto.safeParse({ ...baseUpdate, expenseId: -1 }).success,
 		).toBe(false);
 	});
 
 	it("rejects a 0 expenseId", () => {
 		expect(
-			transactionUpdateDto.safeParse({ ...base, expenseId: 0 }).success,
+			transactionUpdateDto.safeParse({ ...baseUpdate, expenseId: 0 }).success,
 		).toBe(false);
 	});
 });
