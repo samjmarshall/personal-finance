@@ -57,8 +57,6 @@ Executes plan `2026-08-11-transaction-expense-mapping.md` Phase 1.
 - [x] `make test` passes (new schema test green — 5 new + 26 total)
 - [x] `make check` passes (includes `db:check`)
 - [x] `make build` passes (code compiles clean; plain `make build` needs prod env vars locally — verified via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
-
-**Manual**
 - [x] One migration only adds `transaction.expenseId` + FK; applied on the **feature-branch** DB (never main/prod) — `drizzle/0002_silly_terror.sql`, Neon branch `local/expense-linking-stage-1`
 - [x] Transaction created with `expenseId` persists it; deleting that expense sets it `NULL` (row survives) — verified via SQL probe against branch DB
 
@@ -75,8 +73,6 @@ Executes plan `2026-08-11-transaction-expense-mapping.md` Phase 2 (line numbers 
 **Automated**
 - [x] `make check` passes
 - [x] `make build` passes (compiles clean; plain `make build` needs prod env locally — verified via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
-
-**Manual**
 - [x] Pick expense → save → reopen: persists; "— None —" clears it; list shows name or "—" — verified live in `/design-review`
 - [x] `/design-review` — no blockers/high; two nitpicks fixed (`<th>` structure, `FieldOptional` accessible name)
 
@@ -96,8 +92,6 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phases 1–2.
 - [x] `make test` passes (7 new expenseCategoryId cases green — 93 total)
 - [x] `make check` passes (includes `db:check`; generated meta files formatted via `make fix`)
 - [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
-
-**Manual**
 - [x] FK + index present on feature-branch DB — `transaction_expenseCategoryId_expense_category_id_fk` (`confdeltype=n` = ON DELETE SET NULL) + `transaction_expense_category_idx`; migration `drizzle/0006_overrated_james_howlett.sql` (0003 was consumed by Phase 1's index)
 - [x] `transaction.list` projection carries `expenseCategoryId` (via `getTableColumns`) + `expenseCategoryName` (via second `leftJoin`); `TransactionListItem` interface + build type-check confirm both null when unset
 
@@ -113,8 +107,6 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 **Automated**
 - [x] `make check` passes
 - [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
-
-**Manual**
 - [x] Pick managed category → save → visible in list; edit preselects; "None" clears; empty managed list still submits — verified live in `/design-review`
 - [x] `/design-review` — one High (list secondary text failed WCAG AA contrast) fixed by dropping `/70`; Medium loading-flash a non-issue (parent's `category.list` suspense query warms the cache); nitpicks systemic/pre-existing, left per scope
 
@@ -137,8 +129,6 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 - [x] `make test` passes (period tables + new input schemas green — 121 total)
 - [x] `make check` passes (generated drizzle meta formatted via `make fix`)
 - [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase)
-
-**Manual**
 - [ ] `unplanned` returns only unlinked rows inside the window; linked rows absent; refund rows present — needs migration applied + seed on branch DB
 - [ ] `linkExpense` sets/clears `expenseId` — needs migration applied on branch DB
 - [x] `/security-review` (phase touches `src/lib/**`) — no findings; new paths are parameterized drizzle + Zod + `protectedProcedure`
@@ -158,8 +148,6 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 **Automated**
 - [x] `make check` passes
 - [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase; `/expenses/unplanned` route registered)
-
-**Manual**
 - [ ] Unlinked Spend rows appear grouped with totals; linking a row removes it and the Planned expense now shows it in `transaction.list`
 - [ ] Refund (negative, unlinked) reduces its category group total
 - [ ] Fortnight/month toggle + prev/next windows behave; anchor row absent → month-only
@@ -172,12 +160,10 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make build` passes
-
-**Manual**
-- [ ] Desktop sidebar shows Expenses → Planned/Unplanned/Categories; active state correct on all three; mobile bar reaches all pages
-- [ ] `/design-review`
+- [x] `make check` passes
+- [x] `make build` passes (compiles clean via `SKIP_ENV_VALIDATION=1`, pre-existing env gap unrelated to this phase; `/expenses/unplanned` route registered)
+- [x] Desktop sidebar shows Expenses → Planned/Unplanned/Categories; active state correct on all three; mobile bar reaches all pages — verified live in `/design-review`
+- [x] `/design-review` — PASS on all three criteria; High (mobile `<nav>` landmark) + Medium (children `role="group"` + `aria-hidden` header) fixed; theme/sign-out mobile gap pre-existing, left per scope; child border bumped `/20`→`/30`
 
 ## Validate
 
