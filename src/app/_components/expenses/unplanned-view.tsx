@@ -83,10 +83,13 @@ export function UnplannedView() {
 	});
 
 	const expenseOptions = useMemo(
-		() => [
-			{ value: "", label: "Link to expense…" },
-			...expenses.map((e) => ({ value: String(e.id), label: e.name })),
-		],
+		() =>
+			expenses.map((e) => ({
+				value: String(e.id),
+				label: e.name,
+				// Long names truncate in the fixed-width picker; reveal on hover.
+				title: e.name,
+			})),
 		[expenses],
 	);
 
@@ -144,7 +147,11 @@ export function UnplannedView() {
 					>
 						<ChevronLeft />
 					</Button>
-					<span className="tabular min-w-44 text-center font-medium text-foreground text-sm">
+					<span
+						aria-atomic="true"
+						aria-live="polite"
+						className="tabular min-w-44 text-center font-medium text-foreground text-sm"
+					>
 						{range ? periodLabel(kind, range) : "…"}
 					</span>
 					<Button
@@ -158,7 +165,8 @@ export function UnplannedView() {
 					</Button>
 				</div>
 				{anchorDate && (
-					<fieldset aria-label="Period length" className="flex gap-1">
+					<fieldset className="flex gap-1">
+						<legend className="sr-only">Period length</legend>
 						{(["fortnight", "month"] as const).map((k) => (
 							<Button
 								aria-pressed={kind === k}
@@ -207,8 +215,11 @@ export function UnplannedView() {
 					const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
 					return (
 						<Card className="[--card-spacing:0px]" key={category}>
-							<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3">
-								<span className="flex items-center gap-2">
+							{/* Mirror the row grid so the group total sits in the same
+							    column as the amounts it sums (col 3); the picker column
+							    (col 4) stays empty. */}
+							<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
+								<span className="flex items-center gap-2 sm:col-span-2">
 									<span className="font-semibold text-foreground text-sm">
 										{category}
 									</span>
@@ -217,7 +228,7 @@ export function UnplannedView() {
 									</span>
 								</span>
 								<Money
-									className="font-medium text-sm"
+									className="font-medium text-sm sm:text-right"
 									signed
 									tone="ledger"
 									value={groupTotal}
@@ -253,7 +264,8 @@ export function UnplannedView() {
 												if (v)
 													link.mutate({ id: row.id, expenseId: Number(v) });
 											}}
-											value=""
+											placeholder="Link to expense…"
+											value={null}
 										/>
 									</div>
 								))}
