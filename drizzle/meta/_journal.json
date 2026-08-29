@@ -19,50 +19,8 @@
 		{
 			"idx": 2,
 			"version": "7",
-			"when": 1786937266950,
-			"tag": "0002_silly_terror",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1786974216836,
-			"tag": "0003_smooth_jamie_braddock",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1787050110239,
-			"tag": "0004_regular_marvel_zombies",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "7",
-			"when": 1787101928255,
-			"tag": "0005_chunky_princess_powerful",
-			"breakpoints": true
-		},
-		{
-			"idx": 6,
-			"version": "7",
-			"when": 1787121921823,
-			"tag": "0006_overrated_james_howlett",
-			"breakpoints": true
-		},
-		{
-			"idx": 7,
-			"version": "7",
-			"when": 1787579229373,
-			"tag": "0007_hot_tempest",
-			"breakpoints": true
-		},
-		{
-			"idx": 8,
-			"version": "7",
-			"when": 1787956161400,
-			"tag": "0008_seed_fortnight_anchor",
+			"when": 1787981329988,
+			"tag": "0002_expense_linking_stage_1",
 			"breakpoints": true
 		}
 	]

@@ -1,1 +1,0 @@
-ALTER TABLE "transaction" ALTER COLUMN "amount" DROP DEFAULT;

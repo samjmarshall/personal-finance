@@ -1,5 +1,5 @@
 {
-	"id": "3a5c563d-9a91-44fb-8e43-15f2b144fa17",
+	"id": "70a0f449-9d3b-4b14-b014-23f250d8c095",
 	"prevId": "7791b66e-705e-48b1-a542-9043038fbc13",
 	"version": "7",
 	"dialect": "postgresql",
@@ -523,6 +523,31 @@
 			"checkConstraints": {},
 			"isRLSEnabled": false
 		},
+		"public.app_setting": {
+			"name": "app_setting",
+			"schema": "",
+			"columns": {
+				"key": {
+					"name": "key",
+					"type": "text",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"value": {
+					"name": "value",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
 		"public.transaction": {
 			"name": "transaction",
 			"schema": "",
@@ -550,6 +575,12 @@
 					"primaryKey": false,
 					"notNull": false
 				},
+				"expenseCategoryId": {
+					"name": "expenseCategoryId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false
+				},
 				"date": {
 					"name": "date",
 					"type": "timestamp with time zone",
@@ -572,8 +603,7 @@
 					"name": "amount",
 					"type": "double precision",
 					"primaryKey": false,
-					"notNull": true,
-					"default": 0
+					"notNull": true
 				},
 				"category": {
 					"name": "category",
@@ -584,14 +614,16 @@
 				},
 				"frequency": {
 					"name": "frequency",
-					"type": "text",
+					"type": "transaction_frequency",
+					"typeSchema": "public",
 					"primaryKey": false,
 					"notNull": true,
 					"default": "'One-off'"
 				},
 				"priority": {
 					"name": "priority",
-					"type": "text",
+					"type": "transaction_priority",
+					"typeSchema": "public",
 					"primaryKey": false,
 					"notNull": true,
 					"default": "'Nice to Have'"
@@ -645,6 +677,36 @@
 					"concurrently": false,
 					"method": "btree",
 					"with": {}
+				},
+				"transaction_expense_idx": {
+					"name": "transaction_expense_idx",
+					"columns": [
+						{
+							"expression": "expenseId",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"transaction_expense_category_idx": {
+					"name": "transaction_expense_category_idx",
+					"columns": [
+						{
+							"expression": "expenseCategoryId",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
 				}
 			},
 			"foreignKeys": {
@@ -653,6 +715,15 @@
 					"tableFrom": "transaction",
 					"tableTo": "expense",
 					"columnsFrom": ["expenseId"],
+					"columnsTo": ["id"],
+					"onDelete": "set null",
+					"onUpdate": "no action"
+				},
+				"transaction_expenseCategoryId_expense_category_id_fk": {
+					"name": "transaction_expenseCategoryId_expense_category_id_fk",
+					"tableFrom": "transaction",
+					"tableTo": "expense_category",
+					"columnsFrom": ["expenseCategoryId"],
 					"columnsTo": ["id"],
 					"onDelete": "set null",
 					"onUpdate": "no action"
@@ -665,7 +736,25 @@
 			"isRLSEnabled": false
 		}
 	},
-	"enums": {},
+	"enums": {
+		"public.transaction_frequency": {
+			"name": "transaction_frequency",
+			"schema": "public",
+			"values": ["Recurring", "One-off"]
+		},
+		"public.transaction_priority": {
+			"name": "transaction_priority",
+			"schema": "public",
+			"values": [
+				"Must Have",
+				"Should Have",
+				"Nice to Have",
+				"Fix",
+				"VERIFY - possible fraud",
+				"n/a"
+			]
+		}
+	},
 	"schemas": {},
 	"sequences": {},
 	"roles": {},
