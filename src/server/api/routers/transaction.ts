@@ -59,7 +59,6 @@ export const transactionRouter = createTRPCRouter({
 				ctx,
 				input,
 			}): Promise<{ items: TransactionListItem[]; total: number }> => {
-				// Filtering
 				const filters: SQL[] = [];
 
 				if (input.search) {
@@ -82,7 +81,6 @@ export const transactionRouter = createTRPCRouter({
 
 				const where = filters.length ? and(...filters) : undefined;
 
-				// Sorting
 				const sortableColumns: Record<
 					z.infer<typeof transactionSortBy>,
 					PgColumn
@@ -97,7 +95,6 @@ export const transactionRouter = createTRPCRouter({
 				const orderBy =
 					input.sortDir === "asc" ? asc(orderCol) : desc(orderCol);
 
-				// Query execution
 				const [items, countResult] = await Promise.all([
 					ctx.db
 						.select({
