@@ -182,15 +182,11 @@ export function UnplannedView() {
 				)}
 			</div>
 
-			<div
-				className={cn(
-					"mt-6 flex flex-col gap-6 transition-opacity",
-					isFetching && "opacity-60",
-				)}
-			>
+			<div className="mt-6 flex flex-col gap-6">
 				{/* Above the groups, not gated on emptiness: placeholderData keeps the
 				    prior window's rows on a failed refetch, so a groups-length gate
-				    would hide the failure behind stale data. */}
+				    would hide the failure behind stale data. Kept at full opacity — only
+				    the stale rows below dim on refetch, never the error/recovery card. */}
 				{isError && (
 					<Card
 						className="text-center [--card-spacing:--spacing(10)]"
@@ -211,68 +207,77 @@ export function UnplannedView() {
 					</Card>
 				)}
 
-				{groups.map(([category, rowsInGroup]) => {
-					const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
-					return (
-						<Card className="[--card-spacing:0px]" key={category}>
-							{/* Mirror the row grid so the group total sits in the same
+				<div
+					className={cn(
+						"flex flex-col gap-6 transition-opacity",
+						isFetching && "opacity-60",
+					)}
+				>
+					{groups.map(([category, rowsInGroup]) => {
+						const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
+						return (
+							<Card className="[--card-spacing:0px]" key={category}>
+								{/* Mirror the row grid so the group total sits in the same
 							    column as the amounts it sums (col 3); the picker column
 							    (col 4) stays empty. */}
-							<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
-								<span className="flex items-center gap-2 sm:col-span-2">
-									<span className="font-semibold text-foreground text-sm">
-										{category}
-									</span>
-									<span className="text-muted-foreground text-xs">
-										({rowsInGroup.length})
-									</span>
-								</span>
-								<Money
-									className="font-medium text-sm sm:text-right"
-									signed
-									tone="ledger"
-									value={groupTotal}
-								/>
-							</div>
-							<div className="divide-y divide-border">
-								{rowsInGroup.map((row) => (
-									<div
-										className="flex flex-col gap-2 px-4 py-3 text-sm sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:items-center sm:gap-3"
-										key={row.id}
-									>
-										<span className="tabular whitespace-nowrap text-muted-foreground">
-											{formatDate(row.date)}
+								<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
+									<span className="flex items-center gap-2 sm:col-span-2">
+										<span className="font-semibold text-foreground text-sm">
+											{category}
 										</span>
-										<span className="min-w-0 font-medium text-foreground">
-											{row.description}
+										<span className="text-muted-foreground text-xs">
+											({rowsInGroup.length})
 										</span>
-										<Money
-											className="sm:text-right"
-											signed
-											tone="ledger"
-											value={row.amount}
-										/>
-										<SelectField
-											aria-label={`Link ${row.description} to an expense`}
-											className="w-full"
-											// Gate only the row whose link is in flight. The
-											// mutation is shared, so `link.isPending` alone would
-											// freeze every row's picker on any single link.
-											disabled={link.isPending && link.variables?.id === row.id}
-											items={expenseOptions}
-											onValueChange={(v) => {
-												if (v)
-													link.mutate({ id: row.id, expenseId: Number(v) });
-											}}
-											placeholder="Link to expense…"
-											value={null}
-										/>
-									</div>
-								))}
-							</div>
-						</Card>
-					);
-				})}
+									</span>
+									<Money
+										className="font-medium text-sm sm:text-right"
+										signed
+										tone="ledger"
+										value={groupTotal}
+									/>
+								</div>
+								<div className="divide-y divide-border">
+									{rowsInGroup.map((row) => (
+										<div
+											className="flex flex-col gap-2 px-4 py-3 text-sm sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:items-center sm:gap-3"
+											key={row.id}
+										>
+											<span className="tabular whitespace-nowrap text-muted-foreground">
+												{formatDate(row.date)}
+											</span>
+											<span className="min-w-0 font-medium text-foreground">
+												{row.description}
+											</span>
+											<Money
+												className="sm:text-right"
+												signed
+												tone="ledger"
+												value={row.amount}
+											/>
+											<SelectField
+												aria-label={`Link ${row.description} to an expense`}
+												className="w-full"
+												// Gate only the row whose link is in flight. The
+												// mutation is shared, so `link.isPending` alone would
+												// freeze every row's picker on any single link.
+												disabled={
+													link.isPending && link.variables?.id === row.id
+												}
+												items={expenseOptions}
+												onValueChange={(v) => {
+													if (v)
+														link.mutate({ id: row.id, expenseId: Number(v) });
+												}}
+												placeholder="Link to expense…"
+												value={null}
+											/>
+										</div>
+									))}
+								</div>
+							</Card>
+						);
+					})}
+				</div>
 
 				{isLoading && (
 					<Card
