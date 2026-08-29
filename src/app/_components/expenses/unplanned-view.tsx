@@ -1,7 +1,8 @@
 "use client";
 
+import { skipToken } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Money } from "~/app/_components/money";
 import { PageHeader } from "~/app/_components/page-header";
@@ -45,14 +46,26 @@ export function UnplannedView() {
 	const [kind, setKind] = useState<PeriodKind>(
 		anchorDate ? "fortnight" : "month",
 	);
-	const [range, setRange] = useState<PeriodWindow>(() =>
-		anchorDate
-			? fortnightWindow(anchorDate, new Date())
-			: monthWindow(new Date()),
-	);
+	// Seed the window from "today" only after mount. new Date() resolves to a
+	// different calendar day on the server (UTC) than in the browser (local
+	// tz), so computing it during render would mismatch hydration at a day
+	// boundary. Effects don't run server-side: the first client render matches
+	// the server's null window, then this fills it in.
+	const [range, setRange] = useState<PeriodWindow | null>(null);
+	useEffect(() => {
+		const seed = anchor ? fromDateInput(anchor) : null;
+		setRange(
+			seed ? fortnightWindow(seed, new Date()) : monthWindow(new Date()),
+		);
+	}, [anchor]);
 
-	const { data: rows, isFetching } = api.transaction.unplanned.useQuery(
-		{ from: range.from, to: range.to },
+	const {
+		data: rows,
+		isFetching,
+		isError,
+		refetch,
+	} = api.transaction.unplanned.useQuery(
+		range ? { from: range.from, to: range.to } : skipToken,
 		{ placeholderData: (prev) => prev },
 	);
 
@@ -102,10 +115,10 @@ export function UnplannedView() {
 	}
 
 	function step(direction: 1 | -1) {
-		setRange((r) => shiftWindow(r, kind, direction));
+		setRange((r) => (r ? shiftWindow(r, kind, direction) : r));
 	}
 
-	const isLoading = rows === undefined;
+	const isLoading = rows === undefined && !isError;
 
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
@@ -118,6 +131,7 @@ export function UnplannedView() {
 				<div className="flex items-center gap-2">
 					<Button
 						aria-label="Previous period"
+						disabled={!range}
 						onClick={() => step(-1)}
 						size="icon-sm"
 						variant="outline"
@@ -125,10 +139,11 @@ export function UnplannedView() {
 						<ChevronLeft />
 					</Button>
 					<span className="tabular min-w-44 text-center font-medium text-foreground text-sm">
-						{periodLabel(kind, range)}
+						{range ? periodLabel(kind, range) : "…"}
 					</span>
 					<Button
 						aria-label="Next period"
+						disabled={!range}
 						onClick={() => step(1)}
 						size="icon-sm"
 						variant="outline"
@@ -214,6 +229,22 @@ export function UnplannedView() {
 					);
 				})}
 
+				{isError && groups.length === 0 && (
+					<Card className="text-center [--card-spacing:--spacing(10)]">
+						<CardContent className="flex flex-col items-center gap-3">
+							<p className="text-muted-foreground text-sm">
+								Couldn't load unplanned Spend.
+							</p>
+							<Button
+								onClick={() => void refetch()}
+								size="sm"
+								variant="outline"
+							>
+								Try again
+							</Button>
+						</CardContent>
+					</Card>
+				)}
 				{isLoading && groups.length === 0 && (
 					<Card className="text-center [--card-spacing:--spacing(10)]">
 						<CardContent>
@@ -223,7 +254,7 @@ export function UnplannedView() {
 						</CardContent>
 					</Card>
 				)}
-				{!isLoading && groups.length === 0 && (
+				{!isLoading && !isError && groups.length === 0 && (
 					<Card className="text-center [--card-spacing:--spacing(10)]">
 						<CardContent>
 							<p className="text-muted-foreground text-sm">
