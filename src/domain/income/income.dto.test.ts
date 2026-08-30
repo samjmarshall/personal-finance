@@ -42,6 +42,96 @@ describe("incomeCreateDto", () => {
 	});
 });
 
+describe("incomeCreateDto kind + one-time fields", () => {
+	it("accepts recurring, one-time, or an omitted kind", () => {
+		expect(
+			incomeCreateDto.safeParse({ ...base, kind: "recurring" }).success,
+		).toBe(true);
+		expect(
+			incomeCreateDto.safeParse({
+				...base,
+				kind: "one-time",
+				amount: 100,
+				expectedDate: new Date(),
+			}).success,
+		).toBe(true);
+		expect(incomeCreateDto.safeParse(base).success).toBe(true);
+	});
+
+	it("rejects an unknown kind", () => {
+		expect(incomeCreateDto.safeParse({ ...base, kind: "weekly" }).success).toBe(
+			false,
+		);
+	});
+
+	it("accepts null or omitted amount and expectedDate", () => {
+		expect(
+			incomeCreateDto.safeParse({ ...base, amount: null, expectedDate: null })
+				.success,
+		).toBe(true);
+		expect(
+			incomeCreateDto.safeParse({
+				...base,
+				amount: 42,
+				expectedDate: new Date(),
+			}).success,
+		).toBe(true);
+	});
+
+	it("bounds dueDay to 1–31 and dueMonth to 1–12", () => {
+		expect(incomeCreateDto.safeParse({ ...base, dueDay: 0 }).success).toBe(
+			false,
+		);
+		expect(incomeCreateDto.safeParse({ ...base, dueDay: 32 }).success).toBe(
+			false,
+		);
+		expect(incomeCreateDto.safeParse({ ...base, dueDay: 31 }).success).toBe(
+			true,
+		);
+		expect(incomeCreateDto.safeParse({ ...base, dueMonth: 0 }).success).toBe(
+			false,
+		);
+		expect(incomeCreateDto.safeParse({ ...base, dueMonth: 13 }).success).toBe(
+			false,
+		);
+		expect(incomeCreateDto.safeParse({ ...base, dueMonth: 12 }).success).toBe(
+			true,
+		);
+	});
+
+	// adr011: the one-time invariant lives in Zod, not a DB CHECK.
+	it("requires both amount and expectedDate when kind is one-time", () => {
+		expect(
+			incomeCreateDto.safeParse({
+				...base,
+				kind: "one-time",
+				expectedDate: new Date(),
+			}).success,
+		).toBe(false);
+		expect(
+			incomeCreateDto.safeParse({ ...base, kind: "one-time", amount: 100 })
+				.success,
+		).toBe(false);
+		expect(
+			incomeCreateDto.safeParse({ ...base, kind: "one-time" }).success,
+		).toBe(false);
+		expect(
+			incomeCreateDto.safeParse({
+				...base,
+				kind: "one-time",
+				amount: 100,
+				expectedDate: new Date(),
+			}).success,
+		).toBe(true);
+	});
+
+	it("does not require amount or expectedDate for a recurring kind", () => {
+		expect(
+			incomeCreateDto.safeParse({ ...base, kind: "recurring" }).success,
+		).toBe(true);
+	});
+});
+
 describe("incomeUpdateDto", () => {
 	const baseUpdate = { ...base, id: 1 };
 

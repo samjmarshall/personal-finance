@@ -12,6 +12,14 @@ export enum Frequency {
 	OneOff = "One-off",
 }
 
+// Expense/Income budget kind. Lowercase, deliberately distinct from a
+// Transaction's Frequency: a one-time budget is consumed once against its
+// expectedDate; a recurring one keeps the fortnight/month/year Basis figures.
+export enum CommitmentKind {
+	Recurring = "recurring",
+	OneTime = "one-time",
+}
+
 // Stored frequency/priority are free-text; coerce a read value to the managed
 // vocab, falling back to the default when it is outside the current set (e.g.
 // legacy/imported data) so a form seed can never hold an unknown value.
@@ -19,6 +27,14 @@ export function toFrequency(value: string | null | undefined): Frequency {
 	return (Object.values(Frequency) as string[]).includes(value ?? "")
 		? (value as Frequency)
 		: Frequency.OneOff;
+}
+
+export function toCommitmentKind(
+	value: string | null | undefined,
+): CommitmentKind {
+	return (Object.values(CommitmentKind) as string[]).includes(value ?? "")
+		? (value as CommitmentKind)
+		: CommitmentKind.Recurring;
 }
 
 export function toPriority(value: string | null | undefined): Priority {
