@@ -85,17 +85,17 @@ Implements **adr011** — flip its `Status:` to `Accepted` when this phase lands
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make test` passes (`isPast` table green)
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
+- [x] `make check` passes — biome + typecheck + db:check all clean
+- [x] `make test` passes (`isPast` table green) — 155 tests pass
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
 
 **Manual**
-- [ ] Add a one-time expense → it appears in the One-time section (not a category card) with amount, expected date, consumed 0, remaining = amount.
-- [ ] Link a Spend Transaction to it (existing picker) → consumed rises, remaining falls; a refund nets consumed back down.
-- [ ] Set its expected date to yesterday → it moves into the collapsible "past" group; a today date stays upcoming.
-- [ ] Recurring expenses and the summary totals are unchanged.
-- [ ] `/design-review` (UI change).
-- [ ] `/security-review` (phase touches `src/lib/**`).
+- [x] Add a one-time expense → it appears in the One-time section (not a category card) with amount, expected date, consumed 0, remaining = amount — verified live via Playwright.
+- [x] Link a Spend Transaction to it (existing picker) → consumed rises, remaining falls; a refund nets consumed back down — linked a $623.80 Spend (consumed → $623.80, remaining → $1,376.20), then a −$100 refund (consumed netted to $523.80, remaining $1,476.20); data restored.
+- [x] Set its expected date to yesterday → it moves into the collapsible "past" group; a today date stays upcoming — a past-dated one-time moved into the collapsed "Past (1)" group; `isPast` keeps today upcoming (unit-covered).
+- [x] Recurring expenses and the summary totals are unchanged — category cards + Per fortnight/month/year totals unchanged (one-time excluded from the recurring totals memo).
+- [x] `/design-review` (UI change) — no blockers/high-priority; 2 medium a11y findings on the form fixed (`role="alert"` on the error banner + `noValidate` to suppress the native date bubble); nitpicks left (number-input integer display is conventional).
+- [x] `/security-review` (phase touches `src/lib/**`) — no findings ≥ confidence 8; `consumption` query is parameterized + auth-gated.
 
 ## Phase 3: Income one-time entry + split
 

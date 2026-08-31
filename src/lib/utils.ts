@@ -74,6 +74,15 @@ export function fromDateInput(value: string): Date | null {
 	return date;
 }
 
+// Compare by local calendar day, not instant: a one-time due today is upcoming,
+// not past (adr011 — the date does the work, no archive flag). Local to agree
+// with toDateInput/formatDate's local rendering.
+export function isPast(date: Date, now: Date): boolean {
+	const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+	const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	return day.getTime() < today.getTime();
+}
+
 export function formatMonthKey(key: string) {
 	const [year, month] = key.split("-").map(Number);
 	if (!year || !month) return key;
