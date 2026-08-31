@@ -365,7 +365,6 @@ export function ExpensesView() {
 
 			<ExpenseForm
 				expense={editing}
-				key={editing ? `edit-${editing.id}` : "add"}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
 			/>

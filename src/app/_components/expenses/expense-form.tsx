@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -37,6 +37,16 @@ const KIND_OPTIONS = [
 	{ value: CommitmentKind.OneTime, label: "One-time" },
 ] as const;
 
+// Seed the amount field: one-time reads its own amount, recurring the first non-zero cadence figure.
+function seedAmount(expense: Expense | null) {
+	if (!expense) return "";
+	const value =
+		expense.kind === CommitmentKind.OneTime
+			? (expense.amount ?? 0)
+			: expense.month || expense.fortnight || expense.year;
+	return value ? String(Number(value.toFixed(2))) : "";
+}
+
 export function ExpenseForm({
 	open,
 	onClose,
@@ -51,25 +61,29 @@ export function ExpenseForm({
 	const categoryOptions = managedCategories?.length
 		? managedCategories.map((c) => c.name)
 		: [...EXPENSE_CATEGORIES];
-	const [name, setName] = useState(expense?.name ?? "");
-	const [category, setCategory] = useState(
-		expense?.category ?? EXPENSE_CATEGORIES[1],
-	);
+	const [name, setName] = useState("");
+	const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[1]);
 	const [basis, setBasis] = useState<"fortnight" | "month" | "year">("month");
-	const [kind, setKind] = useState(() => toCommitmentKind(expense?.kind));
+	const [kind, setKind] = useState(CommitmentKind.Recurring);
 	const [expectedDate, setExpectedDate] = useState(() =>
-		toDateInput(expense?.expectedDate ?? new Date()),
+		toDateInput(new Date()),
 	);
-	const [amount, setAmount] = useState(() => {
-		if (!expense) return "";
-		const value =
-			expense.kind === CommitmentKind.OneTime
-				? (expense.amount ?? 0)
-				: expense.month || expense.fortnight || expense.year;
-		return value ? String(Number(value.toFixed(2))) : "";
-	});
+	const [amount, setAmount] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const isOneTime = kind === CommitmentKind.OneTime;
+
+	// Reseed on each open: the dialog stays mounted, so a reused Add form would
+	// otherwise show the previous entry's values.
+	useEffect(() => {
+		if (!open) return;
+		setName(expense?.name ?? "");
+		setCategory(expense?.category ?? EXPENSE_CATEGORIES[1]);
+		setBasis("month");
+		setKind(toCommitmentKind(expense?.kind));
+		setExpectedDate(toDateInput(expense?.expectedDate ?? new Date()));
+		setAmount(seedAmount(expense));
+		setError(null);
+	}, [open, expense]);
 
 	const onSuccess = async () => {
 		await utils.expense.list.invalidate();
