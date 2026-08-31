@@ -113,13 +113,13 @@ Implements **adr011** — flip its `Status:` to `Accepted` when this phase lands
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
+- [x] `make check` passes — biome + typecheck + db:check all clean
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
 
 **Manual**
-- [ ] Add a one-time income → appears in the Income One-time section with amount + expected date; recurring income and totals unchanged.
-- [ ] A past-dated one-time income sits in the "past" group.
-- [ ] `/design-review` (UI change).
+- [x] Add a one-time income → appears in the Income One-time section with amount + expected date; recurring income and totals unchanged — verified live in `/design-review`.
+- [x] A past-dated one-time income sits in the "past" group — verified live (starts collapsed in a working "Past (n)" accordion).
+- [x] `/design-review` (UI change) — 1 high fixed (stale Add-form state: reverted to reseed-on-open), income-specific mediums fixed (mobile amount now visible, responsive form grid, Past-toggle focus ring); the same stale-Add bug in `expense-form.tsx` was fixed for parity (reseed-on-open + dropped remount key). Banner-placement + expenses-view mobile/focus parallels left as pre-existing Phase-2 patterns.
 
 ## Validate
 
