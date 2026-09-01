@@ -185,27 +185,17 @@ function CashFlowChartBody({ periodKind }: { periodKind: PeriodKind }) {
 						)}
 						cursor={{ fill: "var(--color-muted)", opacity: 0.4 }}
 					/>
+					{/* Inflow always reads positive — never recolored, so a below-zero
+					    bucket doesn't paint the income bar as a warning. */}
 					<Bar
 						dataKey="inflow"
 						fill="var(--color-inflow)"
 						radius={[3, 3, 0, 0]}
 						yAxisId="left"
-					>
-						{rows.map((r) => (
-							<Cell
-								fill={
-									r.belowZero ? "var(--color-warning)" : "var(--color-inflow)"
-								}
-								key={r.key}
-							/>
-						))}
-					</Bar>
-					<Bar
-						dataKey="spend"
-						fill="var(--color-spend)"
-						radius={[0, 0, 3, 3]}
-						yAxisId="left"
-					>
+					/>
+					{/* Tint only the Spend bar when the bucket's projected balance dips
+					    below zero — the warning is about money going out. */}
+					<Bar dataKey="spend" radius={[0, 0, 3, 3]} yAxisId="left">
 						{rows.map((r) => (
 							<Cell
 								fill={
@@ -241,6 +231,16 @@ function CashFlowTooltip({
 	if (!active || !row) return null;
 	const spend = Math.abs(row.spend);
 
+	// Label+amount can repeat within one bucket (two "Rent" at $600); a per-bucket
+	// occurrence suffix keeps each row's React key unique without an array index.
+	const seen = new Map<string, number>();
+	const items = row.items.map((it) => {
+		const base = `${it.label}:${it.amount}`;
+		const n = seen.get(base) ?? 0;
+		seen.set(base, n + 1);
+		return { ...it, key: n ? `${base}#${n}` : base };
+	});
+
 	return (
 		<div className="min-w-44 rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
 			<p className="font-medium text-foreground">{row.label}</p>
@@ -268,7 +268,7 @@ function CashFlowTooltip({
 					</div>
 				)}
 			</div>
-			{row.items.length > 0 && (
+			{items.length > 0 && (
 				<div className="mt-2 border-border/50 border-t pt-1.5">
 					<p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">
 						Projected
@@ -276,13 +276,8 @@ function CashFlowTooltip({
 					{/* Cap height + scroll: a busy bucket (many projected items) would
 					    otherwise grow the tooltip past the card and cover the page. */}
 					<div className="grid max-h-[280px] gap-0.5 overflow-y-auto">
-						{row.items.map((it) => (
-							// Label alone isn't unique (two "Rent" rows can share a bucket); the
-							// signed amount disambiguates.
-							<div
-								className="flex justify-between gap-4"
-								key={`${it.label}:${it.amount}`}
-							>
+						{items.map((it) => (
+							<div className="flex justify-between gap-4" key={it.key}>
 								<span className="text-muted-foreground">{it.label}</span>
 								{/* item.amount is signed: + Spend, − Inflow. Show the direction
 								    as a sign too, not color alone — spend "−", inflow "+"
