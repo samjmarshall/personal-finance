@@ -13,7 +13,7 @@ Design: [2026-08-11 Better Auth secondary storage on Upstash Redis](../../though
 
 Better Auth 1.6.26 enables rate limiting in production by default, but `rateLimit.storage` defaults to `"memory"` unless a `secondaryStorage` is configured (`node_modules/better-auth/dist/context/create-context.mjs:171-174`). On Vercel that counter lives inside one lambda instance and dies on cold start, so an attacker moving between instances is never counted. Rate limiting is configured, appears active, and does not work. This is the concrete defect.
 
-Session reads are the second force. `createTRPCContext` (`src/server/api/trpc.ts:29-31`) resolves a session on every tRPC request, and `getSession` (`src/server/better-auth/server.ts:5`) is called from `(dashboard)/layout.tsx`, `sign-in/page.tsx` and `sign-up/page.tsx`. React `cache()` dedupes those within a render, so today's cost is roughly one database read per render plus one per tRPC request. `src/server/db/index.ts:1-2` still runs `drizzle-orm/postgres-js` over a pooled connection, so these are not yet the per-call HTTP round trips that [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) chose Neon's HTTP driver for — that pressure arrives when the driver migration lands.
+Session reads are the second force. `createTRPCContext` (`src/server/api/trpc.ts:29-31`) resolves a session on every tRPC request, and `getSession` (`src/server/better-auth/server.ts:5`) is called from `(dashboard)/layout.tsx`, `sign-in/page.tsx` and `sign-up/page.tsx`. React `cache()` dedupes those within a render, so today's cost is roughly one database read per render plus one per tRPC request. `src/server/db/index.ts:1-2` still runs `drizzle-orm/postgres-js` over a pooled connection, so these are not the per-call HTTP round trips that [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s deferred `neon-http` swap would introduce — that pressure arrives only if the driver migration ever lands.
 
 An Upstash Redis instance already exists, provisioned through Vercel, exposing `KV_REST_API_URL` and `KV_REST_API_TOKEN`. Configuring it as Better Auth's `secondaryStorage` moves sessions, the per-user session list, and verification records out of Postgres, and switches rate limit storage to Redis as a side effect of the default above.
 
@@ -32,7 +32,7 @@ Where should session state live, and what must remain in Postgres so that a Redi
 - **A Redis failure must not sign users out.** Upstash is a new dependency; adopting it must not make authentication strictly less reliable than it is today.
 - **A revoked session must not survive revocation.** Whatever caching exists cannot outlive an explicit sign-out.
 - **Complexity must be earned.** Status is pre-PMF prototype with one developer and no load data. Machinery that only pays off at scale is a cost, not an investment.
-- **Protect the Neon connection budget.** Anticipatory rather than measured, but [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) exists precisely to keep per-request database work down.
+- **Protect the Neon connection budget.** Anticipatory rather than measured, but [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s deferred `neon-http` swap targets exactly this — keeping per-request database work down.
 
 ## Considered Options
 
@@ -123,7 +123,7 @@ Cookie cache plus `rateLimit.customStorage` (`@better-auth/core/src/types/init-o
 | Pros | Cons |
 | ---- | ---- |
 | Fixes the concrete defect — rate limiting — with no change to session storage | Store reads still hit Postgres once the 60s cookie cache lapses, per device |
-| No dual-write, no fallback semantics, no key namespace, no `session` bloat | Does not serve [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s driver once the Neon HTTP migration lands |
+| No dual-write, no fallback semantics, no key namespace, no `session` bloat | Does not serve [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s `neon-http` driver if that (now deferred) migration ever lands |
 | Roughly a third less design surface, and no ADR-worthy decisions | Requires hand-writing a `BetterAuthRateLimitStorage` including `consume`, rather than getting it from the `secondaryStorage` default |
 | Zero risk to authentication correctness — the failure modes stay exactly as they are today | Leaves Redis in the stack serving a single narrow purpose |
 
