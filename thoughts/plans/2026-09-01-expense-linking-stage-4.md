@@ -72,12 +72,12 @@ Stands up the typed Inngest client and the `EVENT_REGISTRY` naming authority. No
 
 ### Success
 **Automated**
-- [ ] `make check` passes (env typing resolves; registry types compile)
-- [ ] `make test` passes (`events.test.ts` + golden green)
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build` — bare `make build` fails on missing prod env locally; memory: make-build-needs-prod-env-locally)
+- [x] `make check` passes (env typing resolves; registry types compile)
+- [x] `make test` passes (`events.test.ts` + golden green)
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build` — bare `make build` fails on missing prod env locally; memory: make-build-needs-prod-env-locally)
 
 **Manual**
-- [ ] `/security-review` (touches `src/env.js` — new secrets): `INNGEST_*` keys are server-only, `requiredInProd`, never `NEXT_PUBLIC_`, absent from client bundle.
+- [x] `/security-review` (touches `src/env.js` — new secrets): `INNGEST_*` keys are server-only, `requiredInProd`, never `NEXT_PUBLIC_`, absent from client bundle. _(clean — no findings; keys server-only, no client-bundle path.)_
 
 ## Phase 2: `outbox` table + `commitWithOutbox` / `publish` on `db.transaction()` (+ revise adr003)
 

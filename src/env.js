@@ -39,6 +39,12 @@ export const env = createEnv({
 			requiredInProd(z.url()),
 		),
 		/**
+		 * Inngest Cloud credentials. The local Dev Server needs neither (it
+		 * auto-detects dev), so both are optional outside production.
+		 */
+		INNGEST_EVENT_KEY: requiredInProd(z.string()),
+		INNGEST_SIGNING_KEY: requiredInProd(z.string()),
+		/**
 		 * Upstash Redis REST credentials. Names are fixed by Vercel's Upstash
 		 * integration, which injects them under `KV_`. Required in production:
 		 * without them each lambda rate-limits against its own memory, which a
@@ -70,6 +76,8 @@ export const env = createEnv({
 		DATABASE_URL: process.env.DATABASE_URL,
 		DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
 		DEPLOYMENT_URL: process.env.DEPLOYMENT_URL,
+		INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
+		INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
 		KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
 		KV_REST_API_URL: process.env.KV_REST_API_URL,
 		NODE_ENV: process.env.NODE_ENV,
