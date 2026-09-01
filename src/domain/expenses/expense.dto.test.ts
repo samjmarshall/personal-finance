@@ -145,7 +145,16 @@ describe("expenseCreateDto kind + one-time fields", () => {
 });
 
 describe("expenseUpdateDto", () => {
-	const baseUpdate = { ...base, id: 1 };
+	const baseUpdate = { ...base, id: 1, kind: "recurring" as const };
+
+	// kind is required on update so a partial body can't omit it and slip a null
+	// figure past the one-time invariant (adr011).
+	it("requires kind and can't be bypassed by omitting it", () => {
+		expect(expenseUpdateDto.safeParse({ ...base, id: 1 }).success).toBe(false);
+		expect(
+			expenseUpdateDto.safeParse({ ...base, id: 1, amount: null }).success,
+		).toBe(false);
+	});
 
 	// The invariant guards update too: a row flipped to one-time still needs both.
 	it("requires both amount and expectedDate when updating to one-time", () => {

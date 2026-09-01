@@ -103,6 +103,9 @@ export function TransactionForm({
 		await Promise.all([
 			utils.transaction.list.invalidate(),
 			utils.transaction.summary.invalidate(),
+			// A transaction's amount/expenseId feeds the Planned consumed/remaining
+			// read-model — refresh it so those figures don't go stale.
+			utils.expense.consumption.invalidate(),
 		]);
 		onClose();
 	};

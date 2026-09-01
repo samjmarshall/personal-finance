@@ -49,8 +49,11 @@ const expenseCreateDto = z
 	.object({ ...expenseFields })
 	.superRefine(requireOneTimeFigures);
 
+// kind is required on update (create leaves it optional for the DB default): update
+// is a full replace, and the one-time invariant above can only hold when it knows the
+// row's kind — an omitted kind would let a partial body null a required figure (adr011).
 const expenseUpdateDto = z
-	.object({ ...expenseFields, id: z.number() })
+	.object({ ...expenseFields, id: z.number(), kind: z.enum(CommitmentKind) })
 	.superRefine(requireOneTimeFigures);
 
 export { expenseCreateDto, expenseUpdateDto };

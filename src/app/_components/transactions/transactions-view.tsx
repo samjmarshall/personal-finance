@@ -95,6 +95,8 @@ export function TransactionsView() {
 			await Promise.all([
 				utils.transaction.list.invalidate(),
 				utils.transaction.summary.invalidate(),
+				// Deleting a linked transaction changes its expense's consumed total.
+				utils.expense.consumption.invalidate(),
 			]);
 		},
 	});
