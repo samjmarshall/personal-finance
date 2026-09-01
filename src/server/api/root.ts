@@ -1,4 +1,5 @@
 import { balanceRouter } from "~/server/api/routers/balance";
+import { cashflowRouter } from "~/server/api/routers/cashflow";
 import { categoryRouter } from "~/server/api/routers/category";
 import { expenseRouter } from "~/server/api/routers/expense";
 import { incomeRouter } from "~/server/api/routers/income";
@@ -13,6 +14,7 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
  */
 export const appRouter = createTRPCRouter({
 	balance: balanceRouter,
+	cashflow: cashflowRouter,
 	category: categoryRouter,
 	expense: expenseRouter,
 	income: incomeRouter,

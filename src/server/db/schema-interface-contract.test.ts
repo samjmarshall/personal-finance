@@ -33,6 +33,10 @@ type Contracts = [
 // no contract fails the coverage test, forcing a deliberate decision.
 const COVERED = ["balance", "category", "expense", "income", "transaction"];
 
+// Table-less computed read-models: no *.schema.ts to contract against, so they sit
+// outside the schema↔interface gate. The cash flow projection is derived, not stored.
+const TABLELESS = ["cashflow"];
+
 describe("schema ↔ interface contract", () => {
 	it("keeps each *.schema.ts read model equal to its *.interface.ts", () => {
 		// Annotating with `Contracts` makes tsc evaluate every pair above; the array is
@@ -46,6 +50,7 @@ describe("schema ↔ interface contract", () => {
 		const slugs = (readdirSync("src/domain", { recursive: true }) as string[])
 			.filter((f) => f.endsWith(".interface.ts"))
 			.map((f) => basename(f).replace(".interface.ts", ""))
+			.filter((slug) => !TABLELESS.includes(slug))
 			.sort();
 
 		expect(slugs).toEqual([...COVERED].sort());
