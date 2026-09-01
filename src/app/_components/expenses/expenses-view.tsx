@@ -27,7 +27,16 @@ export function ExpensesView() {
 	const { data: categories } = api.category.list.useQuery();
 	const utils = api.useUtils();
 	const remove = api.expense.delete.useMutation({
-		onSuccess: () => utils.expense.list.invalidate(),
+		onSuccess: async () => {
+			// Deleting an expense SET NULLs its linked transactions: they drop out of
+			// the consumed total and reappear on the Unplanned/transaction lists.
+			await Promise.all([
+				utils.expense.list.invalidate(),
+				utils.expense.consumption.invalidate(),
+				utils.transaction.unplanned.invalidate(),
+				utils.transaction.list.invalidate(),
+			]);
+		},
 	});
 
 	const [formOpen, setFormOpen] = useState(false);
@@ -98,6 +107,9 @@ export function ExpensesView() {
 	function oneTimeRow(item: Expense) {
 		const consumed = consumedById.get(item.id) ?? 0;
 		const remaining = (item.amount ?? 0) - consumed;
+		// Float subtraction can leave a sub-cent negative on an exactly-met budget;
+		// only treat it as over-consumed past half a cent so it never shows a red −$0.00.
+		const isOver = remaining < -0.005;
 		return (
 			<div
 				className="group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(4,7rem)_3rem]"
@@ -119,10 +131,10 @@ export function ExpensesView() {
 				<span
 					className={cn(
 						"tabular text-right font-medium tracking-tight",
-						remaining < 0 ? "text-spend" : "text-foreground",
+						isOver ? "text-spend" : "text-foreground",
 					)}
 				>
-					{remaining < 0 && "−"}
+					{isOver && "−"}
 					{formatCurrency(Math.abs(remaining))}
 				</span>
 				<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
