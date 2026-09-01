@@ -29,6 +29,13 @@
 			"when": 1787983800578,
 			"tag": "0003_expense_income_kind_timing",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1788225047421,
+			"tag": "0004_balance_snapshot",
+			"breakpoints": true
 		}
 	]
 }
