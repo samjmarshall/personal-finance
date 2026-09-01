@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EVENT_REGISTRY } from "../events";
+import { EVENT_REGISTRY } from "./events";
 
 // Tripwire for the FROZEN wire strings (adr002 clause 7; server-architecture rule).
 // These keys are Inngest event names — byte-stable across the wire. A change here
