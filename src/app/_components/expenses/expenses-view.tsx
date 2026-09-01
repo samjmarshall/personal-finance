@@ -1,25 +1,49 @@
 "use client";
 
-import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { Tabs } from "@base-ui/react/tabs";
+import {
+	CalendarClock,
+	ChevronDown,
+	Pencil,
+	Plus,
+	Repeat,
+	Trash2,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
 import { Money } from "~/app/_components/money";
-import { OneTimeSection } from "~/app/_components/one-time-section";
 import { PageHeader } from "~/app/_components/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { CommitmentKind } from "~/lib/constants";
-import { cn, formatCurrency, formatDate } from "~/lib/utils";
+import { cn, formatCurrency, formatDate, isPast } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ExpenseForm } from "./expense-form";
 
 type Expense = RouterOutputs["expense"]["list"][number];
+type Category = RouterOutputs["category"]["list"][number];
 
-// Stable getters for the shared OneTimeSection (module scope so they don't churn
-// its partition memo each render).
-const getOneTimeDate = (item: Expense) => item.expectedDate;
-const getOneTimeAmount = (item: Expense) => item.amount;
+// Rank categories by their managed sortOrder; unmanaged names fall to the end,
+// broken by name. `i` keeps the sort stable across equal sortOrders.
+function makeRank(categories: Category[] | undefined) {
+	const order = new Map(
+		(categories ?? []).map((c, i) => [c.name, c.sortOrder * 1000 + i]),
+	);
+	return (name: string) => order.get(name) ?? Number.MAX_SAFE_INTEGER;
+}
+
+function groupByCategory(items: Expense[], rank: (name: string) => number) {
+	const map = new Map<string, Expense[]>();
+	for (const item of items) {
+		const arr = map.get(item.category) ?? [];
+		arr.push(item);
+		map.set(item.category, arr);
+	}
+	return [...map.entries()].sort(
+		(a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]),
+	);
+}
 
 export function ExpensesView() {
 	const [list] = api.expense.list.useSuspenseQuery();
@@ -43,37 +67,38 @@ export function ExpensesView() {
 	const [editing, setEditing] = useState<Expense | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
-	// Category cards start expanded; the Set tracks which are collapsed.
+	// Category cards start expanded; the Set tracks which are collapsed. Keys are
+	// namespaced ("r:"/"o:") since a category can hold both recurring and one-time.
 	const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
-	function toggleCategory(category: string) {
+	function toggle(key: string) {
 		setCollapsed((prev) => {
 			const next = new Set(prev);
-			if (next.has(category)) next.delete(category);
-			else next.add(category);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
 			return next;
 		});
 	}
 
-	const groups = useMemo(() => {
-		const map = new Map<string, Expense[]>();
-		for (const item of list) {
-			// One-time expenses live in their own section, not the category cards.
-			if (item.kind !== CommitmentKind.Recurring) continue;
-			const arr = map.get(item.category) ?? [];
-			arr.push(item);
-			map.set(item.category, arr);
-		}
-		// Rank each category by its managed sortOrder; categories without a
-		// managed record fall to the end and are broken by name.
-		const order = new Map(
-			(categories ?? []).map((c, i) => [c.name, c.sortOrder * 1000 + i]),
-		);
-		const rank = (name: string) => order.get(name) ?? Number.MAX_SAFE_INTEGER;
-		return [...map.entries()].sort(
-			(a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]),
-		);
-	}, [list, categories]);
+	const rank = useMemo(() => makeRank(categories), [categories]);
+
+	const recurringGroups = useMemo(
+		() =>
+			groupByCategory(
+				list.filter((e) => e.kind === CommitmentKind.Recurring),
+				rank,
+			),
+		[list, rank],
+	);
+
+	const oneTime = useMemo(
+		() => list.filter((e) => e.kind === CommitmentKind.OneTime),
+		[list],
+	);
+	const oneTimeGroups = useMemo(
+		() => groupByCategory(oneTime, rank),
+		[oneTime, rank],
+	);
 
 	// Summary totals are recurring-only — one-time figures aren't a cadence.
 	const totals = useMemo(() => {
@@ -90,10 +115,11 @@ export function ExpensesView() {
 		[consumption],
 	);
 
-	const oneTime = useMemo(
-		() => list.filter((e) => e.kind === CommitmentKind.OneTime),
-		[list],
-	);
+	// Fresh now each render so an item that becomes past — e.g. the page sat open
+	// across midnight — re-classifies on any re-render. The list is tiny.
+	const now = new Date();
+	const isPastItem = (item: Expense) =>
+		item.expectedDate ? isPast(item.expectedDate, now) : false;
 
 	function openAdd() {
 		setEditing(null);
@@ -103,16 +129,46 @@ export function ExpensesView() {
 		setEditing(expense);
 		setFormOpen(true);
 	}
+	function askDelete(expense: Expense) {
+		setDeleteTarget(expense);
+		setConfirmOpen(true);
+	}
+
+	function rowActions(item: Expense) {
+		return (
+			<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+				<button
+					aria-label={`Edit ${item.name}`}
+					className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+					onClick={() => openEdit(item)}
+					type="button"
+				>
+					<Pencil className="h-3.5 w-3.5" />
+				</button>
+				<button
+					aria-label={`Delete ${item.name}`}
+					className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
+					onClick={() => askDelete(item)}
+					type="button"
+				>
+					<Trash2 className="h-3.5 w-3.5" />
+				</button>
+			</div>
+		);
+	}
 
 	function oneTimeRow(item: Expense) {
 		const consumed = consumedById.get(item.id) ?? 0;
 		const remaining = (item.amount ?? 0) - consumed;
 		// Float subtraction can leave a sub-cent negative on an exactly-met budget;
-		// only treat it as over-consumed past half a cent so it never shows a red −$0.00.
+		// only treat it as over-consumed past half a cent so it never shows −$0.00.
 		const isOver = remaining < -0.005;
 		return (
 			<div
-				className="group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(4,7rem)_3rem]"
+				className={cn(
+					"group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(4,7rem)_3rem]",
+					isPastItem(item) && "opacity-55",
+				)}
 				key={item.id}
 			>
 				<span className="font-medium text-foreground">{item.name}</span>
@@ -137,30 +193,26 @@ export function ExpensesView() {
 					{isOver && "−"}
 					{formatCurrency(Math.abs(remaining))}
 				</span>
-				<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
-					<button
-						aria-label={`Edit ${item.name}`}
-						className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-						onClick={() => openEdit(item)}
-						type="button"
-					>
-						<Pencil className="h-3.5 w-3.5" />
-					</button>
-					<button
-						aria-label={`Delete ${item.name}`}
-						className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
-						onClick={() => {
-							setDeleteTarget(item);
-							setConfirmOpen(true);
-						}}
-						type="button"
-					>
-						<Trash2 className="h-3.5 w-3.5" />
-					</button>
-				</div>
+				{rowActions(item)}
 			</div>
 		);
 	}
+
+	const tab = (
+		value: string,
+		icon: React.ReactNode,
+		label: string,
+		count: number,
+	) => (
+		<Tabs.Tab
+			className="flex items-center gap-2 rounded-full px-4 py-1.5 font-medium text-muted-foreground text-sm transition-colors hover:text-foreground data-active:bg-card data-active:text-foreground data-active:shadow-sm data-active:ring-1 data-active:ring-foreground/10"
+			value={value}
+		>
+			{icon}
+			{label}
+			<span className="text-muted-foreground text-xs">({count})</span>
+		</Tabs.Tab>
+	);
 
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
@@ -171,156 +223,216 @@ export function ExpensesView() {
 						Add expense
 					</Button>
 				}
-				description="Your budgeted outgoings, grouped by category."
+				description="Your budgeted outgoings, split by cadence."
 				title="Expenses"
 			/>
 
-			<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-				{(
-					[
-						["Per fortnight", totals.fortnight],
-						["Per month", totals.month],
-						["Per year", totals.year],
-					] as const
-				).map(([label, value]) => (
-					<Card key={label}>
-						<CardContent>
-							<p className="font-medium text-muted-foreground text-xs">
-								{label}
-							</p>
-							<Money
-								className="mt-1.5 block font-semibold text-foreground text-lg sm:text-xl"
-								value={value}
-							/>
-						</CardContent>
-					</Card>
-				))}
-			</div>
+			<Tabs.Root className="mt-6" defaultValue="recurring">
+				<Tabs.List className="inline-flex gap-1 rounded-full bg-muted/50 p-1">
+					{tab(
+						"recurring",
+						<Repeat className="h-4 w-4" />,
+						"Recurring",
+						recurringGroups.reduce((s, [, items]) => s + items.length, 0),
+					)}
+					{tab(
+						"onetime",
+						<CalendarClock className="h-4 w-4" />,
+						"One-time",
+						oneTime.length,
+					)}
+				</Tabs.List>
 
-			<div className="mt-6 flex flex-col gap-6">
-				{groups.map(([category, items]) => {
-					const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
-					const isCollapsed = collapsed.has(category);
-					const panelId = `expense-group-${category.replace(/\s+/g, "-")}`;
-					return (
-						<Card className="[--card-spacing:0px]" key={category}>
-							<button
-								aria-controls={panelId}
-								aria-expanded={!isCollapsed}
-								className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
-								onClick={() => toggleCategory(category)}
-								type="button"
-							>
-								<span className="flex items-center gap-2">
-									<ChevronDown
-										className={cn(
-											"h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-											isCollapsed && "-rotate-90",
-										)}
+				<Tabs.Panel value="recurring">
+					<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+						{(
+							[
+								["Per fortnight", totals.fortnight],
+								["Per month", totals.month],
+								["Per year", totals.year],
+							] as const
+						).map(([label, value]) => (
+							<Card key={label}>
+								<CardContent>
+									<p className="font-medium text-muted-foreground text-xs">
+										{label}
+									</p>
+									<Money
+										className="mt-1.5 block font-semibold text-foreground text-lg sm:text-xl"
+										value={value}
 									/>
-									<span className="font-semibold text-foreground text-sm">
-										{category}
-									</span>
-									<span className="text-muted-foreground text-xs">
-										({items.length})
-									</span>
-								</span>
-								<span className="text-muted-foreground text-xs">
-									<Money className="font-medium" value={groupTotal} /> / mo
-								</span>
-							</button>
-							<div
-								className="divide-y divide-border"
-								hidden={isCollapsed}
-								id={panelId}
-							>
-								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
-									<span>Item</span>
-									<span className="text-right">Fortnight</span>
-									<span className="text-right">Month</span>
-									<span className="text-right">Year</span>
-									<span />
-								</div>
-								{items.map((item) => (
-									<div
-										className="group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(3,7rem)_3rem]"
-										key={item.id}
+								</CardContent>
+							</Card>
+						))}
+					</div>
+
+					<div className="mt-6 flex flex-col gap-4">
+						{recurringGroups.map(([category, items]) => {
+							const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
+							const isCollapsed = collapsed.has(`r:${category}`);
+							const panelId = `expense-recurring-${category.replace(/\s+/g, "-")}`;
+							return (
+								<Card className="[--card-spacing:0px]" key={category}>
+									<button
+										aria-controls={panelId}
+										aria-expanded={!isCollapsed}
+										className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
+										onClick={() => toggle(`r:${category}`)}
+										type="button"
 									>
-										<span className="font-medium text-foreground">
-											{item.name}
+										<span className="flex items-center gap-2">
+											<ChevronDown
+												className={cn(
+													"h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+													isCollapsed && "-rotate-90",
+												)}
+											/>
+											<span className="font-semibold text-foreground text-sm">
+												{category}
+											</span>
+											<span className="text-muted-foreground text-xs">
+												({items.length})
+											</span>
 										</span>
-										<Money
-											className="hidden text-right text-muted-foreground sm:block"
-											value={item.fortnight}
-										/>
-										<Money
-											className="text-right font-medium text-foreground"
-											value={item.month}
-										/>
-										<Money
-											className="hidden text-right text-muted-foreground sm:block"
-											value={item.year}
-										/>
-										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
-											<button
-												aria-label={`Edit ${item.name}`}
-												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-												onClick={() => openEdit(item)}
-												type="button"
-											>
-												<Pencil className="h-3.5 w-3.5" />
-											</button>
-											<button
-												aria-label={`Delete ${item.name}`}
-												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
-												onClick={() => {
-													setDeleteTarget(item);
-													setConfirmOpen(true);
-												}}
-												type="button"
-											>
-												<Trash2 className="h-3.5 w-3.5" />
-											</button>
+										<span className="text-muted-foreground text-xs">
+											<Money className="font-medium" value={groupTotal} /> / mo
+										</span>
+									</button>
+									<div
+										className="divide-y divide-border"
+										hidden={isCollapsed}
+										id={panelId}
+									>
+										<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+											<span>Item</span>
+											<span className="text-right">Fortnight</span>
+											<span className="text-right">Month</span>
+											<span className="text-right">Year</span>
+											<span />
 										</div>
+										{items.map((item) => (
+											<div
+												className="group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(3,7rem)_3rem]"
+												key={item.id}
+											>
+												<span className="font-medium text-foreground">
+													{item.name}
+												</span>
+												<Money
+													className="hidden text-right text-muted-foreground sm:block"
+													value={item.fortnight}
+												/>
+												<Money
+													className="text-right font-medium text-foreground"
+													value={item.month}
+												/>
+												<Money
+													className="hidden text-right text-muted-foreground sm:block"
+													value={item.year}
+												/>
+												{rowActions(item)}
+											</div>
+										))}
 									</div>
-								))}
-							</div>
-						</Card>
-					);
-				})}
+								</Card>
+							);
+						})}
 
-				<OneTimeSection
-					columnHeader={
-						<div className="hidden grid-cols-[1fr_repeat(4,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
-							<span>Item</span>
-							<span className="text-right">Amount</span>
-							<span className="text-right">Expected</span>
-							<span className="text-right">Consumed</span>
-							<span className="text-right">Remaining</span>
-							<span />
-						</div>
-					}
-					getAmount={getOneTimeAmount}
-					getExpectedDate={getOneTimeDate}
-					idPrefix="expense"
-					items={oneTime}
-					renderRow={oneTimeRow}
-				/>
+						{!recurringGroups.length && (
+							<Card className="text-center [--card-spacing:--spacing(10)]">
+								<CardContent>
+									<p className="text-muted-foreground text-sm">
+										No recurring expenses yet. Add your first budgeted item to
+										get started.
+									</p>
+									<Button className="mt-4" onClick={openAdd} size="sm">
+										<Plus className="h-4 w-4" />
+										Add expense
+									</Button>
+								</CardContent>
+							</Card>
+						)}
+					</div>
+				</Tabs.Panel>
 
-				{!groups.length && !oneTime.length && (
-					<Card className="text-center [--card-spacing:--spacing(10)]">
-						<CardContent>
-							<p className="text-muted-foreground text-sm">
-								No expenses yet. Add your first budgeted item to get started.
-							</p>
-							<Button className="mt-4" onClick={openAdd} size="sm">
-								<Plus className="h-4 w-4" />
-								Add expense
-							</Button>
-						</CardContent>
-					</Card>
-				)}
-			</div>
+				<Tabs.Panel value="onetime">
+					<div className="mt-6 flex flex-col gap-4">
+						{oneTimeGroups.map(([category, itemsRaw]) => {
+							// Upcoming first (soonest → latest), then past (most recent → oldest).
+							const items = [...itemsRaw].sort((a, b) => {
+								const pa = isPastItem(a);
+								const pb = isPastItem(b);
+								if (pa !== pb) return pa ? 1 : -1;
+								const da = a.expectedDate?.getTime() ?? 0;
+								const db = b.expectedDate?.getTime() ?? 0;
+								return pa ? db - da : da - db;
+							});
+							const total = items.reduce((s, e) => s + (e.amount ?? 0), 0);
+							const isCollapsed = collapsed.has(`o:${category}`);
+							const panelId = `expense-onetime-${category.replace(/\s+/g, "-")}`;
+							return (
+								<Card className="[--card-spacing:0px]" key={category}>
+									<button
+										aria-controls={panelId}
+										aria-expanded={!isCollapsed}
+										className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
+										onClick={() => toggle(`o:${category}`)}
+										type="button"
+									>
+										<span className="flex items-center gap-2">
+											<ChevronDown
+												className={cn(
+													"h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+													isCollapsed && "-rotate-90",
+												)}
+											/>
+											<span className="font-semibold text-foreground text-sm">
+												{category}
+											</span>
+											<span className="text-muted-foreground text-xs">
+												({items.length})
+											</span>
+										</span>
+										<span className="text-muted-foreground text-xs">
+											<Money className="font-medium" value={total} /> total
+										</span>
+									</button>
+									<div
+										className="divide-y divide-border"
+										hidden={isCollapsed}
+										id={panelId}
+									>
+										<div className="hidden grid-cols-[1fr_repeat(4,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+											<span>Item</span>
+											<span className="text-right">Amount</span>
+											<span className="text-right">Expected</span>
+											<span className="text-right">Consumed</span>
+											<span className="text-right">Remaining</span>
+											<span />
+										</div>
+										{items.map(oneTimeRow)}
+									</div>
+								</Card>
+							);
+						})}
+
+						{!oneTime.length && (
+							<Card className="text-center [--card-spacing:--spacing(10)]">
+								<CardContent>
+									<p className="text-muted-foreground text-sm">
+										No one-time expenses yet. Add a dated, one-off outgoing to
+										track it here.
+									</p>
+									<Button className="mt-4" onClick={openAdd} size="sm">
+										<Plus className="h-4 w-4" />
+										Add expense
+									</Button>
+								</CardContent>
+							</Card>
+						)}
+					</div>
+				</Tabs.Panel>
+			</Tabs.Root>
 
 			<ExpenseForm
 				expense={editing}
