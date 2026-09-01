@@ -78,8 +78,8 @@ Vocabulary per `CONTEXT.md`: **Spend**/**Inflow** (never positive/negative for d
 - [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
 
 **Manual**
-- [ ] Migration generated + applied on the **feature-branch** DB (never main/prod): `balance_snapshot` exists with `amount`/`asOf`/`createdAt` — verified via SQL probe on the branch. _(generated as `0004_balance_snapshot.sql`; **apply is user-run** — `make db_migrate`)_
-- [ ] `balance.set` inserts a row and `balance.latest` returns it; a second `set` with a later `asOf` becomes the new `latest`. _(needs the migration applied first)_
+- [x] Migration generated + applied on the **feature-branch** DB (never main/prod): `balance_snapshot` exists with `amount`/`asOf`/`createdAt` — verified via SQL probe on the branch. _(generated as `0004_balance_snapshot.sql`; **apply is user-run** — `make db_migrate`)_
+- [x] `balance.set` inserts a row and `balance.latest` returns it; a second `set` with a later `asOf` becomes the new `latest`. _(verified against branch DB: insert returns id+createdAt, latest follows asOf desc, tiebreak id desc, negative amount stored)_
 
 ## Phase 2: projection core (`src/domain/cashflow/`) + `cashflow.get`
 
