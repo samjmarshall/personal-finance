@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
 	type Category,
 	categoryCreateDto,
+	categoryReorderDto,
 	categoryUpdateDto,
 } from "~/domain/categories";
 import { assertRow } from "~/server/api/lib/assert-row";
@@ -34,10 +35,21 @@ export const categoryRouter = createTRPCRouter({
 	create: protectedProcedure
 		.input(categoryCreateDto)
 		.mutation(async ({ ctx, input }): Promise<Category> => {
+			// New categories sort last: one past the current highest sortOrder.
+			// MAX (not count) — deletes can leave gaps; count would collide. Empty -> 0.
+			const [next] = await ctx.db
+				.select({
+					sortOrder:
+						sql<number>`coalesce(max(${expenseCategories.sortOrder}) + 1, 0)`.mapWith(
+							Number,
+						),
+				})
+				.from(expenseCategories);
+
 			const values = {
 				name: input.name.trim(),
 				description: input.description?.trim() || null,
-				sortOrder: input.sortOrder,
+				sortOrder: next?.sortOrder ?? 0,
 			};
 			try {
 				const [row] = await ctx.db
@@ -60,7 +72,7 @@ export const categoryRouter = createTRPCRouter({
 	update: protectedProcedure
 		.input(categoryUpdateDto)
 		.mutation(async ({ ctx, input }): Promise<Category> => {
-			const { id, name, description, sortOrder } = input;
+			const { id, name, description } = input;
 
 			const [existing] = await ctx.db
 				.select()
@@ -76,7 +88,6 @@ export const categoryRouter = createTRPCRouter({
 			const values = {
 				name: name.trim(),
 				description: description?.trim() || null,
-				sortOrder,
 			};
 
 			try {
@@ -105,6 +116,21 @@ export const categoryRouter = createTRPCRouter({
 				}
 				throw error;
 			}
+		}),
+
+	reorder: protectedProcedure
+		.input(categoryReorderDto)
+		.mutation(async ({ ctx, input }) => {
+			// Persist the dragged order in one commit: sortOrder = position in ids.
+			await ctx.db.transaction(async (tx) => {
+				for (const [index, id] of input.ids.entries()) {
+					await tx
+						.update(expenseCategories)
+						.set({ sortOrder: index })
+						.where(eq(expenseCategories.id, id));
+				}
+			});
+			return { success: true };
 		}),
 
 	delete: protectedProcedure
