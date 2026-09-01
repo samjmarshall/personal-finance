@@ -48,7 +48,7 @@
 	--spend-foreground: oklch(0.99 0.01 40);
 	--warning: oklch(0.72 0.13 75);
 
-	/* Charts unused until Recharts lands (out of scope); shadcn defaults */
+	/* shadcn default chart palette; the cash flow chart uses the money tokens */
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
 	--chart-3: oklch(0.439 0 0);
@@ -111,7 +111,7 @@
 	--spend-foreground: oklch(0.16 0.02 32);
 	--warning: oklch(0.78 0.13 75);
 
-	/* Charts unused until Recharts lands (out of scope); shadcn defaults */
+	/* shadcn default chart palette; the cash flow chart uses the money tokens */
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
 	--chart-3: oklch(0.439 0 0);

@@ -164,9 +164,9 @@ Built as a TDD vertical-slice loop (see the `tdd` skill): each sub-function belo
 
 ### Success
 **Automated**
-- [ ] `make check` passes (recharts types resolve; `chart.tsx` lints clean)
-- [ ] `make test` passes
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
+- [x] `make check` passes (recharts types resolve; `chart.tsx` lints clean) _(needed `react-is@19.2.0` — recharts v3 imports it but doesn't bundle it; two generated-file lints fixed: array-index keys + a justified `dangerouslySetInnerHTML` ignore)_
+- [x] `make test` passes _(190 pass)_
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
 
 **Manual**
 - [ ] Chart renders 25 buckets: Inflow bars up, Spend bars down, a "Today" marker on the current bucket, and a balance line when a snapshot exists (bars-only when not). Hover shows a bucket's contributing items; a below-zero bucket is tinted.
