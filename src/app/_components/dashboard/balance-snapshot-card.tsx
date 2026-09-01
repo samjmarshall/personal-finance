@@ -23,6 +23,7 @@ export function BalanceSnapshotCard() {
 			]);
 			setAmount("");
 		},
+		onError: () => setError("Couldn't save your balance. Please try again."),
 	});
 
 	function onSubmit(e: React.FormEvent) {
@@ -71,7 +72,12 @@ export function BalanceSnapshotCard() {
 							className="flex-1"
 							id="balance-amount"
 							inputMode="decimal"
-							onChange={(e) => setAmount(e.target.value)}
+							onChange={(e) => {
+								setAmount(e.target.value);
+								// Clear a prior validation error once they start correcting —
+								// stale error text + aria-invalid would mislead a screen reader.
+								if (error) setError(null);
+							}}
 							placeholder="0.00"
 							step="0.01"
 							type="number"

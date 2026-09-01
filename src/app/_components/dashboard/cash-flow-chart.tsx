@@ -30,7 +30,10 @@ const PERIOD_OPTIONS = [
 
 const chartConfig = {
 	inflow: { label: "Inflow", color: "var(--color-positive)" },
-	spend: { label: "Spend", color: "var(--color-spend)" },
+	// Reference the base --spend token, not --color-spend: the config key "spend"
+	// makes ChartStyle emit `--color-spend: var(--color-spend)`, a self-reference
+	// that's invalid at computed-value time (bars would fall back to black).
+	spend: { label: "Spend", color: "var(--spend)" },
 	balance: { label: "Balance", color: "var(--color-foreground)" },
 } satisfies ChartConfig;
 
@@ -270,17 +273,27 @@ function CashFlowTooltip({
 					<p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">
 						Projected
 					</p>
-					<div className="grid gap-0.5">
+					{/* Cap height + scroll: a busy bucket (many projected items) would
+					    otherwise grow the tooltip past the card and cover the page. */}
+					<div className="grid max-h-[280px] gap-0.5 overflow-y-auto">
 						{row.items.map((it) => (
-							<div className="flex justify-between gap-4" key={it.label}>
+							// Label alone isn't unique (two "Rent" rows can share a bucket); the
+							// signed amount disambiguates.
+							<div
+								className="flex justify-between gap-4"
+								key={`${it.label}:${it.amount}`}
+							>
 								<span className="text-muted-foreground">{it.label}</span>
-								{/* item.amount is signed: + Spend, − Inflow. */}
+								{/* item.amount is signed: + Spend, − Inflow. Show the direction
+								    as a sign too, not color alone — spend "−", inflow "+"
+								    (WCAG 1.4.1: color isn't the only cue). */}
 								<span
 									className={cn(
 										"tabular",
 										it.amount >= 0 ? "text-spend" : "text-positive",
 									)}
 								>
+									{it.amount >= 0 ? "−" : "+"}
 									{formatCurrency(Math.abs(it.amount))}
 								</span>
 							</div>
