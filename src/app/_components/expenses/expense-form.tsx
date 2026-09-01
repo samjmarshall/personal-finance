@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -13,7 +13,12 @@ import {
 } from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { EXPENSE_CATEGORIES } from "~/lib/constants";
+import {
+	CommitmentKind,
+	EXPENSE_CATEGORIES,
+	toCommitmentKind,
+} from "~/lib/constants";
+import { fromDateInput, toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { SelectField, toOptions } from "../select-field";
 
@@ -26,6 +31,21 @@ const BASIS_OPTIONS = [
 	{ value: "month", label: "Month" },
 	{ value: "year", label: "Year" },
 ] as const;
+
+const KIND_OPTIONS = [
+	{ value: CommitmentKind.Recurring, label: "Recurring" },
+	{ value: CommitmentKind.OneTime, label: "One-time" },
+] as const;
+
+// Seed the amount field: one-time reads its own amount, recurring the first non-zero cadence figure.
+function seedAmount(expense: Expense | null) {
+	if (!expense) return "";
+	const value =
+		expense.kind === CommitmentKind.OneTime
+			? (expense.amount ?? 0)
+			: expense.month || expense.fortnight || expense.year;
+	return value ? String(Number(value.toFixed(2))) : "";
+}
 
 export function ExpenseForm({
 	open,
@@ -41,17 +61,29 @@ export function ExpenseForm({
 	const categoryOptions = managedCategories?.length
 		? managedCategories.map((c) => c.name)
 		: [...EXPENSE_CATEGORIES];
-	const [name, setName] = useState(expense?.name ?? "");
-	const [category, setCategory] = useState(
-		expense?.category ?? EXPENSE_CATEGORIES[1],
-	);
+	const [name, setName] = useState("");
+	const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[1]);
 	const [basis, setBasis] = useState<"fortnight" | "month" | "year">("month");
-	const [amount, setAmount] = useState(() => {
-		if (!expense) return "";
-		const value = expense.month || expense.fortnight || expense.year;
-		return value ? String(Number(value.toFixed(2))) : "";
-	});
+	const [kind, setKind] = useState(CommitmentKind.Recurring);
+	const [expectedDate, setExpectedDate] = useState(() =>
+		toDateInput(new Date()),
+	);
+	const [amount, setAmount] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const isOneTime = kind === CommitmentKind.OneTime;
+
+	// Reseed on each open: the dialog stays mounted, so a reused Add form would
+	// otherwise show the previous entry's values.
+	useEffect(() => {
+		if (!open) return;
+		setName(expense?.name ?? "");
+		setCategory(expense?.category ?? EXPENSE_CATEGORIES[1]);
+		setBasis("month");
+		setKind(toCommitmentKind(expense?.kind));
+		setExpectedDate(toDateInput(expense?.expectedDate ?? new Date()));
+		setAmount(seedAmount(expense));
+		setError(null);
+	}, [open, expense]);
 
 	const onSuccess = async () => {
 		await utils.expense.list.invalidate();
@@ -82,8 +114,30 @@ export function ExpenseForm({
 		if (Number.isNaN(value) || value < 0)
 			return setError("Please enter a valid amount.");
 
-		const amounts = deriveAmounts(value, basis);
-		const payload = { name: name.trim(), category, ...amounts };
+		const date = isOneTime ? fromDateInput(expectedDate) : null;
+		if (isOneTime && !date) return setError("Please enter a valid date.");
+
+		// One-time carries amount + expectedDate; its three cadence figures are
+		// unused (zeroed). Recurring is the inverse: derived cadence, no one-time pair.
+		const payload = isOneTime
+			? {
+					name: name.trim(),
+					category,
+					kind,
+					amount: value,
+					expectedDate: date,
+					fortnight: 0,
+					month: 0,
+					year: 0,
+				}
+			: {
+					name: name.trim(),
+					category,
+					kind,
+					amount: null,
+					expectedDate: null,
+					...deriveAmounts(value, basis),
+				};
 
 		if (expense) update.mutate({ id: expense.id, ...payload });
 		else create.mutate(payload);
@@ -95,10 +149,14 @@ export function ExpenseForm({
 				<DialogHeader>
 					<DialogTitle>{expense ? "Edit expense" : "Add expense"}</DialogTitle>
 					<DialogDescription>
-						Enter the amount on any cadence — we'll work out the rest.
+						{isOneTime
+							? "A single expected spend on a date — track what's consumed against it."
+							: "Enter the amount on any cadence — we'll work out the rest."}
 					</DialogDescription>
 				</DialogHeader>
-				<form className="flex flex-col gap-4" onSubmit={onSubmit}>
+				{/* noValidate: the required date input is React-validated (onSubmit), so
+			    suppress the native bubble that would clash with the error banner below. */}
+				<form className="flex flex-col gap-4" noValidate onSubmit={onSubmit}>
 					<Field>
 						<FieldLabel htmlFor="exp-name">Name</FieldLabel>
 						<Input
@@ -122,6 +180,16 @@ export function ExpenseForm({
 							value={category}
 						/>
 					</Field>
+					<Field>
+						<FieldLabel htmlFor="exp-kind">Type</FieldLabel>
+						<SelectField
+							className="w-full"
+							id="exp-kind"
+							items={KIND_OPTIONS}
+							onValueChange={(v) => v && setKind(v)}
+							value={kind}
+						/>
+					</Field>
 					<div className="grid grid-cols-2 gap-3">
 						<Field>
 							<FieldLabel htmlFor="exp-amt">Amount</FieldLabel>
@@ -136,20 +204,36 @@ export function ExpenseForm({
 								value={amount}
 							/>
 						</Field>
-						<Field>
-							<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
-							<SelectField
-								className="w-full"
-								id="exp-basis"
-								items={BASIS_OPTIONS}
-								onValueChange={(v) => v && setBasis(v)}
-								value={basis}
-							/>
-						</Field>
+						{isOneTime ? (
+							<Field>
+								<FieldLabel htmlFor="exp-date">Expected date</FieldLabel>
+								<Input
+									id="exp-date"
+									onChange={(e) => setExpectedDate(e.target.value)}
+									required
+									type="date"
+									value={expectedDate}
+								/>
+							</Field>
+						) : (
+							<Field>
+								<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
+								<SelectField
+									className="w-full"
+									id="exp-basis"
+									items={BASIS_OPTIONS}
+									onValueChange={(v) => v && setBasis(v)}
+									value={basis}
+								/>
+							</Field>
+						)}
 					</div>
 
 					{error && (
-						<p className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend">
+						<p
+							className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend"
+							role="alert"
+						>
 							{error}
 						</p>
 					)}

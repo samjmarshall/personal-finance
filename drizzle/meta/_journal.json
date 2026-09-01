@@ -22,6 +22,13 @@
 			"when": 1787981329988,
 			"tag": "0002_expense_linking_stage_1",
 			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1787983800578,
+			"tag": "0003_expense_income_kind_timing",
+			"breakpoints": true
 		}
 	]
 }

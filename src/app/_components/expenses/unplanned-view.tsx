@@ -79,6 +79,9 @@ export function UnplannedView() {
 			// derived view and appears in the Planned transaction list.
 			void utils.transaction.unplanned.invalidate();
 			void utils.transaction.list.invalidate();
+			// Linking sets the row's expenseId, adding it to that expense's consumed
+			// total on the Planned page.
+			void utils.expense.consumption.invalidate();
 		},
 	});
 

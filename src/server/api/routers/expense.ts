@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
 	type Expense,
@@ -8,6 +8,7 @@ import {
 import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenses } from "~/server/expenses/expenses.schema";
+import { transactions } from "~/server/transactions/transactions.schema";
 
 export const expenseRouter = createTRPCRouter({
 	list: protectedProcedure.query(async ({ ctx }): Promise<Expense[]> => {
@@ -20,6 +21,30 @@ export const expenseRouter = createTRPCRouter({
 				asc(expenses.name),
 			);
 	}),
+
+	// Lifetime spend linked to each expense, for the Planned-page consumed/remaining
+	// read-model. Reads the sibling transactions table (sanctioned cross-domain read
+	// join). Sum nets refunds (negative Inflow) against Spend, per glossary signs.
+	consumption: protectedProcedure.query(
+		async ({ ctx }): Promise<{ expenseId: number; consumed: number }[]> => {
+			const rows = await ctx.db
+				.select({
+					expenseId: transactions.expenseId,
+					consumed:
+						sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(
+							Number,
+						),
+				})
+				.from(transactions)
+				.where(isNotNull(transactions.expenseId))
+				.groupBy(transactions.expenseId);
+			// expenseId is non-null by the isNotNull filter; drop the join-nullable type.
+			return rows.map((r) => ({
+				expenseId: r.expenseId as number,
+				consumed: r.consumed,
+			}));
+		},
+	),
 
 	create: protectedProcedure
 		.input(expenseCreateDto)

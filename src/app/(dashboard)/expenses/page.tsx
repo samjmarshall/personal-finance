@@ -3,6 +3,7 @@ import { api, HydrateClient } from "~/trpc/server";
 
 export default async function ExpensesPage() {
 	void api.expense.list.prefetch();
+	void api.expense.consumption.prefetch();
 	void api.category.list.prefetch();
 	return (
 		<HydrateClient>

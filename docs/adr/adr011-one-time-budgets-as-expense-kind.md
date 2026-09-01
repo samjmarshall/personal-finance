@@ -1,7 +1,7 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-08-17'
+Date: '2026-08-29'
 # prettier-ignore
 ---
 
@@ -38,6 +38,7 @@ Shape: `kind` text not null default `'recurring'`; `amount` double null and `exp
 
 ### Positive Consequences
 
+- `kind` shipped as a two-value `pgEnum` (`expense_kind`/`income_kind`) rather than the literal `text` this ADR's Shape names, matching the repo's managed-vocab convention (`transaction_frequency`/`transaction_priority`) — the database rejects an out-of-vocab kind, not just Zod.
 - `transaction.expenseId`, the Unplanned predicate, and the leftJoin actual sums are untouched — one-time support costs zero query rewrites.
 - The Planned page's one-time section and its "past" group are a `kind` filter, not a second query path; the projection walks one table for both spike sources.
 - Migration is additive and nullable — no backfill, no downtime risk.

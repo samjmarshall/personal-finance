@@ -11,6 +11,7 @@ import { TopCategories } from "~/app/_components/dashboard/top-categories";
 import { Money } from "~/app/_components/money";
 import { PageHeader } from "~/app/_components/page-header";
 import { Card, CardContent } from "~/components/ui/card";
+import { CommitmentKind } from "~/lib/constants";
 import { cn, formatCurrency } from "~/lib/utils";
 import { api } from "~/trpc/server";
 
@@ -21,8 +22,23 @@ export default async function DashboardPage() {
 		api.income.list(),
 	]);
 
-	const budgetedMonthly = expenses.reduce((sum, e) => sum + (e.month ?? 0), 0);
-	const incomeMonthly = income.reduce((sum, i) => sum + (i.month ?? 0), 0);
+	// Recurring-only: one-time rows carry a monthly cadence of 0, and every figure
+	// here (counts + leftover) is monthly-framed, so one-time entries mustn't count.
+	// Leftover stays recurring-monthly — upcoming one-time spend isn't a cadence.
+	const recurringExpenses = expenses.filter(
+		(e) => e.kind === CommitmentKind.Recurring,
+	);
+	const recurringIncome = income.filter(
+		(i) => i.kind === CommitmentKind.Recurring,
+	);
+	const budgetedMonthly = recurringExpenses.reduce(
+		(sum, e) => sum + (e.month ?? 0),
+		0,
+	);
+	const incomeMonthly = recurringIncome.reduce(
+		(sum, i) => sum + (i.month ?? 0),
+		0,
+	);
 	const leftover = incomeMonthly - budgetedMonthly;
 
 	const stats = [
@@ -31,14 +47,14 @@ export default async function DashboardPage() {
 			value: formatCurrency(incomeMonthly),
 			icon: ArrowUpRight,
 			accent: "text-positive",
-			hint: `${income.length} sources`,
+			hint: `${recurringIncome.length} sources`,
 		},
 		{
 			label: "Budgeted expenses",
 			value: formatCurrency(budgetedMonthly),
 			icon: Wallet,
 			accent: "text-foreground",
-			hint: `${expenses.length} line items / month`,
+			hint: `${recurringExpenses.length} line items / month`,
 		},
 		{
 			label: "Projected leftover",

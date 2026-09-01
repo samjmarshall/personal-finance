@@ -5,13 +5,21 @@ import { useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
 import { Money } from "~/app/_components/money";
+import { OneTimeSection } from "~/app/_components/one-time-section";
 import { PageHeader } from "~/app/_components/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { CommitmentKind } from "~/lib/constants";
+import { formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { IncomeForm } from "./income-form";
 
 type Income = RouterOutputs["income"]["list"][number];
+
+// Stable getters for the shared OneTimeSection (module scope so they don't churn
+// its partition memo each render).
+const getOneTimeDate = (item: Income) => item.expectedDate;
+const getOneTimeAmount = (item: Income) => item.amount;
 
 export function IncomeView() {
 	const [list] = api.income.list.useSuspenseQuery();
@@ -28,6 +36,8 @@ export function IncomeView() {
 	const groups = useMemo(() => {
 		const map = new Map<string, Income[]>();
 		for (const item of list) {
+			// One-time income lives in its own section, not the person cards.
+			if (item.kind !== CommitmentKind.Recurring) continue;
 			const arr = map.get(item.person) ?? [];
 			arr.push(item);
 			map.set(item.person, arr);
@@ -35,12 +45,18 @@ export function IncomeView() {
 		return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 	}, [list]);
 
-	const totals = useMemo(
-		() => ({
-			fortnight: list.reduce((s, e) => s + (e.fortnight ?? 0), 0),
-			month: list.reduce((s, e) => s + (e.month ?? 0), 0),
-			year: list.reduce((s, e) => s + (e.year ?? 0), 0),
-		}),
+	// Summary totals are recurring-only — one-time figures aren't a cadence.
+	const totals = useMemo(() => {
+		const recurring = list.filter((e) => e.kind === CommitmentKind.Recurring);
+		return {
+			fortnight: recurring.reduce((s, e) => s + (e.fortnight ?? 0), 0),
+			month: recurring.reduce((s, e) => s + (e.month ?? 0), 0),
+			year: recurring.reduce((s, e) => s + (e.year ?? 0), 0),
+		};
+	}, [list]);
+
+	const oneTime = useMemo(
+		() => list.filter((e) => e.kind === CommitmentKind.OneTime),
 		[list],
 	);
 
@@ -51,6 +67,47 @@ export function IncomeView() {
 	function openEdit(item: Income) {
 		setEditing(item);
 		setFormOpen(true);
+	}
+
+	function oneTimeRow(item: Income) {
+		return (
+			<div
+				className="group grid grid-cols-2 items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_repeat(2,7rem)_3rem]"
+				key={item.id}
+			>
+				<span className="font-medium text-foreground">{item.source}</span>
+				{/* Amount stays visible on mobile — it's the row's core figure (no consumed/remaining to fall back on). */}
+				<Money
+					className="text-right font-medium"
+					tone="income"
+					value={item.amount}
+				/>
+				<span className="hidden text-right text-muted-foreground sm:block">
+					{formatDate(item.expectedDate)}
+				</span>
+				<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+					<button
+						aria-label={`Edit ${item.source}`}
+						className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+						onClick={() => openEdit(item)}
+						type="button"
+					>
+						<Pencil className="h-3.5 w-3.5" />
+					</button>
+					<button
+						aria-label={`Delete ${item.source}`}
+						className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
+						onClick={() => {
+							setDeleteTarget(item);
+							setConfirmOpen(true);
+						}}
+						type="button"
+					>
+						<Trash2 className="h-3.5 w-3.5" />
+					</button>
+				</div>
+			</div>
+		);
 	}
 
 	return (
@@ -166,7 +223,24 @@ export function IncomeView() {
 					);
 				})}
 
-				{!groups.length && (
+				<OneTimeSection
+					columnHeader={
+						<div className="hidden grid-cols-[1fr_repeat(2,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+							<span>Source</span>
+							<span className="text-right">Amount</span>
+							<span className="text-right">Expected</span>
+							<span />
+						</div>
+					}
+					getAmount={getOneTimeAmount}
+					getExpectedDate={getOneTimeDate}
+					idPrefix="income"
+					items={oneTime}
+					renderRow={oneTimeRow}
+					totalTone="income"
+				/>
+
+				{!groups.length && !oneTime.length && (
 					<Card className="text-center [--card-spacing:--spacing(10)]">
 						<CardContent>
 							<p className="text-muted-foreground text-sm">

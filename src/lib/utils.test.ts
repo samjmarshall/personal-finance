@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatMonthKey, fromDateInput, toDateInput } from "~/lib/utils";
+import {
+	formatMonthKey,
+	fromDateInput,
+	isPast,
+	toDateInput,
+} from "~/lib/utils";
 
 describe("toDateInput", () => {
 	it("formats a local date as YYYY-MM-DD", () => {
@@ -38,6 +43,45 @@ describe("fromDateInput", () => {
 	it("returns null for a 2-digit year (Date maps 0-99 to 1900s)", () => {
 		expect(fromDateInput("26-08-14")).toBeNull();
 	});
+});
+
+describe("isPast", () => {
+	// [label, date, now, expected] — compared by local calendar day, so a
+	// one-time due today counts as upcoming, not past.
+	const cases: [string, Date, Date, boolean][] = [
+		["today is not past", new Date(2026, 7, 22), new Date(2026, 7, 22), false],
+		[
+			"a later time today is still not past",
+			new Date(2026, 7, 22, 23, 30),
+			new Date(2026, 7, 22, 1, 0),
+			false,
+		],
+		["yesterday is past", new Date(2026, 7, 21), new Date(2026, 7, 22), true],
+		[
+			"tomorrow is not past",
+			new Date(2026, 7, 23),
+			new Date(2026, 7, 22),
+			false,
+		],
+		[
+			"across a month boundary",
+			new Date(2026, 6, 31),
+			new Date(2026, 7, 1),
+			true,
+		],
+		[
+			"across a year boundary",
+			new Date(2025, 11, 31),
+			new Date(2026, 0, 1),
+			true,
+		],
+	];
+
+	for (const [label, date, now, expected] of cases) {
+		it(label, () => {
+			expect(isPast(date, now)).toBe(expected);
+		});
+	}
 });
 
 describe("formatMonthKey", () => {
