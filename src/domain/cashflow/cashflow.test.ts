@@ -119,7 +119,6 @@ describe("buildCashflow — historic actuals", () => {
 		expect(july?.key).toBe("2026-07-01");
 		expect(july?.spend).toBe(100);
 		expect(july?.inflow).toBe(40);
-		// a bucket with no transactions stays zeroed
 		expect(buckets[9]?.spend).toBe(0);
 		expect(buckets[9]?.inflow).toBe(0);
 	});
