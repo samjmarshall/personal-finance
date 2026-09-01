@@ -15,8 +15,8 @@ import { transactions } from "~/server/transactions/transactions.schema";
 const FORTNIGHT_ANCHOR_KEY = "fortnightAnchor";
 
 export const cashflowRouter = createTRPCRouter({
-	// Loads every row (a household's volume is small) and windows client-side in the
-	// pure core. Buckets carry string key/label — no Date crosses the wire.
+	// Loads every row (volume stays small for a household) and windows in the pure TS
+	// core — no SQL windowing. Buckets carry string key/label — no Date crosses the wire.
 	get: protectedProcedure
 		.input(cashflowQueryDto)
 		.query(async ({ ctx, input }): Promise<CashflowResult> => {

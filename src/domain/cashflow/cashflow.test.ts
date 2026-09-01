@@ -4,9 +4,17 @@ import type { Income } from "~/domain/income";
 import { CommitmentKind } from "~/lib/constants";
 import { type BuildCashflowInput, buildCashflow } from "./cashflow";
 
-// A fixed "now" for every case: midday 20 Aug 2026. On a month grid the current
-// bucket is Aug 2026 at index 12 (12 back · current · 12 forward = 25).
-const NOW = new Date(2026, 7, 20, 12, 0);
+// A fixed "now": midday 20 Aug 2026 UTC. The projection reads UTC (server time is the
+// timing source of truth), so every fixture date is built in UTC too — the suite then
+// asserts the same buckets on any machine, regardless of its zone. On a month grid the
+// current bucket is Aug 2026 at index 12 (12 back · current · 12 forward = 25).
+const NOW = new Date(Date.UTC(2026, 7, 20, 12, 0));
+
+// UTC-midnight of a calendar date — the shape a stored date-string parses to on a UTC
+// server. Keeps every case zone-independent.
+function d(year: number, month0: number, day: number): Date {
+	return new Date(Date.UTC(year, month0, day));
+}
 
 function run(overrides: Partial<BuildCashflowInput> = {}) {
 	return buildCashflow({
@@ -89,7 +97,7 @@ describe("buildCashflow — grid", () => {
 	it("uses the fortnight grid and day-month labels when an anchor is set", () => {
 		const { buckets } = run({
 			periodKind: "fortnight",
-			fortnightAnchor: new Date(2026, 7, 14), // payday 14 Aug 2026
+			fortnightAnchor: d(2026, 7, 14), // payday 14 Aug 2026
 		});
 		expect(buckets).toHaveLength(25);
 		expect(buckets[12]?.key).toBe("2026-08-14");
@@ -103,8 +111,8 @@ describe("buildCashflow — historic actuals", () => {
 	it("nets a historic bucket into Spend and Inflow separately", () => {
 		const { buckets } = run({
 			transactions: [
-				{ date: new Date(2026, 6, 5), amount: 100 }, // Spend
-				{ date: new Date(2026, 6, 6), amount: -40 }, // Inflow (refund/credit)
+				{ date: d(2026, 6, 5), amount: 100 }, // Spend
+				{ date: d(2026, 6, 6), amount: -40 }, // Inflow (refund/credit)
 			],
 		});
 		const july = buckets[11]; // 2026-07
@@ -177,7 +185,7 @@ describe("buildCashflow — untimed smear", () => {
 	it("smears ≈ the fortnight figure per fortnight bucket", () => {
 		const { buckets } = run({
 			periodKind: "fortnight",
-			fortnightAnchor: new Date(2026, 7, 14),
+			fortnightAnchor: d(2026, 7, 14),
 			expenses: [expense({ fortnight: 140, year: 3650 })],
 		});
 		expect(buckets[13]?.spend).toBeCloseTo(140, 6); // 3650×14/365
@@ -192,7 +200,7 @@ describe("buildCashflow — one-time expense remaining", () => {
 					id: 7,
 					kind: CommitmentKind.OneTime,
 					amount: 500,
-					expectedDate: new Date(2026, 9, 15), // 15 Oct 2026
+					expectedDate: d(2026, 9, 15), // 15 Oct 2026
 				}),
 			],
 			consumedByExpenseId: new Map([[7, 200]]),
@@ -209,7 +217,7 @@ describe("buildCashflow — one-time expense remaining", () => {
 					id: 7,
 					kind: CommitmentKind.OneTime,
 					amount: 500,
-					expectedDate: new Date(2026, 9, 15),
+					expectedDate: d(2026, 9, 15),
 				}),
 			],
 			consumedByExpenseId: new Map([[7, 500]]),
@@ -225,7 +233,7 @@ describe("buildCashflow — one-time expense remaining", () => {
 					id: 7,
 					kind: CommitmentKind.OneTime,
 					amount: 500,
-					expectedDate: new Date(2026, 6, 5), // 5 Jul 2026 (past)
+					expectedDate: d(2026, 6, 5), // 5 Jul 2026 (past)
 				}),
 			],
 			consumedByExpenseId: new Map([[7, 100]]),
@@ -241,12 +249,46 @@ describe("buildCashflow — one-time expense remaining", () => {
 					id: 7,
 					kind: CommitmentKind.OneTime,
 					amount: 500,
-					expectedDate: new Date(2026, 6, 5),
+					expectedDate: d(2026, 6, 5),
 				}),
 			],
 			consumedByExpenseId: new Map([[7, 500]]),
 		});
 		expect(buckets[12]?.spend).toBe(0);
+	});
+
+	it("clamps a beyond-horizon future one-time into the last bucket, never dropping it", () => {
+		const farOut = d(2027, 2, 1); // 1 Mar 2027
+		// month grid reaches a year, so it lands in its own bucket …
+		const monthGrid = run({
+			expenses: [
+				expense({
+					id: 9,
+					kind: CommitmentKind.OneTime,
+					amount: 5000,
+					expectedDate: farOut,
+				}),
+			],
+		});
+		expect(monthGrid.buckets[19]?.spend).toBe(5000); // Mar 2027
+		expect(monthGrid.buckets.reduce((s, b) => s + b.spend, 0)).toBe(5000);
+
+		// … the shorter fortnight grid (~5.5 months) clamps it into the last bucket
+		// rather than silently dropping the same row.
+		const fortnightGrid = run({
+			periodKind: "fortnight",
+			fortnightAnchor: d(2026, 7, 14),
+			expenses: [
+				expense({
+					id: 9,
+					kind: CommitmentKind.OneTime,
+					amount: 5000,
+					expectedDate: farOut,
+				}),
+			],
+		});
+		expect(fortnightGrid.buckets[24]?.spend).toBe(5000); // last bucket
+		expect(fortnightGrid.buckets.reduce((s, b) => s + b.spend, 0)).toBe(5000);
 	});
 });
 
@@ -257,7 +299,7 @@ describe("buildCashflow — one-time income", () => {
 				income({
 					kind: CommitmentKind.OneTime,
 					amount: 1000,
-					expectedDate: new Date(2026, 9, 15),
+					expectedDate: d(2026, 9, 15),
 				}),
 			],
 		});
@@ -271,7 +313,7 @@ describe("buildCashflow — one-time income", () => {
 				income({
 					kind: CommitmentKind.OneTime,
 					amount: 1000,
-					expectedDate: new Date(2026, 6, 5),
+					expectedDate: d(2026, 6, 5),
 				}),
 			],
 		});
@@ -282,7 +324,7 @@ describe("buildCashflow — one-time income", () => {
 describe("buildCashflow — today-straddle (current bucket)", () => {
 	it("sums elapsed actuals plus spikes landing later this bucket", () => {
 		const { buckets } = run({
-			transactions: [{ date: new Date(2026, 7, 5), amount: 300 }], // 5 Aug, elapsed
+			transactions: [{ date: d(2026, 7, 5), amount: 300 }], // 5 Aug, elapsed
 			expenses: [expense({ dueDay: 25, month: 600, year: 7200 })], // lands 25 Aug > now
 		});
 		expect(buckets[12]?.spend).toBe(900); // 300 actual + 600 projected
@@ -290,10 +332,17 @@ describe("buildCashflow — today-straddle (current bucket)", () => {
 
 	it("excludes a spike whose landing has already elapsed", () => {
 		const { buckets } = run({
-			transactions: [{ date: new Date(2026, 7, 5), amount: 300 }],
+			transactions: [{ date: d(2026, 7, 5), amount: 300 }],
 			expenses: [expense({ dueDay: 5, month: 400, year: 4800 })], // lands 5 Aug ≤ now
 		});
 		expect(buckets[12]?.spend).toBe(300); // spike assumed already in actuals
+	});
+
+	it("counts a spike due today (upcoming, not assumed already paid)", () => {
+		const { buckets } = run({
+			expenses: [expense({ dueDay: 20, month: 600, year: 7200 })], // due today = 20 Aug
+		});
+		expect(buckets[12]?.spend).toBe(600);
 	});
 
 	it("prorates an untimed smear to the days remaining after today", () => {
@@ -308,8 +357,8 @@ describe("buildCashflow — today-straddle (current bucket)", () => {
 describe("buildCashflow — balance line", () => {
 	it("pivots on the anchor and stays continuous both directions", () => {
 		const { buckets, hasBalanceAnchor } = run({
-			anchor: { amount: 1000, asOf: new Date(2026, 7, 20) }, // pivot = current bucket
-			transactions: [{ date: new Date(2026, 6, 10), amount: 250 }], // Jul Spend
+			anchor: { amount: 1000, asOf: d(2026, 7, 20) }, // pivot = current bucket
+			transactions: [{ date: d(2026, 6, 10), amount: 250 }], // Jul Spend
 			incomes: [income({ dueDay: 1, month: 500, year: 6000 })], // +500 on the 1st
 			expenses: [expense({ dueDay: 15, month: 200, year: 2400 })], // −200 on the 15th
 		});
@@ -318,6 +367,19 @@ describe("buildCashflow — balance line", () => {
 		expect(buckets[13]?.balance).toBe(1300); // Sep net +500 − 200
 		expect(buckets[11]?.balance).toBe(1000); // Jul Spend reverses back through the pivot
 		expect(buckets[10]?.balance).toBe(1250); // before the Jul 250 Spend
+	});
+
+	it("rolls the current bucket's own upcoming spend into the forward balance", () => {
+		const { buckets } = run({
+			anchor: { amount: 1000, asOf: d(2026, 7, 20) },
+			// rent due 25 Aug — after now, so it sits in the current bucket's projection
+			expenses: [expense({ dueDay: 25, month: 600, year: 7200 })],
+		});
+		expect(buckets[12]?.spend).toBe(600); // shows in the current bucket
+		expect(buckets[12]?.balance).toBe(400); // 1000 − 600 post-anchor, not a flat 1000
+		expect(buckets[13]?.balance).toBe(-200); // − Sep rent
+		expect(buckets[14]?.balance).toBe(-800); // − Oct rent
+		expect(buckets[11]?.balance).toBe(1000); // backward: pre-anchor only (no actuals)
 	});
 
 	it("returns a null balance line and no anchor when there is no snapshot", () => {
