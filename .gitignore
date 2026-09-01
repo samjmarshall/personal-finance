@@ -62,3 +62,6 @@ thoughts/*
 .claude/skills.log
 .claude/scheduled_tasks.lock
 .env*.local
+
+# Worktrees
+.worktrees/
