@@ -140,12 +140,12 @@ Built as a TDD vertical-slice loop (see the `tdd` skill): each sub-function belo
 
 ### Success
 **Automated**
-- [ ] `make test` passes — the `cashflow.test.ts` tables (spike/clamp/smear/one-time roll-forward/income drop-out/today-straddle/balance-pivot) all green
-- [ ] `make check` passes (db:check; `cashflow.get` return type matches `CashflowResult`)
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
+- [x] `make test` passes — the `cashflow.test.ts` tables (spike/clamp/smear/one-time roll-forward/income drop-out/today-straddle/balance-pivot) all green
+- [x] `make check` passes (db:check; `cashflow.get` return type matches `CashflowResult`)
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
 
 **Manual**
-- [ ] `cashflow.get` (server caller or a temporary log) returns 25 buckets with plausible spend/inflow and a balance line when a snapshot exists; bars-only (`balance: null`) when none.
+- [ ] `cashflow.get` (server caller or a temporary log) returns 25 buckets with plausible spend/inflow and a balance line when a snapshot exists; bars-only (`balance: null`) when none. _(needs the feature-branch DB + an authed session — **user-run**, or exercised live by the Phase 3 chart render.)_
 
 ## Phase 3: Dashboard cash flow chart + balance snapshot card
 
