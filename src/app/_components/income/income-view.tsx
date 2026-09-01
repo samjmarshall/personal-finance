@@ -1,23 +1,25 @@
 "use client";
 
-import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
 import { Money } from "~/app/_components/money";
+import { OneTimeSection } from "~/app/_components/one-time-section";
 import { PageHeader } from "~/app/_components/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { CommitmentKind } from "~/lib/constants";
-import { cn, formatDate, isPast } from "~/lib/utils";
+import { formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { IncomeForm } from "./income-form";
 
 type Income = RouterOutputs["income"]["list"][number];
 
-// Collapse-Set key for the one-time "past" group. Sentinel that can't collide
-// with a person name (which drives the same Set).
-const PAST_KEY = "__onetime_past__";
+// Stable getters for the shared OneTimeSection (module scope so they don't churn
+// its partition memo each render).
+const getOneTimeDate = (item: Income) => item.expectedDate;
+const getOneTimeAmount = (item: Income) => item.amount;
 
 export function IncomeView() {
 	const [list] = api.income.list.useSuspenseQuery();
@@ -30,19 +32,6 @@ export function IncomeView() {
 	const [editing, setEditing] = useState<Income | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
-	// Past group starts collapsed — bygone one-times are the least relevant.
-	const [collapsed, setCollapsed] = useState<Set<string>>(
-		() => new Set([PAST_KEY]),
-	);
-
-	function togglePast() {
-		setCollapsed((prev) => {
-			const next = new Set(prev);
-			if (next.has(PAST_KEY)) next.delete(PAST_KEY);
-			else next.add(PAST_KEY);
-			return next;
-		});
-	}
 
 	const groups = useMemo(() => {
 		const map = new Map<string, Income[]>();
@@ -66,26 +55,10 @@ export function IncomeView() {
 		};
 	}, [list]);
 
-	const { oneTime, upcoming, past, oneTimeTotal } = useMemo(() => {
-		const now = new Date();
-		const items = list.filter((e) => e.kind === CommitmentKind.OneTime);
-		const up: Income[] = [];
-		const pa: Income[] = [];
-		for (const e of items) {
-			if (e.expectedDate && isPast(e.expectedDate, now)) pa.push(e);
-			else up.push(e);
-		}
-		const byDate = (a: Income, b: Income) =>
-			(a.expectedDate?.getTime() ?? 0) - (b.expectedDate?.getTime() ?? 0);
-		up.sort(byDate); // soonest first
-		pa.sort((a, b) => byDate(b, a)); // most recent first
-		return {
-			oneTime: items,
-			upcoming: up,
-			past: pa,
-			oneTimeTotal: items.reduce((s, e) => s + (e.amount ?? 0), 0),
-		};
-	}, [list]);
+	const oneTime = useMemo(
+		() => list.filter((e) => e.kind === CommitmentKind.OneTime),
+		[list],
+	);
 
 	function openAdd() {
 		setEditing(null);
@@ -250,63 +223,22 @@ export function IncomeView() {
 					);
 				})}
 
-				{oneTime.length > 0 && (
-					<Card className="[--card-spacing:0px]">
-						<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3">
-							<span className="flex items-center gap-2">
-								<span className="font-semibold text-foreground text-sm">
-									One-time
-								</span>
-								<span className="text-muted-foreground text-xs">
-									({oneTime.length})
-								</span>
-							</span>
-							<span className="text-muted-foreground text-xs">
-								<Money
-									className="font-medium"
-									tone="income"
-									value={oneTimeTotal}
-								/>{" "}
-								total
-							</span>
+				<OneTimeSection
+					columnHeader={
+						<div className="hidden grid-cols-[1fr_repeat(2,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+							<span>Source</span>
+							<span className="text-right">Amount</span>
+							<span className="text-right">Expected</span>
+							<span />
 						</div>
-						<div className="divide-y divide-border">
-							<div className="hidden grid-cols-[1fr_repeat(2,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
-								<span>Source</span>
-								<span className="text-right">Amount</span>
-								<span className="text-right">Expected</span>
-								<span />
-							</div>
-							{upcoming.map(oneTimeRow)}
-							{past.length > 0 && (
-								<div>
-									<button
-										aria-controls="income-onetime-past"
-										aria-expanded={!collapsed.has(PAST_KEY)}
-										className="flex w-full items-center gap-2 px-4 py-2 text-left text-muted-foreground text-xs transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-										onClick={togglePast}
-										type="button"
-									>
-										<ChevronDown
-											className={cn(
-												"h-3.5 w-3.5 shrink-0 transition-transform",
-												collapsed.has(PAST_KEY) && "-rotate-90",
-											)}
-										/>
-										Past ({past.length})
-									</button>
-									<div
-										className="divide-y divide-border border-border border-t"
-										hidden={collapsed.has(PAST_KEY)}
-										id="income-onetime-past"
-									>
-										{past.map(oneTimeRow)}
-									</div>
-								</div>
-							)}
-						</div>
-					</Card>
-				)}
+					}
+					getAmount={getOneTimeAmount}
+					getExpectedDate={getOneTimeDate}
+					idPrefix="income"
+					items={oneTime}
+					renderRow={oneTimeRow}
+					totalTone="income"
+				/>
 
 				{!groups.length && !oneTime.length && (
 					<Card className="text-center [--card-spacing:--spacing(10)]">
