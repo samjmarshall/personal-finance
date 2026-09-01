@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Single naming + payload authority for outbox events (adr002 clause 7). Keys are
- * FROZEN Inngest wire strings — golden-pinned in `__tests__/registry-golden.test.ts`.
+ * FROZEN Inngest wire strings — golden-pinned in `./registry-golden.test.ts`.
  * Payload shapes are provisional: the receipt consumers land in stage 5 and may firm
  * them up. Nothing produces these events yet; stage 4 builds the rail only.
  */
@@ -24,7 +24,6 @@ export interface OutboxEventDescriptor {
 	data: unknown;
 }
 
-/** Mints the idempotency-key uuid and validates payload against the registry. */
 export function buildOutboxEvent<K extends EventName>(
 	name: K,
 	payload: EventPayload<K>,

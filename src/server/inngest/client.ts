@@ -2,7 +2,7 @@ import { Inngest } from "inngest";
 
 import { env } from "~/env";
 
-// Singleton Inngest client. `id` is the app name (matches the Portless host).
+// `id` is the app name (matches the Portless host).
 // `eventKey` also auto-reads INNGEST_EVENT_KEY; passed explicitly so env-validation
 // owns it. Signing key is read by `serve` at the route handler, not here.
 //
