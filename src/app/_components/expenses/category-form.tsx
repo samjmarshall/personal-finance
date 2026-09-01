@@ -11,12 +11,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
-import {
-	Field,
-	FieldDescription,
-	FieldLabel,
-	FieldOptional,
-} from "~/components/ui/field";
+import { Field, FieldLabel, FieldOptional } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -35,9 +30,6 @@ export function CategoryForm({
 	const utils = api.useUtils();
 	const [name, setName] = useState(category?.name ?? "");
 	const [description, setDescription] = useState(category?.description ?? "");
-	const [sortOrder, setSortOrder] = useState(
-		category ? String(category.sortOrder) : "0",
-	);
 	const [error, setError] = useState<string | null>(null);
 
 	const onSuccess = async () => {
@@ -59,7 +51,6 @@ export function CategoryForm({
 		const payload = {
 			name: name.trim(),
 			description: description.trim() || undefined,
-			sortOrder: Number.parseInt(sortOrder, 10) || 0,
 		};
 
 		if (category) update.mutate({ id: category.id, ...payload });
@@ -98,22 +89,6 @@ export function CategoryForm({
 							placeholder="What belongs in this category?"
 							value={description}
 						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="cat-sort">Sort order</FieldLabel>
-						<Input
-							aria-describedby="cat-sort-hint"
-							id="cat-sort"
-							inputMode="numeric"
-							onChange={(e) => setSortOrder(e.target.value)}
-							placeholder="0"
-							step="1"
-							type="number"
-							value={sortOrder}
-						/>
-						<FieldDescription id="cat-sort-hint">
-							Lower numbers appear first.
-						</FieldDescription>
 					</Field>
 
 					{error && (
