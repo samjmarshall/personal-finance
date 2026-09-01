@@ -3,6 +3,7 @@ import postgres from "postgres";
 
 import { env } from "~/env";
 import * as authSchema from "~/server/auth/auth.schema";
+import * as balancesSchema from "~/server/balances/balances.schema";
 import * as expenseCategoriesSchema from "~/server/expenses/categories.schema";
 import * as expensesSchema from "~/server/expenses/expenses.schema";
 import * as incomeSchema from "~/server/income/income.schema";
@@ -11,6 +12,7 @@ import * as transactionsSchema from "~/server/transactions/transactions.schema";
 
 /** Merged table set backing `db.query.*`; every domain schema module must appear here. */
 const schema = {
+	...balancesSchema,
 	...expenseCategoriesSchema,
 	...expensesSchema,
 	...incomeSchema,
