@@ -143,9 +143,7 @@ Built as a TDD vertical-slice loop (see the `tdd` skill): each sub-function belo
 - [x] `make test` passes — the `cashflow.test.ts` tables (spike/clamp/smear/one-time roll-forward/income drop-out/today-straddle/balance-pivot) all green
 - [x] `make check` passes (db:check; `cashflow.get` return type matches `CashflowResult`)
 - [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
-
-**Manual**
-- [ ] `cashflow.get` (server caller or a temporary log) returns 25 buckets with plausible spend/inflow and a balance line when a snapshot exists; bars-only (`balance: null`) when none. _(needs the feature-branch DB + an authed session — **user-run**, or exercised live by the Phase 3 chart render.)_
+- [x] `cashflow.get` (server caller or a temporary log) returns 25 buckets with plausible spend/inflow and a balance line when a snapshot exists; bars-only (`balance: null`) when none. _(needs the feature-branch DB + an authed session — **user-run**, or exercised live by the Phase 3 chart render.)_
 
 ## Phase 3: Dashboard cash flow chart + balance snapshot card
 
@@ -167,12 +165,10 @@ Built as a TDD vertical-slice loop (see the `tdd` skill): each sub-function belo
 - [x] `make check` passes (recharts types resolve; `chart.tsx` lints clean) _(needed `react-is@19.2.0` — recharts v3 imports it but doesn't bundle it; two generated-file lints fixed: array-index keys + a justified `dangerouslySetInnerHTML` ignore)_
 - [x] `make test` passes _(190 pass)_
 - [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
-
-**Manual**
-- [ ] Chart renders 25 buckets: Inflow bars up, Spend bars down, a "Today" marker on the current bucket, and a balance line when a snapshot exists (bars-only when not). Hover shows a bucket's contributing items; a below-zero bucket is tinted.
-- [ ] Toggling fortnight ⇄ month re-buckets the chart (grid switches, today marker stays on the current bucket).
-- [ ] The inline balance field records a snapshot → the card updates and the balance line re-anchors on refetch.
-- [ ] `/design-review` (UI change; check both light/dark tokens and mobile 375px).
+- [x] Chart renders 25 buckets: Inflow bars up, Spend bars down, a "Today" marker on the current bucket, and a balance line when a snapshot exists (bars-only when not). Hover shows a bucket's contributing items; a below-zero bucket is tinted. _(verified live via /design-review; caveats: busy-bucket tooltip overflows the card, and the below-zero tint also recolors the Inflow bar — see Code Review Findings)_
+- [x] Toggling fortnight ⇄ month re-buckets the chart (grid switches, today marker stays on the current bucket). _(verified; minor: transient Recharts 0×0 warning during the toggle)_
+- [x] The inline balance field records a snapshot → the card updates and the balance line re-anchors on refetch. _(verified live: save → card + balance line re-anchor via cache invalidation)_
+- [x] `/design-review` (UI change; check both light/dark tokens and mobile 375px). _(run as /design-review &lt;plan&gt;; no blockers; 2 high-priority polish items, dark-mode + 375px checked)_
 
 ## Phase 4: Timing (`dueDay`/`dueMonth`) inputs on Expense + Income forms
 
@@ -189,8 +185,6 @@ DTO validation and columns already exist (stage 2); this is pure form UI whose v
 - [ ] `make check` passes
 - [ ] `make test` passes
 - [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
-
-**Manual**
 - [ ] Set `dueDay`=15 on a recurring monthly Expense → its `month` figure spikes on the 15th's bucket in the cash flow chart (not smeared).
 - [ ] Set `dueMonth`=6 (+ optional `dueDay`) on an annual Expense → a single June spike of the `year` figure; a `dueDay` of 31 in a 30-day month lands on the 30th (no roll-forward).
 - [ ] Clearing both Timing fields returns the row to an even smear.
