@@ -18,10 +18,9 @@ import {
 	ChartContainer,
 	ChartTooltip,
 } from "~/components/ui/chart";
+import type { PeriodKind } from "~/lib/period";
 import { cn, formatCompact, formatCurrency } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
-
-type PeriodKind = "fortnight" | "month";
 
 const PERIOD_OPTIONS = [
 	{ value: "fortnight" as const, label: "Fortnight" },
