@@ -81,7 +81,7 @@ export function OneTimeSection<T extends { id: number }>({
 						<button
 							aria-controls={pastId}
 							aria-expanded={pastOpen}
-							className="flex w-full items-center gap-2 px-4 py-2 text-left text-muted-foreground text-xs transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							className="flex w-full items-center gap-2 rounded-sm px-4 py-2 text-left text-muted-foreground text-xs transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							onClick={() => setPastOpen((v) => !v)}
 							type="button"
 						>
