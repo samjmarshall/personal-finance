@@ -6,17 +6,18 @@ set -euo pipefail
 #               and portless dev URLs.
 #
 # Usage:
-#   worktree.sh create <issue#> [--slug <override>] [--dry-run]
+#   worktree.sh create <branch-name> [<issue#>] [--dry-run]
 #   worktree.sh list
 #   worktree.sh cleanup <issue#|branch> [--force] [--dry-run]
 #   worktree.sh cleanup --merged [--dry-run]
 #
-# Each worktree lives at .worktrees/<issue#>-<slug>. The directory name is a
-# DNS-safe label so portless can use it as a hostname prefix
-# (<issue#>-<slug>.personal-finance.localhost) and neon-branch.sh keys its branch off it
-# (local/<issue#>-<slug>). The Neon branch lifecycle is owned by the
-# post-checkout hook (create) and teardown.yml (delete) — this script never
-# calls the Neon API directly.
+# Each worktree lives at .worktrees/<branch>, where <branch> is a DNS-safe slug
+# of the given name, optionally prefixed with an issue number (<issue#>-<slug>).
+# The directory name doubles as the portless hostname prefix
+# (<branch>.personal-finance.localhost) and neon-branch.sh keys its branch off it
+# (local/<branch>). The Neon branch lifecycle is owned by the post-checkout hook
+# (create) and teardown.yml (delete) — this script never calls the Neon API
+# directly.
 # ---------------------------------------------------------------------------
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -56,24 +57,17 @@ portless_url() { echo "https://${1}.${DEV_HOST_SUFFIX}"; }
 neon_name()    { echo "local/${1}"; }
 worktree_dir() { echo "$WORKTREES_DIR/${1}"; }
 
-# Resolve a branch name for an issue number. Uses the issue title for the slug;
-# falls back to issue-<N> if gh is unavailable or the issue is not found.
-resolve_branch_for_issue() {
-  local issue="$1" override="${2:-}"
-  if [[ -n "$override" ]]; then
-    echo "${issue}-$(slugify "$override")"
-    return
+# Build a branch name from a user-supplied name, optionally prefixed with an
+# issue number. The name is slugified to a DNS-safe label so it can double as a
+# hostname prefix and Neon branch name.
+build_branch() {
+  local name="$1" issue="${2:-}" slug
+  slug="$(slugify "$name")"
+  if [[ -n "$issue" ]]; then
+    echo "${issue}-${slug}"
+  else
+    echo "$slug"
   fi
-  local title=""
-  if command -v gh &>/dev/null; then
-    title="$(gh issue view "$issue" --json title --jq .title 2>/dev/null || true)"
-  fi
-  if [[ -z "$title" ]]; then
-    err "could not resolve issue #${issue} title (gh missing or issue not found) — using issue-${issue}"
-    echo "issue-${issue}"
-    return
-  fi
-  echo "${issue}-$(slugify "$title")"
 }
 
 branch_exists()   { git show-ref --quiet --verify "refs/heads/$1"; }
@@ -82,25 +76,36 @@ worktree_exists() { [[ -d "$(worktree_dir "$1")" ]]; }
 # ── create ──────────────────────────────────────────────────────────────────
 
 cmd_create() {
-  local issue="" slug_override="" dry_run=false
+  local name="" issue="" dry_run=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --slug)    slug_override="$2"; shift 2 ;;
       --dry-run) dry_run=true; shift ;;
       -*)        err "unknown option: $1"; exit 1 ;;
-      *)         issue="$1"; shift ;;
+      *)
+        if [[ -z "$name" ]]; then
+          name="$1"
+        elif [[ -z "$issue" ]]; then
+          issue="$1"
+        else
+          err "unexpected argument: $1"; exit 1
+        fi
+        shift ;;
     esac
   done
 
-  if [[ -z "$issue" ]]; then
-    err "issue number required: worktree.sh create <issue#>"
+  if [[ -z "$name" ]]; then
+    err "branch name required: worktree.sh create <branch-name> [<issue#>]"
+    exit 1
+  fi
+  if [[ -n "$issue" && ! "$issue" =~ ^[0-9]+$ ]]; then
+    err "issue number must be numeric: got '$issue'"
     exit 1
   fi
 
   assert_main_worktree
 
   local branch wt neon url
-  branch="$(resolve_branch_for_issue "$issue" "$slug_override")"
+  branch="$(build_branch "$name" "$issue")"
   wt="$(worktree_dir "$branch")"
   neon="$(neon_name "$branch")"
   url="$(portless_url "$branch")"
@@ -318,7 +323,7 @@ cmd_list() {
 usage() {
   cat <<'EOF'
 Usage:
-  worktree.sh create <issue#> [--slug <override>] [--dry-run]
+  worktree.sh create <branch-name> [<issue#>] [--dry-run]
   worktree.sh list
   worktree.sh cleanup <issue#|branch> [--force] [--dry-run]
   worktree.sh cleanup --merged [--dry-run]

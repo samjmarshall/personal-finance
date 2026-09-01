@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Create, list, and tear down per-issue git worktrees, each with an isolated Neon database branch and a portless dev URL, so multiple issues can be worked in parallel without DB or dev-server collisions. Use when the user says "spin up / create a worktree for issue N", "clean up the worktree", "list worktrees", invokes /worktree, or wants parallel isolated dev environments per GitHub issue.
+description: Create, list, and tear down per-branch git worktrees, each with an isolated Neon database branch and a portless dev URL, so multiple branches can be worked in parallel without DB or dev-server collisions. A worktree is named for its branch and can be optionally tagged with a GitHub issue number. Use when the user says "spin up / create a worktree for <branch>", "clean up the worktree", "list worktrees", invokes /worktree, or wants parallel isolated dev environments.
 model: sonnet
 effort: low
 ---
@@ -15,20 +15,23 @@ the deterministic, idempotent contract.
 ## Quick start
 
 ```
-/worktree create 142          # provision + open a worktree for issue #142
-/worktree list                # show all worktrees
-/worktree cleanup 142         # tear down (guards against unsaved work)
-/worktree cleanup --merged    # sweep all merged/closed worktrees
+/worktree create drag-and-drop-categories       # provision + open a worktree for this branch
+/worktree create drag-and-drop-categories 142    # …tagged with issue #142 → branch 142-drag-and-drop-categories
+/worktree list                                   # show all worktrees
+/worktree cleanup 142                            # tear down by issue# (guards against unsaved work)
+/worktree cleanup drag-and-drop-categories       # …or by branch name
+/worktree cleanup --merged                       # sweep all merged/closed worktrees
 ```
 
 ## How it works
 
-A worktree lives at `.worktrees/<issue#>-<slug>`. The directory name is a
-DNS-safe label, so it doubles as the portless hostname prefix
-(`<issue#>-<slug>.personal-finance.localhost`) and the Neon branch name
-(`local/<issue#>-<slug>`). The Neon branch is provisioned by the `post-checkout`
-hook on create and reaped by `teardown.yml` on branch delete — this skill never
-touches the Neon API itself.
+A worktree lives at `.worktrees/<branch>`, where `<branch>` is a DNS-safe slug of
+the given name, optionally prefixed with an issue number (`<issue#>-<slug>`). The
+directory name doubles as the portless hostname prefix
+(`<branch>.personal-finance.localhost`) and the Neon branch name
+(`local/<branch>`). The Neon branch is provisioned by the `post-checkout` hook on
+create and reaped by `teardown.yml` on branch delete — this skill never touches
+the Neon API itself.
 
 ## Workflow
 
@@ -64,12 +67,13 @@ themselves once `claude` is running in the worktree.
 
 The mutating paths touch real Neon branches (never mocked). To verify:
 
-- **Automated:** `worktree.sh create <N> --dry-run` must print the resolved
-  branch (`<N>-<slug>`), worktree dir, Neon branch, and dev URL with no
-  mutation. Run `shellcheck worktree.sh` if available.
-- **Manual smoke:** `create` a throwaway issue → confirm worktree, `.env`, Neon
+- **Automated:** `worktree.sh create <name> --dry-run` must print the resolved
+  branch (`<slug>`, or `<issue#>-<slug>` when an issue number is passed), worktree
+  dir, Neon branch, and dev URL with no mutation. Run `shellcheck worktree.sh` if
+  available.
+- **Manual smoke:** `create` a throwaway branch → confirm worktree, `.env`, Neon
   branch, dev URL, and `code` window → `list` shows it → `cleanup` blocks on a
   dirty file → `cleanup --force` removes it → `teardown.yml` reaps the Neon
   branch on delete.
-- **Idempotency:** run `create <N>` twice; the second run must reuse, not
+- **Idempotency:** run `create <name>` twice; the second run must reuse, not
   duplicate or error.
