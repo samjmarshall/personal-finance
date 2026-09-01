@@ -11,7 +11,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
-import { Field, FieldLabel } from "~/components/ui/field";
+import {
+	Field,
+	FieldDescription,
+	FieldLabel,
+	FieldOptional,
+} from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import {
 	CommitmentKind,
@@ -69,6 +74,9 @@ export function ExpenseForm({
 		toDateInput(new Date()),
 	);
 	const [amount, setAmount] = useState("");
+	// Timing (recurring only): empty string = unset, so the projection smears.
+	const [dueDay, setDueDay] = useState("");
+	const [dueMonth, setDueMonth] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const isOneTime = kind === CommitmentKind.OneTime;
 
@@ -82,6 +90,8 @@ export function ExpenseForm({
 		setKind(toCommitmentKind(expense?.kind));
 		setExpectedDate(toDateInput(expense?.expectedDate ?? new Date()));
 		setAmount(seedAmount(expense));
+		setDueDay(expense?.dueDay != null ? String(expense.dueDay) : "");
+		setDueMonth(expense?.dueMonth != null ? String(expense.dueMonth) : "");
 		setError(null);
 	}, [open, expense]);
 
@@ -117,6 +127,15 @@ export function ExpenseForm({
 		const date = isOneTime ? fromDateInput(expectedDate) : null;
 		if (isOneTime && !date) return setError("Please enter a valid date.");
 
+		// Empty Timing fields stay null (row smears); submitting null on update
+		// clears a stored value, so a cleared field genuinely reverts to a smear.
+		const day = dueDay ? Number.parseInt(dueDay, 10) : null;
+		const month = dueMonth ? Number.parseInt(dueMonth, 10) : null;
+		if (!isOneTime && day != null && (day < 1 || day > 31))
+			return setError("Due day must be between 1 and 31.");
+		if (!isOneTime && month != null && (month < 1 || month > 12))
+			return setError("Due month must be between 1 and 12.");
+
 		// One-time carries amount + expectedDate; its three cadence figures are
 		// unused (zeroed). Recurring is the inverse: derived cadence, no one-time pair.
 		const payload = isOneTime
@@ -136,6 +155,8 @@ export function ExpenseForm({
 					kind,
 					amount: null,
 					expectedDate: null,
+					dueDay: day,
+					dueMonth: month,
 					...deriveAmounts(value, basis),
 				};
 
@@ -228,6 +249,53 @@ export function ExpenseForm({
 							</Field>
 						)}
 					</div>
+
+					{!isOneTime && (
+						<div className="flex flex-col gap-2">
+							<div className="grid grid-cols-2 gap-3">
+								<Field>
+									<FieldLabel htmlFor="exp-due-day">
+										Due day
+										<FieldOptional />
+									</FieldLabel>
+									<Input
+										aria-describedby="exp-timing-hint"
+										id="exp-due-day"
+										inputMode="numeric"
+										max="31"
+										min="1"
+										onChange={(e) => setDueDay(e.target.value)}
+										placeholder="—"
+										step="1"
+										type="number"
+										value={dueDay}
+									/>
+								</Field>
+								<Field>
+									<FieldLabel htmlFor="exp-due-month">
+										Due month
+										<FieldOptional />
+									</FieldLabel>
+									<Input
+										aria-describedby="exp-timing-hint"
+										id="exp-due-month"
+										inputMode="numeric"
+										max="12"
+										min="1"
+										onChange={(e) => setDueMonth(e.target.value)}
+										placeholder="—"
+										step="1"
+										type="number"
+										value={dueMonth}
+									/>
+								</Field>
+							</div>
+							<FieldDescription id="exp-timing-hint">
+								Set a due day for a monthly bill, or add a month too for a
+								once-a-year one. Leave blank to spread the cost evenly.
+							</FieldDescription>
+						</div>
+					)}
 
 					{error && (
 						<p

@@ -182,13 +182,13 @@ DTO validation and columns already exist (stage 2); this is pure form UI whose v
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
-- [ ] Set `dueDay`=15 on a recurring monthly Expense → its `month` figure spikes on the 15th's bucket in the cash flow chart (not smeared).
-- [ ] Set `dueMonth`=6 (+ optional `dueDay`) on an annual Expense → a single June spike of the `year` figure; a `dueDay` of 31 in a 30-day month lands on the 30th (no roll-forward).
-- [ ] Clearing both Timing fields returns the row to an even smear.
-- [ ] `/design-review` (UI change).
+- [x] `make check` passes
+- [x] `make test` passes (190 pass)
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
+- [ ] Set `dueDay`=15 on a recurring monthly Expense → its `month` figure spikes on the 15th's bucket in the cash flow chart (not smeared). _(form now writes `dueDay`/`dueMonth`; spike/clamp/smear logic is green in `cashflow.test.ts` — live chart confirmation is **user-run**, needs authed session + branch DB.)_
+- [ ] Set `dueMonth`=6 (+ optional `dueDay`) on an annual Expense → a single June spike of the `year` figure; a `dueDay` of 31 in a 30-day month lands on the 30th (no roll-forward). _(month-end clamp covered by `cashflow.test.ts`; live confirmation **user-run**.)_
+- [ ] Clearing both Timing fields returns the row to an even smear. _(recurring payload submits `dueDay`/`dueMonth` as `null` explicitly so a cleared field reverts on update; live confirmation **user-run**.)_
+- [x] `/design-review` (UI change). _(run as `/design-review <plan> 4`; no blockers. Fixed: income error copy now matches Payday/Pay month labels; Timing hint linked via `aria-describedby` on both forms. Verified light/dark + 375/768/1440, add+edit, recurring-only show/hide.)_
 
 ## Validate
 

@@ -10,7 +10,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
-import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import {
+	Field,
+	FieldDescription,
+	FieldLabel,
+	FieldOptional,
+} from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { CommitmentKind, toCommitmentKind } from "~/lib/constants";
 import { fromDateInput, toDateInput } from "~/lib/utils";
@@ -54,6 +59,9 @@ export function IncomeForm({
 		toDateInput(new Date()),
 	);
 	const [amount, setAmount] = useState("");
+	// Timing (recurring only): empty string = unset, so the projection smears.
+	const [dueDay, setDueDay] = useState("");
+	const [dueMonth, setDueMonth] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const isOneTime = kind === CommitmentKind.OneTime;
 
@@ -66,6 +74,8 @@ export function IncomeForm({
 		setKind(toCommitmentKind(income?.kind));
 		setExpectedDate(toDateInput(income?.expectedDate ?? new Date()));
 		setAmount(seedAmount(income));
+		setDueDay(income?.dueDay != null ? String(income.dueDay) : "");
+		setDueMonth(income?.dueMonth != null ? String(income.dueMonth) : "");
 		setError(null);
 	}, [open, income]);
 
@@ -89,6 +99,15 @@ export function IncomeForm({
 		const date = isOneTime ? fromDateInput(expectedDate) : null;
 		if (isOneTime && !date) return setError("Please enter a valid date.");
 
+		// Empty Timing fields stay null (row smears); submitting null on update
+		// clears a stored value, so a cleared field genuinely reverts to a smear.
+		const day = dueDay ? Number.parseInt(dueDay, 10) : null;
+		const month = dueMonth ? Number.parseInt(dueMonth, 10) : null;
+		if (!isOneTime && day != null && (day < 1 || day > 31))
+			return setError("Payday must be between 1 and 31.");
+		if (!isOneTime && month != null && (month < 1 || month > 12))
+			return setError("Pay month must be between 1 and 12.");
+
 		// One-time carries amount + expectedDate; its three cadence figures are
 		// unused (zeroed). Recurring is the inverse: derived cadence, no one-time pair.
 		const payload = isOneTime
@@ -108,6 +127,8 @@ export function IncomeForm({
 					kind,
 					amount: null,
 					expectedDate: null,
+					dueDay: day,
+					dueMonth: month,
 					fortnight: value,
 					month: (value * FORTNIGHTS_PER_YEAR) / MONTHS_PER_YEAR,
 					year: value * FORTNIGHTS_PER_YEAR,
@@ -181,25 +202,71 @@ export function IncomeForm({
 							</Field>
 						</div>
 					) : (
-						<Field>
-							<FieldLabel htmlFor="income-fortnight">
-								Amount per fortnight
-							</FieldLabel>
-							<Input
-								aria-describedby="income-fortnight-hint"
-								id="income-fortnight"
-								inputMode="decimal"
-								min="0"
-								onChange={(e) => setAmount(e.target.value)}
-								placeholder="0.00"
-								step="0.01"
-								type="number"
-								value={amount}
-							/>
-							<FieldDescription id="income-fortnight-hint">
-								Monthly and yearly figures are calculated automatically.
-							</FieldDescription>
-						</Field>
+						<>
+							<Field>
+								<FieldLabel htmlFor="income-fortnight">
+									Amount per fortnight
+								</FieldLabel>
+								<Input
+									aria-describedby="income-fortnight-hint"
+									id="income-fortnight"
+									inputMode="decimal"
+									min="0"
+									onChange={(e) => setAmount(e.target.value)}
+									placeholder="0.00"
+									step="0.01"
+									type="number"
+									value={amount}
+								/>
+								<FieldDescription id="income-fortnight-hint">
+									Monthly and yearly figures are calculated automatically.
+								</FieldDescription>
+							</Field>
+							<div className="flex flex-col gap-2">
+								<div className="grid grid-cols-2 gap-3">
+									<Field>
+										<FieldLabel htmlFor="income-due-day">
+											Payday
+											<FieldOptional />
+										</FieldLabel>
+										<Input
+											aria-describedby="income-timing-hint"
+											id="income-due-day"
+											inputMode="numeric"
+											max="31"
+											min="1"
+											onChange={(e) => setDueDay(e.target.value)}
+											placeholder="—"
+											step="1"
+											type="number"
+											value={dueDay}
+										/>
+									</Field>
+									<Field>
+										<FieldLabel htmlFor="income-due-month">
+											Pay month
+											<FieldOptional />
+										</FieldLabel>
+										<Input
+											aria-describedby="income-timing-hint"
+											id="income-due-month"
+											inputMode="numeric"
+											max="12"
+											min="1"
+											onChange={(e) => setDueMonth(e.target.value)}
+											placeholder="—"
+											step="1"
+											type="number"
+											value={dueMonth}
+										/>
+									</Field>
+								</div>
+								<FieldDescription id="income-timing-hint">
+									Set a payday for a monthly payment, or add a pay month too for
+									a once-a-year one. Leave blank to spread it evenly.
+								</FieldDescription>
+							</div>
+						</>
 					)}
 
 					{error && (
