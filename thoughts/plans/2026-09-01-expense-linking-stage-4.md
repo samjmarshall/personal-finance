@@ -115,13 +115,13 @@ The write door. Canonical writes + outbox insert commit in one `db.transaction()
 
 ### Success
 **Automated**
-- [ ] `make check` passes (includes `db:check` — migration ↔ schema consistent)
-- [ ] `make test` passes (schema-default + commit/publish fake-driven cases green)
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
+- [x] `make check` passes (includes `db:check` — migration ↔ schema consistent)
+- [x] `make test` passes (schema-default + commit/publish fake-driven cases green)
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
 
 **Manual**
 - [ ] Migration generated + applied on the **feature-branch** DB (never main/prod): `outbox` exists with all seven columns + `outbox_unprocessed_idx` — verified via SQL probe. _(generated as `0005_outbox.sql`; **apply is user-run** — `make db_migrate`.)_
-- [ ] adr003 revised in place (Accepted, 2026-09-01) — decision is keep `postgres-js` + `db.transaction()`, swap deferred; no adr013.
+- [x] adr003 revised in place (Accepted, 2026-09-01) — decision is keep `postgres-js` + `db.transaction()`, swap deferred; no adr013.
 
 ## Phase 3: `outbox-sweep` + `outbox-prune` crons + Inngest route handler
 
@@ -147,12 +147,12 @@ Makes the rail run: the two scheduled functions plus the serve endpoint that Inn
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make test` passes (sweep/prune fake-driven cases + extended golden green)
-- [ ] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build`)
+- [x] `make check` passes
+- [x] `make test` passes (sweep/prune fake-driven cases + extended golden green — 208 tests)
+- [x] Build compiles clean (`SKIP_ENV_VALIDATION=1 yarn build` — `/api/inngest` route registered)
 
 **Manual**
-- [ ] `/security-review` (new public webhook route `src/app/api/inngest/route.ts`): confirm `serve` verifies the `INNGEST_SIGNING_KEY` signature and rejects unsigned/forged requests; no secret leaks in the served introspection response.
+- [x] `/security-review` (new public webhook route `src/app/api/inngest/route.ts`): confirm `serve` verifies the `INNGEST_SIGNING_KEY` signature and rejects unsigned/forged requests; no secret leaks in the served introspection response. _(clean — no high-confidence findings; `serve` auto-verifies signatures in prod, workers read rows only, no attacker-controlled SQL interpolation.)_
 - [ ] End-to-end rail smoke via the **Inngest Dev Server** (**user-run**, needs the feature-branch DB; the Dev Server needs no Inngest keys): run the app + `npx --ignore-scripts=false inngest-cli@latest dev -u https://personal-finance.localhost/api/inngest` (polls the serve endpoint, auto-discovers `outbox-sweep`/`outbox-prune`; dashboard at `http://localhost:8288`); `INSERT` a `pending` outbox row (SQL / Studio, per `.claude/rules/database-migrations.md`); invoke `outbox-sweep` → the event appears in the stream and the row's `processed_at` is stamped. Invoke `outbox-prune` → a recently-processed row and a stuck (`processed_at is null`) row both survive. _(Worker **execution** of a receipt event is stage 5 — stage 4 proves delivery + acknowledgement only.)_
 
 ## Validate

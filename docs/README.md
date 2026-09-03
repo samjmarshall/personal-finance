@@ -29,3 +29,16 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 Better Auth secondary storage — sessions and verification records dual-write to Redis and Postgres and read Redis-first, with Postgres as the durable copy. Rate-limit counters live here so they are shared across lambdas. See [adr006](adr/adr006-redis-session-cache-with-postgres-durable-copy.md) and [adr007](adr/adr007-asymmetric-failure-posture-in-the-redis-adapter.md).
 
 The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `ba:<VERCEL_ENV>:<db-fingerprint>:`, so environments and Neon branches sharing one Upstash database cannot authenticate each other's sessions.
+
+## Async platform (outbox + Inngest)
+
+Side-effecting writes commit their canonical rows and an `outbox` row in one `db.transaction()`, then best-effort `inngest.send`; a cron re-delivers anything the send missed. At-least-once, idempotent on the outbox row `id`. See [adr002](adr/adr002-canonical-postgres-store-transactional-outbox.md); event names live in `src/server/inngest/events.ts` (`EVENT_REGISTRY`).
+
+Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), which serves two scheduled functions:
+
+| Function | Schedule | Purpose |
+| --- | --- | --- |
+| `outbox-sweep` | `0 * * * *` | Re-deliver unacked rows older than 30s; failures stay unacked for the next run. |
+| `outbox-prune` | `0 3 * * *` | Delete rows acked over 7 days ago; never touches unacked or stuck rows. |
+
+Local runs use the Inngest Dev Server (no keys needed): `npx --ignore-scripts=false inngest-cli@latest dev -u https://personal-finance.localhost/api/inngest` (dashboard at `http://localhost:8288`).
