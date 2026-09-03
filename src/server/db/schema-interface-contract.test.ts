@@ -6,11 +6,13 @@ import type { BalanceSnapshot } from "~/domain/balances/balance.interface";
 import type { Category } from "~/domain/categories/category.interface";
 import type { Expense } from "~/domain/expenses/expense.interface";
 import type { Income } from "~/domain/income/income.interface";
+import type { Receipt, ReceiptItem } from "~/domain/receipts/receipt.interface";
 import type { Transaction } from "~/domain/transactions/transaction.interface";
 import type { balanceSnapshots } from "~/server/balances/balances.schema";
 import type { expenseCategories } from "~/server/expenses/categories.schema";
 import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
+import type { receiptItems, receipts } from "~/server/receipts/receipts.schema";
 import type { transactions } from "~/server/transactions/transactions.schema";
 import type { Equal, Expect } from "~/test/type-contracts";
 
@@ -27,11 +29,25 @@ type Contracts = [
 	Expect<
 		Equal<typeof expenseCategories.$inferSelect, Omit<Category, "expenseCount">>
 	>,
+	Expect<Equal<typeof receipts.$inferSelect, Receipt>>,
 ];
+
+// receipt_item shares receipt.interface.ts, so it can't get its own COVERED slug;
+// this standalone alias still errors if the stored shape drifts from ReceiptItem.
+type _ReceiptItemContract = Expect<
+	Equal<typeof receiptItems.$inferSelect, ReceiptItem>
+>;
 
 // Entities whose *.interface.ts is pinned by `Contracts`. A new interface file with
 // no contract fails the coverage test, forcing a deliberate decision.
-const COVERED = ["balance", "category", "expense", "income", "transaction"];
+const COVERED = [
+	"balance",
+	"category",
+	"expense",
+	"income",
+	"receipt",
+	"transaction",
+];
 
 // Table-less computed read-models: no *.schema.ts to contract against, so they sit
 // outside the schema↔interface gate. The cash flow projection is derived, not stored.
@@ -41,7 +57,7 @@ describe("schema ↔ interface contract", () => {
 	it("keeps each *.schema.ts read model equal to its *.interface.ts", () => {
 		// Annotating with `Contracts` makes tsc evaluate every pair above; the array is
 		// contextually typed to the tuple, so it stays a genuine compile-time gate.
-		const aligned: Contracts = [true, true, true, true, true];
+		const aligned: Contracts = [true, true, true, true, true, true];
 
 		expect(aligned).toHaveLength(COVERED.length);
 	});

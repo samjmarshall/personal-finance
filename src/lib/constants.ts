@@ -20,6 +20,22 @@ export enum CommitmentKind {
 	OneTime = "one-time",
 }
 
+// Receipt lifecycle: pending on upload, then the worker flips it to processed,
+// duplicate (same photo, no AI spend), or failed (retryable).
+export enum ReceiptStatus {
+	Pending = "pending",
+	Processed = "processed",
+	Failed = "failed",
+	Duplicate = "duplicate",
+}
+
+// How a receipt arrived. Only upload is produced in stage 5; email is defined
+// now so stage 6 inbound ingestion adds no migration.
+export enum ReceiptChannel {
+	Upload = "upload",
+	Email = "email",
+}
+
 // Stored frequency/priority are free-text; coerce a read value to the managed
 // vocab, falling back to the default when it is outside the current set (e.g.
 // legacy/imported data) so a form seed can never hold an unknown value.
@@ -41,6 +57,22 @@ export function toPriority(value: string | null | undefined): Priority {
 	return (Object.values(Priority) as string[]).includes(value ?? "")
 		? (value as Priority)
 		: Priority.NiceToHave;
+}
+
+export function toReceiptStatus(
+	value: string | null | undefined,
+): ReceiptStatus {
+	return (Object.values(ReceiptStatus) as string[]).includes(value ?? "")
+		? (value as ReceiptStatus)
+		: ReceiptStatus.Pending;
+}
+
+export function toReceiptChannel(
+	value: string | null | undefined,
+): ReceiptChannel {
+	return (Object.values(ReceiptChannel) as string[]).includes(value ?? "")
+		? (value as ReceiptChannel)
+		: ReceiptChannel.Upload;
 }
 
 export const EXPENSE_CATEGORIES = [
