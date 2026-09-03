@@ -4,6 +4,9 @@ import type { db as realDb } from "~/server/db";
 
 import { outbox } from "./outbox.schema";
 
+/** Which post-commit path is acking — used only as a log tag. */
+type AckContext = "send" | "sweep" | "sweep delivery";
+
 /**
  * Best-effort outbox bookkeeping shared by the fast path (commit.ts) and the sweep
  * (outbox.workers.ts). Both run *after* the canonical commit, so a throw here must never
@@ -13,7 +16,7 @@ import { outbox } from "./outbox.schema";
 export async function markProcessed(
 	db: typeof realDb,
 	id: string,
-	context: string,
+	context: AckContext,
 ): Promise<void> {
 	try {
 		await db
@@ -29,7 +32,7 @@ export async function markFailed(
 	db: typeof realDb,
 	id: string,
 	error: unknown,
-	context: string,
+	context: AckContext,
 ): Promise<void> {
 	const lastError = error instanceof Error ? error.message : String(error);
 	console.error(`outbox ${context} failed for ${id}`, error);

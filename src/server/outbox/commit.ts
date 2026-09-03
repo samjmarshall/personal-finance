@@ -41,11 +41,7 @@ export function makeCommitWithOutbox({ db, inngest }: Deps) {
 
 		for (const event of events) {
 			try {
-				await inngest.send({
-					id: event.id,
-					name: event.name,
-					data: event.data,
-				});
+				await inngest.send(event);
 				await markProcessed(db, event.id, "send");
 			} catch (error) {
 				await markFailed(db, event.id, error, "send");
