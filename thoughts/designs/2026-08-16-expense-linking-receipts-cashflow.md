@@ -80,17 +80,17 @@ Planned → `/expenses` (default, existing; label is "Planned", not "Budgeted" �
 
 First real implementation of ADR002/ADR003:
 
-- `outbox` table + `src/server/outbox/` — `publish()` and `commitWithOutbox(writes, events)` executed as one `db.batch()` on neon-http (ADR003 atomicity). `outbox-sweep` cron delivers pending events to Inngest at-least-once, idempotent on row id; `outbox-prune` clears delivered rows.
+- `outbox` table + `src/server/outbox/` — `publish()` and `commitWithOutbox(writes, events)` executed as one `db.transaction()` on postgres-js (ADR003 atomicity — the `neon-http`/`db.batch()` swap is deferred). `outbox-sweep` cron delivers pending events to Inngest at-least-once, idempotent on row id; `outbox-prune` clears delivered rows.
 - `src/server/inngest/` — client, `events.ts` registry (`receipt/uploaded`, `receipt/email.received`, `receipt/retry`), functions registry served from one route handler.
 - New deps: `inngest`, `@vercel/blob`, `resend` (inbound), `ai` + `@ai-sdk/anthropic`.
 
-Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in one batch → sweep delivers → worker processes → worker writes results. Retries/backoff from Inngest; receipt `status` is the user-visible truth.
+Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in one transaction → sweep delivers → worker processes → worker writes results. Retries/backoff from Inngest; receipt `status` is the user-visible truth.
 
 **Deliberate deviation from ADR004:** existing routers are plain tRPC files with direct db calls — no service/repository/module ceremony exists in this repo. This design stays in the current style and does **not** smuggle a 3-tier refactor into the feature. Workers are `makeRun*(deps)` factories (pure core, thin `createFunction` wrapper) purely for testability. The ADR004-vs-reality gap is flagged as an ADR candidate below, not resolved here.
 
 ## Receipt pipeline
 
-**Upload path:** Receipts page uses Vercel Blob client upload (`handleUpload` route; token generation checks session). On complete: one batch writes `receipt` row (`pending`, `channel: upload`, member from session) + `receipt/uploaded` outbox event.
+**Upload path:** Receipts page uses Vercel Blob client upload (`handleUpload` route; token generation checks session). On complete: one transaction writes `receipt` row (`pending`, `channel: upload`, member from session) + `receipt/uploaded` outbox event.
 
 **Email path:** one Resend inbound address; each member forwards from their personal email. Webhook route → verify signature → sender lookup in `allowed_sender`. Unknown: log, drop, 200. Known: each attachment (PDF/JPG/PNG) stored to Blob, one receipt row per attachment; no attachment → the HTML body is the payload (Uber/Amazon e-receipts). Same batch write + event, `channel: email`, member from sender.
 

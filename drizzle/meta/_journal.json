@@ -36,6 +36,20 @@
 			"when": 1788225047421,
 			"tag": "0004_balance_snapshot",
 			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1788267683130,
+			"tag": "0005_outbox",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1788415264412,
+			"tag": "0006_slim_bastion",
+			"breakpoints": true
 		}
 	]
 }

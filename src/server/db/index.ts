@@ -7,6 +7,7 @@ import * as balancesSchema from "~/server/balances/balances.schema";
 import * as expenseCategoriesSchema from "~/server/expenses/categories.schema";
 import * as expensesSchema from "~/server/expenses/expenses.schema";
 import * as incomeSchema from "~/server/income/income.schema";
+import * as outboxSchema from "~/server/outbox/outbox.schema";
 import * as settingsSchema from "~/server/settings/settings.schema";
 import * as transactionsSchema from "~/server/transactions/transactions.schema";
 
@@ -16,6 +17,7 @@ const schema = {
 	...expenseCategoriesSchema,
 	...expensesSchema,
 	...incomeSchema,
+	...outboxSchema,
 	...settingsSchema,
 	...transactionsSchema,
 	...authSchema,

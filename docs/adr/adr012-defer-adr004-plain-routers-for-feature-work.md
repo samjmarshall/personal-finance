@@ -17,7 +17,7 @@ The 2026-08-16 design introduces the first second-class entry point (Inngest wor
 
 ## Decision
 
-We will build the expense-linking/receipts/cashflow feature set in the repo's current style: tRPC routers with direct db calls; `src/server/outbox/` exposing `publish()` and `commitWithOutbox(writes, events)` executed as one `db.batch()` — delivering [adr002](adr002-canonical-postgres-store-transactional-outbox.md)'s write-plus-outbox atomicity at the call sites that use it, without a repository tier; and workers as `makeRun*(deps)` factories — a pure core behind a thin `createFunction` wrapper — taking the one piece of adr004 (factory-closure testability) this work needs.
+We will build the expense-linking/receipts/cashflow feature set in the repo's current style: tRPC routers with direct db calls; `src/server/outbox/` exposing `publish()` and `commitWithOutbox(writes, events)` executed as one `db.transaction()` — delivering [adr002](adr002-canonical-postgres-store-transactional-outbox.md)'s write-plus-outbox atomicity at the call sites that use it, without a repository tier; and workers as `makeRun*(deps)` factories — a pure core behind a thin `createFunction` wrapper — taking the one piece of adr004 (factory-closure testability) this work needs.
 
 No service tier, no repository tier, no module ceremony is introduced, and none may be introduced inside feature branches. adr004 remains Accepted as the destination architecture; executing it is deferred, and is its own future effort. The revisit signal is the first guard or write path duplicated between a router and a worker.
 
@@ -32,5 +32,5 @@ No service tier, no repository tier, no module ceremony is introduced, and none 
 ## Links
 
 - Defers: [adr004](adr004-domain-oriented-3-tier-server-architecture.md)
-- Implements the outbox of: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) via [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s `db.batch` mechanism
+- Implements the outbox of: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) via [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s `db.transaction()` mechanism
 - Design: [2026-08-16 expense-linking/receipts/cashflow design](../../thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md)
