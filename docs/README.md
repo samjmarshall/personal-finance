@@ -41,4 +41,4 @@ Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), whic
 | `outbox-sweep` | `0 * * * *` | Re-deliver unacked rows older than 30s; failures stay unacked for the next run. |
 | `outbox-prune` | `0 3 * * *` | Delete rows acked over 7 days ago; never touches unacked or stuck rows. |
 
-Local runs use the Inngest Dev Server (no keys needed): `npx --ignore-scripts=false inngest-cli@latest dev -u https://personal-finance.localhost/api/inngest` (dashboard at `http://localhost:8288`).
+Local runs use the Inngest Dev Server (no keys needed). Run `make setup` once — it trusts the Portless CA so the Go Dev Server binary trusts the app's HTTPS cert — then `make start` boots the app plus the Dev Server as sibling Portless processes. The Dev Server syncs the app's `/api/inngest`, lists `outbox-sweep` + `outbox-prune`, and can invoke them from its dashboard at `https://inngest.personal-finance.localhost` (worktree: `https://<branch>.inngest.personal-finance.localhost`).
