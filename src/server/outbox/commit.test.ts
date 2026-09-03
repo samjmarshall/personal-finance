@@ -8,7 +8,7 @@ type SentEvent = { id: string; name: string; data: unknown };
 
 // One harness records every db/inngest interaction against a shared ordered log so a
 // test can assert both *what* happened and *when* (inside the tx vs. post-commit).
-function harness(opts: { sendThrows?: boolean } = {}) {
+function harness(opts: { sendThrows?: boolean; updateThrows?: boolean } = {}) {
 	const log: string[] = [];
 	const insertedRows: unknown[][] = [];
 	const updates: Record<string, unknown>[] = [];
@@ -36,7 +36,9 @@ function harness(opts: { sendThrows?: boolean } = {}) {
 				where: () => {
 					log.push("db.update");
 					updates.push(vals);
-					return Promise.resolve();
+					return opts.updateThrows
+						? Promise.reject(new Error("update failed"))
+						: Promise.resolve();
 				},
 			}),
 		}),
@@ -127,6 +129,19 @@ describe("commitWithOutbox", () => {
 		expect(h.updates[0]).toHaveProperty("attempts");
 		expect(h.updates[0]?.lastError).toBe("send failed");
 		expect(h.updates[0]).not.toHaveProperty("processedAt");
+	});
+
+	// The ack runs after the tx has committed, so a throw there must never escape —
+	// else the caller retries an already-durable write and duplicates rows + events.
+	it("swallows a failing ack update: send succeeds, the processedAt write throws, commit still resolves", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = harness({ updateThrows: true });
+		const commit = makeCommitWithOutbox({ db: h.db, inngest: h.inngest });
+
+		await expect(commit(async () => {}, [event])).resolves.toBeUndefined();
+
+		expect(h.sends).toHaveLength(1);
+		expect(console.error).toHaveBeenCalled();
 	});
 
 	it("returns the writes callback's result unchanged", async () => {

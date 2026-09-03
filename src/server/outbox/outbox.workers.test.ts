@@ -19,7 +19,10 @@ type OutboxRow = {
 // in for what the real WHERE would return) and captures the WHERE/ORDER BY so a test
 // can assert the age/ack floor without a live DB. `update` records each set() payload
 // in call order — row i's mark corresponds to updates[i] (rows are processed in order).
-function sweepHarness(rows: OutboxRow[]) {
+function sweepHarness(
+	rows: OutboxRow[],
+	opts: { updateThrows?: boolean } = {},
+) {
 	let whereCond: unknown;
 	let orderByArg: unknown;
 	const updates: Record<string, unknown>[] = [];
@@ -42,7 +45,9 @@ function sweepHarness(rows: OutboxRow[]) {
 			set: (vals: Record<string, unknown>) => ({
 				where: () => {
 					updates.push(vals);
-					return Promise.resolve();
+					return opts.updateThrows
+						? Promise.reject(new Error("update failed"))
+						: Promise.resolve();
 				},
 			}),
 		}),
@@ -135,6 +140,17 @@ describe("runSweep", () => {
 		expect(h.updates[0]).toHaveProperty("attempts");
 		expect(h.updates[0]?.lastError).toBe("boom");
 		expect(h.updates[0]).not.toHaveProperty("processedAt");
+	});
+
+	// A throw in the post-delivery ack must never escape the sweep — else one stuck row
+	// aborts the whole run and starves every later row behind it.
+	it("swallows a failing ack update: delivery succeeds, the processedAt write throws, sweep still resolves", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = sweepHarness([row("r1")], { updateThrows: true });
+		const runSweep = makeRunSweep({ db: h.db, deliver: async () => {} });
+
+		await expect(runSweep()).resolves.toEqual({ delivered: 1, failed: 0 });
+		expect(console.error).toHaveBeenCalled();
 	});
 });
 

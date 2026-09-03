@@ -1,10 +1,9 @@
-import { eq, sql } from "drizzle-orm";
-
 import type { Inngest } from "inngest";
 
 import type { db as realDb } from "~/server/db";
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
 
+import { markFailed, markProcessed } from "./ack";
 import { outbox } from "./outbox.schema";
 
 interface Deps {
@@ -47,18 +46,9 @@ export function makeCommitWithOutbox({ db, inngest }: Deps) {
 					name: event.name,
 					data: event.data,
 				});
-				await db
-					.update(outbox)
-					.set({ processedAt: new Date() })
-					.where(eq(outbox.id, event.id));
+				await markProcessed(db, event.id, "send");
 			} catch (error) {
-				const lastError =
-					error instanceof Error ? error.message : String(error);
-				console.error(`outbox send failed for ${event.id}`, error);
-				await db
-					.update(outbox)
-					.set({ attempts: sql`${outbox.attempts} + 1`, lastError })
-					.where(eq(outbox.id, event.id));
+				await markFailed(db, event.id, error, "send");
 			}
 		}
 

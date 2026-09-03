@@ -1,17 +1,16 @@
-import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, isNull, lt, sql } from "drizzle-orm";
 
 import type { Inngest } from "inngest";
 
 import type { db as realDb } from "~/server/db";
-import type { EventName } from "~/server/inngest/events";
+import type { EventName, OutboxEventDescriptor } from "~/server/inngest/events";
 
+import { markFailed, markProcessed } from "./ack";
 import { outbox } from "./outbox.schema";
-
-type Delivery = { id: string; name: string; data: unknown };
 
 interface SweepCoreDeps {
 	db: typeof realDb;
-	deliver: (event: Delivery) => Promise<unknown>;
+	deliver: (event: OutboxEventDescriptor) => Promise<unknown>;
 }
 
 /**
@@ -20,6 +19,11 @@ interface SweepCoreDeps {
  * `deliver` re-sends with `id` = the row id (the idempotency key), so a race is a
  * guaranteed no-op inside Inngest's 24h dedup window. A failing delivery bumps
  * attempts/lastError and leaves the row unacked for the next run.
+ *
+ * Deferred until stage-5 producers exist (no live callers yet): no LIMIT/batch (a large
+ * backlog loads in one array) and no max-attempts cap / dead-letter (a poison row
+ * re-sends hourly forever). Idempotency lives on the *consumer*: past the 24h dedup
+ * window a re-send delivers again, so stage-5 workers must be idempotent regardless.
  */
 export function makeRunSweep({ db, deliver }: SweepCoreDeps) {
 	return async function runSweep() {
@@ -38,20 +42,16 @@ export function makeRunSweep({ db, deliver }: SweepCoreDeps) {
 		let failed = 0;
 		for (const row of rows) {
 			try {
-				await deliver({ id: row.id, name: row.eventName, data: row.payload });
-				await db
-					.update(outbox)
-					.set({ processedAt: new Date() })
-					.where(eq(outbox.id, row.id));
+				// eventName is a DB text column; only registry names are ever written (buildOutboxEvent).
+				await deliver({
+					id: row.id,
+					name: row.eventName as EventName,
+					data: row.payload,
+				});
+				await markProcessed(db, row.id, "sweep");
 				delivered++;
 			} catch (error) {
-				const lastError =
-					error instanceof Error ? error.message : String(error);
-				console.error(`outbox sweep delivery failed for ${row.id}`, error);
-				await db
-					.update(outbox)
-					.set({ attempts: sql`${outbox.attempts} + 1`, lastError })
-					.where(eq(outbox.id, row.id));
+				await markFailed(db, row.id, error, "sweep delivery");
 				failed++;
 			}
 		}
@@ -88,8 +88,7 @@ interface WorkerDeps {
 export function makeSweepWorker({ db, inngest }: WorkerDeps) {
 	const runSweep = makeRunSweep({
 		db,
-		deliver: (e) =>
-			inngest.send({ id: e.id, name: e.name as EventName, data: e.data }),
+		deliver: (e) => inngest.send({ id: e.id, name: e.name, data: e.data }),
 	});
 	return inngest.createFunction(
 		{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },
