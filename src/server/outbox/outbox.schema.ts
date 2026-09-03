@@ -17,8 +17,11 @@ export const outbox = pgTable(
 		lastError: d.text(),
 	}),
 	(t) => [
+		// Partial index for the sweep. WHERE processedAt IS NULL pins processedAt constant
+		// within the set, so createdAt alone serves both the age filter and the ORDER BY —
+		// leading with processedAt would add a zero-selectivity column.
 		index("outbox_unprocessed_idx")
-			.on(t.processedAt, t.createdAt)
+			.on(t.createdAt)
 			.where(sql`${t.processedAt} is null`),
 	],
 );
