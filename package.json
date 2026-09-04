@@ -17,7 +17,7 @@
 		"dev:app": "portless run --force ./scripts/dev-app.sh",
 		"dev:inngest": "portless run --force --name inngest.personal-finance ./scripts/dev-inngest.sh",
 		"lint": "biome lint .",
-		"postinstall": "husky",
+		"postinstall": "husky || true",
 		"preview": "next build && next start",
 		"start": "next start",
 		"test": "vitest run",
@@ -75,6 +75,5 @@
 	},
 	"ct3aMetadata": {
 		"initVersion": "7.40.0"
-	},
-	"packageManager": "yarn@1.22.22"
+	}
 }
