@@ -89,9 +89,7 @@ describe("commitWithOutbox", () => {
 			"tx.insert",
 			"tx.commit",
 		]);
-		expect(h.insertedRows[0]).toEqual([
-			{ id: event.id, eventName: event.name, payload: event.data },
-		]);
+		expect(h.insertedRows[0]).toEqual([event]);
 	});
 
 	it("sends each event post-commit with id = the outbox row id (the idempotency key)", async () => {
@@ -161,9 +159,7 @@ describe("publish", () => {
 
 		await publish(event);
 
-		expect(h.insertedRows).toEqual([
-			[{ id: event.id, eventName: event.name, payload: event.data }],
-		]);
+		expect(h.insertedRows).toEqual([[event]]);
 		expect(h.sends).toHaveLength(1);
 	});
 });

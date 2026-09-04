@@ -3,18 +3,10 @@ import { and, isNull, lt, sql } from "drizzle-orm";
 import type { Inngest } from "inngest";
 
 import type { db as realDb } from "~/server/db";
-import type { EventName, OutboxEventDescriptor } from "~/server/inngest/events";
+import type { OutboxEventDescriptor } from "~/server/inngest/events";
 
 import { markFailed, markProcessed } from "./ack";
 import { outbox } from "./outbox.schema";
-
-// Row → descriptor for re-delivery. eventName is a DB text column, but only registry
-// names are ever written (buildOutboxEvent), so the EventName cast holds.
-const fromRow = (row: typeof outbox.$inferSelect): OutboxEventDescriptor => ({
-	id: row.id,
-	name: row.eventName as EventName,
-	data: row.payload,
-});
 
 interface SweepCoreDeps {
 	db: typeof realDb;
@@ -50,7 +42,7 @@ export function makeRunSweep({ db, deliver }: SweepCoreDeps) {
 		let failed = 0;
 		for (const row of rows) {
 			try {
-				await deliver(fromRow(row));
+				await deliver(row);
 				await markProcessed(db, row.id, "sweep");
 				delivered++;
 			} catch (error) {

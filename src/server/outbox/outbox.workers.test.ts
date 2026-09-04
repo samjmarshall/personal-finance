@@ -1,6 +1,6 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
+import type { OutboxEventDescriptor } from "~/server/inngest/events";
 import { outbox } from "./outbox.schema";
 import { makeRunPrune, makeRunSweep } from "./outbox.workers";
 
@@ -9,18 +9,12 @@ const render = (cond: unknown) =>
 	// biome-ignore lint/suspicious/noExplicitAny: dialect renders a drizzle SQL condition to text.
 	dialect.sqlToQuery(cond as any).sql;
 
-type OutboxRow = {
-	id: string;
-	eventName: string;
-	payload: unknown;
-};
-
 // Fake db for the sweep core: the select chain resolves to the staged rows (standing
 // in for what the real WHERE would return) and captures the WHERE/ORDER BY so a test
 // can assert the age/ack floor without a live DB. `update` records each set() payload
 // in call order — row i's mark corresponds to updates[i] (rows are processed in order).
 function sweepHarness(
-	rows: OutboxRow[],
+	rows: OutboxEventDescriptor[],
 	opts: { updateThrows?: boolean } = {},
 ) {
 	let whereCond: unknown;
@@ -79,10 +73,10 @@ function pruneHarness(deleted: { id: string }[]) {
 	};
 }
 
-const row = (id: string): OutboxRow => ({
+const row = (id: string): OutboxEventDescriptor => ({
 	id,
-	eventName: "receipt/uploaded",
-	payload: { receiptId: id },
+	name: "receipt/uploaded",
+	data: { receiptId: id },
 });
 
 afterEach(() => vi.restoreAllMocks());

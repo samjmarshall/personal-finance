@@ -16,12 +16,6 @@ type Writes<T> = (
 	tx: Parameters<Parameters<typeof realDb.transaction>[0]>[0],
 ) => Promise<T>;
 
-const toRow = (e: OutboxEventDescriptor) => ({
-	id: e.id,
-	eventName: e.name,
-	payload: e.data,
-});
-
 /**
  * The write door (adr002 clause 3). Canonical writes + the outbox rows commit in one
  * transaction; a best-effort post-commit `inngest.send` is the fast path and the sweep
@@ -35,7 +29,7 @@ export function makeCommitWithOutbox({ db, inngest }: Deps) {
 	): Promise<T> {
 		const result = await db.transaction(async (tx) => {
 			const value = await writes(tx);
-			if (events.length) await tx.insert(outbox).values(events.map(toRow));
+			if (events.length) await tx.insert(outbox).values(events);
 			return value;
 		});
 
