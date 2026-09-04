@@ -648,8 +648,7 @@
 				},
 				"name": {
 					"name": "name",
-					"type": "outbox_event_name",
-					"typeSchema": "public",
+					"type": "text",
 					"primaryKey": false,
 					"notNull": true
 				},
@@ -1273,11 +1272,6 @@
 			"name": "income_kind",
 			"schema": "public",
 			"values": ["recurring", "one-time"]
-		},
-		"public.outbox_event_name": {
-			"name": "outbox_event_name",
-			"schema": "public",
-			"values": ["receipt/uploaded", "receipt/email.received", "receipt/retry"]
 		},
 		"public.receipt_channel": {
 			"name": "receipt_channel",

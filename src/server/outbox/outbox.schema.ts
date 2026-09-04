@@ -1,11 +1,6 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
-import { EVENT_REGISTRY, type EventName } from "~/server/inngest/events";
-
-export const outboxEventName = pgEnum(
-	"outbox_event_name",
-	Object.keys(EVENT_REGISTRY) as [EventName, ...EventName[]],
-);
+import { index, pgTable } from "drizzle-orm/pg-core";
+import type { EventName } from "~/server/inngest/events";
 
 // Transactional outbox (adr002): canonical writes + an outbox row commit together,
 // a best-effort post-commit send is the fast path, the sweep cron the backstop.
@@ -15,7 +10,11 @@ export const outbox = pgTable(
 		// App supplies its own uuid (the Inngest idempotency key); the default covers
 		// raw-SQL INSERTs from migrations (the migration→workflow trigger idiom).
 		id: d.uuid().primaryKey().defaultRandom(),
-		name: outboxEventName().notNull(),
+		// text, not a pgEnum: a new event would otherwise need an ALTER TYPE … ADD
+		// VALUE migration (PG can't drop values on rename, and same-migration ADD
+		// VALUE + INSERT aborts). Runtime safety lives at the buildOutboxEvent mint
+		// boundary (EVENT_REGISTRY), so the column stays a plain typed string.
+		name: d.text().$type<EventName>().notNull(),
 		data: d.jsonb().notNull(),
 		createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
 		processedAt: d.timestamp({ withTimezone: true }),
