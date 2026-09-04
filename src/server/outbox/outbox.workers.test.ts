@@ -1,8 +1,11 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { OutboxEventDescriptor } from "~/server/inngest/events";
 import { outbox } from "./outbox.schema";
 import { makeRunPrune, makeRunSweep } from "./outbox.workers";
+
+// Full stored-row shape: the sweep selects `*`, so the fake must carry the internal
+// columns (attempts/processedAt/lastError) a projection bug would leak to Inngest.
+type OutboxRow = typeof outbox.$inferSelect;
 
 const dialect = new PgDialect();
 const render = (cond: unknown) =>
@@ -14,7 +17,7 @@ const render = (cond: unknown) =>
 // can assert the age/ack floor without a live DB. `update` records each set() payload
 // in call order — row i's mark corresponds to updates[i] (rows are processed in order).
 function sweepHarness(
-	rows: OutboxEventDescriptor[],
+	rows: OutboxRow[],
 	opts: { updateThrows?: boolean } = {},
 ) {
 	let whereCond: unknown;
@@ -73,10 +76,14 @@ function pruneHarness(deleted: { id: string }[]) {
 	};
 }
 
-const row = (id: string): OutboxEventDescriptor => ({
+const row = (id: string): OutboxRow => ({
 	id,
 	name: "receipt/uploaded",
 	data: { receiptId: id },
+	createdAt: new Date(),
+	processedAt: null,
+	attempts: 0,
+	lastError: null,
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -100,6 +107,11 @@ describe("runSweep", () => {
 			{ id: "r1", name: "receipt/uploaded", data: { receiptId: "r1" } },
 			{ id: "r2", name: "receipt/uploaded", data: { receiptId: "r2" } },
 		]);
+		// Only the wire fields cross to Inngest — internal columns
+		// (attempts/processedAt/lastError) must never ride along.
+		for (const sent of sends) {
+			expect(Object.keys(sent).sort()).toEqual(["data", "id", "name"]);
+		}
 		expect(h.updates).toHaveLength(2);
 		expect(h.updates[0]?.processedAt).toBeInstanceOf(Date);
 		expect(h.updates[1]?.processedAt).toBeInstanceOf(Date);

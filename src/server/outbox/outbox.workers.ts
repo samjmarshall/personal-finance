@@ -42,7 +42,9 @@ export function makeRunSweep({ db, deliver }: SweepCoreDeps) {
 		let failed = 0;
 		for (const row of rows) {
 			try {
-				await deliver(row);
+				// Project to the wire fields only — never ship internal columns
+				// (attempts/processedAt/lastError, incl. raw error text) to the event store.
+				await deliver({ id: row.id, name: row.name, data: row.data });
 				await markProcessed(db, row.id, "sweep");
 				delivered++;
 			} catch (error) {
