@@ -81,9 +81,9 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make test` passes (DTO contract + producer test + updated events test + golden test still green)
-- [ ] `SKIP_ENV_VALIDATION=1 yarn build` succeeds ([[make-build-needs-prod-env-locally]])
+- [x] `make check` passes
+- [x] `make test` passes (DTO contract + producer test + updated events test + golden test still green)
+- [x] `SKIP_ENV_VALIDATION=1 pnpm run build` succeeds ([[make-build-needs-prod-env-locally]])
 
 **Manual**
 - [ ] User adds `BLOB_READ_WRITE_TOKEN` to `.env` ([[staging-env-example-past-the-block-hook]] for `.env.example`)
