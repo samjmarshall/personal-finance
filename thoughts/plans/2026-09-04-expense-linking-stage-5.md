@@ -65,16 +65,16 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 ## Phase 2: Upload rail + `receipt.create` producer
 
 ### Changes
-- `package.json` — add dep `@vercel/blob` (via `yarn add`).
+- `package.json` — add dep `@vercel/blob` (via `pnpm add`).
 - `src/env.js` — add `BLOB_READ_WRITE_TOKEN: requiredInProd(z.string())` to `server` (`:13-58`) + matching `runtimeEnv` entry (`:73-84`).
 - `src/domain/receipts/receipt.dto.ts` — `receiptCreateDto = z.object({ blobUrl: z.url(), blobPathname: z.string().min(1), contentType: z.string().optional() })` (client sends blob coordinates only; `userId`/`status`/`channel` are server-set). Follow the `*Fields`-spread shape of `src/domain/expenses/expense.dto.ts:6-18`.
 - `src/domain/receipts/receipt.dto.test.ts` — **written first** (TDD): compile-time `Contracts` tuple `Expect<WritesInto<z.infer<typeof receiptCreateDto> & { userId: string; status: ReceiptStatus; channel: ReceiptChannel }, Receipt>>` + runtime parse cases (rejects non-URL, empty pathname), mirroring `src/domain/expenses/expense.dto.test.ts:1-10`.
 - `src/app/api/receipts/upload/route.ts` — POST handler using `handleUpload` from `@vercel/blob`. `onBeforeGenerateToken`: resolve session the same way `createTRPCContext` does (`src/server/api/trpc.ts:33`), throw if unauthenticated; return `{ allowedContentTypes: ["image/jpeg","image/png","application/pdf"], maximumSizeInBytes, addRandomSuffix: true, tokenPayload: JSON.stringify({ userId }) }`. `onUploadCompleted`: no-op comment noting the row is created by `receipt.create` (webhook doesn't fire on localhost).
 - `src/server/inngest/events.ts` — firm `receipt/uploaded`, `receipt/retry`, `receipt/email.received` payloads from `z.object({ receiptId: z.string() })` to `z.object({ receiptId: z.number().int() })` (`:10-12`). Keys unchanged.
 - `src/server/inngest/events.test.ts` — update the payload contract assertions (`:33-41`) to `{ receiptId: number }`.
-- `src/server/api/routers/receipts.ts` — new router. `create: protectedProcedure.input(receiptCreateDto).mutation` calls `commitWithOutbox` (imported from `~/server/outbox`): the `writes` callback inserts one `receipts` row (`status: pending`, `channel: upload`, `userId: ctx.session.user.id`, blob fields) with `.returning()`, then returns `buildOutboxEvent("receipt/uploaded", { receiptId: row.id })` as the single event. Return the inserted `Receipt`.
+- `src/server/api/routers/receipts.ts` — new router. `create: protectedProcedure.input(receiptCreateDto).mutation` calls `commitWithOutbox(writes, (row) => events)` (imported from `~/server/outbox`): the `writes` callback inserts one `receipts` row (`status: pending`, `channel: upload`, `userId: ctx.session.user.id`, blob fields) with `.returning()`; the events fn derives `[buildOutboxEvent("receipt/uploaded", { receiptId: row.id })]` from the returned row. Return the inserted `Receipt`.
 - `src/server/api/root.ts` — register `receipt: receiptRouter` (`:15-23`).
-- `src/app/_components/receipts/receipt-upload.tsx` — client component: `upload(pathname, file, { access: "public", handleUploadUrl: "/api/receipts/upload", contentType })` from `@vercel/blob/client`, then `api.receipt.create.mutate({ blobUrl, blobPathname, contentType })` and invalidate the receipts list.
+- `src/app/_components/receipts/receipt-upload.tsx` — client component: `upload(pathname, file, { access: "private", handleUploadUrl: "/api/receipts/upload", contentType })` from `@vercel/blob/client` (private store — anonymous GET 400s), then `api.receipt.create.mutate({ blobUrl, blobPathname, contentType })` and invalidate the receipts list. Pre-processes the pick via `prepReceipt`: transcodes HEIC→JPEG, compresses images; PDFs pass through.
 
 ### Changes — tests
 - `src/server/api/routers/receipts.create.test.ts` — inject a fake `commitWithOutbox` (per `src/server/outbox/commit.test.ts` fake pattern) and assert: one receipt row written with server-set `status/channel/userId`; exactly one `receipt/uploaded` event minted carrying the returned `row.id` as a **number**.
@@ -86,9 +86,10 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 - [x] `SKIP_ENV_VALIDATION=1 pnpm run build` succeeds ([[make-build-needs-prod-env-locally]])
 
 **Manual**
-- [ ] User adds `BLOB_READ_WRITE_TOKEN` to `.env` ([[staging-env-example-past-the-block-hook]] for `.env.example`)
-- [ ] Uploading a JPG/PNG/PDF at `/receipts` creates a `pending` row; a non-allowed type is rejected by the token route
-- [ ] Unauthenticated POST to `/api/receipts/upload` is rejected
+- [x] User adds `BLOB_READ_WRITE_TOKEN` to `.env`
+- [ ] Add `BLOB_READ_WRITE_TOKEN` to `.env.example` ([[staging-env-example-past-the-block-hook]])
+- [ ] Uploading a JPG/PNG/PDF creates a `pending` row; a non-allowed type is rejected by the token route (wire `<ReceiptUpload />` on a temp page or wait for Phase 4's `/receipts`)
+- [x] Unauthenticated POST to `/api/receipts/upload` is rejected
 - [ ] `/security-review` (touches `src/env.js`, auth session in a route handler, blob token minting)
 
 ---
@@ -120,7 +121,7 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 **Automated**
 - [ ] `make check` passes
 - [ ] `make test` passes (extraction, mismatch, worker cases, golden test with new entry)
-- [ ] `SKIP_ENV_VALIDATION=1 yarn build` succeeds
+- [ ] `SKIP_ENV_VALIDATION=1 pnpm run build` succeeds
 
 **Manual**
 - [ ] User adds `ANTHROPIC_API_KEY` to `.env`; Inngest Dev Server running ([[inngest-local-dev-host-not-docker]])
