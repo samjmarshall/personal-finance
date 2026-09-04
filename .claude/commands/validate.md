@@ -1,5 +1,5 @@
 ---
-model: fable
+model: claude-opus-5
 effort: ultracode
 ---
 # Validate Plan
