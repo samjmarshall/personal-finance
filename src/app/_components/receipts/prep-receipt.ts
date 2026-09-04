@@ -28,7 +28,8 @@ export function isHeic(file: File): boolean {
  * dynamically so libheif WASM never ships to a non-HEIC upload.
  */
 export async function prepReceipt(file: File): Promise<File> {
-	if (file.type === "application/pdf") return file;
+	// Some browsers (Windows/Linux) report no MIME for local PDFs; sniff extension too.
+	if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return file;
 
 	let image = file;
 	if (isHeic(file)) {

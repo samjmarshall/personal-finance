@@ -38,8 +38,7 @@ export function ReceiptUpload() {
 		// Clear so re-picking the same file fires onChange again.
 		event.target.value = "";
 
-		// Convert + compress. Failures here (unreadable/corrupt image) toast and
-		// return the button to idle so the member can retry.
+		// prepReceipt failures (corrupt/unreadable file) toast + reset idle so the member can retry.
 		setStatus("processing");
 		let ready: File;
 		try {

@@ -21,6 +21,7 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | `KV_REST_API_TOKEN` | production | Upstash Redis REST token. |
 | `INNGEST_EVENT_KEY` | production | Inngest Cloud key for sending events. |
 | `INNGEST_SIGNING_KEY` | production | Inngest Cloud key `serve` uses to verify inbound requests. |
+| `BLOB_READ_WRITE_TOKEN` | production | Vercel Blob token; mints client-upload tokens at `/api/receipts/upload` (private store). Injected by the Blob integration in prod. |
 
 `next build` runs with `NODE_ENV=production`, so `make build` and `pnpm run preview` fail locally unless the production-required variables are in `.env`.
 

@@ -13,7 +13,15 @@ const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 // receipt.create mutation — Blob's onUploadCompleted webhook can't reach localhost,
 // so it must never be the producer or dev uploads would leave no row.
 export async function POST(request: Request): Promise<NextResponse> {
-	const body = (await request.json()) as HandleUploadBody;
+	let body: HandleUploadBody;
+	try {
+		body = (await request.json()) as HandleUploadBody;
+	} catch {
+		return NextResponse.json(
+			{ error: "Invalid request body" },
+			{ status: 400 },
+		);
+	}
 
 	try {
 		const jsonResponse = await handleUpload({
