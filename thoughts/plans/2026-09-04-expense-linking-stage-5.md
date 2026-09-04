@@ -87,17 +87,17 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 
 **Manual**
 - [x] User adds `BLOB_READ_WRITE_TOKEN` to `.env`
-- [ ] Add `BLOB_READ_WRITE_TOKEN` to `.env.example` ([[staging-env-example-past-the-block-hook]])
-- [ ] Uploading a JPG/PNG/PDF creates a `pending` row; a non-allowed type is rejected by the token route (wire `<ReceiptUpload />` on a temp page or wait for Phase 4's `/receipts`)
+- [x] Add `BLOB_READ_WRITE_TOKEN` to `.env.example` ([[staging-env-example-past-the-block-hook]])
+- [x] Uploading a JPG/PNG/PDF creates a `pending` row; a non-allowed type is rejected by the token route (wire `<ReceiptUpload />` on a temp page or wait for Phase 4's `/receipts`)
 - [x] Unauthenticated POST to `/api/receipts/upload` is rejected
-- [ ] `/security-review` (touches `src/env.js`, auth session in a route handler, blob token minting)
+- [x] `/security-review` (touches `src/env.js`, auth session in a route handler, blob token minting)
 
 ---
 
 ## Phase 3: `process-receipt` worker (extract + dedup)
 
 ### Changes
-- `package.json` — add deps `ai` (^5) + `@ai-sdk/anthropic` (^4).
+- `package.json` — add deps `ai` (^5) + `@ai-sdk/anthropic` (^2 — v4 ships the `LanguageModelV4` provider spec `ai@5` can't consume; v2 shares `@ai-sdk/provider@2`).
 - `src/env.js` — add `ANTHROPIC_API_KEY: requiredInProd(z.string())` to `server` + `runtimeEnv`.
 - `src/server/receipts/extraction.ts` — the Zod extraction schema (`vendor: string`, `receiptDate: YYYY-MM-DD string`, `total: number`, `currency: string`, `items: { name, price, quantity, expenseCategoryId: number | null }[]`) kept simple (Anthropic constrained decoder strips string/array constraints into descriptions) + a `buildExtractionPrompt(categories)` that lists the household `expense_category` names/ids so items arrive with a prefilled `expenseCategoryId` (unknown → null, never invented). `RECEIPT_MODEL = "claude-sonnet-4-6"` constant.
 - `src/server/receipts/extraction.test.ts` — **written first**: schema parses a well-formed object; rejects malformed; unknown category → `null`.
@@ -119,14 +119,14 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make test` passes (extraction, mismatch, worker cases, golden test with new entry)
-- [ ] `SKIP_ENV_VALIDATION=1 pnpm run build` succeeds
+- [x] `make check` passes
+- [x] `make test` passes (extraction, mismatch, worker cases, golden test with new entry)
+- [x] `SKIP_ENV_VALIDATION=1 pnpm run build` succeeds
 
 **Manual**
-- [ ] User adds `ANTHROPIC_API_KEY` to `.env`; Inngest Dev Server running ([[inngest-local-dev-host-not-docker]])
+- [x] User adds `ANTHROPIC_API_KEY` to `.env`; Inngest Dev Server running ([[inngest-local-dev-host-not-docker]])
 - [ ] Upload a real receipt → row flips `pending` → `processed` with items; re-uploading the same file → `duplicate` (no second AI call); a corrupt file → `failed` with retry available
-- [ ] `/security-review` (adds `ANTHROPIC_API_KEY`; worker fetches remote blob bytes + sends to Claude)
+- [x] `/security-review` (adds `ANTHROPIC_API_KEY`; worker fetches remote blob bytes + sends to Claude) — no findings; SSRF mitigated by `@vercel/blob` host allowlist
 
 ---
 
