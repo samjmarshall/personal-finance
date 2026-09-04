@@ -47,7 +47,7 @@ The posture, stated once — the clauses that bind:
 4. **Sweep cadence: hourly, with a 30-second row-age floor.** The cron runs `0 * * * *`; its filter carries `created_at < now() - interval '30 seconds'` so it cannot race the post-commit send. Under any real load every event is delivered by the post-commit send and never reaches the sweep, so the hourly cadence trades worst-case backstop latency for letting Neon's compute scale to zero instead of being pinned open by per-minute polling.
 5. **Idempotency.** The outbox row `id` **is** the Inngest idempotency key. A sweep racing the post-commit send is a guaranteed no-op. This is an infrastructure guarantee, not per-worker application logic.
 6. **Control state vs output state.** Inngest owns live run state (an in-flight categorisation pass over an import batch). The DB owns the canonical output rows the dashboard reads. **The UI never reads the event tape.**
-7. **Typed event surface.** A single Zod `EVENT_REGISTRY` in `src/server/inngest/events.ts` maps event name → payload schema and is the sole naming authority, deriving `EventName`, `EventPayload<K>` and `OutboxEventDescriptor`. `buildOutboxEvent(name, payload)` parses the payload against the registry and returns `{ id, name, data, insert }` — an **un-awaited** insert for the caller to include in its own atomic write. The registry is the outbox delivery catalogue only; a direct `inngest.send` with no canonical row to attach to (a dev tracer ping, a manual reconcile trigger) is deliberately excluded.
+7. **Typed event surface.** A single Zod `EVENT_REGISTRY` in `src/server/inngest/events.ts` maps event name → payload schema and is the sole naming authority, deriving `EventName`, `EventPayload<K>` and `OutboxEventDescriptor`. `buildOutboxEvent(name, payload)` parses the payload against the registry and returns `{ id, name, data }`; the caller hands the descriptor to the write door (`commitWithOutbox`), which inserts it in the same transaction as the canonical rows. The registry is the outbox delivery catalogue only; a direct `inngest.send` with no canonical row to attach to (a dev tracer ping, a manual reconcile trigger) is deliberately excluded.
 
 This is explicitly **not** event sourcing: rows are canonical, and the outbox exists only for *delivery*. No surface may fold state out of the event history.
 
@@ -82,16 +82,18 @@ flowchart LR
 ```sql
 CREATE TABLE outbox (
   id           uuid PRIMARY KEY NOT NULL,
-  event_name   text NOT NULL,
-  payload      jsonb NOT NULL,
+  name         text NOT NULL,
+  data         jsonb NOT NULL,
   created_at   timestamptz DEFAULT now() NOT NULL,
   processed_at timestamptz,
   attempts     integer DEFAULT 0 NOT NULL,
   last_error   text
 );
 
--- partial index: the sweep only ever reads the unacked set
-CREATE INDEX outbox_unprocessed_idx ON outbox (processed_at, created_at)
+-- partial index: the sweep only ever reads the unacked set. WHERE processed_at IS NULL
+-- pins processed_at constant within the set, so created_at alone serves the age filter
+-- and the ORDER BY — a leading processed_at would add a zero-selectivity column.
+CREATE INDEX outbox_unprocessed_idx ON outbox (created_at)
   WHERE processed_at IS NULL;
 ```
 
