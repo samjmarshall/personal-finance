@@ -11,7 +11,12 @@ describe("receipt table shape", () => {
 	it("requires the blob coordinates the worker fetches from", () => {
 		expect(receiptCols.blobUrl.notNull).toBe(true);
 		expect(receiptCols.blobPathname.notNull).toBe(true);
-		expect(receiptCols.userId.notNull).toBe(true);
+	});
+
+	// Deleting a member's auth row must never wipe their receipts — tax evidence is
+	// kept forever (schema uses onDelete: set null; userId goes null, the row stays).
+	it("keeps the receipt when its owner is deleted (userId nullable)", () => {
+		expect(receiptCols.userId.notNull).toBe(false);
 	});
 
 	it("defaults status to pending and channel to upload on upload", () => {

@@ -26,10 +26,9 @@ export const receipts = pgTable(
 		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
 		status: receiptStatus().notNull().default(ReceiptStatus.Pending),
 		channel: receiptChannel().notNull().default(ReceiptChannel.Upload),
-		userId: d
-			.text()
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		// set null, not cascade: a receipt is tax evidence kept forever, so deleting a
+		// member's auth row detaches ownership but never wipes the receipt or its items.
+		userId: d.text().references(() => user.id, { onDelete: "set null" }),
 		blobUrl: d.text().notNull(),
 		blobPathname: d.text().notNull(),
 		contentType: d.text(),

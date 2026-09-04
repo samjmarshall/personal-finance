@@ -64,6 +64,13 @@
 			"when": 1788483481666,
 			"tag": "0008_wide_steel_serpent",
 			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1788490326747,
+			"tag": "0009_nappy_albert_cleary",
+			"breakpoints": true
 		}
 	]
 }

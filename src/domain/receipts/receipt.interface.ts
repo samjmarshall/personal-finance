@@ -4,7 +4,7 @@ export interface Receipt {
 	id: number;
 	status: ReceiptStatus;
 	channel: ReceiptChannel;
-	userId: string;
+	userId: string | null;
 	blobUrl: string;
 	blobPathname: string;
 	contentType: string | null;
