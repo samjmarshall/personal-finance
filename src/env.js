@@ -11,6 +11,8 @@ export const env = createEnv({
 	 * isn't built with invalid env vars.
 	 */
 	server: {
+		/** Claude API key. Powers the process-receipt worker's Vision extraction. */
+		ANTHROPIC_API_KEY: requiredInProd(z.string()),
 		BETTER_AUTH_SECRET: requiredInProd(z.string()),
 		BETTER_AUTH_URL: z.preprocess(
 			(str) =>
@@ -77,6 +79,7 @@ export const env = createEnv({
 	 * middlewares) or client-side so we need to destruct manually.
 	 */
 	runtimeEnv: {
+		ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
 		BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
