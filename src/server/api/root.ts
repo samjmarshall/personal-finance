@@ -3,6 +3,7 @@ import { cashflowRouter } from "~/server/api/routers/cashflow";
 import { categoryRouter } from "~/server/api/routers/category";
 import { expenseRouter } from "~/server/api/routers/expense";
 import { incomeRouter } from "~/server/api/routers/income";
+import { receiptRouter } from "~/server/api/routers/receipts";
 import { settingRouter } from "~/server/api/routers/setting";
 import { transactionRouter } from "~/server/api/routers/transaction";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
@@ -18,6 +19,7 @@ export const appRouter = createTRPCRouter({
 	category: categoryRouter,
 	expense: expenseRouter,
 	income: incomeRouter,
+	receipt: receiptRouter,
 	setting: settingRouter,
 	transaction: transactionRouter,
 });

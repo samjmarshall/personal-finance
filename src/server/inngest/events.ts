@@ -3,13 +3,13 @@ import { z } from "zod";
 /**
  * Single naming + payload authority for outbox events (adr002 clause 7). Keys are
  * FROZEN Inngest wire strings — golden-pinned in `./registry-golden.test.ts`.
- * Payload shapes are provisional: the receipt consumers land in stage 5 and may firm
- * them up. Nothing produces these events yet; stage 4 builds the rail only.
+ * receiptId is the integer `receipt` PK — firmed from the stage-4 provisional
+ * string once the stage-5 producer landed.
  */
 export const EVENT_REGISTRY = {
-	"receipt/uploaded": z.object({ receiptId: z.string() }),
-	"receipt/email.received": z.object({ receiptId: z.string() }),
-	"receipt/retry": z.object({ receiptId: z.string() }),
+	"receipt/uploaded": z.object({ receiptId: z.number().int() }),
+	"receipt/email.received": z.object({ receiptId: z.number().int() }),
+	"receipt/retry": z.object({ receiptId: z.number().int() }),
 } as const;
 
 export type EventName = keyof typeof EVENT_REGISTRY;
