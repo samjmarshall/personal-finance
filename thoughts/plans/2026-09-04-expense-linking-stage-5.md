@@ -58,7 +58,7 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 
 **Manual**
 - [x] `make db_generate` produces one additive migration (two `CREATE TABLE`, two enums, indexes; no changes to existing tables)
-- [ ] **User runs** `make db_migrate` against the feature-branch DB ([[db-migrate-and-env-are-user-run]]; never on `main`/prod)
+- [x] **User runs** `make db_migrate` against the feature-branch DB ([[db-migrate-and-env-are-user-run]]; never on `main`/prod)
 
 ---
 
