@@ -22,7 +22,7 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | `INNGEST_EVENT_KEY` | production | Inngest Cloud key for sending events. |
 | `INNGEST_SIGNING_KEY` | production | Inngest Cloud key `serve` uses to verify inbound requests. |
 
-`next build` runs with `NODE_ENV=production`, so `make build` and `yarn preview` fail locally unless the production-required variables are in `.env`.
+`next build` runs with `NODE_ENV=production`, so `make build` and `pnpm run preview` fail locally unless the production-required variables are in `.env`.
 
 ### Upstash Redis
 

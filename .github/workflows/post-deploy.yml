@@ -41,14 +41,17 @@ jobs:
       - name: Checkout
         uses: vercel/repository-dispatch/actions/checkout@v1
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
-          cache: yarn
+          cache: pnpm
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Resolve Neon branch
         id: neon
@@ -93,14 +96,14 @@ jobs:
 
       # Catches journal/snapshot collisions before anything is applied.
       - name: Run database check
-        run: yarn db:check
+        run: pnpm run db:check
         env:
           SKIP_ENV_VALIDATION: 1
           DATABASE_URL_UNPOOLED: ${{ steps.dburl.outputs.db_url_unpooled }}
 
       # Unpooled: DDL must not go through PgBouncer.
       - name: Run database migrations
-        run: yarn db:migrate
+        run: pnpm run db:migrate
         env:
           SKIP_ENV_VALIDATION: 1
           DATABASE_URL_UNPOOLED: ${{ steps.dburl.outputs.db_url_unpooled }}

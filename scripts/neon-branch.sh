@@ -218,7 +218,7 @@ cmd_create() {
 
   # Run migrations
   log "Running migrations..."
-  (cd "$REPO_ROOT" && SKIP_ENV_VALIDATION=1 yarn db:migrate)
+  (cd "$REPO_ROOT" && SKIP_ENV_VALIDATION=1 pnpm run db:migrate)
   log "Done — local dev is using branch: $neon_branch_name"
 }
 

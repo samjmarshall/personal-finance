@@ -1,0 +1,78 @@
+name: Quality Control
+
+on: push
+
+jobs:
+  check:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: make install
+
+      - name: Lint & Type Check
+        run: make check
+
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: make install
+
+      - name: Audit
+        run: make audit
+
+      # TODO: Path to Production - Sign up for PaderDuty. Create API integration key to allow medium urgency (P2) alerts on `main` NPM Audit Critical/High CVEs
+      # - name: Send PagerDuty alert on failure
+      #   if: failure() && github.ref_name == 'main'
+      #   uses: Entle/action-pagerduty-alert@1.0.5
+      #   with:
+      #     pagerduty-integration-key: ${{ secrets.PAGERDUTY_INTEGRATION_KEY }}
+      #     pagerduty-dedup-key: npm_audit
+      #     runbook-url: https://github.com/samjmarshall/rekurve/docs/run-books/...
+      #
+      # - name: Resolve PagerDuty alert on success
+      #   if: ${{ !failure() && !cancelled() }}
+      #   uses: Entle/action-pagerduty-alert@1.0.5
+      #   with:
+      #     pagerduty-integration-key: '${{ secrets.PAGERDUTY_INTEGRATION_KEY }}'
+      #     pagerduty-dedup-key: npm_audit
+      #     resolve: true
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: make install
+
+      - name: Unit Tests
+        run: make test

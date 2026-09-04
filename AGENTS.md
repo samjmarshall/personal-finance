@@ -12,16 +12,16 @@
 
 ***Prerequisite:*** Run `nvm use` - Configure the correct version of Node.js for the project, specified in `.nvmrc`.
 
-Prefer Makefile targets with `yarn` as a fallback — never use `npm` or `npx` directly:
+Prefer Makefile targets with `pnpm` as a fallback — never use `npm`, `npx`, or `yarn` directly:
 
-- `make build` — clean build (`rm -rf .next` + `yarn build`)
-- `make check` — lint + typecheck + db schema check (`yarn run check` + `yarn run typecheck` + `yarn run db:check`)
-- `make fix` - fix lint issues (`yarn run check:write`)
-- `make test` — run Vitest unit tests (`yarn test`)
-- `make start` — local dev server (`yarn run dev`)
-- `make install` — install dependencies (`yarn`)
-- `make db_generate` - generate new schema migration files (`yarn db:generate`)
-- `make db_migrate` - run schema migrations against the db (`yarn db:migrate`)
+- `make build` — clean build (`rm -rf .next` + `pnpm run build`)
+- `make check` — lint + typecheck + db schema check (`pnpm run check` + `pnpm run typecheck` + `pnpm run db:check`)
+- `make fix` - fix lint issues (`pnpm run check:write`)
+- `make test` — run Vitest unit tests (`pnpm run test`)
+- `make start` — local dev server (`pnpm run dev`)
+- `make install` — install dependencies (`pnpm install`)
+- `make db_generate` - generate new schema migration files (`pnpm run db:generate`)
+- `make db_migrate` - run schema migrations against the db (`pnpm run db:migrate`)
 
 The dev server runs via Vercel Portless - no port.
 - Main worktree (no prefix): https://personal-finance.localhost
@@ -29,7 +29,7 @@ The dev server runs via Vercel Portless - no port.
 
 ## Database Migrations
 
-Never use `drizzle-kit push`. Always generate and run git tracked migration files with `yarn db:generate` and then `yarn db:migrate`.
+Never use `drizzle-kit push`. Always generate and run git tracked migration files with `pnpm run db:generate` and then `pnpm run db:migrate`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
