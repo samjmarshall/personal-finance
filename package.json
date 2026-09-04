@@ -3,6 +3,11 @@
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
+	"packageManager": "pnpm@10.18.0",
+	"engines": {
+		"node": ">=24",
+		"pnpm": ">=10"
+	},
 	"scripts": {
 		"build": "next build",
 		"check": "biome check .",
@@ -13,7 +18,7 @@
 		"db:custom": "drizzle-kit generate --custom",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
-		"dev": "concurrently -k -n app,inngest -c blue,green \"yarn dev:app\" \"yarn dev:inngest\"",
+		"dev": "concurrently -k -n app,inngest -c blue,green \"pnpm dev:app\" \"pnpm dev:inngest\"",
 		"dev:app": "portless run --force ./scripts/dev-app.sh",
 		"dev:inngest": "portless run --force --name inngest.personal-finance ./scripts/dev-inngest.sh",
 		"lint": "biome lint .",
@@ -75,5 +80,12 @@
 	},
 	"ct3aMetadata": {
 		"initVersion": "7.40.0"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild",
+			"inngest-cli",
+			"protobufjs"
+		]
 	}
 }
