@@ -10,6 +10,10 @@ import { receipts } from "~/server/receipts/receipts.schema";
 // the browser can't load the blob URL directly (an anonymous GET 400s) — this
 // route gates on the session, then signs the read with BLOB_READ_WRITE_TOKEN via
 // the SDK's `get` and pipes the bytes through under the original content type.
+//
+// Reads by `blobPathname`, never the member-supplied `blobUrl`: the SDK resolves
+// a pathname against *our* store token, so a URL pointing at a foreign public
+// store can't be streamed back same-origin as `text/html`.
 export async function GET(
 	request: Request,
 	ctx: { params: Promise<{ id: string }> },
@@ -22,12 +26,12 @@ export async function GET(
 		return new NextResponse("Not found", { status: 404 });
 
 	const [receipt] = await db
-		.select({ blobUrl: receipts.blobUrl })
+		.select({ blobPathname: receipts.blobPathname })
 		.from(receipts)
 		.where(eq(receipts.id, receiptId));
 	if (!receipt) return new NextResponse("Not found", { status: 404 });
 
-	const result = await get(receipt.blobUrl, { access: "private" });
+	const result = await get(receipt.blobPathname, { access: "private" });
 	if (result?.statusCode !== 200)
 		return new NextResponse("Not found", { status: 404 });
 
