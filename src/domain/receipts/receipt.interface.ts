@@ -33,3 +33,21 @@ export interface ReceiptItem {
 	createdAt: Date;
 	updatedAt: Date | null;
 }
+
+// A receipt as it appears in the history table: the row plus the joined member
+// name and matched-transaction description (null when unowned/unmatched).
+export interface ReceiptListItem extends Receipt {
+	userName: string | null;
+	transactionDescription: string | null;
+}
+
+// A line item carrying its resolved expense/category labels for the detail view.
+export interface ReceiptItemDetail extends ReceiptItem {
+	expenseName: string | null;
+	expenseCategoryName: string | null;
+}
+
+// One receipt with its line items — the detail overlay's payload.
+export interface ReceiptDetail extends Receipt {
+	items: ReceiptItemDetail[];
+}

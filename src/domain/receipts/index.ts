@@ -1,5 +1,17 @@
 import { receiptCreateDto } from "./receipt.dto";
-import type { Receipt, ReceiptItem } from "./receipt.interface";
+import type {
+	Receipt,
+	ReceiptDetail,
+	ReceiptItem,
+	ReceiptItemDetail,
+	ReceiptListItem,
+} from "./receipt.interface";
 
-export type { Receipt, ReceiptItem };
+export type {
+	Receipt,
+	ReceiptDetail,
+	ReceiptItem,
+	ReceiptItemDetail,
+	ReceiptListItem,
+};
 export { receiptCreateDto };
