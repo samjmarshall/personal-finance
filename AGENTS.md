@@ -10,8 +10,6 @@
 
 ## Build & Test Commands
 
-***Prerequisite:*** Run `nvm use` - Configure the correct version of Node.js for the project, specified in `.nvmrc`.
-
 Prefer Makefile targets with `pnpm` as a fallback — never use `npm`, `npx`, or `yarn` directly:
 
 - `make build` — clean build (`rm -rf .next` + `pnpm run build`)
