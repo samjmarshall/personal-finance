@@ -142,21 +142,22 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 - `src/app/(dashboard)/receipts/page.tsx` — RSC prefetch (`api.receipt.list.prefetch`) + `HydrateClient` (mirror `src/app/(dashboard)/transactions/page.tsx:1-18`).
 - `src/app/_components/receipts/receipts-view.tsx` — history table: thumbnail, vendor, total, date, member, status badge; retry button on `failed`; `duplicate` rows link to `duplicateOfId` (no retry); Destructive delete (confirm dialog) on any row; status filter. Embeds `<ReceiptUpload />` from Phase 2. Uses `useSuspenseQuery`/`useMutation` + `utils.receipt.invalidate()` per `transactions-view.tsx`.
 - `src/app/_components/receipts/receipt-detail.tsx` — image beside extracted items; items-total mismatch badge via `itemsTotalMismatch`. (Match banner + per-item pickers land in Phase 5.)
-- `src/app/_components/app-nav.tsx` — add top-level `{ href: "/receipts", label: "Receipts", icon: <lucide> }` to `links` (`:25-42`).
+- `src/app/api/receipts/[id]/image/route.ts` — **added in impl** (not foreseen when the plan was written): the Blob store is private ([[vercel-blob-store-is-private]]), so `receipt-detail.tsx`/thumbnails can't `<img src={blobUrl}>` (anonymous GET 400s). Auth-gated GET route: session check → load `blobUrl` → `get(blobUrl,{access:'private'})` → stream bytes under the original content type, `Cache-Control: private, no-store`.
+- `src/app/_components/app-nav.tsx` — add top-level `{ href: "/receipts", label: "Receipts", icon: ScanLine }` to `links` (`:25-42`); `Receipt` icon is taken by Transactions.
 
 ### Changes — tests
 - `src/server/api/routers/receipts.mutations.test.ts` — `retry` refuses non-`failed` and mints `receipt/retry` for `failed`; `delete` removes row + calls blob `del` with the stored pathname (injected fake).
 
 ### Success
 **Automated**
-- [ ] `make check` passes
-- [ ] `make test` passes
+- [x] `make check` passes
+- [x] `make test` passes
 
 **Manual**
 - [ ] `/receipts` lists uploads with correct status badges; filter shows only the processed-but-unmatched queue
 - [ ] Retry on a `failed` row re-runs the worker; delete removes the row + blob and unlinks any matched transaction
 - [ ] `/design-review` (new page + nav)
-- [ ] `/security-review` (delete removes a blob; `del` uses the same write token)
+- [ ] `/security-review` (delete removes a blob; `del` uses the same write token; private-blob image proxy route added — auth-gated)
 
 ---
 
