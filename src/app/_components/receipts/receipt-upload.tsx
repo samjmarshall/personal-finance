@@ -38,7 +38,7 @@ export function ReceiptUpload() {
 		// Clear so re-picking the same file fires onChange again.
 		event.target.value = "";
 
-		// prepReceipt failures (corrupt/unreadable file) toast + reset idle so the member can retry.
+		// corrupt/unreadable file — reset to idle so the member can retry
 		setStatus("processing");
 		let ready: File;
 		try {

@@ -7,6 +7,7 @@ import {
 	type LucideIcon,
 	Moon,
 	Receipt,
+	ScanLine,
 	Sun,
 	SunMoon,
 	Tags,
@@ -39,6 +40,7 @@ const links: NavItem[] = [
 	},
 	{ href: "/income", label: "Income", icon: TrendingUp },
 	{ href: "/transactions", label: "Transactions", icon: Receipt },
+	{ href: "/receipts", label: "Receipts", icon: ScanLine },
 ];
 
 /** Every navigable leaf, sections flattened; `group` names the parent section. */
