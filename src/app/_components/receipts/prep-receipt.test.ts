@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isHeic } from "./prep-receipt";
+import { isHeic, prepReceipt } from "./prep-receipt";
 
 // Content is irrelevant to isHeic — it gates on name + reported MIME only.
 function file(name: string, type: string): File {
@@ -25,5 +25,20 @@ describe("isHeic", () => {
 		expect(isHeic(file("scan.pdf", "application/pdf"))).toBe(false);
 		expect(isHeic(file("noext", ""))).toBe(false);
 		expect(isHeic(file("x.jpg", ""))).toBe(false);
+	});
+});
+
+describe("prepReceipt", () => {
+	it("stamps application/pdf on a PDF the browser reported with no type", async () => {
+		// Windows/Linux browsers hand back an empty File.type for local PDFs; every
+		// downstream branch (upload allowlist, worker file part, detail view) keys on it.
+		const out = await prepReceipt(file("scan.pdf", ""));
+		expect(out.type).toBe("application/pdf");
+		expect(out.name).toBe("scan.pdf");
+	});
+
+	it("passes a correctly typed PDF through untouched", async () => {
+		const pdf = file("scan.pdf", "application/pdf");
+		expect(await prepReceipt(pdf)).toBe(pdf);
 	});
 });

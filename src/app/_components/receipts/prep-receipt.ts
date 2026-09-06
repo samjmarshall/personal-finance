@@ -1,5 +1,7 @@
 import type { Options } from "browser-image-compression";
 
+import { isPdf } from "~/lib/utils";
+
 // Big phone photos → keep the upload small: a legible receipt well under the 10MB
 // token cap. Claude also downscales >1568px, so extra pixels only cost bandwidth.
 const COMPRESS: Options = {
@@ -28,8 +30,11 @@ export function isHeic(file: File): boolean {
  * dynamically so libheif WASM never ships to a non-HEIC upload.
  */
 export async function prepReceipt(file: File): Promise<File> {
-	// Some browsers (Windows/Linux) report no MIME for local PDFs; sniff extension too.
-	if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return file;
+	// Some browsers (Windows/Linux) report no MIME for local PDFs; sniff extension too,
+	// and stamp the type so the upload allowlist, worker and viewer all see a real PDF.
+	if (isPdf(file.type)) return file;
+	if (/\.pdf$/i.test(file.name))
+		return new File([file], file.name, { type: "application/pdf" });
 
 	let image = file;
 	if (isHeic(file)) {

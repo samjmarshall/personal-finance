@@ -1,3 +1,4 @@
+import { APICallError } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import { expenseCategories } from "~/server/expenses/categories.schema";
@@ -155,6 +156,52 @@ describe("runProcessReceipt", () => {
 		]);
 	});
 
+	it("nulls a category id the model invented instead of failing the whole extraction", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			categories: [{ id: 7, name: "Groceries" }],
+		});
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: okBlob,
+			generate: async () => ({
+				...extraction,
+				items: [
+					{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
+					{ name: "Soap", price: 1.5, quantity: 1, expenseCategoryId: 99 },
+				],
+			}),
+			hash: () => "hash-abc",
+		});
+
+		await run(1);
+
+		expect(findUpdate(h.updates, "status")?.status).toBe(
+			ReceiptStatus.Processed,
+		);
+		expect(h.inserts[0]?.values).toEqual([
+			expect.objectContaining({ name: "Milk", expenseCategoryId: 7 }),
+			expect.objectContaining({ name: "Soap", expenseCategoryId: null }),
+		]);
+	});
+
+	it("nulls a non-ISO receipt date instead of failing the whole extraction", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: okBlob,
+			generate: async () => ({ ...extraction, receiptDate: "14/08/2026" }),
+			hash: () => "hash-abc",
+		});
+
+		await run(1);
+
+		const processed = findUpdate(h.updates, "status");
+		expect(processed?.status).toBe(ReceiptStatus.Processed);
+		expect(processed?.receiptDate).toBeNull();
+		expect(h.inserts).toHaveLength(1);
+	});
+
 	it("marks a re-upload duplicate without spending on the AI call", async () => {
 		const h = harness({
 			receipt: baseReceipt(),
@@ -217,5 +264,50 @@ describe("runProcessReceipt", () => {
 		expect(failed?.status).toBe(ReceiptStatus.Failed);
 		expect(failed?.error).toContain("model unavailable");
 		expect(h.inserts).toHaveLength(0);
+	});
+
+	const overloaded = () =>
+		new APICallError({
+			message: "Overloaded",
+			url: "https://api.anthropic.com/v1/messages",
+			requestBodyValues: {},
+			statusCode: 529,
+			isRetryable: true,
+		});
+
+	it("rethrows a retryable API error while attempts remain so Inngest retries", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: okBlob,
+			generate: async () => {
+				throw overloaded();
+			},
+			hash: () => "hash-abc",
+		});
+
+		await expect(run(1, { isFinalAttempt: false })).rejects.toThrow(
+			"Overloaded",
+		);
+
+		expect(findUpdate(h.updates, "error")).toBeUndefined();
+	});
+
+	it("parks a retryable API error as failed on the final attempt", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: okBlob,
+			generate: async () => {
+				throw overloaded();
+			},
+			hash: () => "hash-abc",
+		});
+
+		await run(1, { isFinalAttempt: true });
+
+		const failed = findUpdate(h.updates, "error");
+		expect(failed?.status).toBe(ReceiptStatus.Failed);
+		expect(failed?.error).toContain("Overloaded");
 	});
 });
