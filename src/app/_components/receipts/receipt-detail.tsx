@@ -1,6 +1,7 @@
 "use client";
 
 import { FileText, Loader2Icon, TriangleAlert } from "lucide-react";
+import { useRef } from "react";
 
 import { Money } from "~/app/_components/money";
 import { Badge } from "~/components/ui/badge";
@@ -11,8 +12,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
+import { receiptImageUrl } from "~/domain/receipts";
 import { itemsTotalMismatch } from "~/domain/receipts/receipt-total";
-import { formatDate } from "~/lib/utils";
+import { ReceiptStatus } from "~/lib/constants";
+import { formatDate, isPdf } from "~/lib/utils";
 import { api } from "~/trpc/react";
 
 // A processed receipt with no vendor is still worth opening (the image is the
@@ -29,15 +32,17 @@ export function ReceiptDetail({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const open = receiptId !== null;
-	// Kept mounted across close so Base UI can play the exit animation; the query
-	// only runs while a row is selected.
+	// Kept mounted across close so Base UI can play the exit animation. Freezing
+	// the last selected id keeps the query key — and its cached data — stable
+	// while fading out, instead of snapping to "Receipt" + a spinner.
+	const lastId = useRef(receiptId);
+	if (receiptId !== null) lastId.current = receiptId;
 	const { data, isLoading } = api.receipt.get.useQuery(
-		{ id: receiptId ?? 0 },
+		{ id: lastId.current ?? 0 },
 		{ enabled: open },
 	);
 
-	const isPdf = data?.contentType === "application/pdf";
-	const imageSrc = data ? `/api/receipts/${data.id}/image` : "";
+	const imageSrc = data ? receiptImageUrl(data.id) : "";
 	const mismatch = data ? itemsTotalMismatch(data.total, data.items) : false;
 
 	return (
@@ -53,21 +58,25 @@ export function ReceiptDetail({
 				</DialogHeader>
 
 				{isLoading || !data ? (
-					<div className="flex h-48 items-center justify-center text-muted-foreground">
-						<Loader2Icon className="h-5 w-5 animate-spin" />
+					<div
+						aria-label="Loading receipt"
+						className="flex h-48 items-center justify-center text-muted-foreground"
+						role="status"
+					>
+						<Loader2Icon aria-hidden className="h-5 w-5 animate-spin" />
 					</div>
 				) : (
 					<div className="grid gap-5 sm:grid-cols-[minmax(0,11rem)_1fr]">
 						{/* Source image — the receipt's ground truth, beside the extraction. */}
 						<div className="overflow-hidden rounded-lg border border-border bg-muted/40">
-							{isPdf ? (
+							{isPdf(data.contentType) ? (
 								<a
 									className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground text-xs hover:text-foreground"
 									href={imageSrc}
 									rel="noreferrer"
 									target="_blank"
 								>
-									<FileText className="h-8 w-8" />
+									<FileText aria-hidden className="h-8 w-8" />
 									Open PDF
 								</a>
 							) : (
@@ -86,7 +95,11 @@ export function ReceiptDetail({
 								<div>
 									<dt className="text-muted-foreground text-xs">Total</dt>
 									<dd className="font-medium">
-										<Money tone="spend" value={data.total} />
+										{data.total != null ? (
+											<Money tone="spend" value={data.total} />
+										) : (
+											<span className="text-muted-foreground">—</span>
+										)}
 										{data.currency && (
 											<span className="ml-1 text-muted-foreground text-xs">
 												{data.currency}
@@ -102,7 +115,7 @@ export function ReceiptDetail({
 
 							{mismatch && (
 								<Badge className="w-fit border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] text-[var(--badge-warn-fg)]">
-									<TriangleAlert />
+									<TriangleAlert aria-hidden />
 									Items don't sum to the total
 								</Badge>
 							)}
@@ -112,11 +125,19 @@ export function ReceiptDetail({
 									<table className="w-full border-collapse text-sm">
 										<thead>
 											<tr className="border-border border-b bg-muted/40 text-left text-muted-foreground text-xs">
-												<th className="px-3 py-2 font-medium">Item</th>
-												<th className="px-3 py-2 text-right font-medium">
+												<th className="px-3 py-2 font-medium" scope="col">
+													Item
+												</th>
+												<th
+													className="px-3 py-2 text-right font-medium"
+													scope="col"
+												>
 													Qty
 												</th>
-												<th className="px-3 py-2 text-right font-medium">
+												<th
+													className="px-3 py-2 text-right font-medium"
+													scope="col"
+												>
 													Price
 												</th>
 											</tr>
@@ -151,9 +172,17 @@ export function ReceiptDetail({
 								</p>
 							)}
 
-							{data.error && (
-								<p className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-spend text-xs">
-									{data.error}
+							{/* `error` is never cleared on retry/success; only a failed row's message is current. */}
+							{data.status === ReceiptStatus.Failed && data.error && (
+								<p
+									className="flex items-start gap-2 rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-spend text-xs"
+									role="alert"
+								>
+									<TriangleAlert
+										aria-hidden
+										className="mt-0.5 h-3.5 w-3.5 shrink-0"
+									/>
+									<span>{data.error}</span>
 								</p>
 							)}
 						</div>

@@ -8,8 +8,9 @@ import { Money } from "~/app/_components/money";
 import { PageHeader } from "~/app/_components/page-header";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
+import { receiptImageUrl } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
-import { cn, formatDate } from "~/lib/utils";
+import { cn, formatDate, isPdf } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { SelectField, type SelectFieldOption } from "../select-field";
 import { ReceiptDetail } from "./receipt-detail";
@@ -62,7 +63,15 @@ export function ReceiptsView() {
 
 	const { data, isFetching } = api.receipt.list.useQuery(
 		status ? { status } : undefined,
-		{ placeholderData: (prev) => prev },
+		{
+			placeholderData: (prev) => prev,
+			// Extraction runs async in Inngest; poll only while a row is still pending
+			// so the pending→processed flip lands without a manual reload.
+			refetchInterval: (query) =>
+				query.state.data?.some((r) => r.status === ReceiptStatus.Pending)
+					? 3000
+					: false,
+		},
 	);
 
 	const utils = api.useUtils();
@@ -97,7 +106,10 @@ export function ReceiptsView() {
 
 			<Card className="mt-4 [--card-spacing:0px]">
 				<div className="overflow-x-auto">
-					<table className="w-full min-w-[48rem] border-collapse text-sm">
+					<table
+						aria-label="Receipts"
+						className="w-full min-w-[48rem] border-collapse text-sm"
+					>
 						<thead>
 							<tr className="border-border border-b bg-muted/40 text-left text-muted-foreground text-xs">
 								<th className="w-14 px-4 py-2.5 font-medium" />
@@ -117,18 +129,17 @@ export function ReceiptsView() {
 						>
 							{rows.map((r) => {
 								const style = STATUS_STYLE[r.status];
-								const isPdf = r.contentType === "application/pdf";
 								const isDuplicate = r.status === ReceiptStatus.Duplicate;
 								return (
 									<tr className="group hover:bg-muted/30" key={r.id}>
 										<td className="px-4 py-2.5">
 											<button
-												aria-label={`Open receipt from ${r.vendor ?? "unknown vendor"}`}
+												aria-label={`Open ${r.vendor ?? "unread receipt"}`}
 												className="block h-10 w-10 overflow-hidden rounded-md border border-border bg-muted/40"
 												onClick={() => setDetailId(r.id)}
 												type="button"
 											>
-												{isPdf ? (
+												{isPdf(r.contentType) ? (
 													<span className="flex h-full w-full items-center justify-center text-muted-foreground">
 														<FileText className="h-4 w-4" />
 													</span>
@@ -138,7 +149,7 @@ export function ReceiptsView() {
 														alt=""
 														className="h-full w-full object-cover"
 														loading="lazy"
-														src={`/api/receipts/${r.id}/image`}
+														src={receiptImageUrl(r.id)}
 													/>
 												)}
 											</button>
@@ -162,7 +173,11 @@ export function ReceiptsView() {
 											)}
 										</td>
 										<td className="whitespace-nowrap px-4 py-3 text-right">
-											<Money tone="spend" value={r.total} />
+											{r.total != null ? (
+												<Money tone="spend" value={r.total} />
+											) : (
+												<span className="text-muted-foreground">—</span>
+											)}
 										</td>
 										<td className="tabular whitespace-nowrap px-4 py-3 text-muted-foreground">
 											{r.receiptDate ? formatDate(r.receiptDate) : "—"}
@@ -184,7 +199,9 @@ export function ReceiptsView() {
 													<button
 														aria-label={`Retry ${r.vendor ?? "receipt"}`}
 														className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-														disabled={retry.isPending}
+														disabled={
+															retry.isPending && retry.variables?.id === r.id
+														}
 														onClick={() => retry.mutate({ id: r.id })}
 														type="button"
 													>
@@ -207,21 +224,18 @@ export function ReceiptsView() {
 									</tr>
 								);
 							})}
-							{!rows.length && (
-								<tr>
-									<td
-										className="px-4 py-16 text-center text-muted-foreground text-sm"
-										colSpan={7}
-									>
-										{status
-											? "No receipts with this status."
-											: "No receipts yet. Upload one to get started."}
-									</td>
-								</tr>
-							)}
 						</tbody>
 					</table>
 				</div>
+				{/* Outside the horizontal-scroll wrapper so the copy wraps on a phone
+				    instead of being clipped by the table's min-width. */}
+				{!rows.length && (
+					<p className="px-4 py-16 text-center text-muted-foreground text-sm">
+						{status
+							? "No receipts with this status."
+							: "No receipts yet. Upload one to get started."}
+					</p>
+				)}
 			</Card>
 
 			<ReceiptDetail

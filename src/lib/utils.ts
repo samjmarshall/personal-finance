@@ -88,3 +88,7 @@ export function formatMonthKey(key: string) {
 	if (!year || !month) return key;
 	return monthFormatter.format(new Date(year, month - 1, 1));
 }
+
+export function isPdf(contentType: string | null | undefined): boolean {
+	return contentType === "application/pdf";
+}

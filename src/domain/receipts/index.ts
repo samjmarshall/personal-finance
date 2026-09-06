@@ -6,6 +6,7 @@ import type {
 	ReceiptItemDetail,
 	ReceiptListItem,
 } from "./receipt.interface";
+import { receiptImageUrl } from "./receipt-media";
 
 export type {
 	Receipt,
@@ -14,4 +15,4 @@ export type {
 	ReceiptItemDetail,
 	ReceiptListItem,
 };
-export { receiptCreateDto };
+export { receiptCreateDto, receiptImageUrl };

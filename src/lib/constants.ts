@@ -59,22 +59,6 @@ export function toPriority(value: string | null | undefined): Priority {
 		: Priority.NiceToHave;
 }
 
-export function toReceiptStatus(
-	value: string | null | undefined,
-): ReceiptStatus {
-	return (Object.values(ReceiptStatus) as string[]).includes(value ?? "")
-		? (value as ReceiptStatus)
-		: ReceiptStatus.Pending;
-}
-
-export function toReceiptChannel(
-	value: string | null | undefined,
-): ReceiptChannel {
-	return (Object.values(ReceiptChannel) as string[]).includes(value ?? "")
-		? (value as ReceiptChannel)
-		: ReceiptChannel.Upload;
-}
-
 export const EXPENSE_CATEGORIES = [
 	"Home Loan",
 	"Bills & Subscriptions",
