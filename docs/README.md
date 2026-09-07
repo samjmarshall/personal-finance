@@ -21,7 +21,8 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | `KV_REST_API_TOKEN` | production | Upstash Redis REST token. |
 | `INNGEST_EVENT_KEY` | production | Inngest Cloud key for sending events. |
 | `INNGEST_SIGNING_KEY` | production | Inngest Cloud key `serve` uses to verify inbound requests. |
-| `BLOB_READ_WRITE_TOKEN` | production | Vercel Blob token; mints client-upload tokens at `/api/receipts/upload` (private store). Injected by the Blob integration in prod. |
+| `BLOB_READ_WRITE_TOKEN` | production | Vercel Blob token; mints client-upload tokens at `/api/receipts/upload` (private store) and signs reads for the `/api/receipts/[id]/image` proxy. Injected by the Blob integration in prod. |
+| `ANTHROPIC_API_KEY` | production | Claude Vision key the `process-receipt` worker uses to extract vendor/total/date + line items. |
 
 `next build` runs with `NODE_ENV=production`, so `make build` and `pnpm run preview` fail locally unless the production-required variables are in `.env`.
 
@@ -35,11 +36,12 @@ The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `
 
 Side-effecting writes commit their canonical rows and an `outbox` row in one `db.transaction()`, then best-effort `inngest.send`; a cron re-delivers anything the send missed. At-least-once, idempotent on the outbox row `id`. See [adr002](adr/adr002-canonical-postgres-store-transactional-outbox.md); event names live in `src/server/inngest/events.ts` (`EVENT_REGISTRY`).
 
-Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), which serves two scheduled functions:
+Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), which serves two scheduled functions and one event-driven worker:
 
-| Function | Schedule | Purpose |
+| Function | Trigger | Purpose |
 | --- | --- | --- |
 | `outbox-sweep` | `0 * * * *` | Re-deliver unacked rows older than 30s; failures stay unacked for the next run. |
 | `outbox-prune` | `0 3 * * *` | Delete rows acked over 7 days ago; never touches unacked or stuck rows. |
+| `process-receipt` | `receipt/uploaded`, `receipt/retry` | Extract vendor/total/date + line items from an uploaded receipt via Claude Vision, or short-circuit an identical re-upload as a `duplicate` on its content hash. |
 
-Local runs use the Inngest Dev Server (no keys needed). Run `make setup` once — it trusts the Portless CA so the Go Dev Server binary trusts the app's HTTPS cert — then `make start` boots the app plus the Dev Server as sibling Portless processes. The Dev Server syncs the app's `/api/inngest`, lists `outbox-sweep` + `outbox-prune`, and can invoke them from its dashboard at `https://inngest.personal-finance.localhost` (worktree: `https://<branch>.inngest.personal-finance.localhost`).
+Local runs use the Inngest Dev Server (no keys needed). Run `make setup` once — it trusts the Portless CA so the Go Dev Server binary trusts the app's HTTPS cert — then `make start` boots the app plus the Dev Server as sibling Portless processes. The Dev Server syncs the app's `/api/inngest`, lists `outbox-sweep` + `outbox-prune` + `process-receipt`, and can invoke them from its dashboard at `https://inngest.personal-finance.localhost` (worktree: `https://<branch>.inngest.personal-finance.localhost`).
