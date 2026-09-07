@@ -1,6 +1,6 @@
 ---
 name: codebase-verification
-description: Runs the project's make verification targets (build, check, test, test_e2e) in a sub-agent and returns a compact STATUS: SUCCESS/FAILURE/REFUSED with the extracted error block, keeping verbose output out of the main context. Use proactively after code changes. Not for diagnosing or fixing failures — it only runs and reports (use codebase-locator/analyzer to investigate).
+description: Runs the project's pnpm or make verification targets (build, check, test, test_e2e) in a sub-agent and returns a compact STATUS: SUCCESS/FAILURE/REFUSED with the extracted error block, keeping verbose output out of the main context. Use proactively after code changes. Not for diagnosing or fixing failures — it only runs and reports (use codebase-locator/analyzer to investigate).
 tools: Bash
 color: green
 model: claude-haiku-4-5
