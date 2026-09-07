@@ -20,6 +20,22 @@ export enum CommitmentKind {
 	OneTime = "one-time",
 }
 
+// Receipt lifecycle: pending on upload, then the worker flips it to processed,
+// duplicate (same photo, no AI spend), or failed (retryable).
+export enum ReceiptStatus {
+	Pending = "pending",
+	Processed = "processed",
+	Failed = "failed",
+	Duplicate = "duplicate",
+}
+
+// How a receipt arrived. Only upload is produced in stage 5; email is defined
+// now so stage 6 inbound ingestion adds no migration.
+export enum ReceiptChannel {
+	Upload = "upload",
+	Email = "email",
+}
+
 // Stored frequency/priority are free-text; coerce a read value to the managed
 // vocab, falling back to the default when it is outside the current set (e.g.
 // legacy/imported data) so a form seed can never hold an unknown value.
@@ -82,7 +98,8 @@ export const PRIORITY_STYLES: Record<string, PriorityStyle> = {
 	},
 	[Priority.VerifyPossibleFraud]: {
 		label: "Verify",
-		badge: "bg-spend/10 text-spend border-spend/25",
+		badge:
+			"bg-[var(--badge-spend-bg)] text-[var(--badge-spend-fg)] border-[color:var(--badge-spend-border)]",
 		dot: "bg-spend",
 	},
 	[Priority.NA]: {

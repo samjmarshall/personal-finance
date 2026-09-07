@@ -11,6 +11,8 @@ export const env = createEnv({
 	 * isn't built with invalid env vars.
 	 */
 	server: {
+		/** Claude API key. Powers the process-receipt worker's Vision extraction. */
+		ANTHROPIC_API_KEY: requiredInProd(z.string()),
 		BETTER_AUTH_SECRET: requiredInProd(z.string()),
 		BETTER_AUTH_URL: z.preprocess(
 			(str) =>
@@ -23,6 +25,12 @@ export const env = createEnv({
 						: str,
 			requiredInProd(z.url()),
 		),
+		/**
+		 * Vercel Blob read/write token. Mints upload tokens in the Blob route and
+		 * deletes blobs on receipt delete. Injected by Vercel's Blob integration in
+		 * prod; set locally to exercise uploads.
+		 */
+		BLOB_READ_WRITE_TOKEN: requiredInProd(z.string()),
 		DATABASE_URL: z.url(),
 		/**
 		 * Direct (non-PgBouncer) connection, used by drizzle-kit for DDL.
@@ -71,8 +79,10 @@ export const env = createEnv({
 	 * middlewares) or client-side so we need to destruct manually.
 	 */
 	runtimeEnv: {
+		ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+		BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
 		DATABASE_URL: process.env.DATABASE_URL,
 		DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
 		DEPLOYMENT_URL: process.env.DEPLOYMENT_URL,

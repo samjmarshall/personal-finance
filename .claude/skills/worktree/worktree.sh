@@ -163,7 +163,7 @@ cmd_create() {
 
   if [[ ! -d "$wt/node_modules" ]]; then
     log "Installing dependencies…"
-    (cd "$wt" && yarn install --frozen-lockfile)
+    (cd "$wt" && pnpm install --frozen-lockfile)
   fi
 
   log "Ready."
@@ -227,7 +227,7 @@ remove_worktree() {
   fi
 
   # Release the portless host for this worktree (best-effort).
-  (cd "$REPO_ROOT" && yarn run portless prune >/dev/null 2>&1) || true
+  (cd "$REPO_ROOT" && pnpm exec portless prune >/dev/null 2>&1) || true
 
   if $force; then
     git worktree remove --force "$wt"

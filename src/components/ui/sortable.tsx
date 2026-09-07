@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: third-party component */
 "use client";
 
 import { useRender } from "@base-ui/react/use-render";
@@ -212,7 +213,6 @@ function Sortable<T>({
 				return rectSortingStrategy;
 			case "grid":
 				return rectSortingStrategy;
-			case "vertical":
 			default:
 				return verticalListSortingStrategy;
 		}

@@ -4,6 +4,7 @@ import {
 	makePruneWorker,
 	makeSweepWorker,
 } from "~/server/outbox/outbox.workers";
+import { makeProcessReceiptWorker } from "~/server/receipts/receipts.workers";
 
 import { EVENT_REGISTRY } from "./events";
 
@@ -20,16 +21,17 @@ describe("event registry golden", () => {
 	});
 });
 
-// Function ids + crons are also frozen: Inngest keys scheduled runs by id, so a rename
-// silently drops the old schedule. Drive the worker factories with a spy client to read
-// what they declare — avoids importing the real db/client (env-free, like the block above).
-describe("cron worker golden", () => {
-	it("pins the frozen function ids + cron schedules", () => {
-		const declared: { id: string; cron: string }[] = [];
+// Function ids + triggers are also frozen: Inngest keys scheduled runs by id (a rename
+// silently drops the old schedule) and event triggers are the same wire strings as the
+// registry above. Drive the worker factories with a spy client to read what they declare
+// — avoids importing the real db/client (env-free, like the block above).
+describe("worker golden", () => {
+	it("pins the frozen function ids + triggers", () => {
+		const declared: { id: string; triggers: unknown[] }[] = [];
 		const spy = {
 			send: async () => {},
-			createFunction: (opts: { id: string; triggers: { cron: string }[] }) => {
-				declared.push({ id: opts.id, cron: opts.triggers[0]?.cron ?? "" });
+			createFunction: (opts: { id: string; triggers: unknown[] }) => {
+				declared.push({ id: opts.id, triggers: opts.triggers });
 				return { id: () => opts.id };
 			},
 			// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
@@ -37,10 +39,15 @@ describe("cron worker golden", () => {
 
 		makeSweepWorker({ db: {} as never, inngest: spy });
 		makePruneWorker({ db: {} as never, inngest: spy });
+		makeProcessReceiptWorker({ db: {} as never, inngest: spy });
 
 		expect(declared).toEqual([
-			{ id: "outbox-sweep", cron: "0 * * * *" },
-			{ id: "outbox-prune", cron: "0 3 * * *" },
+			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },
+			{ id: "outbox-prune", triggers: [{ cron: "0 3 * * *" }] },
+			{
+				id: "process-receipt",
+				triggers: [{ event: "receipt/uploaded" }, { event: "receipt/retry" }],
+			},
 		]);
 	});
 });

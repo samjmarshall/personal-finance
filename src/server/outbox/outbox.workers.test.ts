@@ -1,19 +1,16 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { outbox } from "./outbox.schema";
 import { makeRunPrune, makeRunSweep } from "./outbox.workers";
+
+// Full stored-row shape: the sweep selects `*`, so the fake must carry the internal
+// columns (attempts/processedAt/lastError) a projection bug would leak to Inngest.
+type OutboxRow = typeof outbox.$inferSelect;
 
 const dialect = new PgDialect();
 const render = (cond: unknown) =>
 	// biome-ignore lint/suspicious/noExplicitAny: dialect renders a drizzle SQL condition to text.
 	dialect.sqlToQuery(cond as any).sql;
-
-type OutboxRow = {
-	id: string;
-	eventName: string;
-	payload: unknown;
-};
 
 // Fake db for the sweep core: the select chain resolves to the staged rows (standing
 // in for what the real WHERE would return) and captures the WHERE/ORDER BY so a test
@@ -81,8 +78,12 @@ function pruneHarness(deleted: { id: string }[]) {
 
 const row = (id: string): OutboxRow => ({
 	id,
-	eventName: "receipt/uploaded",
-	payload: { receiptId: id },
+	name: "receipt/uploaded",
+	data: { receiptId: id },
+	createdAt: new Date(),
+	processedAt: null,
+	attempts: 0,
+	lastError: null,
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -106,6 +107,11 @@ describe("runSweep", () => {
 			{ id: "r1", name: "receipt/uploaded", data: { receiptId: "r1" } },
 			{ id: "r2", name: "receipt/uploaded", data: { receiptId: "r2" } },
 		]);
+		// Only the wire fields cross to Inngest — internal columns
+		// (attempts/processedAt/lastError) must never ride along.
+		for (const sent of sends) {
+			expect(Object.keys(sent).sort()).toEqual(["data", "id", "name"]);
+		}
 		expect(h.updates).toHaveLength(2);
 		expect(h.updates[0]?.processedAt).toBeInstanceOf(Date);
 		expect(h.updates[1]?.processedAt).toBeInstanceOf(Date);

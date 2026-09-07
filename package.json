@@ -3,6 +3,10 @@
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
+	"packageManager": "pnpm@10.18.0",
+	"engines": {
+		"node": "24.x"
+	},
 	"scripts": {
 		"build": "next build",
 		"check": "biome check .",
@@ -13,11 +17,11 @@
 		"db:custom": "drizzle-kit generate --custom",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
-		"dev": "concurrently -k -n app,inngest -c blue,green \"yarn dev:app\" \"yarn dev:inngest\"",
+		"dev": "concurrently -k -n app,inngest -c blue,green \"pnpm dev:app\" \"pnpm dev:inngest\"",
 		"dev:app": "portless run --force ./scripts/dev-app.sh",
 		"dev:inngest": "portless run --force --name inngest.personal-finance ./scripts/dev-inngest.sh",
 		"lint": "biome lint .",
-		"postinstall": "husky",
+		"postinstall": "husky || true",
 		"preview": "next build && next start",
 		"start": "next start",
 		"test": "vitest run",
@@ -25,22 +29,27 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@ai-sdk/anthropic": "2.0.101",
 		"@base-ui/react": "1.7.0",
-		"@dnd-kit/core": "^6.3.1",
-		"@dnd-kit/sortable": "^10.0.0",
-		"@dnd-kit/utilities": "^3.2.2",
+		"@dnd-kit/core": "6.3.1",
+		"@dnd-kit/sortable": "10.0.0",
+		"@dnd-kit/utilities": "3.2.2",
 		"@t3-oss/env-nextjs": "0.13.11",
 		"@tanstack/react-query": "5.101.4",
 		"@trpc/client": "11.18.0",
 		"@trpc/react-query": "11.18.0",
 		"@trpc/server": "11.18.0",
 		"@upstash/redis": "1.38.2",
+		"@vercel/blob": "2.8.0",
+		"ai": "5.0.252",
 		"better-auth": "1.6.26",
+		"browser-image-compression": "2.0.2",
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
 		"date-fns": "4.4.0",
 		"drizzle-orm": "0.45.2",
-		"inngest": "^4.18.1",
+		"heic-to": "1.5.2",
+		"inngest": "4.19.0",
 		"lucide-react": "1.31.0",
 		"next": "16.3.0",
 		"next-themes": "0.4.6",
@@ -76,5 +85,14 @@
 	"ct3aMetadata": {
 		"initVersion": "7.40.0"
 	},
-	"packageManager": "yarn@1.22.22"
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild",
+			"inngest-cli",
+			"protobufjs"
+		],
+		"overrides": {
+			"@ai-sdk/provider-utils>undici": "^7.29.0"
+		}
+	}
 }

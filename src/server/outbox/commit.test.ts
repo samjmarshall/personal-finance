@@ -79,9 +79,12 @@ describe("commitWithOutbox", () => {
 		const h = harness();
 		const commit = makeCommitWithOutbox({ db: h.db, inngest: h.inngest });
 
-		await commit(async () => {
-			h.log.push("writes");
-		}, [event]);
+		await commit(
+			async () => {
+				h.log.push("writes");
+			},
+			() => [event],
+		);
 
 		expect(h.log.slice(0, 4)).toEqual([
 			"tx.begin",
@@ -89,16 +92,17 @@ describe("commitWithOutbox", () => {
 			"tx.insert",
 			"tx.commit",
 		]);
-		expect(h.insertedRows[0]).toEqual([
-			{ id: event.id, eventName: event.name, payload: event.data },
-		]);
+		expect(h.insertedRows[0]).toEqual([event]);
 	});
 
 	it("sends each event post-commit with id = the outbox row id (the idempotency key)", async () => {
 		const h = harness();
 		const commit = makeCommitWithOutbox({ db: h.db, inngest: h.inngest });
 
-		await commit(async () => {}, [event]);
+		await commit(
+			async () => {},
+			() => [event],
+		);
 
 		expect(h.sends).toEqual([
 			{ id: event.id, name: event.name, data: event.data },
@@ -112,7 +116,10 @@ describe("commitWithOutbox", () => {
 		const h = harness();
 		const commit = makeCommitWithOutbox({ db: h.db, inngest: h.inngest });
 
-		await commit(async () => {}, [event]);
+		await commit(
+			async () => {},
+			() => [event],
+		);
 
 		expect(h.updates).toHaveLength(1);
 		expect(h.updates[0]?.processedAt).toBeInstanceOf(Date);
@@ -123,7 +130,12 @@ describe("commitWithOutbox", () => {
 		const h = harness({ sendThrows: true });
 		const commit = makeCommitWithOutbox({ db: h.db, inngest: h.inngest });
 
-		await expect(commit(async () => {}, [event])).resolves.toBeUndefined();
+		await expect(
+			commit(
+				async () => {},
+				() => [event],
+			),
+		).resolves.toBeUndefined();
 
 		expect(h.updates).toHaveLength(1);
 		expect(h.updates[0]).toHaveProperty("attempts");
@@ -138,7 +150,12 @@ describe("commitWithOutbox", () => {
 		const h = harness({ updateThrows: true });
 		const commit = makeCommitWithOutbox({ db: h.db, inngest: h.inngest });
 
-		await expect(commit(async () => {}, [event])).resolves.toBeUndefined();
+		await expect(
+			commit(
+				async () => {},
+				() => [event],
+			),
+		).resolves.toBeUndefined();
 
 		expect(h.sends).toHaveLength(1);
 		expect(console.error).toHaveBeenCalled();
@@ -148,7 +165,10 @@ describe("commitWithOutbox", () => {
 		const h = harness();
 		const commit = makeCommitWithOutbox({ db: h.db, inngest: h.inngest });
 
-		const result = await commit(async () => "RESULT", [event]);
+		const result = await commit(
+			async () => "RESULT",
+			() => [event],
+		);
 
 		expect(result).toBe("RESULT");
 	});
@@ -161,9 +181,7 @@ describe("publish", () => {
 
 		await publish(event);
 
-		expect(h.insertedRows).toEqual([
-			[{ id: event.id, eventName: event.name, payload: event.data }],
-		]);
+		expect(h.insertedRows).toEqual([[event]]);
 		expect(h.sends).toHaveLength(1);
 	});
 });

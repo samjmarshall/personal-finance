@@ -299,7 +299,7 @@ export function ExpenseForm({
 
 					{error && (
 						<p
-							className="rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-sm text-spend"
+							className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm"
 							role="alert"
 						>
 							{error}

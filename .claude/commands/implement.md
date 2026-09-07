@@ -75,9 +75,9 @@ If you encounter a mismatch:
 ## Verification Approach
 
 After implementing a phase:
-- Run **every** command listed under the phase's `**Automated**` checklist (typically some combination of `make check`, `make test`, `make test_e2e`) — don't assume one covers the others
+- Walk **every** item under the phase's `### Success` checklist. Run each command listed (typically some combination of `make check`, `make test`, `make test_e2e`) — don't assume one covers the others
 - Fix any issues before proceeding
-- Walk the phase's `**Manual**` checklist; check off only what you've actually observed
+- For behavioural criteria, verify them yourself with the tools you have (browser automation, a scratch script, querying the DB) rather than deferring to the user. Check off only what you've actually observed; ask the user only when verification genuinely needs a human
 - Update checkboxes in the plan file using Edit as items are verified
 
 Don't let verification interrupt your flow - batch it at natural stopping points.

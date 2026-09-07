@@ -75,6 +75,16 @@
 	--badge-warn-bg: oklch(0.95 0.06 75);
 	--badge-warn-fg: oklch(0.45 0.1 60);
 	--badge-warn-border: oklch(0.85 0.09 75);
+	/* Positive/spend badges + status banners. The money tokens are tuned to read on
+	   the page ground; `bg-positive/10 text-positive` put them on a tint of themselves
+	   and dropped to ~4.2:1, under AA. These are a separate fg tuned to their own bg,
+	   like info/warn above — the money tokens stay for numbers, dots and borders. */
+	--badge-positive-bg: oklch(0.95 0.04 165);
+	--badge-positive-fg: oklch(0.42 0.08 165);
+	--badge-positive-border: oklch(0.85 0.06 165);
+	--badge-spend-bg: oklch(0.95 0.04 32);
+	--badge-spend-fg: oklch(0.44 0.13 32);
+	--badge-spend-border: oklch(0.86 0.07 32);
 }
 
 .dark {
@@ -140,6 +150,12 @@
 	--badge-warn-bg: oklch(0.3 0.05 75);
 	--badge-warn-fg: oklch(0.82 0.1 75);
 	--badge-warn-border: oklch(0.42 0.07 75);
+	--badge-positive-bg: oklch(0.28 0.04 165);
+	--badge-positive-fg: oklch(0.85 0.08 165);
+	--badge-positive-border: oklch(0.4 0.06 165);
+	--badge-spend-bg: oklch(0.3 0.05 32);
+	--badge-spend-fg: oklch(0.84 0.09 32);
+	--badge-spend-border: oklch(0.42 0.07 32);
 }
 
 @theme inline {

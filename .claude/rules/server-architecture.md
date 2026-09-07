@@ -52,10 +52,12 @@ Real examples: `category.ts` `update` (rename + cascade) and `reorder`.
   send goes through it. The client (`client.ts`) is a bare
   `new Inngest({ id, eventKey })`: inngest v4 dropped the typed `schemas` option,
   so safety lives at the mint boundary, not the client type.
-- **Not built yet** (arrives with the outbox slice): `src/server/outbox/`. When it
-  lands, a write-with-side-effects commits its canonical rows and its outbox rows
-  in one `db.transaction()`, then best-effort post-commit send, with a cron sweep
-  as the durable backstop (adr002). Never a bare `inngest.send` from a handler.
+- `src/server/outbox/` is the write door. A write-with-side-effects goes through
+  `commitWithOutbox` (or `publish` for emit-only): canonical rows + outbox rows
+  commit in one `db.transaction()`, then a best-effort post-commit send. The
+  `outbox-sweep` cron re-delivers unacked rows as the durable backstop and
+  `outbox-prune` drops acked rows past retention (adr002). Never a bare
+  `inngest.send` from a handler.
 
 ## FROZEN external identifiers
 

@@ -16,11 +16,12 @@ type Writes<T> = (
 	tx: Parameters<Parameters<typeof realDb.transaction>[0]>[0],
 ) => Promise<T>;
 
-const toRow = (e: OutboxEventDescriptor) => ({
-	id: e.id,
-	eventName: e.name,
-	payload: e.data,
-});
+/**
+ * Events to enqueue, derived from the writes' result. Taking a function (not a ready
+ * array) is what lets an event carry a DB-generated id — `receiptId` is the identity
+ * PK the insert only produces inside the transaction, so it can't be known at call time.
+ */
+type Events<T> = (result: T) => OutboxEventDescriptor[];
 
 /**
  * The write door (adr002 clause 3). Canonical writes + the outbox rows commit in one
@@ -31,20 +32,26 @@ const toRow = (e: OutboxEventDescriptor) => ({
 export function makeCommitWithOutbox({ db, inngest }: Deps) {
 	return async function commitWithOutbox<T>(
 		writes: Writes<T>,
-		events: OutboxEventDescriptor[],
+		events: Events<T>,
 	): Promise<T> {
+		let outboxEvents: OutboxEventDescriptor[] = [];
 		const result = await db.transaction(async (tx) => {
 			const value = await writes(tx);
-			if (events.length) await tx.insert(outbox).values(events.map(toRow));
+			outboxEvents = events(value);
+
+			if (outboxEvents.length) {
+				await tx.insert(outbox).values(outboxEvents);
+			}
+
 			return value;
 		});
 
-		for (const event of events) {
+		for (const e of outboxEvents) {
 			try {
-				await inngest.send(event);
-				await markProcessed(db, event.id, "send");
+				await inngest.send(e);
+				await markProcessed(db, e.id, "send");
 			} catch (error) {
-				await markFailed(db, event.id, error, "send");
+				await markFailed(db, e.id, error, "send");
 			}
 		}
 
@@ -55,6 +62,10 @@ export function makeCommitWithOutbox({ db, inngest }: Deps) {
 /** Emit-only write: an outbox event with no other canonical rows. */
 export function makePublish(deps: Deps) {
 	const commitWithOutbox = makeCommitWithOutbox(deps);
+
 	return (event: OutboxEventDescriptor) =>
-		commitWithOutbox(async () => {}, [event]);
+		commitWithOutbox(
+			async () => {},
+			() => [event],
+		);
 }

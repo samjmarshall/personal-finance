@@ -18,37 +18,37 @@ ifneq ($(NVMRC_MAJOR),$(NODE_MAJOR))
 endif
 
 install: nvm
-	yarn
+	pnpm install
 
 build: nvm
 	rm -rf .next
-	yarn run build
+	pnpm run build
 
 setup: install
-	yarn run portless proxy start
-	yarn run portless trust
+	pnpm exec portless proxy start
+	pnpm exec portless trust
 
 start: install
-	yarn run dev
+	pnpm run dev
 
 stop:
-	yarn run portless proxy stop
-	yarn run portless prune
+	pnpm exec portless proxy stop
+	pnpm exec portless prune
 
 check: nvm
-	yarn run check
-	yarn run typecheck
-	yarn run db:check
+	pnpm run check
+	pnpm run typecheck
+	pnpm run db:check
 
 fix: nvm
-	yarn run check:write
+	pnpm run check:write
 
 # Security audit — gate on real CVEs only, production deps only.
 audit: nvm
-	yarn audit --groups dependencies --level high
+	pnpm audit --prod --audit-level high
 
 test: nvm
-	yarn run test
+	pnpm run test
 
 # No e2e runner is wired up yet. This exists so .claude/agents/codebase-verification.md
 # and /validate don't hard-fail on a missing target. Replace when a runner lands.
@@ -56,19 +56,19 @@ test_e2e: nvm
 	@echo "skip: no e2e test runner configured"
 
 db_generate: install
-	yarn run db:generate
+	pnpm run db:generate
 
 db_custom: install
-	yarn run db:custom --name=$(name)
+	pnpm run db:custom -- --name=$(name)
 
 db_migrate: install
-	yarn run db:migrate
+	pnpm run db:migrate
 
 db_studio: install
-	yarn run db:studio
+	pnpm run db:studio
 
 db_check: nvm
-	yarn run db:check
+	pnpm run db:check
 
 db_branch:
 	scripts/neon-branch.sh create
@@ -83,5 +83,5 @@ db_branch_status:
 	scripts/neon-branch.sh status
 
 clean:
-	test ! -d node_modules || yarn run portless clean
+	test ! -d node_modules || pnpm exec portless clean
 	rm -rf .next/ next-env.d.ts tsconfig.tsbuildinfo node_modules .playwright-mcp

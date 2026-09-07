@@ -1,5 +1,5 @@
 ---
-model: fable
+model: claude-opus-5
 effort: ultracode
 ---
 # Validate Plan
@@ -23,7 +23,7 @@ When invoked:
    git log --oneline -n 20
    git diff HEAD~N..HEAD  # Where N covers implementation commits
 
-   # Run the full automated suite — mirror what phases list under `**Automated**`
+   # Run the full suite — mirror the `make` targets the phases list under `### Success`
    cd $(git rev-parse --show-toplevel) && make build && make check && make test && make test_e2e
    ```
 
@@ -36,7 +36,7 @@ If starting fresh or need more context:
 1. **Read the implementation plan** completely
 2. **Identify what should have changed**:
    - List all files that should be modified
-   - Note all success criteria (automated and manual)
+   - Note all success criteria
    - Identify key functionality to verify
 
 3. **Spawn parallel research tasks** to discover implementation:
@@ -80,29 +80,25 @@ For each phase in the plan:
    - Look for checkmarks in the plan (- [x])
    - Verify the actual code matches claimed completion
 
-2. **Run automated verification**:
-   - Execute every command listed under the phase's `### Success` → `**Automated**` checklist
-   - Document pass/fail status per command
+2. **Verify success criteria**:
+   - Walk every item under the phase's `### Success` checklist and verify it yourself. Run the commands; for behavioural criteria use whatever you have — browser automation, a scratch script, querying the DB, reading the rendered output. Reach for a human only when verification genuinely needs one (a physical device, a credential you don't hold, a subjective aesthetic call)
+   - Document pass/fail per item. Tick only what you actually verified; leave the rest unchecked with a note on what's still needed and, where a human is required, exactly what you need them to do
    - If failures, investigate root cause
    - If an E2E spec fails, re-run just that spec once via `@agent-codebase-verification` before starting root-cause analysis. Only treat the failure as a real regression if it fails twice in a row. First-run flakes on parallel specs are a recurring pattern.
+   - If any phase invokes `/design-review` (required for UI phases), run it **once for the whole plan** as `/design-review <plan-path>` rather than per-phase — passing the plan path lets it decompose the branch into isolated per-surface reviews aligned with the plan's UI phases, run them in parallel, and return one consolidated report. Fold each per-surface verdict into the validation report. A phase with UI changes is not validated until its surfaces are clean in that report
 
-3. **Assess manual criteria**:
-   - Walk every item under the phase's `### Success` → `**Manual**` checklist
-   - Tick items you've personally verified; leave the rest unchecked with a note on what's still needed
-   - If any phase invokes `/design-review` (required for UI phases), run it **once for the whole plan** as `/design-review <plan-path>` rather than per-phase — passing the plan path lets it decompose the branch into isolated per-surface reviews aligned with the plan's UI phases and Manual criteria, run them in parallel, and return one consolidated report. Fold each per-surface verdict into the validation report. A phase with UI changes is not validated until its surfaces are clean in that report
-
-4. **Run code review**:
+3. **Run code review**:
    - Always run `/code-review <plan-path>` once over the whole branch and fold its findings into the validation report's "Code Review Findings" section. The built-in runs its own multi-agent review out-of-context, so this does not flood validation. Omit `--comment` here — the PR may not exist yet, and the CI "Claude Code Review" workflow posts inline PR comments once a PR is open.
    - Run `/quality-control` over the branch diff (fixed point: the plan's base, same as `origin/HEAD` unless stated otherwise). Fold its smell findings into "Code Review Findings" as a "Design smells (judgement calls)" subsection — never merge them into hard findings.
    - Run the `/code-comment` skill's judge mode over the same branch diff (same fixed point). It spawns an isolated sub-agent that verdicts the changed comments (`PASS`/`REWRITE`/`REMOVE`/`FIX_CODE`); fold its findings into "Code Review Findings" as a "Comment quality (judgement calls)" subsection, kept separate from hard findings like the smell subsection. Apply the suggested `REWRITE`/`REMOVE`/`FIX_CODE` fixes, or note why not.
    - **Conditionally** run `/security-review` when the branch diff touches security-sensitive paths — `src/lib/**`, `src/env.js`, `next.config.ts`, `**/auth/**`, `**/*.env*` (mirrors how `/design-review` is conditional on `src/` UI changes). Fold its findings into the report. Check the diff with `git diff --name-only origin/HEAD...`.
 
-5. **Think deeply about edge cases**:
+4. **Think deeply about edge cases**:
    - Were error conditions handled?
    - Are there missing validations?
    - Could the implementation break existing functionality?
 
-6. **Update inline docs**:
+5. **Update inline docs**:
    - Update **`docs/README.md`** when the plan adds an env var, integration, scheduled job, or Make target. Skip otherwise.
 
 ### Step 3: Update Associated Issue
@@ -110,7 +106,7 @@ For each phase in the plan:
 If the plan's `## References` links to an issue or ticket, sync your verification results back to it.
 
 1. **Read the issue body** for existing acceptance criteria or verification checklists.
-2. **If it has checkboxes**, update them to reflect your results. Only check items you verified — leave manual items unchecked.
+2. **If it has checkboxes**, update them to reflect your results. Only check items you verified — leave the rest unchecked.
 3. **If it has no checkboxes**, skip this step.
 4. GitHub: `gh issue edit <number> --body "..."`. Linear: MCP tools. File tickets: Edit tool.
 
@@ -126,7 +122,7 @@ Create comprehensive validation summary:
 ✓ Phase 2: [Name] - Fully implemented
 ⚠️ Phase 3: [Name] - Partially implemented (see issues)
 
-### Automated Verification Results
+### Success Criteria Results
 ✓ Build passes: `make build`
 ✓ Lint + typecheck: `make check`
 ✓ Unit tests: `make test`
@@ -157,14 +153,10 @@ Create comprehensive validation summary:
 - Missing index on foreign key could impact performance
 - No rollback handling in migration
 
-### Manual Testing Required:
-1. UI functionality:
-   - [ ] Verify [feature] appears correctly
-   - [ ] Test error states with invalid input
-
-2. Integration:
-   - [ ] Confirm works with existing [component]
-   - [ ] Check performance with large datasets
+### Unverified — Needs You:
+Only criteria I could not verify myself. State why, and exactly what you need done.
+- [ ] [criterion] — needs a real bank login I don't hold
+- [ ] [criterion] — subjective call on whether the empty state reads right
 
 ### Recommendations:
 - Address linting warnings before merge
@@ -183,7 +175,7 @@ If you were part of the implementation:
 ## Important Guidelines
 
 1. **Be thorough but practical** - Focus on what matters
-2. **Run all automated checks** - Don't skip verification commands
+2. **Verify every success criterion yourself** - Don't skip checks, and don't hand one back as "manual" before trying the tools you have
 3. **Document everything** - Both successes and issues
 4. **Think critically** - Question if the implementation truly solves the problem
 5. **Consider maintenance** - Will this be maintainable long-term?
@@ -192,7 +184,7 @@ If you were part of the implementation:
 
 Always verify:
 - [ ] All phases marked complete are actually done
-- [ ] Automated tests pass
+- [ ] Every `### Success` criterion checked; unverified ones listed with what's needed
 - [ ] `/code-review` run over the branch; findings triaged
 - [ ] `/quality-control` design smell review run over the branch; judgement calls noted
 - [ ] `/code-comment` judge run over the branch; comment verdicts noted and fixes applied
@@ -201,7 +193,6 @@ Always verify:
 - [ ] No regressions introduced
 - [ ] Error handling is robust
 - [ ] Documentation updated if needed
-- [ ] Manual test steps are clear
 - [ ] No ADR tied to this work remains `Proposed`/`In Progress`
 - [ ] `## Terminology TODO` resolutions present in `CONTEXT.md` and used in code
 

@@ -3,13 +3,15 @@ import {
 	makePruneWorker,
 	makeSweepWorker,
 } from "~/server/outbox/outbox.workers";
+import { makeProcessReceiptWorker } from "~/server/receipts/receipts.workers";
 
 import { inngest } from "./client";
 
-// Composition root: the two cron workers built once with the real db + client. The
-// route handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers
-// each function's cron from it.
+// Composition root: every worker built once with the real db + client. The route
+// handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
+// function's cron/event triggers from it.
 export const sweepWorker = makeSweepWorker({ db, inngest });
 export const pruneWorker = makePruneWorker({ db, inngest });
+export const processReceiptWorker = makeProcessReceiptWorker({ db, inngest });
 
-export const functions = [sweepWorker, pruneWorker];
+export const functions = [sweepWorker, pruneWorker, processReceiptWorker];

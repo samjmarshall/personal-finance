@@ -6,9 +6,9 @@ import { outbox } from "./outbox.schema";
 const cols = getTableColumns(outbox);
 
 describe("outbox table shape (adr002)", () => {
-	it("makes eventName and payload required", () => {
-		expect(cols.eventName.notNull).toBe(true);
-		expect(cols.payload.notNull).toBe(true);
+	it("makes name and data required", () => {
+		expect(cols.name.notNull).toBe(true);
+		expect(cols.data.notNull).toBe(true);
 	});
 
 	it("defaults createdAt and attempts so a raw INSERT need not supply them", () => {
