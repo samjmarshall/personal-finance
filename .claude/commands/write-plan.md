@@ -69,7 +69,7 @@ When planning from a `/brainstorm` design doc, reconcile its appendix **before**
 ## Rules
 
 - Tests ship in the phase that changes behaviour, not a trailing appendix.
-- Automated criteria use `make` targets (`make check`, `make test`, `make build`, `make test_e2e`).
+- Success criteria are one flat checklist — don't group them by who verifies them. Runnable criteria use `make` targets (`make check`, `make test`, `make build`, `make test_e2e`); the rest state an observable behaviour.
 - UI phases add `/design-review` as a success checklist item.
 - Phases touching security-sensitive paths (`src/lib/**`, `src/env.js`, `next.config.ts`, `**/auth/**`, `**/*.env*`) add `/security-review` as a success checklist item.
 - `/code-review` over the whole branch is a standing `/validate` step — do not add it as a per-phase success checklist item.

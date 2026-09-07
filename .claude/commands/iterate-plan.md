@@ -120,13 +120,13 @@ Get user confirmation before proceeding.
    - If adding a new phase, ensure it follows the existing pattern
    - If modifying scope, update "What We're NOT Doing" section
    - If changing approach, update "Implementation Approach" section
-   - Maintain the distinction between automated vs manual success criteria
+   - Keep success criteria as one flat checklist per phase
    - Every phase that adds or changes behavior must include test files in its "Changes Required" — if a phase is missing tests, add them
 
 3. **Preserve quality standards**:
    - Include specific file paths and line numbers for new content
    - Write measurable success criteria
-   - Use `make` commands for automated verification
+   - Use `make` commands for anything runnable
    - Keep language clear and actionable
 
 ### Step 5: Review
@@ -192,19 +192,11 @@ Get user confirmation before proceeding.
 
 ## Success Criteria Guidelines
 
-When updating success criteria, always maintain the two-category structure:
+Keep success criteria as one flat checklist — don't split them by who or what verifies them.
 
-1. **Automated Verification** (can be run by execution agents):
-   - Commands that can be run: `make test`, `npm run lint`, etc.
-   - Prefer `make` commands: `make check` instead of `cd src/ && yarn lint`
-   - Specific files that should exist
-   - Code compilation/type checking
-
-2. **Manual Verification** (requires human testing):
-   - UI/UX functionality
-   - Performance under real conditions
-   - Edge cases that are hard to automate
-   - User acceptance criteria
+- Prefer `make` commands: `make check` instead of `cd src/ && yarn lint`
+- Cover compilation/type checking, tests, and files that should exist
+- State behavioural criteria as observable outcomes (UI behaviour, performance under real conditions, edge cases, user acceptance) — leave it to whoever validates to work out how to check each one
 
 ## Sub-task Spawning Best Practices
 
