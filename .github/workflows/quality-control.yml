@@ -21,6 +21,12 @@ jobs:
 
       - name: Lint & Type Check
         run: make check
+        env:
+          # `make check` ends in `drizzle-kit check`, which only validates the
+          # local migration journal — it never opens a connection. The
+          # placeholder exists purely to satisfy drizzle.config.ts.
+          SKIP_ENV_VALIDATION: 1
+          DATABASE_URL_UNPOOLED: postgres://ci:ci@localhost:5432/ci
 
   audit:
     name: Dependency Audit
