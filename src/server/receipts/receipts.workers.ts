@@ -37,7 +37,7 @@ export interface FetchedBlob {
 
 interface ProcessReceiptCoreDeps {
 	db: typeof realDb;
-	fetchBlob: (blobUrl: string) => Promise<FetchedBlob>;
+	fetchBlob: (blobPathname: string) => Promise<FetchedBlob>;
 	generate: (input: {
 		prompt: string;
 		bytes: Uint8Array;
@@ -72,7 +72,10 @@ export function makeRunProcessReceipt({
 		if (!receipt || DONE_STATUSES.includes(receipt.status)) return;
 
 		try {
-			const { bytes, mediaType } = await fetchBlob(receipt.blobUrl);
+			// Read by store-relative pathname, never the member-supplied blobUrl: `get`
+			// resolves a pathname against our own token, so a foreign store URL can't be
+			// fetched and fed to the model (the DTO already rejects a URL pathname).
+			const { bytes, mediaType } = await fetchBlob(receipt.blobPathname);
 			const contentHash = hash(bytes);
 			await db
 				.update(receipts)
@@ -206,11 +209,12 @@ export function makeProcessReceiptWorker({ db, inngest }: WorkerDeps) {
 }
 
 // The Blob store is private, so a bare fetch of the URL 400s — go through the SDK's
-// `get`, which signs the request with BLOB_READ_WRITE_TOKEN from the env.
-async function fetchBlobBytes(blobUrl: string): Promise<FetchedBlob> {
-	const result = await get(blobUrl, { access: "private" });
+// `get`, which signs the request with BLOB_READ_WRITE_TOKEN from the env. Keyed on the
+// store-relative pathname so the read is pinned to our own store, never a foreign URL.
+async function fetchBlobBytes(blobPathname: string): Promise<FetchedBlob> {
+	const result = await get(blobPathname, { access: "private" });
 	if (result?.statusCode !== 200) {
-		throw new Error(`blob fetch failed for ${blobUrl}`);
+		throw new Error(`blob fetch failed for ${blobPathname}`);
 	}
 	const bytes = new Uint8Array(await new Response(result.stream).arrayBuffer());
 	return { bytes, mediaType: result.blob.contentType };

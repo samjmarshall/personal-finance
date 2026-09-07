@@ -6,6 +6,16 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { receipts } from "~/server/receipts/receipts.schema";
 
+// Only ever hand the browser a type it renders inertly. Blob metadata is set at
+// upload time by the member, so a `text/html` value would otherwise stream back
+// same-origin as executable markup — anything off this list downgrades to a
+// non-sniffable octet-stream (paired with X-Content-Type-Options below).
+const RENDERABLE_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"application/pdf",
+]);
+
 // Streams a private receipt blob to a signed-in member. The store is private, so
 // the browser can't load the blob URL directly (an anonymous GET 400s) — this
 // route gates on the session, then signs the read with BLOB_READ_WRITE_TOKEN via
@@ -35,9 +45,16 @@ export async function GET(
 	if (result?.statusCode !== 200)
 		return new NextResponse("Not found", { status: 404 });
 
+	const contentType = RENDERABLE_TYPES.has(result.blob.contentType)
+		? result.blob.contentType
+		: "application/octet-stream";
+
 	return new NextResponse(result.stream, {
 		headers: {
-			"Content-Type": result.blob.contentType,
+			"Content-Type": contentType,
+			// Belt-and-braces with the allowlist: stop the browser MIME-sniffing an
+			// octet-stream back up into renderable HTML.
+			"X-Content-Type-Options": "nosniff",
 			// Sensitive image: keep it out of shared/proxy caches.
 			"Cache-Control": "private, no-store",
 		},

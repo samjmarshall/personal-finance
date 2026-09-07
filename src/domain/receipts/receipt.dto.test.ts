@@ -48,6 +48,24 @@ describe("receiptCreateDto", () => {
 		).toBe(false);
 	});
 
+	// The image proxy feeds blobPathname straight to blob `get()`, which treats an
+	// `https://` value as a foreign store URL — so a URL pathname is a stored-XSS vector.
+	it("rejects a blobPathname that is an absolute URL", () => {
+		expect(
+			receiptCreateDto.safeParse({
+				...base,
+				blobPathname: "https://evil.blob.vercel-storage.com/x.html",
+			}).success,
+		).toBe(false);
+	});
+
+	it("rejects a blobPathname with a parent-directory traversal", () => {
+		expect(
+			receiptCreateDto.safeParse({ ...base, blobPathname: "../secret.png" })
+				.success,
+		).toBe(false);
+	});
+
 	it("keeps create writable into the Receipt interface", () => {
 		const aligned: Contracts = [true];
 		expect(aligned).toHaveLength(1);
