@@ -54,7 +54,9 @@ describe("setting.setFortnightAnchor", () => {
 	it("upserts the anchor under the shared key and returns the stored string", async () => {
 		const { captured, db } = upsertDb([{ value: "2026-08-26" }]);
 
-		const result = await caller(db).setFortnightAnchor({ value: "2026-08-26" });
+		const result = await caller(db).setFortnightAnchor({
+			anchor: "2026-08-26",
+		});
 
 		expect(captured.values).toEqual({
 			key: FORTNIGHT_ANCHOR_KEY,
@@ -72,7 +74,7 @@ describe("setting.setFortnightAnchor", () => {
 		const { db } = upsertDb([]);
 
 		await expect(
-			caller(db).setFortnightAnchor({ value: "2026-08-26" }),
+			caller(db).setFortnightAnchor({ anchor: "2026-08-26" }),
 		).rejects.toMatchObject(
 			new TRPCError({
 				code: "INTERNAL_SERVER_ERROR",
@@ -85,7 +87,7 @@ describe("setting.setFortnightAnchor", () => {
 		const { captured, db } = upsertDb([{ value: "2026-02-30" }]);
 
 		await expect(
-			caller(db).setFortnightAnchor({ value: "2026-02-30" }),
+			caller(db).setFortnightAnchor({ anchor: "2026-02-30" }),
 		).rejects.toThrow();
 		expect(captured.values).toBeUndefined();
 	});

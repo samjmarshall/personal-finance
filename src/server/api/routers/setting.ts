@@ -31,10 +31,10 @@ export const settingRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }): Promise<string> => {
 			const [row] = await ctx.db
 				.insert(appSettings)
-				.values({ key: FORTNIGHT_ANCHOR_KEY, value: input.value })
+				.values({ key: FORTNIGHT_ANCHOR_KEY, value: input.anchor })
 				.onConflictDoUpdate({
 					target: appSettings.key,
-					set: { value: input.value },
+					set: { value: input.anchor },
 				})
 				.returning();
 			return assertRow(row, "set fortnight anchor").value;

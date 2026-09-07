@@ -4,17 +4,17 @@ import { fortnightAnchorSetDto } from "./setting.dto";
 describe("fortnightAnchorSetDto", () => {
 	it("accepts a valid calendar date", () => {
 		expect(
-			fortnightAnchorSetDto.safeParse({ value: "2026-08-12" }).success,
+			fortnightAnchorSetDto.safeParse({ anchor: "2026-08-12" }).success,
 		).toBe(true);
 	});
 
 	it("rejects an empty value", () => {
-		expect(fortnightAnchorSetDto.safeParse({ value: "" }).success).toBe(false);
+		expect(fortnightAnchorSetDto.safeParse({ anchor: "" }).success).toBe(false);
 	});
 
 	it("rejects non-date text", () => {
 		expect(
-			fortnightAnchorSetDto.safeParse({ value: "next payday" }).success,
+			fortnightAnchorSetDto.safeParse({ anchor: "next payday" }).success,
 		).toBe(false);
 	});
 
@@ -22,20 +22,20 @@ describe("fortnightAnchorSetDto", () => {
 	// reader would hand the grid an anchor the member never chose.
 	it("rejects a rolled-over month", () => {
 		expect(
-			fortnightAnchorSetDto.safeParse({ value: "2026-13-01" }).success,
+			fortnightAnchorSetDto.safeParse({ anchor: "2026-13-01" }).success,
 		).toBe(false);
 	});
 
 	it("rejects a rolled-over day", () => {
 		expect(
-			fortnightAnchorSetDto.safeParse({ value: "2026-02-30" }).success,
+			fortnightAnchorSetDto.safeParse({ anchor: "2026-02-30" }).success,
 		).toBe(false);
 	});
 
 	it("rejects a 2-digit year", () => {
-		expect(fortnightAnchorSetDto.safeParse({ value: "26-08-12" }).success).toBe(
-			false,
-		);
+		expect(
+			fortnightAnchorSetDto.safeParse({ anchor: "26-08-12" }).success,
+		).toBe(false);
 	});
 
 	// These name a real day, so the chart would grid off them happily — but
@@ -44,7 +44,9 @@ describe("fortnightAnchorSetDto", () => {
 	it.each(["2026-8-12", " 2026-08-12", "+002026-08-12", "2026-08-12 "])(
 		"rejects the unpadded/padded-junk shape %j",
 		(value) => {
-			expect(fortnightAnchorSetDto.safeParse({ value }).success).toBe(false);
+			expect(fortnightAnchorSetDto.safeParse({ anchor: value }).success).toBe(
+				false,
+			);
 		},
 	);
 });
