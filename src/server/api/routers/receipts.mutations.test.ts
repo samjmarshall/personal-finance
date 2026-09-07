@@ -78,15 +78,25 @@ describe("receipt.retry", () => {
 	});
 });
 
+// delete runs two selects — the blobPathname lookup, then the duplicate-copy probe.
+// select() consumes one queued batch per call; .where() yields an awaitable that also
+// chains .limit, so both `await …where()` and `await …where().limit(1)` resolve.
+function selectQueue(...batches: unknown[][]) {
+	let i = 0;
+	return () => {
+		const rows = batches[i++] ?? [];
+		const result = Object.assign(Promise.resolve(rows), {
+			limit: () => Promise.resolve(rows),
+		});
+		return { from: () => ({ where: () => result }) };
+	};
+}
+
 describe("receipt.delete", () => {
 	it("removes the row then best-effort deletes the stored blob pathname", async () => {
 		let deletedId: number | undefined;
 		const db = {
-			select: () => ({
-				from: () => ({
-					where: async () => [{ blobPathname: "receipt-abc.jpg" }],
-				}),
-			}),
+			select: selectQueue([{ blobPathname: "receipt-abc.jpg" }], []),
 			delete: () => ({
 				where: async (clause: unknown) => {
 					// eq(receipts.id, 3) — presence is enough; assert delete ran.
@@ -106,9 +116,7 @@ describe("receipt.delete", () => {
 	it("swallows a blob del failure — the row delete already committed", async () => {
 		del.mockRejectedValueOnce(new Error("blob gone"));
 		const db = {
-			select: () => ({
-				from: () => ({ where: async () => [{ blobPathname: "x.jpg" }] }),
-			}),
+			select: selectQueue([{ blobPathname: "x.jpg" }], []),
 			delete: () => ({ where: async () => {} }),
 		};
 
@@ -117,10 +125,26 @@ describe("receipt.delete", () => {
 		});
 	});
 
-	it("404s when the receipt is gone", async () => {
+	it("blocks with CONFLICT (row kept) when duplicate copies still reference it", async () => {
+		let deleted = false;
 		const db = {
-			select: () => ({ from: () => ({ where: async () => [] }) }),
+			select: selectQueue([{ blobPathname: "x.jpg" }], [{ id: 99 }]),
+			delete: () => ({
+				where: async () => {
+					deleted = true;
+				},
+			}),
 		};
+
+		await expect(caller(db).delete({ id: 5 })).rejects.toMatchObject({
+			code: "CONFLICT",
+		});
+		expect(deleted).toBe(false);
+		expect(del).not.toHaveBeenCalled();
+	});
+
+	it("404s when the receipt is gone", async () => {
+		const db = { select: selectQueue([]) };
 
 		await expect(caller(db).delete({ id: 404 })).rejects.toBeInstanceOf(
 			TRPCError,

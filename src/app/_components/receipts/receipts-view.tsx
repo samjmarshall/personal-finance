@@ -61,7 +61,7 @@ export function ReceiptsView() {
 	const [deleteTarget, setDeleteTarget] = useState<ReceiptRow | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 
-	const { data, isFetching } = api.receipt.list.useQuery(
+	const { data, isError, isFetching } = api.receipt.list.useQuery(
 		status ? { status } : undefined,
 		{
 			placeholderData: (prev) => prev,
@@ -228,14 +228,20 @@ export function ReceiptsView() {
 					</table>
 				</div>
 				{/* Outside the horizontal-scroll wrapper so the copy wraps on a phone
-				    instead of being clipped by the table's min-width. */}
-				{!rows.length && (
-					<p className="px-4 py-16 text-center text-muted-foreground text-sm">
-						{status
-							? "No receipts with this status."
-							: "No receipts yet. Upload one to get started."}
-					</p>
-				)}
+				    instead of being clipped by the table's min-width. isError forks the
+				    copy so a load failure never reads as an empty to-do queue. */}
+				{!rows.length &&
+					(isError ? (
+						<p className="px-4 py-16 text-center text-muted-foreground text-sm">
+							Couldn&apos;t load receipts. Refresh to try again.
+						</p>
+					) : (
+						<p className="px-4 py-16 text-center text-muted-foreground text-sm">
+							{status
+								? "No receipts with this status."
+								: "No receipts yet. Upload one to get started."}
+						</p>
+					))}
 			</Card>
 
 			<ReceiptDetail

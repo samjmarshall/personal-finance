@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { del } from "@vercel/blob";
-import { and, asc, desc, eq, getTableColumns } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -49,8 +49,9 @@ export const receiptRouter = createTRPCRouter({
 		),
 
 	// History table: newest first, with the uploading member and any matched
-	// transaction resolved by name. The optional status filter drives the
-	// processed-but-unmatched "to-do queue".
+	// transaction resolved by name. A status filter narrows to *unmatched* rows —
+	// that's the "to-do queue": e.g. processed receipts still awaiting a transaction
+	// (transactionId stays null until Phase 5 attribution links one).
 	list: protectedProcedure
 		.input(z.object({ status: z.enum(ReceiptStatus).optional() }).optional())
 		.query(async ({ ctx, input }): Promise<ReceiptListItem[]> => {
@@ -63,7 +64,14 @@ export const receiptRouter = createTRPCRouter({
 				.from(receipts)
 				.leftJoin(user, eq(receipts.userId, user.id))
 				.leftJoin(transactions, eq(receipts.transactionId, transactions.id))
-				.where(input?.status ? eq(receipts.status, input.status) : undefined)
+				.where(
+					input?.status
+						? and(
+								eq(receipts.status, input.status),
+								isNull(receipts.transactionId),
+							)
+						: undefined,
+				)
 				.orderBy(desc(receipts.createdAt), desc(receipts.id));
 		}),
 
@@ -138,6 +146,20 @@ export const receiptRouter = createTRPCRouter({
 			.where(eq(receipts.id, input.id));
 		if (!row)
 			throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found." });
+
+		// Block if copies dedup against this one: duplicateOfId is `set null` on delete,
+		// so deleting the target would strand them as duplicates-of-nothing (no extracted
+		// data, retry is failed-only) — a dead-end row. Make the member clear the copies first.
+		const [dependent] = await ctx.db
+			.select({ id: receipts.id })
+			.from(receipts)
+			.where(eq(receipts.duplicateOfId, input.id))
+			.limit(1);
+		if (dependent)
+			throw new TRPCError({
+				code: "CONFLICT",
+				message: "Delete the duplicate copies of this receipt first.",
+			});
 
 		await ctx.db.delete(receipts).where(eq(receipts.id, input.id));
 
