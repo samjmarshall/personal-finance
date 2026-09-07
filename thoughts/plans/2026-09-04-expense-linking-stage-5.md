@@ -156,8 +156,8 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 **Manual**
 - [ ] `/receipts` lists uploads with correct status badges; filter shows only the processed-but-unmatched queue
 - [ ] Retry on a `failed` row re-runs the worker; delete removes the row + blob and unlinks any matched transaction
-- [ ] `/design-review` (new page + nav)
-- [ ] `/security-review` (delete removes a blob; `del` uses the same write token; private-blob image proxy route added — auth-gated)
+- [ ] `/design-review` (new page + nav) — blocked in validation: `make start` needs a TTY for the portless sudo prompt; run it from a terminal, then re-run
+- [ ] `/security-review` (delete removes a blob; `del` uses the same write token; private-blob image proxy route added — auth-gated) — **1 HIGH open**: `receiptCreateDto.blobPathname` is `z.string().min(1)`, and `@vercel/blob` `get()` treats an `https://` value as a URL (any `*.blob.vercel-storage.com` host passes), so a member can point it at their own public store and the proxy serves `text/html` same-origin. Fix: reject URL-shaped pathnames in the DTO + allowlist `Content-Type` and add `X-Content-Type-Options: nosniff` in the proxy
 
 ---
 
