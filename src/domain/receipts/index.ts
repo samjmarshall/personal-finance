@@ -1,4 +1,12 @@
-import { receiptCreateDto } from "./receipt.dto";
+import type { MatchCandidate, MatchTransaction } from "./match";
+import { MATCH_SCAN_DAYS, matchCandidates } from "./match";
+import {
+	receiptConfirmMatchDto,
+	receiptCreateDto,
+	receiptItemCategoryDto,
+	receiptItemExpenseDto,
+	receiptMatchDto,
+} from "./receipt.dto";
 import type {
 	Receipt,
 	ReceiptDetail,
@@ -9,10 +17,21 @@ import type {
 import { receiptImageUrl } from "./receipt-media";
 
 export type {
+	MatchCandidate,
+	MatchTransaction,
 	Receipt,
 	ReceiptDetail,
 	ReceiptItem,
 	ReceiptItemDetail,
 	ReceiptListItem,
 };
-export { receiptCreateDto, receiptImageUrl };
+export {
+	MATCH_SCAN_DAYS,
+	matchCandidates,
+	receiptConfirmMatchDto,
+	receiptCreateDto,
+	receiptImageUrl,
+	receiptItemCategoryDto,
+	receiptItemExpenseDto,
+	receiptMatchDto,
+};

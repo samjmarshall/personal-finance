@@ -1,15 +1,35 @@
 import { TRPCError } from "@trpc/server";
 import { del } from "@vercel/blob";
-import { and, asc, desc, eq, getTableColumns, isNull } from "drizzle-orm";
+import {
+	and,
+	asc,
+	desc,
+	eq,
+	getTableColumns,
+	gte,
+	isNull,
+	lt,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import {
+	MATCH_SCAN_DAYS,
+	type MatchCandidate,
+	matchCandidates,
+	type Receipt,
 	type ReceiptDetail,
+	type ReceiptItem,
 	type ReceiptListItem,
+	receiptConfirmMatchDto,
 	receiptCreateDto,
+	receiptItemCategoryDto,
+	receiptItemExpenseDto,
+	receiptMatchDto,
 } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import { fromDateInput } from "~/lib/utils";
 import { assertRow } from "~/server/api/lib/assert-row";
+import { isPgError } from "~/server/api/lib/pg-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { user } from "~/server/auth/auth.schema";
 import { expenseCategories } from "~/server/expenses/categories.schema";
@@ -20,6 +40,20 @@ import { receiptItems, receipts } from "~/server/receipts/receipts.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
 
 const byId = z.object({ id: z.number() });
+
+// Attribution writes an expenseId or an expenseCategoryId; either FK can raise 23503
+// if the member deleted the target in another tab.
+const ITEM_FK_CONFLICT_MESSAGE =
+	"The selected expense or category no longer exists.";
+
+// Rethrow a Postgres FK violation (23503) as a CONFLICT with the given message;
+// pass anything else through untouched.
+function rethrowFkConflict(error: unknown, message: string): never {
+	if (isPgError(error, "23503")) {
+		throw new TRPCError({ code: "CONFLICT", message });
+	}
+	throw error;
+}
 
 export const receiptRouter = createTRPCRouter({
 	// The producer for the receipt pipeline: the client has already put the file in
@@ -76,13 +110,17 @@ export const receiptRouter = createTRPCRouter({
 		}),
 
 	// Detail overlay: the receipt plus its line items, each with its resolved
-	// expense/category label (null until Phase 5 attribution).
+	// expense/category label (null until the member attributes it).
 	get: protectedProcedure
 		.input(byId)
 		.query(async ({ ctx, input }): Promise<ReceiptDetail> => {
 			const [receipt] = await ctx.db
-				.select()
+				.select({
+					...getTableColumns(receipts),
+					transactionDescription: transactions.description,
+				})
 				.from(receipts)
+				.leftJoin(transactions, eq(receipts.transactionId, transactions.id))
 				.where(eq(receipts.id, input.id));
 			if (!receipt)
 				throw new TRPCError({
@@ -170,4 +208,132 @@ export const receiptRouter = createTRPCRouter({
 		}
 		return { success: true };
 	}),
+
+	// Ranked suggestions for the detail banner. Read-time, never cached: a
+	// transaction another receipt confirmed in the meantime drops out on the next
+	// call, so two members can't be offered the same match.
+	matchCandidates: protectedProcedure
+		.input(receiptMatchDto)
+		.query(async ({ ctx, input }): Promise<MatchCandidate[]> => {
+			const [receipt] = await ctx.db
+				.select({
+					total: receipts.total,
+					receiptDate: receipts.receiptDate,
+				})
+				.from(receipts)
+				.where(eq(receipts.id, input.receiptId));
+			if (!receipt)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Receipt not found.",
+				});
+
+			// Nothing extracted to match on (still pending, or a failed read) — skip the
+			// scan rather than pull a window we'd discard.
+			const receiptDay = receipt.receiptDate
+				? fromDateInput(receipt.receiptDate)
+				: null;
+			if (receipt.total === null || !receiptDay) return [];
+
+			const from = new Date(receiptDay);
+			from.setDate(from.getDate() - MATCH_SCAN_DAYS);
+			const to = new Date(receiptDay);
+			// Half-open upper bound, so the last in-window day counts whole.
+			to.setDate(to.getDate() + MATCH_SCAN_DAYS + 1);
+
+			const rows = await ctx.db
+				.select({
+					id: transactions.id,
+					description: transactions.description,
+					amount: transactions.amount,
+					date: transactions.date,
+					linkedReceiptId: receipts.id,
+				})
+				.from(transactions)
+				.leftJoin(receipts, eq(receipts.transactionId, transactions.id))
+				.where(and(gte(transactions.date, from), lt(transactions.date, to)));
+
+			return matchCandidates(
+				receipt,
+				rows.map(({ linkedReceiptId, ...t }) => ({
+					...t,
+					hasReceipt: linkedReceiptId !== null,
+				})),
+			);
+		}),
+
+	// A member confirming the match the banner suggested — the only way a receipt
+	// ever links to a transaction (adr010 / design decision 7: never silent).
+	confirmMatch: protectedProcedure
+		.input(receiptConfirmMatchDto)
+		.mutation(async ({ ctx, input }): Promise<Receipt> => {
+			let row: Receipt | undefined;
+			try {
+				// Update-or-404 in one statement, per the transaction router.
+				[row] = await ctx.db
+					.update(receipts)
+					.set({ transactionId: input.transactionId })
+					.where(eq(receipts.id, input.receiptId))
+					.returning();
+			} catch (error) {
+				// The unique index on transactionId is the dup-photo catcher: two photos
+				// of one purchase race here and the loser is told why, not 500'd.
+				if (isPgError(error, "23505"))
+					throw new TRPCError({
+						code: "CONFLICT",
+						message: "That transaction already has a receipt.",
+					});
+				rethrowFkConflict(error, "That transaction no longer exists.");
+			}
+			if (!row)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Receipt not found.",
+				});
+			return row;
+		}),
+
+	// Per-item attribution: which planned expense this line belongs to. Null clears.
+	setItemExpense: protectedProcedure
+		.input(receiptItemExpenseDto)
+		.mutation(async ({ ctx, input }): Promise<ReceiptItem> => {
+			let row: ReceiptItem | undefined;
+			try {
+				[row] = await ctx.db
+					.update(receiptItems)
+					.set({ expenseId: input.expenseId })
+					.where(eq(receiptItems.id, input.itemId))
+					.returning();
+			} catch (error) {
+				rethrowFkConflict(error, ITEM_FK_CONFLICT_MESSAGE);
+			}
+			if (!row)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Receipt item not found.",
+				});
+			return row;
+		}),
+
+	// Per-item attribution against the managed category list. Null clears.
+	setItemCategory: protectedProcedure
+		.input(receiptItemCategoryDto)
+		.mutation(async ({ ctx, input }): Promise<ReceiptItem> => {
+			let row: ReceiptItem | undefined;
+			try {
+				[row] = await ctx.db
+					.update(receiptItems)
+					.set({ expenseCategoryId: input.expenseCategoryId })
+					.where(eq(receiptItems.id, input.itemId))
+					.returning();
+			} catch (error) {
+				rethrowFkConflict(error, ITEM_FK_CONFLICT_MESSAGE);
+			}
+			if (!row)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Receipt item not found.",
+				});
+			return row;
+		}),
 });

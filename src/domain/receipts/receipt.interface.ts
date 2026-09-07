@@ -47,7 +47,9 @@ export interface ReceiptItemDetail extends ReceiptItem {
 	expenseCategoryName: string | null;
 }
 
-// One receipt with its line items — the detail overlay's payload.
+// One receipt with its line items — the detail overlay's payload. The description
+// names the confirmed match, so the banner can say what it linked to after reload.
 export interface ReceiptDetail extends Receipt {
+	transactionDescription: string | null;
 	items: ReceiptItemDetail[];
 }
