@@ -37,4 +37,14 @@ describe("fortnightAnchorSetDto", () => {
 			false,
 		);
 	});
+
+	// These name a real day, so the chart would grid off them happily — but
+	// <input type="date"> renders them blank, leaving the member looking at an
+	// empty field that re-saves the same unusable string.
+	it.each(["2026-8-12", " 2026-08-12", "+002026-08-12", "2026-08-12 "])(
+		"rejects the unpadded/padded-junk shape %j",
+		(value) => {
+			expect(fortnightAnchorSetDto.safeParse({ value }).success).toBe(false);
+		},
+	);
 });
