@@ -164,12 +164,12 @@ Five vertical slices matching the design's arrows: **schema → upload → worke
 - `src/server/api/routers/receipts.match.test.ts` — `confirmMatch` maps a `23505` to `CONFLICT`; `setItem*` maps a `23503` to `CONFLICT`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes (pure match table + router conflict-mapping tests)
-- [ ] Detail banner suggests the right transaction; confirming links it and removes it from other receipts' candidate lists (read-time freshness)
-- [ ] A second receipt cannot confirm the same transaction (CONFLICT), proving the dup-photo catcher
-- [ ] Per-item Expense/Category pickers persist and survive reload
-- [ ] `/design-review` (banner + per-item pickers)
+- [x] `make check` passes
+- [x] `make test` passes (pure match table + router conflict-mapping tests) — 32 files / 297 tests
+- [x] Detail banner suggests the right transaction; confirming links it and removes it from other receipts' candidate lists (read-time freshness) — seeded two same-vendor transactions; banner ranked the exact-amount/same-day one first, confirming linked it, and the second receipt's banner then offered only the remaining transaction
+- [x] A second receipt cannot confirm the same transaction (CONFLICT), proving the dup-photo catcher — forced `confirmMatch` on the taken transaction returned 409 `CONFLICT` "That transaction already has a receipt.". **Required a fix**: drizzle 0.45 wraps driver errors in `DrizzleQueryError` and hangs the `PostgresError` off `cause`, so the top-level-only `isPgError` never matched and this 500'd; `src/server/api/lib/pg-error.ts` now walks the `cause` chain (+ `pg-error.test.ts`). Same bug silently broke the transaction router's 23503 mapping
+- [x] Per-item Expense/Category pickers persist and survive reload
+- [x] `/design-review` (banner + per-item pickers) — no blockers. Two HIGH fixed: the matched banner overflowed the dialog by 32px at 375px (the `flex flex-col gap-5` wrapper is a grid item, so `min-width:auto` sized it to min-content — now `min-w-0`, banner wraps to two lines inside the dialog), and the suggestion button had no focus ring (now the app's `focus-visible:ring-3 ring-ring/50`). Also added a per-candidate pending spinner, named the `SUB_CENT` threshold, and gave the button a comma-separated `aria-label` so screen readers don't announce "bullet". Two MEDIUMs measured and **dismissed**: banner contrast is 5.74:1 in dark (above AA; the suggested `bg-positive/15` would have *lowered* it to 5.31), and Escape closes only the open picker, leaving the dialog up with focus back on the trigger. Light-theme `text-positive` on `bg-positive/10` measures 4.05:1 — a real AA miss, but it's the app-wide token pattern (`auth-form.tsx`, `app-nav.tsx`, `receipts-view.tsx` badges), not Phase 5; logged as a follow-up rather than fixed here
 
 ---
 
