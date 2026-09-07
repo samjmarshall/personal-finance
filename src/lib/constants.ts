@@ -98,7 +98,8 @@ export const PRIORITY_STYLES: Record<string, PriorityStyle> = {
 	},
 	[Priority.VerifyPossibleFraud]: {
 		label: "Verify",
-		badge: "bg-spend/10 text-spend border-spend/25",
+		badge:
+			"bg-[var(--badge-spend-bg)] text-[var(--badge-spend-fg)] border-[color:var(--badge-spend-border)]",
 		dot: "bg-spend",
 	},
 	[Priority.NA]: {
