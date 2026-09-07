@@ -244,7 +244,7 @@ describe("runProcessReceipt", () => {
 		expect(h.updates).toHaveLength(0);
 	});
 
-	it("marks the receipt failed with the error text when extraction throws", async () => {
+	it("marks the receipt failed when extraction throws", async () => {
 		const h = harness({
 			receipt: baseReceipt(),
 			categories: [],
@@ -262,8 +262,31 @@ describe("runProcessReceipt", () => {
 
 		const failed = findUpdate(h.updates, "error");
 		expect(failed?.status).toBe(ReceiptStatus.Failed);
-		expect(failed?.error).toContain("model unavailable");
+		expect(failed?.error).toBeTruthy();
 		expect(h.inserts).toHaveLength(0);
+	});
+
+	// `error` is rendered to the member verbatim, and a drizzle/postgres error message
+	// carries the failing SQL with its bound parameters. Nothing internal may reach it.
+	it("stores an actionable message, not the raw driver error", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: okBlob,
+			generate: async () => {
+				throw new Error(
+					'insert into "receipt_item" ... params: 7, secret-vendor',
+				);
+			},
+			hash: () => "hash-abc",
+		});
+
+		await run(1);
+
+		const failed = findUpdate(h.updates, "error");
+		expect(failed?.error).not.toContain("insert into");
+		expect(failed?.error).not.toContain("secret-vendor");
+		expect(failed?.error).toContain("Retry");
 	});
 
 	const overloaded = () =>
@@ -308,6 +331,6 @@ describe("runProcessReceipt", () => {
 
 		const failed = findUpdate(h.updates, "error");
 		expect(failed?.status).toBe(ReceiptStatus.Failed);
-		expect(failed?.error).toContain("Overloaded");
+		expect(failed?.error).toContain("extraction service");
 	});
 });

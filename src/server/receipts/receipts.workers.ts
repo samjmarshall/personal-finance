@@ -30,6 +30,15 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // a real outage. Explicit so the final-attempt check below can't drift from it.
 const RETRIES = 3;
 
+// `error` is rendered verbatim to the member in the detail overlay, and a driver error's
+// message carries the failing SQL with its bound parameters. Log the real thing, store a
+// line that says what to do about it — the same split markFailed makes for the outbox.
+function memberFacingError(error: unknown): string {
+	if (APICallError.isInstance(error))
+		return "The extraction service couldn't read this receipt. Retry in a moment.";
+	return "Couldn't extract this receipt. Retry, or delete it and upload a clearer photo.";
+}
+
 export interface FetchedBlob {
 	bytes: Uint8Array;
 	mediaType: string;
@@ -154,11 +163,12 @@ export function makeRunProcessReceipt({
 				APICallError.isInstance(error) && error.isRetryable === true;
 			if (retryable && !isFinalAttempt) throw error;
 
+			console.error(`process-receipt failed for ${receiptId}`, error);
 			await db
 				.update(receipts)
 				.set({
 					status: ReceiptStatus.Failed,
-					error: error instanceof Error ? error.message : String(error),
+					error: memberFacingError(error),
 				})
 				.where(eq(receipts.id, receiptId));
 		}
@@ -199,6 +209,13 @@ export function makeProcessReceiptWorker({ db, inngest }: WorkerDeps) {
 		{
 			id: "process-receipt",
 			retries: RETRIES,
+			// One run at a time per receipt. The status guard above only stops a *later*
+			// delivery; two concurrent ones (an at-least-once redelivery racing the first
+			// send, or a retry fired mid-run) would both read `pending`, both pay for an
+			// extraction, and both insert the line items. Serialised, the second finds
+			// `processed` and returns. Keyed on the receipt, so unrelated receipts still
+			// run in parallel.
+			concurrency: { key: "event.data.receiptId", limit: 1 },
 			triggers: [{ event: "receipt/uploaded" }, { event: "receipt/retry" }],
 		},
 		({ event, attempt }) =>
