@@ -93,11 +93,9 @@ function DesktopNavLink({ link, active }: { link: NavLeaf; active: boolean }) {
 	);
 }
 
-function NavLinks() {
-	const pathname = usePathname();
-	const current = activeHref(pathname);
+function NavLinks({ current }: { current: string }) {
 	return (
-		<nav className="flex flex-col gap-1">
+		<nav aria-label="Main navigation" className="flex flex-col gap-1">
 			{links.map((item) => {
 				if ("children" in item) {
 					const Icon = item.icon;
@@ -132,16 +130,6 @@ function NavLinks() {
 				);
 			})}
 		</nav>
-	);
-}
-
-function SettingsNavLink() {
-	const pathname = usePathname();
-	return (
-		<DesktopNavLink
-			active={activeHref(pathname) === settingsLink.href}
-			link={settingsLink}
-		/>
 	);
 }
 
@@ -188,6 +176,7 @@ function SignOutButton() {
 }
 
 export function AppNav({ userName }: { userName: string }) {
+	const current = activeHref(usePathname());
 	return (
 		<aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-4 text-sidebar-foreground lg:flex">
 			<div>
@@ -197,7 +186,7 @@ export function AppNav({ userName }: { userName: string }) {
 					</span>
 					<span className="font-semibold text-base tracking-tight">Ledger</span>
 				</div>
-				<NavLinks />
+				<NavLinks current={current} />
 			</div>
 			<div className="flex flex-col gap-1 border-sidebar-muted/20 border-t pt-3">
 				<div className="px-3 py-1.5">
@@ -206,7 +195,14 @@ export function AppNav({ userName }: { userName: string }) {
 						{userName}
 					</p>
 				</div>
-				<SettingsNavLink />
+				{/* Its own landmark: it sits in the footer, outside the main nav, so
+				    without this the desktop Settings link is in no landmark at all. */}
+				<nav aria-label="Settings">
+					<DesktopNavLink
+						active={current === settingsLink.href}
+						link={settingsLink}
+					/>
+				</nav>
 				<SignOutButton />
 			</div>
 		</aside>
