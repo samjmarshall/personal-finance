@@ -1,9 +1,10 @@
 "use client";
 
+import { Loader2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
-import { Field, FieldLabel } from "~/components/ui/field";
+import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { cn, formatCurrency, formatDate } from "~/lib/utils";
 import { api } from "~/trpc/react";
@@ -72,6 +73,7 @@ export function BalanceSnapshotCard() {
 							aria-describedby={error ? "balance-error" : undefined}
 							aria-invalid={error ? true : undefined}
 							className="flex-1"
+							disabled={set.isPending}
 							id="balance-amount"
 							inputMode="decimal"
 							onChange={(e) => {
@@ -85,20 +87,26 @@ export function BalanceSnapshotCard() {
 							type="number"
 							value={amount}
 						/>
-						<Button disabled={set.isPending} type="submit">
-							{set.isPending ? "Saving…" : "Save"}
+						<Button
+							className="w-14"
+							// Guards the empty field, not a repeat amount: a snapshot is
+							// stamped asOf now, so re-saving an unchanged balance is a real
+							// action — it re-anchors the projection to today.
+							disabled={set.isPending || amount === ""}
+							type="submit"
+						>
+							{set.isPending ? (
+								<Loader2Icon
+									className="animate-spin"
+									data-icon="inline-start"
+								/>
+							) : (
+								"Save"
+							)}
 						</Button>
 					</div>
+					<FieldError id="balance-error">{error}</FieldError>
 				</Field>
-				{error && (
-					<p
-						className="mt-2 text-destructive text-sm"
-						id="balance-error"
-						role="alert"
-					>
-						{error}
-					</p>
-				)}
 			</form>
 		</div>
 	);
