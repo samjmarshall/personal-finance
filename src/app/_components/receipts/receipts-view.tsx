@@ -31,12 +31,14 @@ const STATUS_STYLE: Record<ReceiptStatus, StatusStyle> = {
 	},
 	[ReceiptStatus.Processed]: {
 		label: "Processed",
-		badge: "bg-positive/10 text-positive border-positive/25",
+		badge:
+			"bg-[var(--badge-positive-bg)] text-[var(--badge-positive-fg)] border-[color:var(--badge-positive-border)]",
 		dot: "bg-positive",
 	},
 	[ReceiptStatus.Failed]: {
 		label: "Failed",
-		badge: "bg-spend/10 text-spend border-spend/25",
+		badge:
+			"bg-[var(--badge-spend-bg)] text-[var(--badge-spend-fg)] border-[color:var(--badge-spend-border)]",
 		dot: "bg-spend",
 	},
 	[ReceiptStatus.Duplicate]: {
@@ -55,14 +57,24 @@ const STATUS_FILTER_ITEMS: SelectFieldOption<ReceiptStatus | null>[] = [
 	})),
 ];
 
+// Its own control, not a rider on the status filter: "still needs a transaction" is a
+// separate question from "where is it in the pipeline", and hiding it inside Status
+// made a matched receipt unreachable through every value of that dropdown.
+const MATCH_FILTER_ITEMS: SelectFieldOption<"all" | "unmatched">[] = [
+	{ value: "all", label: "Matched and unmatched" },
+	{ value: "unmatched", label: "Unmatched only" },
+];
+
 export function ReceiptsView() {
 	const [status, setStatus] = useState<ReceiptStatus | null>(null);
+	const [match, setMatch] = useState<"all" | "unmatched">("all");
 	const [detailId, setDetailId] = useState<number | null>(null);
 	const [deleteTarget, setDeleteTarget] = useState<ReceiptRow | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 
+	const unmatchedOnly = match === "unmatched";
 	const { data, isError, isFetching } = api.receipt.list.useQuery(
-		status ? { status } : undefined,
+		{ status: status ?? undefined, unmatchedOnly },
 		{
 			placeholderData: (prev) => prev,
 			// Extraction runs async in Inngest; poll only while a row is still pending
@@ -100,6 +112,13 @@ export function ReceiptsView() {
 						items={STATUS_FILTER_ITEMS}
 						onValueChange={(v) => setStatus(v)}
 						value={status}
+					/>
+					<SelectField
+						aria-label={`Filter by match, currently ${match === "unmatched" ? "unmatched only" : "matched and unmatched"}`}
+						className="min-w-52"
+						items={MATCH_FILTER_ITEMS}
+						onValueChange={(v) => setMatch(v ?? "all")}
+						value={match}
 					/>
 				</CardContent>
 			</Card>
@@ -237,8 +256,8 @@ export function ReceiptsView() {
 						</p>
 					) : (
 						<p className="px-4 py-16 text-center text-muted-foreground text-sm">
-							{status
-								? "No receipts with this status."
+							{status || unmatchedOnly
+								? "No receipts match these filters."
 								: "No receipts yet. Upload one to get started."}
 						</p>
 					))}

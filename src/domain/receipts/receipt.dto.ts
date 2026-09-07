@@ -18,9 +18,15 @@ const receiptFields = {
 
 const receiptCreateDto = z.object({ ...receiptFields });
 
-const receiptMatchDto = z.object({ receiptId: z.number().int() });
+const receiptRefDto = z.object({ receiptId: z.number().int() });
 
-const receiptConfirmMatchDto = receiptMatchDto.extend({
+// timeZone is the viewer's IANA zone. Ranking compares a bare calendar date against
+// transaction *instants*, so the day each instant counts as has to be resolved in
+// someone's zone — the viewer's, so the "2 days earlier" label agrees with the date
+// rendered beside it. An unknown zone falls back to the server's rather than throwing.
+const receiptMatchDto = receiptRefDto.extend({ timeZone: z.string().min(1) });
+
+const receiptConfirmMatchDto = receiptRefDto.extend({
 	transactionId: z.number().int(),
 });
 

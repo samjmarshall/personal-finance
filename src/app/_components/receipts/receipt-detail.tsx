@@ -77,8 +77,16 @@ function MatchBanner({
 
 	// Read-time: refetched whenever the overlay opens, so a transaction another
 	// member claimed in the meantime is already gone from the list.
+	// The zone goes with the request: the server ranks by how many days off each
+	// transaction is, and its own zone is UTC — which would disagree with the dates
+	// this component renders (browser-local) by a day for anyone east of it.
 	const { data: candidates, isLoading } = api.receipt.matchCandidates.useQuery(
-		unmatched ? { receiptId } : skipToken,
+		unmatched
+			? {
+					receiptId,
+					timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+				}
+			: skipToken,
 	);
 
 	const confirm = api.receipt.confirmMatch.useMutation({
@@ -90,7 +98,7 @@ function MatchBanner({
 
 	if (transactionId !== null) {
 		return (
-			<p className="flex items-center gap-2 rounded-lg border border-positive/25 bg-positive/10 px-3 py-2 text-positive text-sm">
+			<p className="flex items-center gap-2 rounded-lg border border-[color:var(--badge-positive-border)] bg-[var(--badge-positive-bg)] px-3 py-2 text-[var(--badge-positive-fg)] text-sm">
 				<Check aria-hidden className="h-4 w-4 shrink-0" />
 				{/* min-w-0: without it a long bank description refuses to wrap and
 				    pushes past the dialog edge on a phone. */}
@@ -296,7 +304,11 @@ export function ReceiptDetail({
 								)}
 							</div>
 
-							<div className="flex flex-col gap-4">
+							{/* min-w-0: as a grid item this defaults to min-width:auto, so the
+							    items table's w-52 picker column inflated the track instead of
+							    letting overflow-x-auto engage — pickers were clipped off-screen
+							    at 375px. Same fix as the matched banner above. */}
+							<div className="flex min-w-0 flex-col gap-4">
 								<dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 									<div>
 										<dt className="text-muted-foreground text-xs">Total</dt>
@@ -444,7 +456,7 @@ export function ReceiptDetail({
 								{/* `error` is never cleared on retry/success; only a failed row's message is current. */}
 								{data.status === ReceiptStatus.Failed && data.error && (
 									<p
-										className="flex items-start gap-2 rounded-md border border-spend/25 bg-spend/10 px-3 py-2 text-spend text-xs"
+										className="flex items-start gap-2 rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-xs"
 										role="alert"
 									>
 										<TriangleAlert

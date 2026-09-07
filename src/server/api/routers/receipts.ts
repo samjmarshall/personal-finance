@@ -13,9 +13,9 @@ import {
 import { z } from "zod";
 
 import {
-	MATCH_SCAN_DAYS,
 	type MatchCandidate,
 	matchCandidates,
+	matchScanWindow,
 	type Receipt,
 	type ReceiptDetail,
 	type ReceiptItem,
@@ -27,7 +27,6 @@ import {
 	receiptMatchDto,
 } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
-import { fromDateInput } from "~/lib/utils";
 import { assertRow } from "~/server/api/lib/assert-row";
 import { isPgError } from "~/server/api/lib/pg-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -83,11 +82,19 @@ export const receiptRouter = createTRPCRouter({
 		),
 
 	// History table: newest first, with the uploading member and any matched
-	// transaction resolved by name. A status filter narrows to *unmatched* rows —
-	// that's the "to-do queue": e.g. processed receipts still awaiting a transaction
-	// (transactionId stays null until Phase 5 attribution links one).
+	// transaction resolved by name. The two filters are independent and mean exactly
+	// what they say: `status` narrows by lifecycle, `unmatchedOnly` to rows with no
+	// transaction yet (the to-do queue). Folding the second into the first would make
+	// a matched receipt unreachable through every filter value.
 	list: protectedProcedure
-		.input(z.object({ status: z.enum(ReceiptStatus).optional() }).optional())
+		.input(
+			z
+				.object({
+					status: z.enum(ReceiptStatus).optional(),
+					unmatchedOnly: z.boolean().optional(),
+				})
+				.optional(),
+		)
 		.query(async ({ ctx, input }): Promise<ReceiptListItem[]> => {
 			return ctx.db
 				.select({
@@ -99,12 +106,11 @@ export const receiptRouter = createTRPCRouter({
 				.leftJoin(user, eq(receipts.userId, user.id))
 				.leftJoin(transactions, eq(receipts.transactionId, transactions.id))
 				.where(
-					input?.status
-						? and(
-								eq(receipts.status, input.status),
-								isNull(receipts.transactionId),
-							)
-						: undefined,
+					// `and()` drops undefined arms, so no filter selected means no WHERE.
+					and(
+						input?.status ? eq(receipts.status, input.status) : undefined,
+						input?.unmatchedOnly ? isNull(receipts.transactionId) : undefined,
+					),
 				)
 				.orderBy(desc(receipts.createdAt), desc(receipts.id));
 		}),
@@ -230,16 +236,10 @@ export const receiptRouter = createTRPCRouter({
 
 			// Nothing extracted to match on (still pending, or a failed read) — skip the
 			// scan rather than pull a window we'd discard.
-			const receiptDay = receipt.receiptDate
-				? fromDateInput(receipt.receiptDate)
+			const window = receipt.receiptDate
+				? matchScanWindow(receipt.receiptDate)
 				: null;
-			if (receipt.total === null || !receiptDay) return [];
-
-			const from = new Date(receiptDay);
-			from.setDate(from.getDate() - MATCH_SCAN_DAYS);
-			const to = new Date(receiptDay);
-			// Half-open upper bound, so the last in-window day counts whole.
-			to.setDate(to.getDate() + MATCH_SCAN_DAYS + 1);
+			if (receipt.total === null || !window) return [];
 
 			const rows = await ctx.db
 				.select({
@@ -251,7 +251,12 @@ export const receiptRouter = createTRPCRouter({
 				})
 				.from(transactions)
 				.leftJoin(receipts, eq(receipts.transactionId, transactions.id))
-				.where(and(gte(transactions.date, from), lt(transactions.date, to)));
+				.where(
+					and(
+						gte(transactions.date, window.from),
+						lt(transactions.date, window.to),
+					),
+				);
 
 			return matchCandidates(
 				receipt,
@@ -259,6 +264,7 @@ export const receiptRouter = createTRPCRouter({
 					...t,
 					hasReceipt: linkedReceiptId !== null,
 				})),
+				input.timeZone,
 			);
 		}),
 

@@ -38,9 +38,16 @@ const monthFormatter = new Intl.DateTimeFormat("en-AU", {
 	year: "numeric",
 });
 
+// A bare YYYY-MM-DD (a `date` column, e.g. receiptDate) is a calendar day with no
+// zone — `new Date()` reads it as UTC midnight and renders the day *before* for
+// anyone behind UTC. Parse those locally, same as toDateInput/isPast; a full
+// timestamp still parses as the instant it is.
 export function formatDate(value: Date | string | null | undefined) {
 	if (!value) return "—";
-	const date = typeof value === "string" ? new Date(value) : value;
+	const date =
+		typeof value === "string"
+			? (fromDateInput(value) ?? new Date(value))
+			: value;
 	return dateFormatter.format(date);
 }
 
@@ -72,6 +79,39 @@ export function fromDateInput(value: string): Date | null {
 	)
 		return null;
 	return date;
+}
+
+// Intl rejects an unknown IANA zone by throwing, and a zone string can arrive from a
+// client — fall back to the runtime's own zone so a bad value degrades rather than 500s.
+// Cached because startOfDayInZone runs per row over a scan window.
+const zonedDayFormatters = new Map<string, Intl.DateTimeFormat>();
+function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
+	const cached = zonedDayFormatters.get(timeZone);
+	if (cached) return cached;
+	const options: Intl.DateTimeFormatOptions = {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	};
+	let formatter: Intl.DateTimeFormat;
+	try {
+		formatter = new Intl.DateTimeFormat("en-CA", { ...options, timeZone });
+	} catch {
+		formatter = new Intl.DateTimeFormat("en-CA", options);
+	}
+	zonedDayFormatters.set(timeZone, formatter);
+	return formatter;
+}
+
+// Local midnight of the calendar day `value` lands on *in `timeZone`* (IANA). A
+// timestamp is an instant; which day it belongs to depends on who's asking, and the
+// runtime's own zone is UTC on the server. Returned at local midnight so it subtracts
+// cleanly against fromDateInput's parse of a YYYY-MM-DD calendar column.
+export function startOfDayInZone(value: Date, timeZone: string): Date {
+	const parts = zonedDayFormatter(timeZone).formatToParts(value);
+	const part = (type: Intl.DateTimeFormatPartTypes) =>
+		Number(parts.find((p) => p.type === type)?.value);
+	return new Date(part("year"), part("month") - 1, part("day"));
 }
 
 // Compare by local calendar day, not instant: a one-time due today is upcoming,

@@ -1,10 +1,54 @@
 import { describe, expect, it } from "vitest";
 import {
+	formatDate,
 	formatMonthKey,
 	fromDateInput,
 	isPast,
+	startOfDayInZone,
 	toDateInput,
 } from "~/lib/utils";
+
+describe("formatDate", () => {
+	// A `date` column (receiptDate) arrives as a bare calendar day. `new Date()` reads
+	// that as UTC midnight, which renders the day *before* anywhere behind UTC — the
+	// exact drift toDateInput/fromDateInput exist to avoid.
+	it("renders a YYYY-MM-DD as that calendar day, not a UTC instant", () => {
+		expect(formatDate("2026-08-04")).toBe(formatDate(new Date(2026, 7, 4)));
+	});
+
+	it("still parses a full timestamp as the instant it is", () => {
+		const instant = "2026-08-04T13:45:00Z";
+		expect(formatDate(instant)).toBe(formatDate(new Date(instant)));
+	});
+
+	it("renders an em dash for nothing", () => {
+		expect(formatDate(null)).toBe("—");
+		expect(formatDate(undefined)).toBe("—");
+	});
+});
+
+describe("startOfDayInZone", () => {
+	// 20:00 UTC is already the next day in Brisbane (UTC+10) — the skew that made the
+	// server (UTC) disagree with the browser about which day a transaction fell on.
+	const lateUtc = new Date("2026-09-14T20:00:00Z");
+
+	it("resolves the calendar day in the given zone", () => {
+		expect(toDateInput(startOfDayInZone(lateUtc, "UTC"))).toBe("2026-09-14");
+		expect(toDateInput(startOfDayInZone(lateUtc, "Australia/Brisbane"))).toBe(
+			"2026-09-15",
+		);
+	});
+
+	it("returns local midnight so it subtracts cleanly against fromDateInput", () => {
+		expect(startOfDayInZone(lateUtc, "UTC").getHours()).toBe(0);
+	});
+
+	it("falls back to the runtime zone rather than throwing on an unknown zone", () => {
+		expect(toDateInput(startOfDayInZone(lateUtc, "Not/AZone"))).toBe(
+			toDateInput(lateUtc),
+		);
+	});
+});
 
 describe("toDateInput", () => {
 	it("formats a local date as YYYY-MM-DD", () => {

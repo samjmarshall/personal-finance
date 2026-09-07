@@ -10,6 +10,10 @@ vi.mock("@vercel/blob", () => ({ del: vi.fn() }));
 const { createCallerFactory } = await import("~/server/api/trpc");
 const { receiptRouter } = await import("./receipts");
 
+// The runner's own zone, so the local-midnight fixtures below resolve to the day
+// they read as. Zone-shift behaviour itself is pinned in match.test.ts.
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 function caller(db: unknown) {
 	return createCallerFactory(receiptRouter)({
 		db,
@@ -199,7 +203,10 @@ describe("receipt.matchCandidates", () => {
 			},
 		]);
 
-		const result = await caller(db).matchCandidates({ receiptId: 3 });
+		const result = await caller(db).matchCandidates({
+			receiptId: 3,
+			timeZone: TZ,
+		});
 
 		expect(result.map((c) => c.id)).toEqual([1, 3]);
 	});
@@ -215,15 +222,15 @@ describe("receipt.matchCandidates", () => {
 			},
 		};
 
-		await expect(caller(db).matchCandidates({ receiptId: 3 })).resolves.toEqual(
-			[],
-		);
+		await expect(
+			caller(db).matchCandidates({ receiptId: 3, timeZone: TZ }),
+		).resolves.toEqual([]);
 		expect(selects).toBe(1);
 	});
 
 	it("404s when the receipt is gone", async () => {
 		await expect(
-			caller(matchDb(null, [])).matchCandidates({ receiptId: 3 }),
+			caller(matchDb(null, [])).matchCandidates({ receiptId: 3, timeZone: TZ }),
 		).rejects.toMatchObject({ code: "NOT_FOUND" });
 	});
 });

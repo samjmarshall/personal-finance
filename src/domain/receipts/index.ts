@@ -1,5 +1,5 @@
 import type { MatchCandidate, MatchTransaction } from "./match";
-import { MATCH_SCAN_DAYS, matchCandidates } from "./match";
+import { matchCandidates, matchScanWindow } from "./match";
 import {
 	receiptConfirmMatchDto,
 	receiptCreateDto,
@@ -26,8 +26,8 @@ export type {
 	ReceiptListItem,
 };
 export {
-	MATCH_SCAN_DAYS,
 	matchCandidates,
+	matchScanWindow,
 	receiptConfirmMatchDto,
 	receiptCreateDto,
 	receiptImageUrl,

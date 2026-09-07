@@ -1,4 +1,4 @@
-import { fromDateInput, toDateInput } from "~/lib/utils";
+import { fromDateInput, startOfDayInZone } from "~/lib/utils";
 
 // A till total and the bank's settled amount agree to the cent far more often than
 // not; the 2% band only has to absorb a tip/rounding line, not a different purchase.
@@ -38,6 +38,25 @@ function daysBetween(from: Date, to: Date): number {
 }
 
 /**
+ * Half-open `[from, to)` instant range to pull before ranking, or null when the
+ * receipt has no date to scan around. MATCH_SCAN_DAYS either side — one day wider
+ * than the ±4 the ranking itself keeps, which is the slack that absorbs a viewer
+ * zone up to ~24h off the server's.
+ */
+export function matchScanWindow(
+	receiptDate: string,
+): { from: Date; to: Date } | null {
+	const receiptDay = fromDateInput(receiptDate);
+	if (!receiptDay) return null;
+	const from = new Date(receiptDay);
+	from.setDate(from.getDate() - MATCH_SCAN_DAYS);
+	const to = new Date(receiptDay);
+	// Half-open upper bound, so the last in-window day counts whole.
+	to.setDate(to.getDate() + MATCH_SCAN_DAYS + 1);
+	return { from, to };
+}
+
+/**
  * Rank the transactions a receipt could belong to, closest amount first then
  * closest date. Never auto-links (adr010 / design decision 7) — a member confirms.
  *
@@ -45,10 +64,13 @@ function daysBetween(from: Date, to: Date): number {
  * bounds inclusive. Transactions another receipt already claims are dropped, so a
  * confirmed match disappears from every other receipt's list on the next read.
  * A receipt still missing its total or date yields nothing rather than guessing.
+ *
+ * `timeZone` is the *viewer's* IANA zone, not the server's.
  */
 export function matchCandidates(
 	receipt: { total: number | null; receiptDate: string | null },
 	transactions: MatchTransaction[],
+	timeZone: string,
 ): MatchCandidate[] {
 	const { total, receiptDate } = receipt;
 	if (total === null || receiptDate === null) return [];
@@ -62,12 +84,11 @@ export function matchCandidates(
 		.map((t) => ({
 			...t,
 			amountDelta: Math.abs(t.amount - total),
-			// Via the transaction's *local* calendar day, so a timestamp's time of day
-			// never drags it into the neighbouring day.
-			dayDelta: daysBetween(
-				receiptDay,
-				fromDateInput(toDateInput(t.date)) ?? t.date,
-			),
+			// receiptDate is a bare calendar day; the transaction is an instant, so which
+			// day it counts as depends on the zone you resolve it in. Resolve in the
+			// viewer's — the server's is UTC on Vercel, which would shift an AU evening
+			// spend a day earlier and skew both this label and the ±4-day window.
+			dayDelta: daysBetween(receiptDay, startOfDayInZone(t.date, timeZone)),
 		}))
 		.filter(
 			(c) =>
