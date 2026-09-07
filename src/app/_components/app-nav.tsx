@@ -5,11 +5,9 @@ import {
 	LayoutDashboard,
 	LogOut,
 	type LucideIcon,
-	Moon,
 	Receipt,
 	ScanLine,
-	Sun,
-	SunMoon,
+	Settings,
 	Tags,
 	TrendingUp,
 	Wallet,
@@ -17,9 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import { useState } from "react";
-import { useMounted } from "~/hooks/use-mounted";
 import { cn } from "~/lib/utils";
 import { authClient } from "~/server/auth/client";
 
@@ -43,12 +39,24 @@ const links: NavItem[] = [
 	{ href: "/receipts", label: "Receipts", icon: ScanLine },
 ];
 
+// Rendered in the sidebar footer beside the theme and sign-out controls rather than
+// in `links` — workspace config, not somewhere you browse to. Still folded into
+// flatLinks below so active-state matching and the mobile bar keep seeing it.
+const settingsLink: NavLeaf = {
+	href: "/settings",
+	label: "Settings",
+	icon: Settings,
+};
+
 /** Every navigable leaf, sections flattened; `group` names the parent section. */
-const flatLinks: (NavLeaf & { group?: string })[] = links.flatMap((item) =>
-	"children" in item
-		? item.children.map((child) => ({ ...child, group: item.label }))
-		: [item],
-);
+const flatLinks: (NavLeaf & { group?: string })[] = [
+	...links.flatMap((item) =>
+		"children" in item
+			? item.children.map((child) => ({ ...child, group: item.label }))
+			: [item],
+	),
+	settingsLink,
+];
 
 /** Returns the href of the most specific link matching the current pathname. */
 function activeHref(pathname: string) {
@@ -128,6 +136,16 @@ function NavLinks() {
 	);
 }
 
+function SettingsNavLink() {
+	const pathname = usePathname();
+	return (
+		<DesktopNavLink
+			active={activeHref(pathname) === settingsLink.href}
+			link={settingsLink}
+		/>
+	);
+}
+
 function SignOutButton() {
 	const router = useRouter();
 	const [error, setError] = useState<string | null>(null);
@@ -170,35 +188,6 @@ function SignOutButton() {
 	);
 }
 
-function ThemeToggle() {
-	const { resolvedTheme, setTheme } = useTheme();
-	// resolvedTheme is unknown until next-themes resolves it post-mount; show a
-	// neutral affordance until then so a dark-resolved user never sees the
-	// inverted "switch to dark" label/icon for a frame.
-	const mounted = useMounted();
-	const isDark = resolvedTheme === "dark";
-
-	let Icon = SunMoon;
-	let label = "Toggle theme";
-	let ariaLabel = "Toggle theme";
-	if (mounted) {
-		Icon = isDark ? Sun : Moon;
-		label = isDark ? "Light mode" : "Dark mode";
-		ariaLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
-	}
-	return (
-		<button
-			aria-label={ariaLabel}
-			className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
-			onClick={() => setTheme(isDark ? "light" : "dark")}
-			type="button"
-		>
-			<Icon className="h-[18px] w-[18px]" />
-			{label}
-		</button>
-	);
-}
-
 export function AppNav({ userName }: { userName: string }) {
 	return (
 		<aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-4 text-sidebar-foreground lg:flex">
@@ -218,7 +207,7 @@ export function AppNav({ userName }: { userName: string }) {
 						{userName}
 					</p>
 				</div>
-				<ThemeToggle />
+				<SettingsNavLink />
 				<SignOutButton />
 			</div>
 		</aside>
