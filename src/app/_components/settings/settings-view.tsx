@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarClock, Palette } from "lucide-react";
-import { Suspense, useState } from "react";
+import { useState } from "react";
 import { PageHeader } from "~/app/_components/page-header";
 import { cn } from "~/lib/utils";
 import { AppearanceSection } from "./appearance-section";
@@ -50,14 +50,16 @@ export function SettingsView() {
 					))}
 				</nav>
 
-				{/* A section mounts on click rather than at first paint, so its suspending
-				    query needs a boundary the page's streamed HTML can't stand in for. */}
-				<Suspense
-					fallback={<p className="text-muted-foreground text-sm">Loading…</p>}
-				>
-					{active === "appearance" && <AppearanceSection />}
-					{active === "pay-cycle" && <PayCycleSection />}
-				</Suspense>
+				{/* Both sections stay mounted and the inactive one is hidden — unmounting
+				    it would silently bin a half-typed anchor when a member flicks to
+				    Appearance and back. Pay cycle's suspending query is covered by the
+				    page prefetch, same as every other view. */}
+				<div hidden={active !== "appearance"}>
+					<AppearanceSection />
+				</div>
+				<div hidden={active !== "pay-cycle"}>
+					<PayCycleSection />
+				</div>
 			</div>
 		</div>
 	);
