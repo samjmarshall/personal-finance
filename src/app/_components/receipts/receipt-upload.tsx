@@ -38,12 +38,12 @@ export function ReceiptUpload() {
 		// Clear so re-picking the same file fires onChange again.
 		event.target.value = "";
 
-		// corrupt/unreadable file — reset to idle so the member can retry
 		setStatus("processing");
 		let ready: File;
 		try {
 			ready = await prepReceipt(file);
 		} catch (err) {
+			// corrupt/unreadable file — back to idle so the member can retry
 			toast.error(
 				err instanceof Error ? err.message : "Couldn't read that image",
 			);
