@@ -39,9 +39,8 @@ const links: NavItem[] = [
 	{ href: "/receipts", label: "Receipts", icon: ScanLine },
 ];
 
-// Rendered in the sidebar footer beside the theme and sign-out controls rather than
-// in `links` — workspace config, not somewhere you browse to. Still folded into
-// flatLinks below so active-state matching and the mobile bar keep seeing it.
+// Not in `links` — config, not a browse destination. Still in `flatLinks` so
+// active-state matching and the mobile bar see it.
 const settingsLink: NavLeaf = {
 	href: "/settings",
 	label: "Settings",

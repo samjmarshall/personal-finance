@@ -75,7 +75,7 @@ Gives the app a Settings page and closes the gap where the pay-cycle anchor coul
 - [x] `make check` passes
 - [x] `make test` passes (DTO cases + upsert unit)
 - [x] `FORTNIGHT_ANCHOR_KEY` is declared once and imported by both `setting.ts` and `cashflow.ts`
-- [ ] `/settings` saves a new anchor, and the cash-flow chart's fortnight buckets shift to the new grid after invalidation
+- [x] `/settings` saves a new anchor, and the cash-flow chart's fortnight buckets shift to the new grid after invalidation
 - [x] A malformed value is rejected by the form rather than written (a written-then-unreadable value would silently degrade the chart to the month grid)
 - [x] `/design-review` (new page + nav entry)
 
@@ -98,6 +98,19 @@ Gives the app a Settings page and closes the gap where the pay-cycle anchor coul
 > — React keeps the server's attribute and `resolvedTheme` never changes again, so it
 > never repaints; now gated on `mounted`), and the section rail fell back to the
 > browser's default focus ring while the tiles carried the project's.
+
+> Validation note (`/validate`). The last box is now ticked — verified in-browser:
+> anchor `2026-08-12` → `2026-08-15` shifted **every** fortnight tick by exactly three
+> days (`10 Mar → 13 Mar`, `7 Apr → 10 Apr`, … `9 Feb → 12 Feb`); the original value
+> was restored and the grid returned to baseline. The reject path was re-confirmed
+> (empty anchor → `role="alert"`, `aria-invalid`, `aria-describedby`, zero tRPC calls).
+>
+> Carried into Phase 2 rather than fixed here (see the `/validate` report):
+> `FORTNIGHT_ANCHOR_KEY` is a non-table export in a `*.schema.ts`, so `src/server/db/index.ts`
+> spreads it into the object handed to `drizzle()`; the DTO checks calendar validity
+> but not the padded `YYYY-MM-DD` shape `<input type="date">` needs; and the inline
+> `role="alert"` double-reports mutation failures alongside the global `MutationCache`
+> toast while wrongly setting `aria-invalid` on a valid date.
 
 ---
 
