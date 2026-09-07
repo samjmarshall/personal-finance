@@ -91,6 +91,9 @@
 			"esbuild",
 			"inngest-cli",
 			"protobufjs"
-		]
+		],
+		"overrides": {
+			"@ai-sdk/provider-utils>undici": "^7.29.0"
+		}
 	}
 }
