@@ -13,7 +13,10 @@
 	--font-heading: var(--font-sans);
 }
 
-:root {
+/* .light is listed alongside :root so a subtree can force the light palette back on
+   inside a dark page — without it, a nested .light has no rule to override .dark. */
+:root,
+.light {
 	--radius: 0.625rem;
 
 	/* Neutrals - cool paper */
@@ -104,7 +107,10 @@
 	   card; full 3:1 (needs ~0.50) is a tracked contrast-hardening follow-up. */
 	--border: oklch(0.4 0.01 245);
 	--input: oklch(0.4 0.01 245);
-	--ring: oklch(0.62 0.1 175);
+	/* Lifted well clear of --primary. At the old 0.62 it was luminance-identical to
+	   the brand teal (1.00:1), so focus-visible:border-ring vanished on any
+	   bg-primary button and the active/focus states merged on the settings tiles. */
+	--ring: oklch(0.82 0.11 175);
 
 	/* Brand - teal brightened for contrast on the dark ground */
 	--primary: oklch(0.62 0.1 178);
