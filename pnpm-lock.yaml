@@ -12,19 +12,19 @@ importers:
   .:
     dependencies:
       '@ai-sdk/anthropic':
-        specifier: ^2.0.101
+        specifier: 2.0.101
         version: 2.0.101(zod@4.4.3)
       '@base-ui/react':
         specifier: 1.7.0
         version: 1.7.0(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@dnd-kit/core':
-        specifier: ^6.3.1
+        specifier: 6.3.1
         version: 6.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@dnd-kit/sortable':
-        specifier: ^10.0.0
+        specifier: 10.0.0
         version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       '@dnd-kit/utilities':
-        specifier: ^3.2.2
+        specifier: 3.2.2
         version: 3.2.2(react@19.2.8)
       '@t3-oss/env-nextjs':
         specifier: 0.13.11
@@ -45,16 +45,16 @@ importers:
         specifier: 1.38.2
         version: 1.38.2
       '@vercel/blob':
-        specifier: ^2.8.0
+        specifier: 2.8.0
         version: 2.8.0
       ai:
-        specifier: ^5.0.252
+        specifier: 5.0.252
         version: 5.0.252(zod@4.4.3)
       better-auth:
         specifier: 1.6.26
         version: 1.6.26(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.38.2)(kysely@0.29.5)(postgres@3.4.9))(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
       browser-image-compression:
-        specifier: ^2.0.2
+        specifier: 2.0.2
         version: 2.0.2
       class-variance-authority:
         specifier: 0.7.1
@@ -69,10 +69,10 @@ importers:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.38.2)(kysely@0.29.5)(postgres@3.4.9)
       heic-to:
-        specifier: ^1.5.2
+        specifier: 1.5.2
         version: 1.5.2
       inngest:
-        specifier: ^4.18.1
+        specifier: 4.19.0
         version: 4.19.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.2.1)(hono@4.13.5)(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(typescript@7.0.2)(zod@4.4.3)
       lucide-react:
         specifier: 1.31.0
