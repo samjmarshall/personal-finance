@@ -16,6 +16,9 @@ export function PayCycleSection() {
 	// YYYY-MM-DD calendar date, and re-parsing it to a Date reads it as UTC midnight,
 	// walking behind-UTC members back a day before they've touched anything.
 	const [value, setValue] = useState(anchor ?? "");
+	// Client-side validation only. Server failures are the global MutationCache's
+	// job (src/trpc/query-client.ts) — routing them here too would double-report
+	// and, worse, set aria-invalid on a date that's actually fine.
 	const [error, setError] = useState<string | null>(null);
 
 	const save = api.setting.setFortnightAnchor.useMutation({
@@ -27,7 +30,6 @@ export function PayCycleSection() {
 			]);
 			toast.success("Pay cycle saved");
 		},
-		onError: () => setError("Couldn't save your pay cycle. Please try again."),
 	});
 
 	function onSubmit(e: React.FormEvent) {
@@ -58,6 +60,7 @@ export function PayCycleSection() {
 							aria-describedby={error ? "fortnight-anchor-error" : undefined}
 							aria-invalid={error ? true : undefined}
 							className="flex-1"
+							disabled={save.isPending}
 							id="fortnight-anchor"
 							onChange={(e) => {
 								setValue(e.target.value);
@@ -68,14 +71,19 @@ export function PayCycleSection() {
 							type="date"
 							value={value}
 						/>
-						<Button disabled={save.isPending} type="submit">
-							{save.isPending && (
+						<Button
+							className="w-14"
+							disabled={save.isPending || value === anchor}
+							type="submit"
+						>
+							{save.isPending ? (
 								<Loader2Icon
 									className="animate-spin"
 									data-icon="inline-start"
 								/>
+							) : (
+								"Save"
 							)}
-							{save.isPending ? "Saving…" : "Save"}
 						</Button>
 					</div>
 				</Field>

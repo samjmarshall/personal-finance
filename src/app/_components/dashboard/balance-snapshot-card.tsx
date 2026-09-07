@@ -12,6 +12,9 @@ export function BalanceSnapshotCard() {
 	const utils = api.useUtils();
 	const [latest] = api.balance.latest.useSuspenseQuery();
 	const [amount, setAmount] = useState("");
+	// Client-side validation only. Server failures are the global MutationCache's
+	// job (src/trpc/query-client.ts) — routing them here too would double-report
+	// and, worse, set aria-invalid on an amount that's actually fine.
 	const [error, setError] = useState<string | null>(null);
 
 	const set = api.balance.set.useMutation({
@@ -23,7 +26,6 @@ export function BalanceSnapshotCard() {
 			]);
 			setAmount("");
 		},
-		onError: () => setError("Couldn't save your balance. Please try again."),
 	});
 
 	function onSubmit(e: React.FormEvent) {
