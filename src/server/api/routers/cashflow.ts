@@ -9,10 +9,11 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { balanceSnapshots } from "~/server/balances/balances.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { income } from "~/server/income/income.schema";
-import { appSettings } from "~/server/settings/settings.schema";
+import {
+	appSettings,
+	FORTNIGHT_ANCHOR_KEY,
+} from "~/server/settings/settings.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
-
-const FORTNIGHT_ANCHOR_KEY = "fortnightAnchor";
 
 export const cashflowRouter = createTRPCRouter({
 	// Loads every row (volume stays small for a household) and windows in the pure TS
