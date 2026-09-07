@@ -4,6 +4,7 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useMounted } from "~/hooks/use-mounted";
 import { cn } from "~/lib/utils";
+import { SettingsSection } from "./settings-section";
 
 // System leads: it's the provider's defaultTheme, so it's what an untouched browser
 // is already on.
@@ -13,34 +14,32 @@ const themes = [
 	{ value: "dark", label: "Dark", icon: Moon },
 ] as const;
 
-/** Miniature of the app's rail and content in a fixed palette, so a tile can show a
- *  theme the app isn't currently in. */
+/** Miniature of the app's rail and content, painted in a forced theme so a tile can
+ *  show a palette the app isn't currently in. */
 function ThemePreview({ tone }: { tone: "light" | "dark" }) {
-	const palette =
-		tone === "dark"
-			? { page: "#14181d", card: "#1c2127", bar: "#333b45" }
-			: { page: "#f4f6f8", card: "#ffffff", bar: "#dfe4ea" };
 	return (
+		// The tone class re-declares that theme's custom properties on this subtree,
+		// so the tile paints from the same tokens as the real app — a hand-copied
+		// palette goes stale the moment globals.css is retuned.
 		<span
 			aria-hidden="true"
-			className="flex h-16 w-full overflow-hidden rounded-lg ring-1 ring-foreground/15"
-			style={{ background: palette.page }}
+			className={cn(
+				"flex h-16 w-full overflow-hidden rounded-lg bg-background ring-1 ring-foreground/15",
+				tone,
+			)}
 		>
 			{/* The rail is the same slate in both themes — that's the point of the tile. */}
-			<span className="h-full w-1/4" style={{ background: "#2b3440" }} />
+			<span className="h-full w-1/4 bg-sidebar" />
 			<span className="flex flex-1 flex-col gap-1.5 p-2">
-				<span
-					className="h-1.5 w-3/4 rounded-full"
-					style={{ background: palette.bar }}
-				/>
-				<span className="flex-1 rounded" style={{ background: palette.card }} />
+				<span className="h-1.5 w-3/4 rounded-full bg-border" />
+				<span className="flex-1 rounded bg-card" />
 			</span>
 		</span>
 	);
 }
 
 export function AppearanceSection() {
-	const { resolvedTheme, setTheme, theme } = useTheme();
+	const { resolvedTheme, setTheme, systemTheme, theme } = useTheme();
 	// next-themes resolves the stored choice only after mount. Until then no tile is
 	// marked, so a device-dark member never sees Light flagged as theirs for a frame.
 	const mounted = useMounted();
@@ -54,26 +53,23 @@ export function AppearanceSection() {
 	}
 
 	return (
-		<section>
-			<h2 className="font-semibold text-base text-foreground tracking-tight">
-				Appearance
-			</h2>
-			<p className="mt-1 text-muted-foreground text-sm">
-				{summary} — saved to this browser, not shared with your household.
-			</p>
-
+		<SettingsSection
+			description={`${summary} — saved to this browser, not shared with your household.`}
+			title="Appearance"
+		>
 			<div className="mt-5 grid gap-3 sm:grid-cols-3">
 				{themes.map(({ value, label, icon: Icon }) => {
 					const active = mounted && theme === value;
-					// Gated on `mounted` like `active`, and for a sharper reason: the
-					// server has no resolvedTheme, so an ungated tile renders a different
-					// palette here than in the server HTML. React swallows attribute
-					// mismatches at hydration rather than patching them, and resolvedTheme
-					// never changes again — so a device-dark member would be stuck looking
-					// at a light System preview for the whole session.
+					// systemTheme, not resolvedTheme: resolvedTheme is only the OS
+					// preference while the active theme IS system — otherwise it just
+					// echoes `theme`, so a member on forced Dark would see a dark System
+					// tile that switches them to light. Gated on `mounted` because the
+					// server has neither value, and React swallows hydration attribute
+					// mismatches rather than patching them — an ungated tile would stay
+					// wrong for the whole session.
 					const tone =
 						value === "system"
-							? mounted && resolvedTheme === "dark"
+							? mounted && systemTheme === "dark"
 								? "dark"
 								: "light"
 							: value;
@@ -99,6 +95,6 @@ export function AppearanceSection() {
 					);
 				})}
 			</div>
-		</section>
+		</SettingsSection>
 	);
 }

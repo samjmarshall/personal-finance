@@ -8,8 +8,18 @@ import { AppearanceSection } from "./appearance-section";
 import { PayCycleSection } from "./pay-cycle-section";
 
 const sections = [
-	{ id: "appearance", label: "Appearance", icon: Palette },
-	{ id: "pay-cycle", label: "Pay cycle", icon: CalendarClock },
+	{
+		id: "appearance",
+		label: "Appearance",
+		icon: Palette,
+		Component: AppearanceSection,
+	},
+	{
+		id: "pay-cycle",
+		label: "Pay cycle",
+		icon: CalendarClock,
+		Component: PayCycleSection,
+	},
 ] as const;
 
 type SectionId = (typeof sections)[number]["id"];
@@ -20,7 +30,7 @@ export function SettingsView() {
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
 			<PageHeader
-				description="Household preferences for this workspace."
+				description="How Ledger looks, and how your pay cycle is counted."
 				title="Settings"
 			/>
 
@@ -54,12 +64,11 @@ export function SettingsView() {
 				    it would silently bin a half-typed anchor when a member flicks to
 				    Appearance and back. Pay cycle's suspending query is covered by the
 				    page prefetch, same as every other view. */}
-				<div hidden={active !== "appearance"}>
-					<AppearanceSection />
-				</div>
-				<div hidden={active !== "pay-cycle"}>
-					<PayCycleSection />
-				</div>
+				{sections.map(({ id, Component }) => (
+					<div hidden={active !== id} key={id}>
+						<Component />
+					</div>
+				))}
 			</div>
 		</div>
 	);
