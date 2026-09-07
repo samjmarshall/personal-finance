@@ -3,10 +3,8 @@ import { fortnightAnchorSetDto } from "~/domain/settings";
 import { fromDateInput } from "~/lib/utils";
 import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import {
-	appSettings,
-	FORTNIGHT_ANCHOR_KEY,
-} from "~/server/settings/settings.schema";
+import { FORTNIGHT_ANCHOR_KEY } from "~/server/settings/settings.constants";
+import { appSettings } from "~/server/settings/settings.schema";
 
 export const settingRouter = createTRPCRouter({
 	// The household payday (YYYY-MM-DD) seeding fortnight period windows. Returns the

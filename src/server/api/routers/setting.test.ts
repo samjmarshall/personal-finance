@@ -10,7 +10,7 @@ const { createCallerFactory } = await import("~/server/api/trpc");
 const { settingRouter } = await import("./setting");
 const { appSettings } = await import("~/server/settings/settings.schema");
 const { FORTNIGHT_ANCHOR_KEY } = await import(
-	"~/server/settings/settings.schema"
+	"~/server/settings/settings.constants"
 );
 
 function caller(db: unknown) {

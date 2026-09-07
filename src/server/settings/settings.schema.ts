@@ -6,7 +6,3 @@ export const appSettings = pgTable("app_setting", (d) => ({
 	key: d.text().primaryKey(),
 	value: d.text().notNull(),
 }));
-
-// Lives beside the table so the reader, the writer and the cash-flow query all key
-// off one string — it was previously retyped in each router.
-export const FORTNIGHT_ANCHOR_KEY = "fortnightAnchor";

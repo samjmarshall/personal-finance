@@ -9,10 +9,8 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { balanceSnapshots } from "~/server/balances/balances.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { income } from "~/server/income/income.schema";
-import {
-	appSettings,
-	FORTNIGHT_ANCHOR_KEY,
-} from "~/server/settings/settings.schema";
+import { FORTNIGHT_ANCHOR_KEY } from "~/server/settings/settings.constants";
+import { appSettings } from "~/server/settings/settings.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
 
 export const cashflowRouter = createTRPCRouter({
