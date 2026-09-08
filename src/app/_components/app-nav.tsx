@@ -5,11 +5,9 @@ import {
 	LayoutDashboard,
 	LogOut,
 	type LucideIcon,
-	Moon,
 	Receipt,
 	ScanLine,
-	Sun,
-	SunMoon,
+	Settings,
 	Tags,
 	TrendingUp,
 	Wallet,
@@ -17,9 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import { useState } from "react";
-import { useMounted } from "~/hooks/use-mounted";
 import { cn } from "~/lib/utils";
 import { authClient } from "~/server/auth/client";
 
@@ -43,12 +39,23 @@ const links: NavItem[] = [
 	{ href: "/receipts", label: "Receipts", icon: ScanLine },
 ];
 
+// Not in `links` — config, not a browse destination. Still in `flatLinks` so
+// active-state matching and the mobile bar see it.
+const settingsLink: NavLeaf = {
+	href: "/settings",
+	label: "Settings",
+	icon: Settings,
+};
+
 /** Every navigable leaf, sections flattened; `group` names the parent section. */
-const flatLinks: (NavLeaf & { group?: string })[] = links.flatMap((item) =>
-	"children" in item
-		? item.children.map((child) => ({ ...child, group: item.label }))
-		: [item],
-);
+const flatLinks: (NavLeaf & { group?: string })[] = [
+	...links.flatMap((item) =>
+		"children" in item
+			? item.children.map((child) => ({ ...child, group: item.label }))
+			: [item],
+	),
+	settingsLink,
+];
 
 /** Returns the href of the most specific link matching the current pathname. */
 function activeHref(pathname: string) {
@@ -86,11 +93,9 @@ function DesktopNavLink({ link, active }: { link: NavLeaf; active: boolean }) {
 	);
 }
 
-function NavLinks() {
-	const pathname = usePathname();
-	const current = activeHref(pathname);
+function NavLinks({ current }: { current: string }) {
 	return (
-		<nav className="flex flex-col gap-1">
+		<nav aria-label="Main navigation" className="flex flex-col gap-1">
 			{links.map((item) => {
 				if ("children" in item) {
 					const Icon = item.icon;
@@ -170,36 +175,8 @@ function SignOutButton() {
 	);
 }
 
-function ThemeToggle() {
-	const { resolvedTheme, setTheme } = useTheme();
-	// resolvedTheme is unknown until next-themes resolves it post-mount; show a
-	// neutral affordance until then so a dark-resolved user never sees the
-	// inverted "switch to dark" label/icon for a frame.
-	const mounted = useMounted();
-	const isDark = resolvedTheme === "dark";
-
-	let Icon = SunMoon;
-	let label = "Toggle theme";
-	let ariaLabel = "Toggle theme";
-	if (mounted) {
-		Icon = isDark ? Sun : Moon;
-		label = isDark ? "Light mode" : "Dark mode";
-		ariaLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
-	}
-	return (
-		<button
-			aria-label={ariaLabel}
-			className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
-			onClick={() => setTheme(isDark ? "light" : "dark")}
-			type="button"
-		>
-			<Icon className="h-[18px] w-[18px]" />
-			{label}
-		</button>
-	);
-}
-
 export function AppNav({ userName }: { userName: string }) {
+	const current = activeHref(usePathname());
 	return (
 		<aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-4 text-sidebar-foreground lg:flex">
 			<div>
@@ -209,7 +186,7 @@ export function AppNav({ userName }: { userName: string }) {
 					</span>
 					<span className="font-semibold text-base tracking-tight">Ledger</span>
 				</div>
-				<NavLinks />
+				<NavLinks current={current} />
 			</div>
 			<div className="flex flex-col gap-1 border-sidebar-muted/20 border-t pt-3">
 				<div className="px-3 py-1.5">
@@ -218,7 +195,14 @@ export function AppNav({ userName }: { userName: string }) {
 						{userName}
 					</p>
 				</div>
-				<ThemeToggle />
+				{/* Its own landmark: it sits in the footer, outside the main nav, so
+				    without this the desktop Settings link is in no landmark at all. */}
+				<nav aria-label="Settings">
+					<DesktopNavLink
+						active={current === settingsLink.href}
+						link={settingsLink}
+					/>
+				</nav>
 				<SignOutButton />
 			</div>
 		</aside>

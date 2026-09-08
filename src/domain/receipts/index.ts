@@ -1,3 +1,11 @@
+import {
+	allowedSenderCreateDto,
+	allowedSenderRefDto,
+} from "./allowed-sender.dto";
+import type {
+	AllowedSender,
+	AllowedSenderListItem,
+} from "./allowed-sender.interface";
 import type { MatchCandidate, MatchTransaction } from "./match";
 import { matchCandidates, matchScanWindow } from "./match";
 import {
@@ -17,6 +25,8 @@ import type {
 import { receiptImageUrl } from "./receipt-media";
 
 export type {
+	AllowedSender,
+	AllowedSenderListItem,
 	MatchCandidate,
 	MatchTransaction,
 	Receipt,
@@ -26,6 +36,8 @@ export type {
 	ReceiptListItem,
 };
 export {
+	allowedSenderCreateDto,
+	allowedSenderRefDto,
 	matchCandidates,
 	matchScanWindow,
 	receiptConfirmMatchDto,

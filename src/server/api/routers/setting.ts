@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
+import { fortnightAnchorSetDto } from "~/domain/settings";
 import { fromDateInput } from "~/lib/utils";
+import { assertRow } from "~/server/api/lib/assert-row";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { FORTNIGHT_ANCHOR_KEY } from "~/server/settings/settings.constants";
 import { appSettings } from "~/server/settings/settings.schema";
-
-const FORTNIGHT_ANCHOR_KEY = "fortnightAnchor";
 
 export const settingRouter = createTRPCRouter({
 	// The household payday (YYYY-MM-DD) seeding fortnight period windows. Returns the
@@ -21,4 +22,21 @@ export const settingRouter = createTRPCRouter({
 			return row && fromDateInput(row.value) ? row.value : null;
 		},
 	),
+
+	// Upsert, not insert: the seed migration already planted the row, and a member
+	// re-anchoring is the common case. Returns the string for the same wire reason
+	// the query does.
+	setFortnightAnchor: protectedProcedure
+		.input(fortnightAnchorSetDto)
+		.mutation(async ({ ctx, input }): Promise<string> => {
+			const [row] = await ctx.db
+				.insert(appSettings)
+				.values({ key: FORTNIGHT_ANCHOR_KEY, value: input.anchor })
+				.onConflictDoUpdate({
+					target: appSettings.key,
+					set: { value: input.anchor },
+				})
+				.returning();
+			return assertRow(row, "set fortnight anchor").value;
+		}),
 });
