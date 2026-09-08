@@ -140,12 +140,62 @@ The allowlist the webhook will consult, plus the only way to populate it. Member
 
 ### Success
 
-- [ ] `make check` passes (`db:check` sees no drift after generate)
-- [ ] `make test` passes
-- [ ] `make db_generate` produces one additive migration — a single `CREATE TABLE "allowed_sender"` plus its unique + index, with **no change to `receipt`**
-- [ ] **User runs** `make db_migrate` against the feature-branch DB (never `main`/prod)
-- [ ] Adding an address on `/settings` lists it against the adding Member; re-adding it (any casing) is refused with the CONFLICT message, not a 500
-- [ ] `/design-review` (new panel)
+- [x] `make check` passes (`db:check` sees no drift after generate)
+- [x] `make test` passes
+- [x] `make db_generate` produces one additive migration — a single `CREATE TABLE "allowed_sender"` plus its unique + index, with **no change to `receipt`**
+- [x] **User runs** `make db_migrate` against the feature-branch DB (never `main`/prod)
+- [x] Adding an address on `/settings` lists it against the adding Member; re-adding it (any casing) is refused with the CONFLICT message, not a 500
+- [x] `/design-review` (new panel)
+
+> Implementation note. Three deviations from the plan text, all forced by what
+> Phase 1 actually shipped:
+>
+> 1. **`allowed-senders-section.tsx`, not `-card.tsx`.** Phase 1's `/design-review`
+>    replaced the card layout with a rail-nav **section registry**
+>    (`settings-view.tsx` `sections`). A free-rendered card would never appear, so
+>    the panel is a section registered alongside Appearance and Pay cycle.
+> 2. **DTO normalises before validating.** The plan specified
+>    `z.email().transform(v => v.trim().toLowerCase())`, which validates the *raw*
+>    string — so `" Sam@Example.com "` pasted from a mail client is rejected rather
+>    than cleaned. Shipped as `z.string().trim().toLowerCase().pipe(z.email())`;
+>    pinned by a test.
+> 3. **`schema-interface-contract.test.ts` needed updating.** Not in the plan. It is
+>    a coverage tripwire: every `*.interface.ts` must be pinned to its table or
+>    declared table-less. `AllowedSender` is now pinned against
+>    `allowedSenders.$inferSelect`.
+>
+> The three issues Phase 1's `/validate` carried forward were checked and are all
+> already fixed in Phase 1 code (key in `settings.constants.ts`, DTO shape regex,
+> `FieldError` + MutationCache split). Nothing re-opened. The new panel follows the
+> same error convention: CONFLICT surfaces via the global toast, and `aria-invalid`
+> is set only for client-side validation.
+>
+> Verified in-browser after the user ran `make db_migrate`: adding
+> `Sam.Test@Example.COM` stored `sam.test@example.com` (DTO normalisation) filed to
+> **Sam Marshall** (session Member, not client input); re-adding it as
+> `SAM.TEST@example.com` returned the CONFLICT copy — client saw
+> `TRPCClientError: That address is already on the allowlist.` — and minted **no**
+> second row. Removal behind `DeleteConfirmDialog` cleared it and the panel fell
+> back to its empty state, so the test address left no residue in household data.
+>
+> `/design-review` found no blockers and nothing high-priority. Three fixes taken,
+> all re-verified in-browser:
+>
+> 1. **The input's own validation path was unreachable.** `type="email"` makes the
+>    browser run its constraint check first, so its UA tooltip pre-empted
+>    `FieldError` and the wired `aria-invalid`/`role="alert"` never rendered. Now
+>    `type="text"` + `inputMode="email"` with Zod as the only gate — `notanemail`
+>    renders the alert and marks the field invalid.
+> 2. **Active tab clipped at 375px** once the rail held three tabs. The rail now
+>    scrolls the active tab into view (`nearest` on both axes, so the rail moves and
+>    the page never does).
+> 3. **`SettingsSection` rendered an unnamed `<section>`.** Linked to its `<h2>` via
+>    `aria-labelledby`, so all three panels are now named landmarks (verified: the
+>    node reports as `region` "Forwarding addresses", not a bare generic).
+>
+> Left alone deliberately: the rail uses `aria-pressed` buttons rather than
+> `role="tablist"` — valid, no WCAG issue, and it is Phase 1's shipped pattern, so
+> changing it belongs in its own change, not here.
 
 ---
 

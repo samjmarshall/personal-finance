@@ -1,9 +1,10 @@
 "use client";
 
-import { CalendarClock, Palette } from "lucide-react";
-import { useState } from "react";
+import { AtSign, CalendarClock, Palette } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "~/app/_components/page-header";
 import { cn } from "~/lib/utils";
+import { AllowedSendersSection } from "./allowed-senders-section";
 import { AppearanceSection } from "./appearance-section";
 import { PayCycleSection } from "./pay-cycle-section";
 
@@ -20,17 +21,34 @@ const sections = [
 		icon: CalendarClock,
 		Component: PayCycleSection,
 	},
+	{
+		id: "forwarding",
+		label: "Forwarding",
+		icon: AtSign,
+		Component: AllowedSendersSection,
+	},
 ] as const;
 
 type SectionId = (typeof sections)[number]["id"];
 
 export function SettingsView() {
 	const [active, setActive] = useState<SectionId>("appearance");
+	const navRef = useRef<HTMLElement | null>(null);
+
+	// The rail is a horizontally scrolling strip on narrow screens, wide enough to
+	// overflow once there are three tabs. Without this the active tab can sit past
+	// the viewport edge and render half-clipped, which reads as broken. "nearest" on
+	// both axes scrolls the rail only — never the page.
+	useEffect(() => {
+		navRef.current
+			?.querySelector(`[data-section="${active}"]`)
+			?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [active]);
 
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
 			<PageHeader
-				description="How Ledger looks, and how your pay cycle is counted."
+				description="How Ledger looks, how your pay cycle is counted, and where receipts can arrive from."
 				title="Settings"
 			/>
 
@@ -40,6 +58,7 @@ export function SettingsView() {
 				<nav
 					aria-label="Settings sections"
 					className="flex gap-1 overflow-x-auto border-border border-b lg:sticky lg:top-8 lg:h-fit lg:flex-col lg:border-b-0 lg:border-l"
+					ref={navRef}
 				>
 					{sections.map(({ id, label, icon: Icon }) => (
 						<button
@@ -50,6 +69,7 @@ export function SettingsView() {
 									? "border-primary text-foreground"
 									: "border-transparent text-muted-foreground hover:text-foreground",
 							)}
+							data-section={id}
 							key={id}
 							onClick={() => setActive(id)}
 							type="button"
@@ -60,10 +80,10 @@ export function SettingsView() {
 					))}
 				</nav>
 
-				{/* Both sections stay mounted and the inactive one is hidden — unmounting
-				    it would silently bin a half-typed anchor when a member flicks to
-				    Appearance and back. Pay cycle's suspending query is covered by the
-				    page prefetch, same as every other view. */}
+				{/* Every section stays mounted and the inactive ones are hidden —
+				    unmounting would silently bin a half-typed anchor or address when a
+				    member flicks to Appearance and back. The suspending queries are
+				    covered by the page prefetch, same as every other view. */}
 				{sections.map(({ id, Component }) => (
 					<div hidden={active !== id} key={id}>
 						<Component />

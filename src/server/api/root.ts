@@ -1,3 +1,4 @@
+import { allowedSenderRouter } from "~/server/api/routers/allowed-sender";
 import { balanceRouter } from "~/server/api/routers/balance";
 import { cashflowRouter } from "~/server/api/routers/cashflow";
 import { categoryRouter } from "~/server/api/routers/category";
@@ -14,6 +15,7 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
+	allowedSender: allowedSenderRouter,
 	balance: balanceRouter,
 	cashflow: cashflowRouter,
 	category: categoryRouter,
