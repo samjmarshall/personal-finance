@@ -55,8 +55,8 @@ ${list}`;
 }
 
 /**
- * AI-SDK user content for one receipt. Text bodies fold into the prompt's own part;
- * PDFs ride as a file part; anything else is an image part.
+ * AI-SDK user content for one receipt, routed by media type. A text body returns a
+ * *single* part — prompt and markup merged; PDF/image return prompt + payload part.
  */
 export function buildExtractionContent({
 	prompt,
