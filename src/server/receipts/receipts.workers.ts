@@ -216,7 +216,13 @@ export function makeProcessReceiptWorker({ db, inngest }: WorkerDeps) {
 			// `processed` and returns. Keyed on the receipt, so unrelated receipts still
 			// run in parallel.
 			concurrency: { key: "event.data.receiptId", limit: 1 },
-			triggers: [{ event: "receipt/uploaded" }, { event: "receipt/retry" }],
+			// All three carry the same `{ receiptId }` payload, so the email Channel
+			// rides the upload path's extraction unchanged.
+			triggers: [
+				{ event: "receipt/uploaded" },
+				{ event: "receipt/retry" },
+				{ event: "receipt/email.received" },
+			],
 		},
 		({ event, attempt }) =>
 			runProcessReceipt(event.data.receiptId, {

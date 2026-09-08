@@ -1,48 +1,74 @@
 "use client";
 
-import { AtSign, CalendarClock, Palette } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { AtSign, CalendarClock, type LucideIcon, Palette } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { PageHeader } from "~/app/_components/page-header";
 import { cn } from "~/lib/utils";
 import { AllowedSendersSection } from "./allowed-senders-section";
 import { AppearanceSection } from "./appearance-section";
 import { PayCycleSection } from "./pay-cycle-section";
 
-const sections = [
+export type SettingsViewProps = {
+	/** Undefined when RESEND_INBOUND_ADDRESS is unset; the panel then omits it. */
+	inboundAddress?: string;
+};
+
+type SectionId = "appearance" | "pay-cycle" | "forwarding";
+
+// `render` rather than a bare component: this file is a client boundary, so a
+// server-only value like the inbound address can only arrive as a prop from the
+// RSC. Each entry picks the props it needs instead of every section having to
+// accept the whole bag (adr001 — explicit named props, no Provider).
+type Section = {
+	id: SectionId;
+	label: string;
+	icon: LucideIcon;
+	render: (props: SettingsViewProps) => ReactNode;
+};
+
+const sections: Section[] = [
 	{
 		id: "appearance",
 		label: "Appearance",
 		icon: Palette,
-		Component: AppearanceSection,
+		render: () => <AppearanceSection />,
 	},
 	{
 		id: "pay-cycle",
 		label: "Pay cycle",
 		icon: CalendarClock,
-		Component: PayCycleSection,
+		render: () => <PayCycleSection />,
 	},
 	{
 		id: "forwarding",
 		label: "Forwarding",
 		icon: AtSign,
-		Component: AllowedSendersSection,
+		render: ({ inboundAddress }) => (
+			<AllowedSendersSection inboundAddress={inboundAddress} />
+		),
 	},
-] as const;
+];
 
-type SectionId = (typeof sections)[number]["id"];
-
-export function SettingsView() {
+export function SettingsView({ inboundAddress }: SettingsViewProps) {
 	const [active, setActive] = useState<SectionId>("appearance");
 	const navRef = useRef<HTMLElement | null>(null);
 
 	// The rail is a horizontally scrolling strip on narrow screens, wide enough to
-	// overflow once there are three tabs. Without this the active tab can sit past
-	// the viewport edge and render half-clipped, which reads as broken. "nearest" on
-	// both axes scrolls the rail only — never the page.
+	// overflow once there are three tabs, so the active tab can sit past the edge
+	// and render half-clipped — which reads as broken.
+	//
+	// Explicit maths rather than scrollIntoView: `inline: "nearest"` leaves a tab
+	// that overhangs the right edge unscrolled in Chromium, and "start"/"end"/
+	// "center" all move the rail even when the tab is already fully visible.
 	useEffect(() => {
-		navRef.current
-			?.querySelector(`[data-section="${active}"]`)
-			?.scrollIntoView({ block: "nearest", inline: "nearest" });
+		const nav = navRef.current;
+		const tab = nav?.querySelector<HTMLElement>(`[data-section="${active}"]`);
+		if (!nav || !tab) return;
+
+		const overhang =
+			tab.offsetLeft + tab.offsetWidth - (nav.scrollLeft + nav.clientWidth);
+		if (overhang > 0) nav.scrollLeft += overhang;
+		else if (tab.offsetLeft < nav.scrollLeft) nav.scrollLeft = tab.offsetLeft;
 	}, [active]);
 
 	return (
@@ -84,9 +110,9 @@ export function SettingsView() {
 				    unmounting would silently bin a half-typed anchor or address when a
 				    member flicks to Appearance and back. The suspending queries are
 				    covered by the page prefetch, same as every other view. */}
-				{sections.map(({ id, Component }) => (
+				{sections.map(({ id, render }) => (
 					<div hidden={active !== id} key={id}>
-						<Component />
+						{render({ inboundAddress })}
 					</div>
 				))}
 			</div>

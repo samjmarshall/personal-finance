@@ -46,7 +46,11 @@ describe("worker golden", () => {
 			{ id: "outbox-prune", triggers: [{ cron: "0 3 * * *" }] },
 			{
 				id: "process-receipt",
-				triggers: [{ event: "receipt/uploaded" }, { event: "receipt/retry" }],
+				triggers: [
+					{ event: "receipt/uploaded" },
+					{ event: "receipt/retry" },
+					{ event: "receipt/email.received" },
+				],
 			},
 		]);
 	});

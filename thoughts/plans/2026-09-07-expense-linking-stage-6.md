@@ -79,7 +79,14 @@ Gives the app a Settings page and closes the gap where the pay-cycle anchor coul
 - [x] A malformed value is rejected by the form rather than written (a written-then-unreadable value would silently degrade the chart to the month grid)
 - [x] `/design-review` (new page + nav entry)
 
-> Implementation note. Deviation: the pay-cycle section seeds its input straight from
+> Implementation note. Naming deviation, recorded late (caught by Phase 2's
+> `/validate`): the plan's `pay-cycle-card.tsx` shipped as **`pay-cycle-section.tsx`**,
+> and `/design-review` added two files the plan never named —
+> `settings-section.tsx` and `appearance-section.tsx`. Everything under
+> `_components/settings/` is a `*-section.tsx` registered in the `sections` registry;
+> there are no card files.
+>
+> Deviation: the pay-cycle section seeds its input straight from
 > the query string rather than through `toDateInput` as the plan specified — the query
 > already returns `YYYY-MM-DD`, and re-parsing it to a `Date` reads UTC midnight, which
 > walks behind-UTC members back a day (verified: `TZ=America/New_York` turns
@@ -197,6 +204,34 @@ The allowlist the webhook will consult, plus the only way to populate it. Member
 > `role="tablist"` — valid, no WCAG issue, and it is Phase 1's shipped pattern, so
 > changing it belongs in its own change, not here.
 
+> Validation note (`/validate`). All six boxes independently re-verified. `make check`
+> (Biome 214 files, tsc, `db:check` no drift) and `make test` (349/38) pass. The
+> migration is additive-only and `receipts.schema.ts` is untouched on the branch. The
+> table is live in the feature DB with the planned shape and is recorded in
+> `drizzle.__drizzle_migrations` — migrated, not pushed.
+>
+> Re-verified in-browser, residue cleaned up (DB back to its original single row):
+> `  Validate.Check@Example.COM  ` stored as `validate.check@example.com` filed to
+> **Sam Marshall**; re-adding it as `  SAMUELJAMESMarshall@GMAIL.com  ` raised the
+> CONFLICT toast and minted no second row; `notanemail` rendered `role="alert"` +
+> `aria-invalid` with **zero** tRPC calls. `/design-review` returned no blockers and
+> nothing high-priority.
+>
+> Carried into Phase 3 rather than fixed here (see the `/validate` report):
+>
+> 1. **`remove` has no ownership check** (`allowed-sender.ts:54`) — any member can
+>    delete another's entry. Once Phase 3 lands, that member's forwarded receipts then
+>    drop silently with only a `console.info`. `list` documents its household-wide
+>    scope; `remove` does not, so it reads as oversight. Fix or record the rationale.
+> 2. **`/settings` has no `error.tsx`** and all three panels share one Suspense/error
+>    domain (`settings-view.tsx:87`). Phase 2 added the third suspending query, so an
+>    `allowedSender.list` failure now blanks the page — including the theme control.
+> 3. **The local `AllowedSender` alias shadows the domain type**
+>    (`allowed-senders-section.tsx:14`); import `AllowedSenderListItem` instead.
+> 4. `/design-review` mediums on this panel: focus lands on `document.body` after a
+>    delete (the trigger row unmounts before focus returns), and a CONFLICT leaves the
+>    rejected value in the field with no persistent signal once the toast dismisses.
+
 ---
 
 ## Phase 3: Resend inbound webhook + email producer
@@ -223,7 +258,8 @@ The producer. Verify → allowlist → fetch → blob → rows + events, then th
 - `src/app/api/receipts/inbound/route.ts` — **new** `POST`: read the **raw** body with `await request.text()` (a parsed body cannot be signature-verified), `resend.webhooks.verify` with `RESEND_WEBHOOK_SECRET` → **401** when it fails, Zod-parse the event, ignore any `type` other than `email.received` with **200**, then call the core wired with the real `resend` client, `put`, and the `commitWithOutbox` singleton. Return **200** for both ingested and dropped (a drop is a verdict, never retry it) and let a genuine processing failure surface as **5xx** so Svix retries. `export const maxDuration = 60`.
 - `src/server/receipts/receipts.workers.ts` — add `{ event: "receipt/email.received" }` to the `process-receipt` `triggers` (`:219`). The handler already reads `event.data.receiptId` (`:221-224`) and the payload matches.
 - `src/server/inngest/registry-golden.test.ts` — append the new trigger to the pinned `process-receipt` entry (`:44-51`); the event-name block (`:16-20`) already contains `receipt/email.received` and stays untouched. Order is asserted exactly.
-- `src/app/_components/settings/allowed-senders-card.tsx` + `src/app/(dashboard)/settings/page.tsx` — surface `RESEND_INBOUND_ADDRESS` (read server-side in the RSC, passed as a prop) so the panel says where to forward. Rendered only when configured.
+- `src/app/_components/settings/allowed-senders-section.tsx` + `src/app/(dashboard)/settings/page.tsx` — surface `RESEND_INBOUND_ADDRESS` so the panel says where to forward. Rendered only when configured.
+  > **Blocked as written — resolve before starting.** The plan said "read server-side in the RSC, passed as a prop". There is no prop channel: `page.tsx` renders `<SettingsView />` with no props, `SettingsView` is `"use client"`, and it instantiates panels from a module-level `sections` registry as bare `<Component />` (`settings-view.tsx:87-91`). Reaching for `env` inside the client component is a build error and a Context Provider would break adr001. Give the registry a props slot (or thread the value through `SettingsView`) as the first step of this phase.
 
 ### Changes — tests
 
@@ -231,15 +267,15 @@ The producer. Verify → allowlist → fetch → blob → rows + events, then th
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes (ingest core + helpers + updated worker golden)
-- [ ] `SKIP_ENV_VALIDATION=1 pnpm run build` succeeds
-- [ ] User adds `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` (and optionally `RESEND_INBOUND_ADDRESS`) to `.env`; Resend inbound domain + webhook endpoint configured for `email.received`
+- [x] `make check` passes
+- [x] `make test` passes (ingest core + helpers + updated worker golden)
+- [x] `SKIP_ENV_VALIDATION=1 pnpm run build` succeeds
+- [x] User adds `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` (and optionally `RESEND_INBOUND_ADDRESS`) to `.env`; Resend inbound domain + webhook endpoint configured for `email.received`
 - [ ] Forwarding an email with a JPG/PDF attachment from an allowed address creates a `pending` Receipt attributed to that Member with `channel: email`, which the worker flips to `processed` with items
 - [ ] Forwarding from an address that is **not** on the allowlist creates no row and no blob, and is logged
-- [ ] A request with a bad/absent signature is rejected 401 before the allowlist is consulted
-- [ ] `/security-review` (new secrets in `src/env.js`; new public unauthenticated webhook doing raw-body signature verification; first server-side blob write; remote bytes fetched and persisted)
-- [ ] `/design-review` (forwarding address on the Settings panel)
+- [x] A request with a bad/absent signature is rejected 401 before the allowlist is consulted — pinned by `src/app/api/receipts/inbound/route.test.ts` (absent `svix-*` header and a throwing `verify` both 401 with the ingest core never called)
+- [x] `/security-review` — run; HIGH sender-spoof via display-name angle brackets fixed (`parseFromAddress` now takes the **last** `<…>`), attachment count/size/timeout bounds added. Open, awaiting a decision: SPF/DKIM check, endpoint rate limiting, `svix-id` replay guard
+- [x] `/design-review` — run; the 375px active-tab clip and the ragged delete-slot alignment are fixed and re-measured in Chromium. Open: no affordance explaining why a household member's row has no delete button
 
 ---
 

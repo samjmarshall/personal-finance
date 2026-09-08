@@ -23,6 +23,9 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | `INNGEST_SIGNING_KEY` | production | Inngest Cloud key `serve` uses to verify inbound requests. |
 | `BLOB_READ_WRITE_TOKEN` | production | Vercel Blob token; mints client-upload tokens at `/api/receipts/upload` (private store) and signs reads for the `/api/receipts/[id]/image` proxy. Injected by the Blob integration in prod. |
 | `ANTHROPIC_API_KEY` | production | Claude Vision key the `process-receipt` worker uses to extract vendor/total/date + line items. |
+| `RESEND_API_KEY` | production | Resend key the inbound webhook uses to fetch the email body and attachment bytes, which the `email.received` payload omits. |
+| `RESEND_WEBHOOK_SECRET` | production | Svix signing secret verifying the raw body at `/api/receipts/inbound`. Without it the route refuses every request. |
+| `RESEND_INBOUND_ADDRESS` | optional | The address members forward receipts to. Display-only, shown on `/settings`; nothing routes on it. |
 
 `next build` runs with `NODE_ENV=production`, so `make build` and `pnpm run preview` fail locally unless the production-required variables are in `.env`.
 
@@ -42,6 +45,6 @@ Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), whic
 | --- | --- | --- |
 | `outbox-sweep` | `0 * * * *` | Re-deliver unacked rows older than 30s; failures stay unacked for the next run. |
 | `outbox-prune` | `0 3 * * *` | Delete rows acked over 7 days ago; never touches unacked or stuck rows. |
-| `process-receipt` | `receipt/uploaded`, `receipt/retry` | Extract vendor/total/date + line items from an uploaded receipt via Claude Vision, or short-circuit an identical re-upload as a `duplicate` on its content hash. |
+| `process-receipt` | `receipt/uploaded`, `receipt/retry`, `receipt/email.received` | Extract vendor/total/date + line items from a receipt via Claude Vision, or short-circuit an identical re-upload as a `duplicate` on its content hash. All three triggers carry the same `{ receiptId }`, so an emailed receipt rides the upload path unchanged. |
 
 Local runs use the Inngest Dev Server (no keys needed). Run `make setup` once — it trusts the Portless CA so the Go Dev Server binary trusts the app's HTTPS cert — then `make start` boots the app plus the Dev Server as sibling Portless processes. The Dev Server syncs the app's `/api/inngest`, lists `outbox-sweep` + `outbox-prune` + `process-receipt`, and can invoke them from its dashboard at `https://inngest.personal-finance.localhost` (worktree: `https://<branch>.inngest.personal-finance.localhost`).

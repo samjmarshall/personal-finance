@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { asc, eq, getTableColumns } from "drizzle-orm";
+import { and, asc, eq, getTableColumns } from "drizzle-orm";
 
 import {
 	type AllowedSender,
@@ -18,11 +18,16 @@ export const allowedSenderRouter = createTRPCRouter({
 	// needs to see an address is already claimed before the CONFLICT tells them so.
 	list: protectedProcedure.query(
 		async ({ ctx }): Promise<AllowedSenderListItem[]> => {
-			return ctx.db
+			const rows = await ctx.db
 				.select({ ...getTableColumns(allowedSenders), userName: user.name })
 				.from(allowedSenders)
 				.leftJoin(user, eq(allowedSenders.userId, user.id))
 				.orderBy(asc(allowedSenders.email));
+			// Derived here rather than compared in the client, which has no session.
+			return rows.map((row) => ({
+				...row,
+				isOwn: row.userId === ctx.session.user.id,
+			}));
 		},
 	),
 
@@ -51,18 +56,29 @@ export const allowedSenderRouter = createTRPCRouter({
 			return assertRow(row, "add allowed sender");
 		}),
 
+	// Scoped to the caller's own entries, unlike `list`. Removing someone else's
+	// address silently stops their forwarded receipts arriving — the webhook only
+	// logs a drop — so the blast radius is another member's data quietly going
+	// missing. Seeing the whole allowlist is useful; editing it is not.
 	remove: protectedProcedure
 		.input(allowedSenderRefDto)
 		.mutation(async ({ ctx, input }) => {
-			// Delete-or-404 in one statement, per the receipt router.
+			// Delete-or-404 in one statement, per the receipt router. Another member's
+			// id matches no row under this filter and so 404s, which also keeps the
+			// response identical whether it is absent or merely not theirs.
 			const [row] = await ctx.db
 				.delete(allowedSenders)
-				.where(eq(allowedSenders.id, input.id))
+				.where(
+					and(
+						eq(allowedSenders.id, input.id),
+						eq(allowedSenders.userId, ctx.session.user.id),
+					),
+				)
 				.returning({ id: allowedSenders.id });
 			if (!row)
 				throw new TRPCError({
 					code: "NOT_FOUND",
-					message: "That address is not on the allowlist.",
+					message: "That address is not on your allowlist.",
 				});
 			return { success: true };
 		}),

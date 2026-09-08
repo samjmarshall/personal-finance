@@ -1,4 +1,6 @@
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
+import { allowedSenders } from "~/server/receipts/allowed-sender.schema";
 
 // Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
 // (and through them ~/env). Stub those so this stays a pure unit test.
@@ -31,10 +33,21 @@ function insertDb(returning: any[], throws?: unknown) {
 	return { db: { insert: () => ({ values }) }, values };
 }
 
+// Captures the WHERE the delete is handed — that predicate is the ownership
+// contract, so it is asserted rather than assumed.
 // biome-ignore lint/suspicious/noExplicitAny: hand-rolled db stands in for drizzle.
 function deleteDb(returning: any[]) {
+	let where: unknown;
 	return {
-		delete: () => ({ where: () => ({ returning: async () => returning }) }),
+		db: {
+			delete: () => ({
+				where: (w: unknown) => {
+					where = w;
+					return { returning: async () => returning };
+				},
+			}),
+		},
+		seen: () => where,
 	};
 }
 
@@ -94,16 +107,31 @@ describe("allowedSender.add", () => {
 
 describe("allowedSender.remove", () => {
 	it("deletes the entry", async () => {
-		await expect(
-			caller(deleteDb([{ id: 1 }])).remove({ id: 1 }),
-		).resolves.toEqual({ success: true });
+		const h = deleteDb([{ id: 1 }]);
+
+		await expect(caller(h.db).remove({ id: 1 })).resolves.toEqual({
+			success: true,
+		});
 	});
 
 	it("404s when no row matched", async () => {
-		await expect(caller(deleteDb([])).remove({ id: 99 })).rejects.toMatchObject(
-			{
-				code: "NOT_FOUND",
-			},
+		const h = deleteDb([]);
+
+		await expect(caller(h.db).remove({ id: 99 })).rejects.toMatchObject({
+			code: "NOT_FOUND",
+		});
+	});
+
+	// `list` is household-wide, so an id belonging to another member is one a client
+	// can readily see and send. Without the userId arm this deletes it, and that
+	// member's forwarded receipts then drop with nothing but a webhook log line.
+	it("scopes the delete to the caller's own entries", async () => {
+		const h = deleteDb([{ id: 1 }]);
+
+		await caller(h.db).remove({ id: 1 });
+
+		expect(h.seen()).toEqual(
+			and(eq(allowedSenders.id, 1), eq(allowedSenders.userId, SESSION_USER_ID)),
 		);
 	});
 });

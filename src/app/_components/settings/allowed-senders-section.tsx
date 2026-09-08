@@ -7,13 +7,15 @@ import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { allowedSenderCreateDto } from "~/domain/receipts";
-import { api, type RouterOutputs } from "~/trpc/react";
+import {
+	type AllowedSenderListItem,
+	allowedSenderCreateDto,
+} from "~/domain/receipts";
+import { api } from "~/trpc/react";
 import { SettingsSection } from "./settings-section";
+import type { SettingsViewProps } from "./settings-view";
 
-type AllowedSender = RouterOutputs["allowedSender"]["list"][number];
-
-export function AllowedSendersSection() {
+export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 	const utils = api.useUtils();
 	const [senders] = api.allowedSender.list.useSuspenseQuery();
 	const [draft, setDraft] = useState("");
@@ -22,7 +24,8 @@ export function AllowedSendersSection() {
 	// too would double-report and mark a well-formed address invalid.
 	const [error, setError] = useState<string | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const [deleteTarget, setDeleteTarget] = useState<AllowedSender | null>(null);
+	const [deleteTarget, setDeleteTarget] =
+		useState<AllowedSenderListItem | null>(null);
 
 	const add = api.allowedSender.add.useMutation({
 		onSuccess: async () => {
@@ -52,6 +55,17 @@ export function AllowedSendersSection() {
 			description="Receipts are only ingested from these addresses. Mail forwarded from anywhere else is dropped."
 			title="Forwarding addresses"
 		>
+			{/* Omitted rather than stubbed when RESEND_INBOUND_ADDRESS is unset — a
+			    placeholder address would be forwarded to and silently swallowed. */}
+			{inboundAddress ? (
+				<div className="mt-5 rounded-md border border-border bg-muted/40 px-3 py-2.5">
+					<p className="text-muted-foreground text-xs">Forward receipts to</p>
+					<p className="mt-0.5 break-all font-medium font-mono text-foreground text-sm">
+						{inboundAddress}
+					</p>
+				</div>
+			) : null}
+
 			<form className="mt-5 max-w-sm" onSubmit={onSubmit}>
 				<Field>
 					<FieldLabel htmlFor="allowed-sender">Add an address</FieldLabel>
@@ -115,17 +129,27 @@ export function AllowedSendersSection() {
 									Files to {sender.userName ?? "an unnamed member"}
 								</p>
 							</div>
-							<button
-								aria-label={`Remove ${sender.email}`}
-								className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-								onClick={() => {
-									setDeleteTarget(sender);
-									setConfirmOpen(true);
-								}}
-								type="button"
-							>
-								<Trash2 className="h-4 w-4" />
-							</button>
+							{/* The slot is held open whether or not it holds a button: without
+							    it an own row's email truncates 28px earlier than a household
+							    member's and the column reads ragged.
+
+							    Only your own gets the button. The server scopes `remove` to the
+							    caller, so one on someone else's address could only ever 404. */}
+							<div className="w-7 shrink-0">
+								{sender.isOwn ? (
+									<button
+										aria-label={`Remove ${sender.email}`}
+										className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+										onClick={() => {
+											setDeleteTarget(sender);
+											setConfirmOpen(true);
+										}}
+										type="button"
+									>
+										<Trash2 className="h-4 w-4" />
+									</button>
+								) : null}
+							</div>
 						</li>
 					))}
 				</ul>

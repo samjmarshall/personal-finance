@@ -63,6 +63,19 @@ export const env = createEnv({
 		NODE_ENV: z
 			.enum(["development", "test", "production"])
 			.default("development"),
+		/**
+		 * Resend inbound credentials. The API key fetches the body and attachment
+		 * bytes the `email.received` webhook omits; the webhook secret is the Svix
+		 * signing key that decides whether a POST to the inbound route is Resend at
+		 * all — without it the route is an open door, so both are required in prod.
+		 */
+		RESEND_API_KEY: requiredInProd(z.string()),
+		/**
+		 * The address members forward receipts to. Display-only — shown on Settings
+		 * so a member knows where to send; nothing routes on it.
+		 */
+		RESEND_INBOUND_ADDRESS: z.string().optional(),
+		RESEND_WEBHOOK_SECRET: requiredInProd(z.string()),
 	},
 
 	/**
@@ -91,6 +104,9 @@ export const env = createEnv({
 		KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
 		KV_REST_API_URL: process.env.KV_REST_API_URL,
 		NODE_ENV: process.env.NODE_ENV,
+		RESEND_API_KEY: process.env.RESEND_API_KEY,
+		RESEND_INBOUND_ADDRESS: process.env.RESEND_INBOUND_ADDRESS,
+		RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
 	},
 	/**
 	 * Use `SKIP_ENV_VALIDATION` when skipping env validation is required.

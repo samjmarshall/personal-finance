@@ -12,4 +12,8 @@ export interface AllowedSender {
 // name (null when the auth row carries none).
 export interface AllowedSenderListItem extends AllowedSender {
 	userName: string | null;
+	// Whether the row belongs to the caller. The whole household's allowlist is
+	// listed but only your own entries are removable, so the panel needs to know
+	// which rows to offer a remove button for.
+	isOwn: boolean;
 }
