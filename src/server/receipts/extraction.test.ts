@@ -53,6 +53,27 @@ describe("buildExtractionPrompt", () => {
 		expect(prompt).toContain("9");
 		expect(prompt).toContain("Household");
 	});
+
+	// Stage 5's upload path must not drift: the forwarded-email preamble is written
+	// for markup, and on a photo it tells the model to read past a greeting that
+	// isn't there. Nothing else pinned this, so a prompt edit went unnoticed once.
+	it.each([undefined, "image/jpeg", "application/pdf"])(
+		"omits the forwarded-email hint for %s",
+		(mediaType) => {
+			expect(
+				buildExtractionPrompt([{ id: 7, name: "Groceries" }], mediaType),
+			).not.toContain("forwarded e-receipt email");
+		},
+	);
+
+	it.each(["text/html", "text/plain", "text/html; charset=utf-8"])(
+		"includes the forwarded-email hint for %s",
+		(mediaType) => {
+			expect(
+				buildExtractionPrompt([{ id: 7, name: "Groceries" }], mediaType),
+			).toContain("forwarded e-receipt email");
+		},
+	);
 });
 
 describe("buildExtractionContent", () => {
@@ -61,17 +82,16 @@ describe("buildExtractionContent", () => {
 		"<html><body>Total $9.20</body></html>",
 	);
 
-	it("sends a PDF as a file part carrying its media type", () => {
-		const content = buildExtractionContent({
-			prompt,
-			bytes,
-			mediaType: "application/pdf",
-		});
-		expect(content).toEqual([
-			{ type: "text", text: prompt },
-			{ type: "file", data: bytes, mediaType: "application/pdf" },
-		]);
-	});
+	it.each(["application/pdf", "application/pdf; charset=binary"])(
+		"sends %s as a file part carrying the bare media type",
+		(mediaType) => {
+			const content = buildExtractionContent({ prompt, bytes, mediaType });
+			expect(content).toEqual([
+				{ type: "text", text: prompt },
+				{ type: "file", data: bytes, mediaType: "application/pdf" },
+			]);
+		},
+	);
 
 	it.each(["image/jpeg", "image/png", "image/heic"])(
 		"sends %s as an image part",
@@ -84,14 +104,15 @@ describe("buildExtractionContent", () => {
 		},
 	);
 
-	it.each(["text/html", "text/plain"])(
+	// The charset form is what the worker actually sees: `mediaType` is the blob's raw
+	// HTTP content-type header, not the bare string the producer stored on the row.
+	it.each(["text/html", "text/plain", "text/html; charset=utf-8"])(
 		"folds %s into a single text part and sends no image part",
 		(mediaType) => {
 			const content = buildExtractionContent({ prompt, bytes, mediaType });
 			expect(content).toHaveLength(1);
 			expect(content[0]?.type).toBe("text");
-			// The markup is the payload, not an attachment: an image part here is the
-			// regression this phase exists to prevent (the model would see noise).
+			// Guard: HTML as an image part reaches the model as noise, not text.
 			expect(content).not.toContainEqual(
 				expect.objectContaining({ type: "image" }),
 			);
