@@ -259,7 +259,7 @@ The producer. Verify → allowlist → fetch → blob → rows + events, then th
 - `src/server/receipts/receipts.workers.ts` — add `{ event: "receipt/email.received" }` to the `process-receipt` `triggers` (`:219`). The handler already reads `event.data.receiptId` (`:221-224`) and the payload matches.
 - `src/server/inngest/registry-golden.test.ts` — append the new trigger to the pinned `process-receipt` entry (`:44-51`); the event-name block (`:16-20`) already contains `receipt/email.received` and stays untouched. Order is asserted exactly.
 - `src/app/_components/settings/allowed-senders-section.tsx` + `src/app/(dashboard)/settings/page.tsx` — surface `RESEND_INBOUND_ADDRESS` so the panel says where to forward. Rendered only when configured.
-  > **Blocked as written — resolve before starting.** The plan said "read server-side in the RSC, passed as a prop". There is no prop channel: `page.tsx` renders `<SettingsView />` with no props, `SettingsView` is `"use client"`, and it instantiates panels from a module-level `sections` registry as bare `<Component />` (`settings-view.tsx:87-91`). Reaching for `env` inside the client component is a build error and a Context Provider would break adr001. Give the registry a props slot (or thread the value through `SettingsView`) as the first step of this phase.
+  > **Blocked as written — resolved during implementation.** The plan said "read server-side in the RSC, passed as a prop". There was no prop channel: `page.tsx` rendered `<SettingsView />` with no props, `SettingsView` is `"use client"`, and it instantiated panels from a module-level `sections` registry as bare `<Component />`. Reaching for `env` inside the client component is a build error and a Context Provider would break adr001. Shipped fix: the registry gained a `render(props)` slot (`settings-view.tsx:11-27`), `page.tsx:12` passes `env.RESEND_INBOUND_ADDRESS`, and `allowed-senders-section.tsx:60-67` renders it only when set.
 
 ### Changes — tests
 
@@ -302,7 +302,7 @@ Most modern receipts are an HTML email, not an attachment. This teaches the work
 - [x] `make test` passes (403/40; +5 new cases)
 - [ ] Forwarding a real Uber/Amazon HTML e-receipt (no attachment) from an allowed address extracts vendor, total and line items — still needs a human (see validation note)
 - [x] An HTML receipt shows an icon in the list and detail rather than a broken image — verified in-browser against the real components (tRPC stubbed at the fetch boundary, no DB writes): `text/html` and `text/plain` render `lucide-mail` with no `<img>` in either surface; `application/pdf` still renders `lucide-file-text`, `image/jpeg` still renders the `<img>`
-- [~] Attachment receipts (Phase 3) and uploads (stage 5) still extract unchanged — **content parts** unchanged (the PDF and image branches are pinned by `buildExtractionContent`'s table test, and the worker core is byte-identical apart from the swapped content builder), but the **prompt** is not: `buildExtractionPrompt` takes no mediaType, so the new forwarded-e-receipt paragraph now ships on every photo upload too. Nothing pins the prompt text (the existing test only asserts `toContain("Household")`)
+- [x] Attachment receipts (Phase 3) and uploads (stage 5) still extract unchanged — **fixed during `/validate`**. `buildExtractionPrompt(categories, mediaType)` now gates the forwarded-e-receipt paragraph on `isText(mediaType)`, so a photo or PDF upload gets the stage-5 prompt verbatim. Pinned both ways: the hint is absent for `undefined`/`image/jpeg`/`application/pdf` and present for `text/html`/`text/plain`/`text/html; charset=utf-8`. Content parts were already unchanged
 - [x] `/security-review` — run, **no findings**. Both plan-named concerns confirmed closed: the markup stays a content part (Zod-constrained output, `expenseCategoryId` filtered against `knownCategoryIds`, `receiptDate` regex-gated, all DB writes are Drizzle builders — no `sql.raw`), and no path renders the stored HTML (the image proxy still downgrades `text/html` to `octet-stream` + `nosniff`; the only `dangerouslySetInnerHTML` in the repo is `chart.tsx`, developer-fed). A member also can't mint a `text/html` blob to reach the new branch — the upload token pins jpeg/png/pdf and the email content type is server-set.
 - [x] `/design-review` (thumbnail + detail states) — run over both surfaces, **no blockers, no high-priority**. One medium (pre-existing, not introduced here): the list thumbnail button has `overflow-hidden` and no `focus-visible:ring-*`, so no focus ring renders (WCAG 2.4.7) — it now covers the new Mail state too. Two nitpicks: `previewIcon` takes `string | null` while `isPdf`/`isText` take `string | null | undefined`; the email pane's deliberate lack of a hover affordance is undocumented
 
@@ -378,6 +378,91 @@ Most modern receipts are an HTML email, not an attachment. This teaches the work
 - `/validate` runs `/code-review` across the branch once the phases land (standing step — not per-phase). Confirm: no `receipt`/`receipt_item` schema change; `allowed_sender` is the only new table; the allowlist is consulted before any fetch, blob write or model call; the webhook verifies the raw body and returns 200 for drops but 5xx for genuine failures; every event is minted through `buildOutboxEvent` and written via `commitWithOutbox` (never a bare `inngest.send`); `EVENT_REGISTRY` keys unchanged and the worker golden updated deliberately; plain-router style held (adr012).
 - **Known limitation to record, not fix:** a Svix redelivery of the same `email.received` creates a second set of rows. The worker's `contentHash` dedup marks them `duplicate` without a second extraction (`receipts.workers.ts:98-114`), so the cost is a visible junk row, not spend or bad data. Adding a Resend `email_id` column to `receipt` is the fix if it ever becomes a nuisance — deliberately deferred to keep this stage migration-free on `receipt`.
 - Follow-up (not a code phase): run a handful of real forwarded e-receipts through the worker before trusting HTML category prefill, alongside stage 5's outstanding ~10-receipt eval (design `:137`).
+
+> Whole-branch validation note (`/validate`, all four phases).
+>
+> **Suite.** `make check` (Biome 218 files, tsc, `db:check` no drift) and `make test`
+> (403/40) pass. `make build` fails locally on missing `DEPLOYMENT_URL` /
+> `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` — pre-existing prod-only keys absent
+> from `.env`, not a branch regression; `SKIP_ENV_VALIDATION=1 pnpm run build`
+> succeeds and routes both `/settings` and `/api/receipts/inbound`. `make test_e2e`
+> is a stub (no runner wired).
+>
+> **All seven whole-branch invariants above hold.** No `receipt`/`receipt_item`
+> schema change; `drizzle/0010_messy_satana.sql` is the only new migration and adds
+> only `allowed_sender`; the allowlist is consulted at `email-ingest.ts:175-189`
+> before any `listAttachments`/`fetchBytes`/`put`/mint; the webhook verifies the raw
+> body (`route.ts:93`), 401s on missing or bad signature (`:109,:119-123`), 200s a
+> drop (`:136-139`) and lets genuine failures throw; every event goes through
+> `buildOutboxEvent` + `commitWithOutbox` (`:234,:251`) with no bare `inngest.send`
+> outside the rails; `EVENT_REGISTRY` is byte-identical and only the worker golden
+> moved; plain-router style held. ADRs: all four the plan cites are `Accepted`, none
+> `Proposed`. Reference integrity: 100 anchors checked, 0 broken, 4 stale — all four
+> describe pre-implementation state this plan itself changed.
+>
+> **Blocker found and fixed.** `isText` was exact string equality, but the worker's
+> `mediaType` is the blob's raw HTTP `content-type` response header
+> (`receipts.workers.ts:242` → `@vercel/blob/dist/index.js:201`), not the row's
+> value. The row carries our own bare string (`email-ingest.ts:167`), so the **UI**
+> branch was safe; the **extraction** branch was not — a `text/html; charset=utf-8`
+> header fell through to the image part, the exact regression phase 4 exists to
+> prevent, parking the receipt as `Failed`. Phase 4's implementation note claiming
+> both branches "key off the same value" is wrong on both halves.
+>
+> Fixed by normalising in one place: `bareMediaType()` in `src/lib/utils.ts` strips
+> parameters and lower-cases, and both `isPdf` and `isText` compare against it. The
+> PDF file part now also carries the bare type rather than the raw header — Anthropic
+> rejects a parameterised one, the same bug a step later. 20 new cases pin the
+> parameterised, upper-case and padded forms across `utils.test.ts` and
+> `extraction.test.ts`.
+>
+> **Also open, in priority order:** the forwarded email body has no size cap (the
+> attachment path caps at 10 MB) and is folded into the prompt whole; untrusted
+> markup is concatenated into the *same* text part as the instructions with no
+> `<untrusted_email>` fence; `previewIcon` blocklists where the proxy allowlists, so `null`/`image/gif` still
+> render a broken `<img>`; `receipt-detail` asserts "Arrived by email" from
+> client-supplied `contentType` rather than server-set `channel`; the media-type→
+> presentation decision is duplicated across `SourcePane` and `previewIcon` while
+> `src/domain/receipts/receipt-media.ts` sits empty of it; `isText` landed in the
+> client-heavy `src/lib/utils.ts`, dragging `clsx`/`tailwind-merge`/four `Intl`
+> formatters into the worker cold start; `receipts.workers.test.ts:162` asserts a
+> tautology over two stubs and never reaches `buildExtractionContent`;
+> `memberFacingError` still tells an email member to "upload a clearer photo"; the
+> email pane has no download affordance; `runProcessReceipt` was demoted to an
+> anonymous arrow, losing its name in Inngest stack traces; the `image/heic` test
+> case is unreachable from any real path.
+>
+> **Carried from phase 2, still not done and never recorded:** `/settings` has no
+> `error.tsx` and all three panels mount together (`settings-view.tsx:113-117`), so
+> an `allowedSender.list` failure blanks the page including the theme control. (The
+> other two carried items — `remove` ownership scope, the `AllowedSender` shadow —
+> are both fixed.)
+>
+> **Plan text now stale vs shipped code:** the DTO field is `anchor`, not `value`;
+> Settings ships as a separate `settingsLink` outside `links`;
+> `AllowedSenderListItem` gained `isOwn`; phase 2's `remove` bullet still describes
+> the unscoped delete; `route.ts` has an unplanned 500 "Not configured" branch and
+> `email-ingest.ts` an unplanned `empty` branch; `docs/README.md` was updated
+> (correctly) without appearing in any `### Changes` list.
+>
+> **Reviews.** `/security-review` — no findings (indirect prompt injection
+> considered and dismissed: no tools, Zod-constrained output, category ids
+> re-filtered, no SQL/DOM sink). `/code-review` — 14 findings, folded above.
+> `/quality-control` — Repeated Switches (the media-type cascade, now 4 sites),
+> Primitive Obsession on the raw MIME string, `isText` placement, `previewIcon`
+> naming, and the arrow-function churn. `/code-comment` judge — 8 comments, 6 PASS,
+> 2 REWRITE, both applied. `/design-review` — not re-run: every UI surface on the
+> branch is byte-identical to the commit each per-phase review already cleared
+> (phases 1, 2, 3 and 4 all recorded clean above); their open mediums stand.
+>
+> **Still needs a human:** forwarding a real e-receipt end to end (phase 3's two
+> boxes and phase 4's first). No mail has been forwarded yet; the only writer is the
+> Svix-signed webhook, and a direct DB probe is blocked by the repo's
+> `block-env-file-read` hook. The charset blocker that would have failed the HTML
+> case is fixed, so this is now a clean first run.
+>
+> Suite after the two fixes: `make check` ✓, `make test` ✓ 425/40 (was 403),
+> `SKIP_ENV_VALIDATION=1 pnpm run build` ✓.
 
 ## References
 
