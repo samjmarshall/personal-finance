@@ -300,11 +300,11 @@ Most modern receipts are an HTML email, not an attachment. This teaches the work
 
 - [x] `make check` passes
 - [x] `make test` passes (403/40; +5 new cases)
-- [ ] Forwarding a real Uber/Amazon HTML e-receipt (no attachment) from an allowed address extracts vendor, total and line items
-- [ ] An HTML receipt shows an icon in the list and detail rather than a broken image
-- [x] Attachment receipts (Phase 3) and uploads (stage 5) still extract unchanged — the PDF and image branches are pinned by `buildExtractionContent`'s table test, and the worker core is byte-identical apart from the swapped content builder
+- [ ] Forwarding a real Uber/Amazon HTML e-receipt (no attachment) from an allowed address extracts vendor, total and line items — still needs a human (see validation note)
+- [x] An HTML receipt shows an icon in the list and detail rather than a broken image — verified in-browser against the real components (tRPC stubbed at the fetch boundary, no DB writes): `text/html` and `text/plain` render `lucide-mail` with no `<img>` in either surface; `application/pdf` still renders `lucide-file-text`, `image/jpeg` still renders the `<img>`
+- [~] Attachment receipts (Phase 3) and uploads (stage 5) still extract unchanged — **content parts** unchanged (the PDF and image branches are pinned by `buildExtractionContent`'s table test, and the worker core is byte-identical apart from the swapped content builder), but the **prompt** is not: `buildExtractionPrompt` takes no mediaType, so the new forwarded-e-receipt paragraph now ships on every photo upload too. Nothing pins the prompt text (the existing test only asserts `toContain("Household")`)
 - [x] `/security-review` — run, **no findings**. Both plan-named concerns confirmed closed: the markup stays a content part (Zod-constrained output, `expenseCategoryId` filtered against `knownCategoryIds`, `receiptDate` regex-gated, all DB writes are Drizzle builders — no `sql.raw`), and no path renders the stored HTML (the image proxy still downgrades `text/html` to `octet-stream` + `nosniff`; the only `dangerouslySetInnerHTML` in the repo is `chart.tsx`, developer-fed). A member also can't mint a `text/html` blob to reach the new branch — the upload token pins jpeg/png/pdf and the email content type is server-set.
-- [ ] `/design-review` (thumbnail + detail states)
+- [x] `/design-review` (thumbnail + detail states) — run over both surfaces, **no blockers, no high-priority**. One medium (pre-existing, not introduced here): the list thumbnail button has `overflow-hidden` and no `focus-visible:ring-*`, so no focus ring renders (WCAG 2.4.7) — it now covers the new Mail state too. Two nitpicks: `previewIcon` takes `string | null` while `isPdf`/`isText` take `string | null | undefined`; the email pane's deliberate lack of a hover affordance is undocumented
 
 > Implementation note.
 >
@@ -336,6 +336,40 @@ Most modern receipts are an HTML email, not an attachment. This teaches the work
 > (`APIError: Failed to get session`), unrelated to this phase. `/design-review` is
 > left unrun for the same pair of reasons: no session to drive, and the one new state
 > it exists to review is unreachable. Run it once a real e-receipt has landed.
+
+> Validation note (`/validate`).
+>
+> **Two of the three "needs a human" boxes were not blocked.** The Playwright session
+> was fine at validation time (signed in as Sam Marshall); the real obstacle was an
+> empty `receipt` table, not auth. Both UI boxes were verified without touching the
+> database by stubbing `receipt.list` / `receipt.get` at the browser's `window.fetch`
+> boundary (`page.addInitScript`) and rendering four synthetic rows through the real
+> components. `/design-review` was then run the same way and came back clean.
+> Only the end-to-end forwarding box genuinely still needs a human.
+>
+> **The `uploads still extract unchanged` box was inaccurate as ticked** and is now
+> `[~]`. `buildExtractionContent` is media-type-aware, but `buildExtractionPrompt` is
+> not — the forwarded-e-receipt paragraph is unconditional, so every photo upload now
+> carries it. No test pins the prompt text. Either take a `mediaType` (or a boolean)
+> so the hint only ships on the text branch, or accept it deliberately and add a
+> prompt assertion so the change is visible next time.
+>
+> **`isText` may not see what the UI sees.** The note above says "the UI branch and
+> the extraction branch key off the same value" — that is not guaranteed. The row's
+> `contentType` is the bare string `email-ingest.ts:152` passed to `put()`, but the
+> worker reads `result.blob.contentType` off the blob's HTTP `content-type` response
+> header (`receipts.workers.ts:242`), which can carry `; charset=utf-8`. `isText` is
+> exact string equality, so a parameterised header falls through to the image branch —
+> exactly the bug this phase fixes. Unproven either way (no blob was written to check).
+> Cheap defensive fix: strip parameters before comparing (`ct.split(";")[0].trim()`).
+>
+> **Other findings folded into the validation report, not fixed here:** no size cap on
+> the forwarded email body (attachments are capped at 10 MB, the body path is not);
+> `receipt.create`'s `contentType` is client-supplied (`receipt.dto.ts:16`) and written
+> straight to the row, so a client can force the Mail branch on a real image;
+> `memberFacingError` tells an email-channel member to "upload a clearer photo"; a
+> failed email body has no download affordance (PDF has one); the `image/heic` test
+> case is unreachable from any real code path.
 
 ---
 
