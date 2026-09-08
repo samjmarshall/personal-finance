@@ -1,6 +1,6 @@
 import type { FilePart, ImagePart, TextPart } from "ai";
 import { z } from "zod";
-import { isPdf, isText } from "~/lib/utils";
+import { bareMediaType, isPdf, isText } from "~/lib/utils";
 
 /** Claude model for receipt extraction; pinned so a model bump is a deliberate edit. */
 export const RECEIPT_MODEL = "claude-sonnet-4-6";
@@ -37,20 +37,27 @@ export interface ExtractionCategory {
 	name: string;
 }
 
+// Only the email Channel sends markup, so only it gets this. A photo upload has no
+// greeting or footer to read past, and the vendor warning would be nonsense there.
+const FORWARDED_EMAIL_HINT = `The payload is a forwarded e-receipt email rather than a photo of a receipt. Read past the greeting, forwarding headers, promotions and footer to the order lines, and treat the merchant that issued the order as the vendor — never the mail provider or the person who forwarded it.
+
+`;
+
 /**
  * Prompt listing the household's categories by id so each item comes back with a
  * prefilled `expenseCategoryId`. The id/name list is the only allowed vocabulary —
  * the model must map to one of these or return null, never coin a new category.
+ * `mediaType` only selects the forwarded-email preamble; it never changes the schema.
  */
 export function buildExtractionPrompt(
 	categories: ExtractionCategory[],
+	mediaType?: string,
 ): string {
 	const list = categories.map((c) => `- ${c.id}: ${c.name}`).join("\n");
+	const hint = isText(mediaType) ? FORWARDED_EMAIL_HINT : "";
 	return `Extract the receipt's vendor, date (YYYY-MM-DD), grand total, currency, and every line item (name, price, quantity).
 
-The payload may be a forwarded e-receipt email rather than a photo of a receipt. Read past the greeting, forwarding headers, promotions and footer to the order lines, and treat the merchant that issued the order as the vendor — never the mail provider or the person who forwarded it.
-
-For each item, set expenseCategoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
+${hint}For each item, set expenseCategoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
 ${list}`;
 }
 
@@ -67,9 +74,8 @@ export function buildExtractionContent({
 	bytes: Uint8Array;
 	mediaType: string;
 }): Array<TextPart | ImagePart | FilePart> {
-	// A forwarded e-receipt is markup, not a picture of one. Sent as an image part it
-	// reaches the model as unreadable noise, so decode it into the prompt instead.
-	// Untrusted third-party markup — it stays a content part and is never rendered.
+	// Markup sent as an image part reaches the model as unreadable noise; inline it.
+	// Untrusted third-party HTML — never render it in the browser.
 	if (isText(mediaType)) {
 		return [
 			{
@@ -81,7 +87,9 @@ export function buildExtractionContent({
 	return [
 		{ type: "text", text: prompt },
 		isPdf(mediaType)
-			? { type: "file", data: bytes, mediaType }
+			? // Bare type, not the blob's raw header: Anthropic rejects a file part whose
+				// media type carries parameters.
+				{ type: "file", data: bytes, mediaType: bareMediaType(mediaType) }
 			: { type: "image", image: bytes },
 	];
 }

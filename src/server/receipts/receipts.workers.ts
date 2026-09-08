@@ -117,7 +117,7 @@ export function makeRunProcessReceipt({
 				.select({ id: expenseCategories.id, name: expenseCategories.name })
 				.from(expenseCategories);
 			const extracted = await generate({
-				prompt: buildExtractionPrompt(categories),
+				prompt: buildExtractionPrompt(categories, mediaType),
 				bytes,
 				mediaType,
 			});

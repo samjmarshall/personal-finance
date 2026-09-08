@@ -129,13 +129,22 @@ export function formatMonthKey(key: string) {
 	return monthFormatter.format(new Date(year, month - 1, 1));
 }
 
+// Callers pass two different things: a `receipt` row's stored value (bare, as the
+// producer wrote it) and the blob's HTTP `content-type` header, which Vercel Blob
+// hands back verbatim and may parameterise (`text/html; charset=utf-8`). Compare the
+// type alone or the header form silently misses every branch.
+export function bareMediaType(contentType: string | null | undefined): string {
+	return contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
 export function isPdf(contentType: string | null | undefined): boolean {
-	return contentType === "application/pdf";
+	return bareMediaType(contentType) === "application/pdf";
 }
 
 // The email Channel stores a forwarded body under one of these (email-ingest.ts).
 // Neither is on the image proxy's renderable allowlist, so callers must branch here
 // rather than hand the blob to an `<img>` that can only come back as octet-stream.
 export function isText(contentType: string | null | undefined): boolean {
-	return contentType === "text/html" || contentType === "text/plain";
+	const bare = bareMediaType(contentType);
+	return bare === "text/html" || bare === "text/plain";
 }
