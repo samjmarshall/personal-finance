@@ -132,3 +132,10 @@ export function formatMonthKey(key: string) {
 export function isPdf(contentType: string | null | undefined): boolean {
 	return contentType === "application/pdf";
 }
+
+// The email Channel stores a forwarded body under one of these (email-ingest.ts).
+// Neither is on the image proxy's renderable allowlist, so callers must branch here
+// rather than hand the blob to an `<img>` that can only come back as octet-stream.
+export function isText(contentType: string | null | undefined): boolean {
+	return contentType === "text/html" || contentType === "text/plain";
+}

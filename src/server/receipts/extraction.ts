@@ -1,4 +1,6 @@
+import type { FilePart, ImagePart, TextPart } from "ai";
 import { z } from "zod";
+import { isPdf, isText } from "~/lib/utils";
 
 /** Claude model for receipt extraction; pinned so a model bump is a deliberate edit. */
 export const RECEIPT_MODEL = "claude-sonnet-4-6";
@@ -46,6 +48,40 @@ export function buildExtractionPrompt(
 	const list = categories.map((c) => `- ${c.id}: ${c.name}`).join("\n");
 	return `Extract the receipt's vendor, date (YYYY-MM-DD), grand total, currency, and every line item (name, price, quantity).
 
+The payload may be a forwarded e-receipt email rather than a photo of a receipt. Read past the greeting, forwarding headers, promotions and footer to the order lines, and treat the merchant that issued the order as the vendor — never the mail provider or the person who forwarded it.
+
 For each item, set expenseCategoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
 ${list}`;
+}
+
+/**
+ * AI-SDK user content for one receipt. Text bodies fold into the prompt's own part;
+ * PDFs ride as a file part; anything else is an image part.
+ */
+export function buildExtractionContent({
+	prompt,
+	bytes,
+	mediaType,
+}: {
+	prompt: string;
+	bytes: Uint8Array;
+	mediaType: string;
+}): Array<TextPart | ImagePart | FilePart> {
+	// A forwarded e-receipt is markup, not a picture of one. Sent as an image part it
+	// reaches the model as unreadable noise, so decode it into the prompt instead.
+	// Untrusted third-party markup — it stays a content part and is never rendered.
+	if (isText(mediaType)) {
+		return [
+			{
+				type: "text",
+				text: `${prompt}\n\n${new TextDecoder().decode(bytes)}`,
+			},
+		];
+	}
+	return [
+		{ type: "text", text: prompt },
+		isPdf(mediaType)
+			? { type: "file", data: bytes, mediaType }
+			: { type: "image", image: bytes },
+	];
 }

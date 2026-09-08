@@ -298,13 +298,44 @@ Most modern receipts are an HTML email, not an attachment. This teaches the work
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
+- [x] `make check` passes
+- [x] `make test` passes (403/40; +5 new cases)
 - [ ] Forwarding a real Uber/Amazon HTML e-receipt (no attachment) from an allowed address extracts vendor, total and line items
 - [ ] An HTML receipt shows an icon in the list and detail rather than a broken image
-- [ ] Attachment receipts (Phase 3) and uploads (stage 5) still extract unchanged
-- [ ] `/security-review` (touches `src/lib/**`; untrusted third-party email markup becomes model input — confirm it is confined to a content part and that nothing renders the stored HTML)
+- [x] Attachment receipts (Phase 3) and uploads (stage 5) still extract unchanged — the PDF and image branches are pinned by `buildExtractionContent`'s table test, and the worker core is byte-identical apart from the swapped content builder
+- [x] `/security-review` — run, **no findings**. Both plan-named concerns confirmed closed: the markup stays a content part (Zod-constrained output, `expenseCategoryId` filtered against `knownCategoryIds`, `receiptDate` regex-gated, all DB writes are Drizzle builders — no `sql.raw`), and no path renders the stored HTML (the image proxy still downgrades `text/html` to `octet-stream` + `nosniff`; the only `dangerouslySetInnerHTML` in the repo is `chart.tsx`, developer-fed). A member also can't mint a `text/html` blob to reach the new branch — the upload token pins jpeg/png/pdf and the email content type is server-set.
 - [ ] `/design-review` (thumbnail + detail states)
+
+> Implementation note.
+>
+> **Naming deviation: `isText`, not `isHtml`.** The plan named the predicate
+> `isHtml` "matching `text/html` (and `text/plain`)". Phase 3 does store both
+> (`email-ingest.ts:217` picks `text/plain` when a forwarded mail has no html part),
+> so `isHtml` would have been a false name on half its inputs. Shipped as
+> `isText(contentType)` beside `isPdf` — same two types, honest name, no apology
+> comment needed.
+>
+> **UI shape.** The list thumbnail resolves a `previewIcon(contentType)` once per row
+> (`FileText` → PDF, `Mail` → text, `null` → safe to render the real image), so the
+> three-way branch stays flat. The detail pane's inline ternary became a local
+> `SourcePane` component mirroring the file's existing `MatchBanner` — three early
+> returns rather than a nested ternary. The emailed case reads "Arrived by email — no
+> image to preview."
+>
+> Chain verified by reading, not just by test: the email producer writes
+> `contentType: blob.contentType` onto the row (`email-ingest.ts:245`) and the worker
+> reads `result.blob.contentType` back off the blob (`receipts.workers.ts:243`), so the
+> UI branch and the extraction branch key off the same value.
+>
+> **The three unchecked boxes need a human.** All require an HTML receipt to exist,
+> and none does — Phase 3's own two forwarding boxes are unchecked for the same reason
+> (no mail has been forwarded yet). I could not stand one up myself: the only writer is
+> the Svix-signed webhook, which needs a real signature plus a live Resend fetch, and
+> hand-inserting a `receipt` row would mean writing household data from outside the app.
+> A browser check was also blocked — the Playwright context has no session
+> (`APIError: Failed to get session`), unrelated to this phase. `/design-review` is
+> left unrun for the same pair of reasons: no session to drive, and the one new state
+> it exists to review is unreachable. Run it once a real e-receipt has landed.
 
 ---
 

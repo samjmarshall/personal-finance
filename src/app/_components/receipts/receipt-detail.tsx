@@ -1,7 +1,13 @@
 "use client";
 
 import { skipToken } from "@tanstack/react-query";
-import { Check, FileText, Loader2Icon, TriangleAlert } from "lucide-react";
+import {
+	Check,
+	FileText,
+	Loader2Icon,
+	Mail,
+	TriangleAlert,
+} from "lucide-react";
 import { useRef } from "react";
 import { toast } from "sonner";
 
@@ -21,7 +27,7 @@ import {
 import { receiptImageUrl } from "~/domain/receipts";
 import { itemsTotalMismatch } from "~/domain/receipts/receipt-total";
 import { ReceiptStatus } from "~/lib/constants";
-import { formatCurrency, formatDate, isPdf } from "~/lib/utils";
+import { formatCurrency, formatDate, isPdf, isText } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Candidate = RouterOutputs["receipt"]["matchCandidates"][number];
@@ -53,6 +59,54 @@ function gapParts({ amountDelta, dayDelta }: Candidate) {
 			? "same day"
 			: `${Math.abs(dayDelta)} day${Math.abs(dayDelta) === 1 ? "" : "s"} ${dayDelta < 0 ? "earlier" : "later"}`;
 	return [amount, days];
+}
+
+/**
+ * The receipt's stored source, in whichever form the blob proxy can serve it.
+ * Only images stream back under their real type; a PDF opens in a tab and an
+ * emailed body has no picture at all, so both stand in with an icon.
+ */
+function SourcePane({
+	contentType,
+	src,
+	vendor,
+}: {
+	contentType: string | null;
+	src: string;
+	vendor: string | null;
+}) {
+	if (isPdf(contentType))
+		return (
+			<a
+				className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground text-xs hover:text-foreground"
+				href={src}
+				rel="noreferrer"
+				target="_blank"
+			>
+				<FileText aria-hidden className="h-8 w-8" />
+				Open PDF
+			</a>
+		);
+
+	// Never rendered as markup — it is untrusted third-party mail. The extraction
+	// beside this pane is the readable form.
+	if (isText(contentType))
+		return (
+			<div className="flex h-48 flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground text-xs">
+				<Mail aria-hidden className="h-8 w-8" />
+				Arrived by email — no image to preview.
+			</div>
+		);
+
+	return (
+		// biome-ignore lint/performance/noImgElement: private-blob proxy, not a static asset for next/image
+		<img
+			alt={`Receipt from ${titleFor(vendor)}`}
+			className="h-auto w-full object-contain"
+			loading="lazy"
+			src={src}
+		/>
+	);
 }
 
 /**
@@ -283,25 +337,11 @@ export function ReceiptDetail({
 						<div className="grid gap-5 sm:grid-cols-[minmax(0,11rem)_1fr]">
 							{/* Source image — the receipt's ground truth, beside the extraction. */}
 							<div className="h-fit overflow-hidden rounded-lg border border-border bg-muted/40">
-								{isPdf(data.contentType) ? (
-									<a
-										className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground text-xs hover:text-foreground"
-										href={imageSrc}
-										rel="noreferrer"
-										target="_blank"
-									>
-										<FileText aria-hidden className="h-8 w-8" />
-										Open PDF
-									</a>
-								) : (
-									// biome-ignore lint/performance/noImgElement: private-blob proxy, not a static asset for next/image
-									<img
-										alt={`Receipt from ${titleFor(data.vendor)}`}
-										className="h-auto w-full object-contain"
-										loading="lazy"
-										src={imageSrc}
-									/>
-								)}
+								<SourcePane
+									contentType={data.contentType}
+									src={imageSrc}
+									vendor={data.vendor}
+								/>
 							</div>
 
 							{/* min-w-0: as a grid item this defaults to min-width:auto, so the

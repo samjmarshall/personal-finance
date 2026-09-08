@@ -156,6 +156,48 @@ describe("runProcessReceipt", () => {
 		]);
 	});
 
+	// The email Channel must land in the same terminal states as an upload: the core
+	// stays media-type-blind and passes whatever the blob carried to `generate`, which
+	// is what lets buildExtractionContent make the text-vs-image call on its own.
+	it("passes an html body's media type through to generate and still processes it", async () => {
+		const h = harness({
+			receipt: baseReceipt({
+				channel: ReceiptChannel.Email,
+				contentType: "text/html",
+				blobPathname: "receipts/email/abc.html",
+			}),
+			categories: [{ id: 7, name: "Groceries" }],
+		});
+		const generate = vi.fn(
+			async (_input: {
+				prompt: string;
+				bytes: Uint8Array;
+				mediaType: string;
+			}) => extraction,
+		);
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: async () => ({
+				bytes: new TextEncoder().encode("<html>Total $8.99</html>"),
+				mediaType: "text/html",
+			}),
+			generate,
+			hash: () => "hash-html",
+		});
+
+		await run(1);
+
+		expect(generate).toHaveBeenCalledOnce();
+		expect(generate).toHaveBeenCalledWith(
+			expect.objectContaining({ mediaType: "text/html" }),
+		);
+		const processed = findUpdate(h.updates, "status");
+		expect(processed?.status).toBe(ReceiptStatus.Processed);
+		expect(processed?.vendor).toBe("Corner Grocer");
+		expect(h.inserts).toHaveLength(1);
+		expect(h.inserts[0]?.table).toBe(receiptItems);
+	});
+
 	it("nulls a category id the model invented instead of failing the whole extraction", async () => {
 		const h = harness({
 			receipt: baseReceipt(),

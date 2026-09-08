@@ -5,10 +5,10 @@ import { APICallError, generateObject } from "ai";
 import { and, eq, ne } from "drizzle-orm";
 import type { Inngest } from "inngest";
 import { ReceiptStatus } from "~/lib/constants";
-import { isPdf } from "~/lib/utils";
 import type { db as realDb } from "~/server/db";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import {
+	buildExtractionContent,
 	buildExtractionPrompt,
 	RECEIPT_MODEL,
 	type ReceiptExtraction,
@@ -70,10 +70,10 @@ export function makeRunProcessReceipt({
 	generate,
 	hash,
 }: ProcessReceiptCoreDeps) {
-	return async function runProcessReceipt(
+	return async (
 		receiptId: number,
 		{ isFinalAttempt = false }: { isFinalAttempt?: boolean } = {},
-	) {
+	) => {
 		const [receipt] = await db
 			.select()
 			.from(receipts)
@@ -189,15 +189,14 @@ export function makeProcessReceiptWorker({ db, inngest }: WorkerDeps) {
 		db,
 		fetchBlob: fetchBlobBytes,
 		generate: async ({ prompt, bytes, mediaType }) => {
-			// PDFs ride as a file part; everything else is an image part.
-			const filePart = isPdf(mediaType)
-				? { type: "file" as const, data: bytes, mediaType }
-				: { type: "image" as const, image: bytes };
 			const { object } = await generateObject({
 				model: anthropic(RECEIPT_MODEL),
 				schema: receiptExtraction,
 				messages: [
-					{ role: "user", content: [{ type: "text", text: prompt }, filePart] },
+					{
+						role: "user",
+						content: buildExtractionContent({ prompt, bytes, mediaType }),
+					},
 				],
 			});
 			return object;
