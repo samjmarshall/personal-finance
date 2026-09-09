@@ -1,147 +1,91 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The route wires the real client, db and blob store at request time. Stub every
-// one of them so this stays a pure unit over the gate order.
-vi.mock("~/env", () => ({
-	env: { RESEND_API_KEY: "re_test", RESEND_WEBHOOK_SECRET: "whsec_test" },
+// The route is a composition root: it reads the env, builds the tiers once, and
+// delegates. Everything it wires is stubbed so this stays a unit over that job;
+// the gate order itself is covered by email.controller.test.ts.
+const { env } = vi.hoisted(() => ({
+	env: {
+		RESEND_API_KEY: "re_test" as string | undefined,
+		RESEND_WEBHOOK_SECRET: "whsec_test" as string | undefined,
+	},
 }));
+vi.mock("~/env", () => ({ env }));
 vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/outbox", () => ({ commitWithOutbox: vi.fn() }));
-vi.mock("@vercel/blob", () => ({ put: vi.fn() }));
-
-const { verify } = vi.hoisted(() => ({ verify: vi.fn() }));
+vi.mock("~/server/outbox/outbox.module", () => ({ outboxService: {} }));
 vi.mock("resend", () => ({
 	Resend: class {
-		webhooks = { verify };
-		emails = {
-			receiving: { get: vi.fn(), attachments: { list: vi.fn() } },
-		};
+		readonly apiKey: string;
+		webhooks = {};
+		emails = {};
+		constructor(apiKey: string) {
+			this.apiKey = apiKey;
+		}
 	},
 }));
 
-// Keep the real event schema; swap only the ingestion core, which is covered by
-// its own suite.
-const { run } = vi.hoisted(() => ({
-	run: vi.fn(async () => ({ status: "dropped" as const })),
+const { handle, constructed } = vi.hoisted(() => ({
+	handle: vi.fn<(request: Request) => Promise<Response>>(
+		async () => new Response("ok"),
+	),
+	constructed: vi.fn(),
 }));
-vi.mock("~/server/receipts/email-ingest", async (importOriginal) => ({
-	...(await importOriginal<typeof import("~/server/receipts/email-ingest")>()),
-	makeRunIngestInboundEmail: () => run,
+vi.mock("~/server/email/email.controller", () => ({
+	EmailController: class {
+		constructor(deps: unknown) {
+			constructed(deps);
+		}
+		handle = handle;
+	},
 }));
 
 const { POST } = await import("./route");
 
-const SIGNED_HEADERS = {
-	"svix-id": "msg_1",
-	"svix-timestamp": "1700000000",
-	"svix-signature": "v1,abc",
-};
-
-const RECEIVED_EVENT = {
-	type: "email.received",
-	data: { email_id: "email-1", from: "sam@example.com", attachments: [] },
-};
-
-function post(body: unknown, headers: Record<string, string> = SIGNED_HEADERS) {
-	return POST(
+const post = () =>
+	POST(
 		new Request("https://ledger.test/api/receipts/inbound", {
 			method: "POST",
-			body: typeof body === "string" ? body : JSON.stringify(body),
-			headers,
+			body: "{}",
 		}),
 	);
-}
 
-beforeEach(() => {
-	vi.clearAllMocks();
-	verify.mockReturnValue(RECEIVED_EVENT);
+beforeEach(() => vi.clearAllMocks());
+afterEach(() => {
+	env.RESEND_API_KEY = "re_test";
+	env.RESEND_WEBHOOK_SECRET = "whsec_test";
+	vi.restoreAllMocks();
 });
 
 describe("POST /api/receipts/inbound", () => {
-	// The signature is the only thing standing between this route and the open
-	// internet, so nothing downstream may run before it passes.
-	it.each(["svix-id", "svix-timestamp", "svix-signature"])(
-		"401s when %s is absent",
-		async (missing) => {
-			const headers = { ...SIGNED_HEADERS };
-			delete headers[missing as keyof typeof headers];
+	// Both env vars are optional outside production; an unconfigured deployment must
+	// refuse rather than verify against an empty secret.
+	it.each(["RESEND_API_KEY", "RESEND_WEBHOOK_SECRET"] as const)(
+		"500s without touching the controller when %s is unset",
+		async (key) => {
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			env[key] = undefined;
 
-			const response = await post(RECEIVED_EVENT, headers);
+			const response = await post();
 
-			expect(response.status).toBe(401);
-			expect(run).not.toHaveBeenCalled();
+			expect(response.status).toBe(500);
+			expect(handle).not.toHaveBeenCalled();
 		},
 	);
 
-	it("401s when the signature does not verify, without consulting the allowlist", async () => {
-		verify.mockImplementation(() => {
-			throw new Error("no match");
-		});
+	// One controller for the life of the module: the Resend client and the tiers
+	// behind it are built on the first request and reused by every later one.
+	it("builds the controller once — secret + a Resend client on the key — and delegates every request", async () => {
+		const first = await post();
+		await post();
 
-		const response = await post(RECEIVED_EVENT);
-
-		expect(response.status).toBe(401);
-		expect(run).not.toHaveBeenCalled();
-	});
-
-	// Verification is over the exact bytes received; a re-serialised object is not
-	// those bytes, so a parsed body could never be checked.
-	it("verifies the raw body it was sent", async () => {
-		const raw = JSON.stringify(RECEIVED_EVENT);
-
-		await post(raw);
-
-		expect(verify).toHaveBeenCalledWith(
+		expect(constructed).toHaveBeenCalledTimes(1);
+		expect(constructed).toHaveBeenCalledWith(
 			expect.objectContaining({
-				payload: raw,
 				webhookSecret: "whsec_test",
+				resend: expect.objectContaining({ apiKey: "re_test" }),
 			}),
 		);
-	});
-
-	it("ingests a verified email.received", async () => {
-		const response = await post(RECEIVED_EVENT);
-
-		expect(response.status).toBe(200);
-		expect(run).toHaveBeenCalledWith(RECEIVED_EVENT);
-	});
-
-	// A drop is a verdict, not a failure. A non-200 would have Svix redeliver it.
-	it("200s a dropped sender", async () => {
-		run.mockResolvedValue({ status: "dropped" });
-
-		const response = await post(RECEIVED_EVENT);
-
-		expect(response.status).toBe(200);
-		await expect(response.json()).resolves.toEqual({ status: "dropped" });
-	});
-
-	// One endpoint receives every event type subscribed on the Resend side.
-	it("ignores a verified event of another type", async () => {
-		verify.mockReturnValue({
-			type: "email.delivered",
-			data: { email_id: "email-1", from: "sam@example.com" },
-		});
-
-		const response = await post({ type: "email.delivered" });
-
-		expect(response.status).toBe(200);
-		expect(run).not.toHaveBeenCalled();
-	});
-
-	it("ignores a verified payload that does not match the event shape", async () => {
-		verify.mockReturnValue({ type: "email.received", data: { nope: true } });
-
-		const response = await post({ nope: true });
-
-		expect(response.status).toBe(200);
-		expect(run).not.toHaveBeenCalled();
-	});
-
-	// Svix retries on 5xx, which is what an expiring download URL deserves.
-	it("lets a genuine processing failure surface rather than swallowing it", async () => {
-		run.mockRejectedValue(new Error("blob store down"));
-
-		await expect(post(RECEIVED_EVENT)).rejects.toThrow("blob store down");
+		expect(handle).toHaveBeenCalledTimes(2);
+		expect(handle.mock.calls[0]?.[0]).toBeInstanceOf(Request);
+		await expect(first.text()).resolves.toBe("ok");
 	});
 });

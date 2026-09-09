@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
-import { allowedSenders } from "~/server/receipts/allowed-sender.schema";
+import { allowedSenders } from "~/server/email/allowed-sender.schema";
 
 // Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
 // (and through them ~/env). Stub those so this stays a pure unit test.
