@@ -3,7 +3,8 @@ SHELL := /bin/bash -euo pipefail
 .PHONY: install build start check fix audit test test_e2e nvm \
 	db_generate db_custom db_migrate db_studio db_check \
 	db_branch db_branch_delete db_branch_delete_all db_branch_status clean \
-	setup stop
+	setup stop \
+	fmt-check fmt init validate refresh plan apply force-unlock destroy
 
 NVMRC_MAJOR := $(shell cut -d. -f1 .nvmrc | sed 's/^v//')
 NODE_MAJOR := $(shell node --version | cut -d. -f1 | sed 's/^v//')
@@ -85,3 +86,6 @@ db_branch_status:
 clean:
 	test ! -d node_modules || pnpm exec portless clean
 	rm -rf .next/ next-env.d.ts tsconfig.tsbuildinfo node_modules .playwright-mcp
+
+# Terraform targets (make plan env=preview, make apply env=production, ...).
+include infrastructure/Makefile
