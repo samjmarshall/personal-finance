@@ -1,7 +1,7 @@
 ---
 skills: tdd, code-comment
-model: sonnet
-effort: high
+# model: sonnet
+effort: ultracode
 ---
 # Implement Plan
 

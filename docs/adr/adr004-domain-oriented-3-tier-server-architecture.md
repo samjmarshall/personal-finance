@@ -1,11 +1,13 @@
 ---
 Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-08-10'
+Date: '2026-09-09'
 # prettier-ignore
 ---
 
-# Domain-oriented 3-tier server architecture with factory-closure DI and an atomic `commit(writes, outboxEvents)` repository primitive
+# Domain-oriented 3-tier server architecture with class-based constructor injection and an atomic `commit(writes, outboxEvents)` repository primitive
+
+> **Revised in place 2026-09-09** (originally accepted 2026-08-10). Two things changed: the DI shape moved from factory closures (`make*(deps)` returning functions) to classes built with a single constructor deps object (`new X({ … })`), and entry-point adapters are `*.controller.ts` rather than `*.worker(s).ts`. Execution started the same day with `src/server/outbox/` and `src/server/receipts/`. The write-door and frozen-identifier decisions are unchanged. [adr012](archived/adr012-defer-adr004-plain-routers-for-feature-work.md), which deferred this ADR, is superseded.
 
 ## Context and Problem Statement
 
@@ -19,6 +21,10 @@ There are no tests of any kind — no test script, no framework, zero test files
 
 How should server code be organised so that every read and write has one obvious home, both entry-point classes share one implementation, the client/server boundary is compiler-enforced, and adr002's atomicity contract is structural rather than remembered?
 
+### Revision context (2026-09-09)
+
+Between acceptance and this revision the 2026-08 feature set shipped under [adr012](archived/adr012-defer-adr004-plain-routers-for-feature-work.md)'s deferral: routers stayed plain, and the first Inngest workers landed as the one piece of this ADR the design kept — factory closures. In practice they nested: `makeProcessReceiptWorker({ db, inngest, model })` built `makeRunProcessReceipt({ db, fetchBlob, generate, hash })`, whose deps were themselves bare functions. The result reads as a function returning a function over functions of functions; there is no noun to point at for "the thing that fetches a blob" and no place a second entry point could share. A Vitest suite (400+ tests) now exists, so the "seams for a suite that does not exist" driver is met and the question narrows to: **which DI shape do the tiers take?**
+
 ## Decision Drivers
 
 - **Structurally enforce adr002 atomicity.** The canonical-plus-outbox write must be carried by a signature, not by reviewer vigilance. This is the driver that makes the whole reorganisation worth doing now rather than later.
@@ -27,73 +33,90 @@ How should server code be organised so that every read and write has one obvious
 - **Compiler-enforced client/server boundary.** Misfiled imports should be build failures, not review catches.
 - **Navigability.** One consistent answer to "where does this live?", derivable without reading the code.
 - **Honest ceremony budget.** This is a three-table CRUD app. Machinery that pays off on a large aggregate is pure overhead here, and the architecture must say so explicitly rather than importing ceremony by default.
-- **Testable seams for a suite that does not exist yet.** Factory injection should be the default so the first tests written have somewhere to attach.
+- **Testable seams.** Every tier is constructed with explicit deps so a test can hand it plain fakes without module mocking.
+- **Readable dependency graph (added 2026-09-09).** A dependency is a named object with methods, not an anonymous function. A reader should be able to name each collaborator and find its implementation by filename.
 
 ## Considered Options
 
-1. By-domain vertical modules, named 3-tier with dotted suffixes, factory-closure DI, universal `commit(writes, outboxEvents)` primitive with pure `decide()` only where earned
+1. By-domain vertical modules, named 3-tier with dotted suffixes, **class-based constructor injection** (`new X({ deps })`), universal `commit(writes, outboxEvents)` primitive with pure `decide()` only where earned
 2. Same 3-tier but with uniform domain-object write-sets and a `decide()` core on every domain
 3. Horizontal layers (`controllers/`, `services/`, `repositories/`)
 4. Adopt NestJS proper
 5. Status quo — keep flat T3 routers, add workers wherever they land
 
+DI shapes weighed for option 1 at the 2026-09-09 revision:
+
+- 1a. Factory closures — `makeService(deps)` returns an object of closures (the original 2026-08-10 choice)
+- 1b. Classes with one constructor deps object and explicit `private readonly` fields — **chosen**
+- 1c. Classes with TS parameter properties — `constructor(private readonly deps: XDeps)`
+- 1d. Decorators + a DI container (folds into option 4)
+
 ## Decision Outcome
 
-Chosen option: "1. By-domain vertical modules, named 3-tier with dotted suffixes, factory-closure DI, universal `commit(writes, outboxEvents)` primitive with pure `decide()` only where earned", because it makes adr002's atomicity a property of the repository's only write signature, gives Inngest workers a home beside the domain they serve, and — unlike option 2 — spends ceremony only where a flow's write complexity earns it, which on a three-table CRUD app is nowhere yet.
+Chosen option: "1. By-domain vertical modules, named 3-tier with dotted suffixes, class-based constructor injection, universal `commit(writes, outboxEvents)` primitive with pure `decide()` only where earned", with DI shape **1b**, because it makes adr002's atomicity a property of the repository's write signature, gives Inngest workers a home beside the domain they serve, spends ceremony only where a flow's write complexity earns it, and — unlike closures — names every collaborator as a class or interface a reader can grep for.
 
-The conventions below are the **converged** form of this decision, with known refinements folded in as the decision rather than left to be re-derived through drift. `.claude/rules/server-architecture.md` is already written against this converged shape.
+The conventions below are the **converged** form of this decision. `.claude/rules/server-architecture.md` is the operational statement and `src/server/outbox/` + `src/server/receipts/` are the reference implementations.
 
 Specifics that bind:
 
-- **By-domain vertical modules.** `transactions/`, `expenses/`, `income/`. Collapsed infra with no domain: `outbox/`, `inngest/`, `db/`, `better-auth/`. New behaviour from adr002 — categorisation, recurring-subscription detection, threshold alerts — lands inside `transactions/` unless it grows its own vocabulary, at which point it earns its own module.
-- **Named tiers, dotted suffixes.** `*.router.ts` (tRPC adapter), `*.worker.ts` / `*.workers.ts` (Inngest adapter and its per-domain composition root), `*.service.ts`, `*.repository.ts`, `*.module.ts` (composition root), `*.schema.ts` (Drizzle tables, per [adr005](adr005-per-domain-drizzle-schema-files.md)), `*.errors.ts` (domain errors), `*.decide.ts` (pure decision core, where earned), and `*.dto.ts` for Zod schema, kept visually distinct from the Drizzle `*.schema.ts` homes. Every file declares its tier in its name.
-- **Two thin adapters over one service.** The router owns Zod parsing, auth and domain-error mapping; the worker owns event schema, `step.run` and retries; both delegate to the same service. Services throw domain errors and never transport errors; a shared `toTRPCError` map owns the tRPC representation.
-- **Module surface is `{ service }`.** Not `{ router, workers, service }`. Entry-point adapters are wired by their host registries — routers in `src/server/api/root.ts`, workers in `<domain>.workers.ts` feeding the Inngest functions registry — so a service-only consumer never drags the tRPC/auth or Inngest adapter graph in behind it. **The repository is never exported.** Cross-domain access is service-port to service-port, wired module to module, and the module graph stays acyclic.
-- **`commit(writes, outboxEvents)` is the only write door — the heart of this ADR.** Plural: a discriminated-union list of write descriptors plus typed outbox event descriptors, executed as one atomic write — [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s `db.transaction()` — by a shared `makeCommitWithOutbox` helper in `src/server/outbox/commit.ts`. The outbox rides the signature, which is what turns adr002's code-review rule into a structural one. Emit-only surfaces with no canonical rows use the outbox's write-less `publish`; a bare `inngest.send` from a handler is a violation.
-- **`decide()` is earned, not default.** Pure cores (input + current state + injected `ctx`/`now` → write descriptors + event descriptors) are introduced only on write-heavy flows. **No flow in this app earns one today** — every current mutation is a single-row create, update or delete. The first candidate is statement import, which will fan a parsed batch into inserts, dedupe decisions and categorisation-request events. Until then, services make imperative repository calls that still terminate in `commit`. Uniform domain-object write-sets are explicitly not adopted; see option 2.
-- **Reads pass through all three tiers**, even as one-line pass-throughs — they are the designated home for future scoping and must not be optimised away. Importing another domain's `*.schema.ts` tables for **read** joins is allowed; cross-domain **writes** go through service ports only.
-- **Hard server/isomorphic boundary.** Every non-test file under `src/server/**` carries `import "server-only"` as its first line. `src/domain/` is the isomorphic kernel and is **isomorphic-by-need**: it starts empty and gains a resident only when client code genuinely shares something. `src/lib/constants.ts` (the priority, frequency and category vocabularies) stays where it is — `src/lib/**` is the existing client-safe surface. `decide()` functions are server-side and `server-only`-marked; purity alone does not buy a kernel seat.
-- **Event and identifier authority.** `src/server/inngest/events.ts` (`EVENT_REGISTRY`) is the single naming and payload authority per adr002 clause 7. Inngest function ids, `step.run` ids and event names are byte-stable external identifiers — Inngest memoisation and replay keys — and renaming one is a deliberate act recorded in an ADR consequence note.
-- **Migration shape.** Strangler, one domain per change, green at every step. `transactions/` first as the reference domain, since it is both the largest surface and the one adr002's machinery attaches to. Delete the `post` router and table rather than migrating them.
+- **By-domain vertical modules.** `transactions/`, `expenses/`, `income/`, `receipts/`. Collapsed infra with no domain: `outbox/`, `inngest/`, `db/`, `better-auth/`. New behaviour lands inside the domain it serves unless it grows its own vocabulary, at which point it earns its own module.
+- **Named tiers, dotted suffixes.** `*.controller.ts` (entry-point adapter: Inngest `createFunction` declarations or an HTTP route handler), `*.router.ts` (tRPC adapter, until routers migrate and become controllers), `*.service.ts`, `*.repository.ts`, `*.<adapter>.ts` for one external system behind an interface (`receipts.blob-store.ts`, `email.mailbox.ts`), `*.module.ts` (composition root, optional), `*.schema.ts` (Drizzle tables, per [adr005](adr005-per-domain-drizzle-schema-files.md)), `*.errors.ts`, `*.decide.ts` (pure decision core, where earned), and `*.dto.ts` for Zod schema, kept visually distinct from the Drizzle `*.schema.ts` homes. Every file declares its tier in its name.
+- **Class-based constructor injection.** Each tier is a class. One `interface XDeps` sits directly above it and the constructor takes exactly that object: `new ReceiptsService({ repository, blobStore, languageModel })`. Fields are explicit `private readonly`, assigned in the constructor — no parameter properties, no decorators, no container. Repositories and adapters are exported as an interface plus an implementation class (`ReceiptsRepository` / `DrizzleReceiptsRepository`, `ReceiptBlobStore` / `VercelReceiptBlobStore`); the service types its deps as the interfaces, the controller types `service` as the class. **No dep is a bare function**, and no `make*()` factory returns closures.
+- **Thin adapters over one service.** The controller owns the Inngest declaration (id, triggers, retries, concurrency) or the route's verify/parse/filter, maps `attempt` to `isFinalAttempt`, and calls one service method; the router owns Zod parsing, auth and domain-error mapping. Both delegate to the same service. Services throw domain errors and never transport errors.
+- **Module surface is `{ service }`.** `*.module.ts` is added only when a second consumer needs the same service instance; with one consumer the composition root (`src/server/inngest/functions.ts` for workers) does the `new` calls directly and is the only place the real `db`, `inngest` client and provider SDKs are touched. `outbox.module.ts` is the first module: its `outboxService` is shared by the cron controller, the unmigrated routers' `commitWithOutbox` shim and the inbound repository's write door. An HTTP route file (`src/app/api/receipts/inbound/route.ts`) is its own composition root — it reads the env, builds its tiers lazily on first request and hands the `Request` to `controller.handle`. **The repository is never exported across domains.** Cross-domain access is service-port to service-port, and the module graph stays acyclic.
+- **`commit(writes, outboxEvents)` is the write door for any write with side-effects — the heart of this ADR.** A discriminated-union list of write descriptors plus typed outbox event descriptors, executed as one atomic write — [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md)'s `db.transaction()` — by `OutboxService.commit` (`src/server/outbox/outbox.service.ts`) over `OutboxRepository.commit`. A migrated repository takes it as the `OutboxWriteDoor` interface (`DrizzleEmailRepository.createPendingReceipts`); unmigrated routers reach the same instance through the bound `commitWithOutbox` export in `src/server/outbox/index.ts`. The outbox rides the signature, which is what turns adr002's code-review rule into a structural one. Emit-only surfaces use the outbox's write-less `publish`; a bare `inngest.send` from a handler is a violation. A write that emits **no** event (a status transition, a hash column) may call Drizzle directly inside its repository, as `DrizzleReceiptsRepository` does.
+- **`decide()` is earned, not default.** Pure cores (input + current state + injected `ctx`/`now` → write descriptors + event descriptors) are introduced only on write-heavy flows. **No flow in this app earns one today** — every current mutation is a single-row create, update or delete. Until then, services make imperative, intent-named repository calls (`markDuplicate`, `saveExtraction`). Uniform domain-object write-sets are explicitly not adopted; see option 2.
+- **Reads pass through all three tiers**, even as one-line pass-throughs — they are the designated home for future scoping and must not be optimised away. Importing another domain's `*.schema.ts` tables for **read** joins is allowed (the receipts repository reads `expenseCategories`); cross-domain **writes** go through service ports only.
+- **Server/isomorphic boundary — marker still deferred.** `src/domain/` is the isomorphic kernel and is **isomorphic-by-need**: it gains a resident only when client code genuinely shares something. `src/lib/constants.ts` stays where it is — `src/lib/**` is the existing client-safe surface. The `import "server-only"` marker on every `src/server/**` file remains the intent, but is not adopted until the `--conditions=react-server` tooling it needs is paid for (see Implementation status).
+- **Event and identifier authority.** `src/server/inngest/events.ts` (`EVENT_REGISTRY`) is the single naming and payload authority per adr002 clause 7. Inngest function ids, crons, event triggers, `step.run` ids and concurrency keys are byte-stable external identifiers — Inngest schedule, memoisation and replay keys — pinned by `src/server/inngest/registry-golden.test.ts`. Renaming one is a deliberate act recorded in an ADR consequence note.
+- **Migration shape.** Strangler, one domain per change, green at every step, never inside a feature diff. Executed order: `outbox/` (exemplar), `receipts/` worker, the `/api/receipts/inbound` route; next the tRPC routers with `transactions/` as the reference router domain. The dead `post` router and table are already gone.
 
 ### Implementation status
 
-Not started. No domain module, service, repository, worker, `src/domain/`, or `server-only` marker exists outside `src/trpc/server.ts`. Recorded as **Accepted** because `.claude/rules/server-architecture.md` already binds new code to exactly this shape.
+In progress since 2026-09-09.
 
-Two pieces of tooling this decision assumes do not exist in this repo and must land with it: a way to run `drizzle-kit`, `tsx` and any test runner under `--conditions=react-server` (or to stub the marker), because `server-only` throws at import time otherwise; and a test framework, since there is none. `.claude/rules/server-only-boundary.md` describes a Makefile-based mechanism this project does not have.
+- **Done:** `src/server/outbox/` — `OutboxController` (`outbox-sweep`, `outbox-prune`) → `OutboxService` → `OutboxRepository` / `DrizzleOutboxRepository`. `src/server/receipts/` — `ReceiptsController` (`process-receipt`) → `ReceiptsService` → `ReceiptsRepository` / `DrizzleReceiptsRepository`, with `ReceiptBlobStore` / `VercelReceiptBlobStore` as the adapter and the AI SDK `LanguageModel` injected as `languageModel` (Bedrock is bound to it only in `functions.ts`; the service calls `generateObject` itself). `/api/receipts/inbound` — `EmailController` (Svix verify, parse, type filter; plain `Request` → `Response`) → `EmailService` → `EmailRepository` / `DrizzleEmailRepository`, with `InboundMailbox` / `ResendInboundMailbox` as the adapter, `ReceiptBlobStore.write` for the blob and the route file as its lazy composition root. The former `commit.ts` / `ack.ts` are folded into `OutboxRepository.commit` + `OutboxService.commit` / `publish`; `outbox.module.ts` exports the shared `outboxService`. Each tier has a colocated test with object-literal fakes.
+- **Next:** the tRPC routers domain by domain — `receipts.ts` first, as the last caller of the bound `commitWithOutbox` shim.
+- **Deferred:** the `server-only` marker. It needs a way to run `drizzle-kit`, `tsx` and Vitest under `--conditions=react-server` (or to stub the marker), because `server-only` throws at import time otherwise. No rule file describes that mechanism yet.
 
 ### Positive Consequences
 
-- **adr002 atomicity becomes structural.** `commit(writes, outboxEvents)` is the only write door and its signature carries the outbox. Forgetting the outbox stops being possible without deliberately routing around the repository.
-- **"Where does this live?" has one answer** — the domain folder, the tier named by the suffix. Workers land beside the service they call.
+- **adr002 atomicity becomes structural.** `OutboxService.commit(writes, outboxEvents)` is the write door for anything that emits and its signature carries the outbox. Forgetting the outbox stops being possible without deliberately routing around it.
+- **"Where does this live?" has one answer** — the domain folder, the tier named by the suffix. Controllers land beside the service they call.
+- **Every collaborator has a name.** `blobStore.read`, `mailbox.download`, `repository.markDuplicate` replace `fetchBlob`, `generate`, `hash` function params. The graph is greppable by class and interface name.
+- **Fakes are object literals.** A service test builds `new ReceiptsService({ repository, blobStore, languageModel })` from plain objects typed against the interfaces — no `any`, no module mocking. The model is the one SDK-typed dep; the test stubs it and spies the private `analyzeReceipt`, so `generateObject` never runs.
 - **The five aggregate queries in `transaction.summary` get a home.** They move to the repository, behind a service, where the router used to inline them.
-- **Client bundles cannot import server code.** The `server-only` marker turns a boundary violation into a build failure.
-- **Test seams exist before the tests do.** `makeTransactionsService(fakeDeps)` is injectable from the first test written, rather than requiring module mocking retrofitted later.
-- **Dead scaffold leaves with the migration.** `post` is deleted rather than carried.
+- **Client bundles cannot import server code** — once the `server-only` marker lands.
 
 ### Negative Consequences
 
-- **Substantial reorganisation of a working app for behaviour that does not exist yet.** Every server file moves, to support an import pipeline and a worker tier that are not built. The honest justification is sequencing: retrofitting a single write door onto write sites after they multiply is harder than starting with one, and adr002 is the next piece of work.
-- **Real ceremony on a three-table CRUD app.** A single-row `expense` update passes through router → service → repository → `commit`. On today's surface that is three indirections for one `UPDATE`.
-- **Two write styles to hold once `decide()` arrives.** The "when does a flow earn it" rule must stay documented or it drifts — either everything collapses back to imperative, or ceremony creeps until option 2 is rebuilt by accident. The rule lives in `.claude/rules/server-architecture.md`.
+- **Real ceremony on single-row work.** A cron that calls one method is a 20-line controller class; a single-row `expense` update will pass through controller → service → repository. Accepted for uniformity: every tier reads the same way.
+- **The write door is partly structural.** Event-less writes may still call Drizzle inside a repository, so nothing forces a new write site that *should* emit onto `commitWithOutbox`. Code review still polices that classification.
+- **Two write styles to hold once `decide()` arrives.** The "when does a flow earn it" rule must stay documented or it drifts. The rule lives in `.claude/rules/server-architecture.md`.
 - **Pass-through read services look like dead weight** until the first scoping requirement lands. Documented so nobody deletes them.
-- **More files per domain, and cross-domain wiring is manual.** No container resolves the graph; `*.module.ts` is hand-wired.
-- **The decision outruns the code**, bounded by the one-domain-per-change plan.
-- **It pulls in prerequisite tooling.** The `server-only` marker is inert-to-hostile without the `react-server` condition wired into every script that imports server modules — a real cost this repo has not paid yet.
+- **Cross-domain wiring is manual.** No container resolves the graph; `functions.ts` and any `*.module.ts` are hand-wired.
+- **Two shapes coexist during the strangler.** Plain routers with inline SQL sit beside class-based domains until each router migrates.
+- **The `server-only` marker is still unpaid.** The boundary stays convention-only until the `react-server` condition is wired into every script that imports server modules.
 
 ## Pros and Cons of the Options
 
-### 1. By-domain 3-tier, factory-closure DI, `commit(writes, outboxEvents)`
+### 1. By-domain 3-tier, class-based constructor injection, `commit(writes, outboxEvents)`
 
-Vertical domain folders with named tiers; two thin adapters over one service; the repository's single `commit` primitive executes one `db.transaction()` carrying canonical rows and outbox rows together; `decide()` extracted only where write complexity earns it; `*.module.ts` hand-wires the `make*` factories.
+Vertical domain folders with named tiers; a controller per entry point over one service; repositories and external adapters behind interfaces; `commitWithOutbox` executes one `db.transaction()` carrying canonical rows and outbox rows together; `decide()` extracted only where write complexity earns it; the composition root hand-wires `new` calls.
 
 | Pros                                                                                     | Cons                                                                              |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| adr002 atomicity enforced by the write signature, not by review                          | Large reorganisation of a working app, ahead of the behaviour that motivates it   |
-| One home per concern; greppable tier suffixes; workers co-located with their domain      | Real ceremony on single-row CRUD — three indirections for one `UPDATE`            |
-| Compiler-enforced server/client boundary                                                 | Two write styles to hold once `decide()` lands; needs the rule documented         |
-| Injectable seams ready for a test suite that does not exist yet                          | Manual cross-domain wiring; more files per domain                                 |
-|                                                                                          | Requires `--conditions=react-server` tooling this repo lacks                      |
+| adr002 atomicity enforced by the write signature for emitting writes, not by review      | Reorganisation of a working app, domain by domain, ahead of some of the behaviour   |
+| One home per concern; greppable tier suffixes; controllers co-located with their domain  | Real ceremony on single-row CRUD — three indirections for one `UPDATE`            |
+| Named collaborators; fakes are object literals against interfaces                        | Two write styles to hold once `decide()` lands; needs the rule documented         |
+| Compiler-enforced server/client boundary (once `server-only` tooling is paid)            | Manual wiring; more files per domain; two shapes coexist during the strangler     |
+
+DI shapes within option 1:
+
+- **1a. Factory closures.** Good, because minimal syntax and no `this`. Bad, because closures nest into functions returning functions, deps default to bare functions with no name to grep for, and there is no class or interface for a second entry point to share. This is what the 2026-08 workers became, and the reason for this revision.
+- **1b. Classes with one deps object and explicit `private readonly` fields — chosen.** Good, because `new X({ … })` names the collaborator set at every call site, ports are interfaces so fakes are object literals, and the fields are plain erasable TS (no `experimentalDecorators`, biome-neutral). Bad, because a few lines of constructor boilerplate per class.
+- **1c. TS parameter properties.** Good, because zero boilerplate. Bad, because `constructor(private readonly deps: XDeps)` hides the field list, is not erasable-syntax-safe, and reads differently from every other declaration in the file. Easy to flip to later if the boilerplate grates.
+- **1d. Decorators + container.** See option 4.
 
 ### 2. Same 3-tier with uniform domain-object write-sets
 
@@ -113,10 +136,10 @@ Uniform domain-object write-sets: every service method returns a domain-object w
 
 ### 4. Adopt NestJS proper
 
-- Good, because the tier vocabulary and module system are first-class and a DI container auto-resolves the graph.
+- Good, because the tier vocabulary and module system are first-class and a DI container auto-resolves the graph. The controller / service / repository naming here is borrowed from it deliberately.
 - Bad, because NestJS owns the request lifecycle and would contest it with Next.js App Router.
-- Bad, because a container's payoff arrives with large graphs and request-scoped providers; this graph is three domains of import-time singletons.
-- Bad, because it is a far heavier migration than naming tiers that already half-exist, on a prototype.
+- Bad, because a container's payoff arrives with large graphs and request-scoped providers; this graph is a handful of domains of import-time singletons, wired in one file.
+- Bad, because decorators need `experimentalDecorators` and reflection metadata this tsconfig (`verbatimModuleSyntax`, erasable syntax) does not carry.
 
 ### 5. Status quo — flat T3 routers
 
@@ -130,5 +153,6 @@ Uniform domain-object write-sets: every service method returns a domain-object w
 - Enforces: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) — `commit(writes, outboxEvents)` is the structural enforcement of the atomic write-plus-outbox clause
 - Atomicity mechanism: [adr003](adr003-neon-http-db-batch-for-atomic-outbox-writes.md) — `commit` is a single atomic write; adr003 now keeps `postgres-js` `db.transaction()` and defers the `db.batch` swap
 - Refined by: [adr005](adr005-per-domain-drizzle-schema-files.md) — the schema-location sub-decision within this architecture
-- Refined by: [adr012](adr012-defer-adr004-plain-routers-for-feature-work.md) — feature work stays plain-router; executing this architecture is deferred, deliberately
-- Operational statement: `.claude/rules/server-architecture.md` — the tier map, module surface and frozen-identifier rules; `.claude/rules/server-only-boundary.md` for the boundary mechanism
+- Supersedes: [adr012](archived/adr012-defer-adr004-plain-routers-for-feature-work.md) — deferred executing this ADR for the 2026-08 feature set; the deferral ended with the 2026-09-09 revision
+- Operational statement: `.claude/rules/server-architecture.md` — tier map, construction rules, test conventions and frozen-identifier rules; `.claude/rules/bedrock-invocation.md` for where the model provider is wired
+- Reference implementations: `src/server/outbox/`, `src/server/receipts/`

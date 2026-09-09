@@ -132,7 +132,7 @@ Move off Vercel serverless to a long-lived Node process (e.g. Fly / Railway / Re
 
 - Refinement of: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) — specifies the atomicity mechanism clause 2 requires (now `db.transaction()`; clause 2's pointer here is unchanged)
 - Implemented by: `thoughts/plans/2026-09-01-expense-linking-stage-4.md` — stage 4 builds `commitWithOutbox` on `db.transaction()`
-- Composes with: [adr012](adr012-defer-adr004-plain-routers-for-feature-work.md) — the plain-helper `commitWithOutbox`; [adr004](adr004-domain-oriented-3-tier-server-architecture.md)'s single-`commit()` write door is itself deferred by adr012 (both still describe a `db.batch` mechanism and now read stale against this reversal)
+- Composes with: [adr012](archived/adr012-defer-adr004-plain-routers-for-feature-work.md) (superseded 2026-09-09) — the plain-helper `commitWithOutbox`; [adr004](adr004-domain-oriented-3-tier-server-architecture.md)'s single-`commit()` write door was deferred by adr012 and is now being executed tier by tier (both still describe a `db.batch` mechanism and now read stale against this reversal)
 - Assumed by: `.claude/rules/preview-teardown.md` and the `worktree` skill — both written against Neon branching (unaffected: the host stays Neon either way)
 - Vendor docs: https://neon.com/docs/serverless/serverless-driver
 - Vendor docs: https://orm.drizzle.team/docs/batch-api
