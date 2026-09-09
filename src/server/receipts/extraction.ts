@@ -2,9 +2,6 @@ import type { FilePart, ImagePart, TextPart } from "ai";
 import { z } from "zod";
 import { bareMediaType, isPdf, isText } from "~/lib/utils";
 
-/** Claude model for receipt extraction; pinned so a model bump is a deliberate edit. */
-export const RECEIPT_MODEL = "claude-sonnet-4-6";
-
 // Schema stays flat with rules in `.describe()`: the Anthropic constrained decoder
 // strips string/number/array constraints into the field description, so validators
 // like `.min()`/`.regex()` wouldn't reach the model anyway (they still run client-side).

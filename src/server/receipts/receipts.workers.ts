@@ -1,16 +1,15 @@
 import { createHash } from "node:crypto";
-import { anthropic } from "@ai-sdk/anthropic";
 import { get } from "@vercel/blob";
-import { APICallError, generateObject } from "ai";
+import { APICallError, generateObject, type LanguageModel } from "ai";
 import { and, eq, ne } from "drizzle-orm";
 import type { Inngest } from "inngest";
 import { ReceiptStatus } from "~/lib/constants";
+import { isPdf, isText } from "~/lib/utils";
 import type { db as realDb } from "~/server/db";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import {
 	buildExtractionContent,
 	buildExtractionPrompt,
-	RECEIPT_MODEL,
 	type ReceiptExtraction,
 	receiptExtraction,
 } from "./extraction";
@@ -30,12 +29,41 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // a real outage. Explicit so the final-attempt check below can't drift from it.
 const RETRIES = 3;
 
+// Bedrock Converse caps a message at 3.75 MB per image and 4.5 MB per document (AWS
+// `Message` API reference), while uploads and inbound attachments accept 10 MB. Read
+// as decimal MB — the conservative side of AWS's figure. Over the cap the call would
+// 400 deterministically, so the core refuses first and says so. A text body is inlined
+// into the prompt, not sent as a media block, so it carries no byte cap here.
+const MB = 1_000_000;
+const BEDROCK_MAX_IMAGE_BYTES = 3.75 * MB;
+const BEDROCK_MAX_DOCUMENT_BYTES = 4.5 * MB;
+
+class ReceiptTooLargeError extends Error {
+	constructor(readonly maxBytes: number) {
+		super(`receipt exceeds the model's ${maxBytes / MB} MB cap`);
+	}
+}
+
+function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
+	if (isText(mediaType)) return;
+	const max = isPdf(mediaType)
+		? BEDROCK_MAX_DOCUMENT_BYTES
+		: BEDROCK_MAX_IMAGE_BYTES;
+	if (bytes.byteLength > max) throw new ReceiptTooLargeError(max);
+}
+
 // `error` is rendered verbatim to the member in the detail overlay, and a driver error's
 // message carries the failing SQL with its bound parameters. Log the real thing, store a
 // line that says what to do about it — the same split markFailed makes for the outbox.
+// Only a retryable provider error earns the "retry" copy: a 400/403 fails the same way
+// on every attempt, so telling the member to retry would just waste their time.
 function memberFacingError(error: unknown): string {
+	if (error instanceof ReceiptTooLargeError)
+		return `Receipt is too large to read (max ${error.maxBytes / MB} MB). Delete it and upload a smaller file.`;
 	if (APICallError.isInstance(error))
-		return "The extraction service couldn't read this receipt. Retry in a moment.";
+		return error.isRetryable
+			? "The extraction service couldn't read this receipt. Retry in a moment."
+			: "The extraction service rejected this receipt. Delete it and upload a clearer photo.";
 	return "Couldn't extract this receipt. Retry, or delete it and upload a clearer photo.";
 }
 
@@ -61,6 +89,7 @@ interface ProcessReceiptCoreDeps {
  * so tests run offline. Idempotent by design — safe on Inngest's at-least-once redelivery:
  *   - already processed/duplicate → return, no re-spend
  *   - same photo (contentHash) as a finished receipt → mark duplicate, no AI call
+ *   - over the model's byte cap → park as `failed` (too large), no AI call
  *   - transient provider error with attempts left → rethrow so Inngest retries
  *   - any other failure (or the final attempt) → park as `failed` with the reason
  */
@@ -113,6 +142,7 @@ export function makeRunProcessReceipt({
 				return;
 			}
 
+			assertWithinModelCap(bytes, mediaType);
 			const categories = await db
 				.select({ id: expenseCategories.id, name: expenseCategories.name })
 				.from(expenseCategories);
@@ -178,19 +208,21 @@ export function makeRunProcessReceipt({
 interface WorkerDeps {
 	db: typeof realDb;
 	inngest: Pick<Inngest, "send" | "createFunction">;
+	/** Extraction model, injected so this file stays provider-agnostic and env-free. */
+	model: LanguageModel;
 }
 
 /**
- * process-receipt worker: real blob fetch + Claude Vision extraction wired into the
- * pure core. Fires on both the initial upload and an explicit retry.
+ * process-receipt worker: real blob fetch + model extraction wired into the pure
+ * core. Fires on both the initial upload and an explicit retry.
  */
-export function makeProcessReceiptWorker({ db, inngest }: WorkerDeps) {
+export function makeProcessReceiptWorker({ db, inngest, model }: WorkerDeps) {
 	const runProcessReceipt = makeRunProcessReceipt({
 		db,
 		fetchBlob: fetchBlobBytes,
 		generate: async ({ prompt, bytes, mediaType }) => {
 			const { object } = await generateObject({
-				model: anthropic(RECEIPT_MODEL),
+				model,
 				schema: receiptExtraction,
 				messages: [
 					{

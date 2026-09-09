@@ -11,8 +11,18 @@ export const env = createEnv({
 	 * isn't built with invalid env vars.
 	 */
 	server: {
-		/** Claude API key. Powers the process-receipt worker's Vision extraction. */
-		ANTHROPIC_API_KEY: requiredInProd(z.string()),
+		/** Bedrock region. Terraform sets it on Vercel; `assume <profile>` exports it locally. */
+		AWS_REGION: z.string().default("ap-southeast-2"),
+		/**
+		 * Vercel only: IAM role the OIDC token is exchanged for (src/server/aws/credentials.ts).
+		 * Unset locally; `assume` supplies AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN instead.
+		 */
+		AWS_ROLE_ARN: z.string().optional(),
+		/**
+		 * Bedrock inference profile for receipt extraction. Bare `anthropic.*` ids are not
+		 * invocable. Switch models in infrastructure/locals.tf, not here.
+		 */
+		BEDROCK_RECEIPT_MODEL: z.string().default("au.anthropic.claude-sonnet-4-6"),
 		BETTER_AUTH_SECRET: requiredInProd(z.string()),
 		BETTER_AUTH_URL: z.preprocess(
 			(str) =>
@@ -92,7 +102,9 @@ export const env = createEnv({
 	 * middlewares) or client-side so we need to destruct manually.
 	 */
 	runtimeEnv: {
-		ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+		AWS_REGION: process.env.AWS_REGION,
+		AWS_ROLE_ARN: process.env.AWS_ROLE_ARN,
+		BEDROCK_RECEIPT_MODEL: process.env.BEDROCK_RECEIPT_MODEL,
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
 		BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,

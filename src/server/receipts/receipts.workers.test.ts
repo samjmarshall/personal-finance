@@ -331,10 +331,13 @@ describe("runProcessReceipt", () => {
 		expect(failed?.error).toContain("Retry");
 	});
 
+	const bedrockUrl =
+		"https://bedrock-runtime.ap-southeast-2.amazonaws.com/model/au.anthropic.claude-sonnet-4-6/converse";
+
 	const overloaded = () =>
 		new APICallError({
 			message: "Overloaded",
-			url: "https://api.anthropic.com/v1/messages",
+			url: bedrockUrl,
 			requestBodyValues: {},
 			statusCode: 529,
 			isRetryable: true,
@@ -374,5 +377,98 @@ describe("runProcessReceipt", () => {
 		const failed = findUpdate(h.updates, "error");
 		expect(failed?.status).toBe(ReceiptStatus.Failed);
 		expect(failed?.error).toContain("extraction service");
+	});
+
+	// A 400 (ValidationException) or 403 (AccessDenied) from Bedrock is deterministic:
+	// the same bytes fail the same way next time, so "Retry in a moment" would mislead.
+	it("parks a non-retryable API error at once, without the retry copy", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: okBlob,
+			generate: async () => {
+				throw new APICallError({
+					message: "ValidationException",
+					url: bedrockUrl,
+					requestBodyValues: {},
+					statusCode: 400,
+					isRetryable: false,
+				});
+			},
+			hash: () => "hash-abc",
+		});
+
+		await run(1, { isFinalAttempt: false });
+
+		const failed = findUpdate(h.updates, "error");
+		expect(failed?.status).toBe(ReceiptStatus.Failed);
+		expect(failed?.error).not.toContain("Retry in a moment");
+	});
+
+	// Bedrock Converse caps a message at 3.75 MB per image and 4.5 MB per document,
+	// while uploads and inbound attachments accept 10 MB. Anything over would 400
+	// deterministically — so the core refuses first, without spending the call, and
+	// says "too large" rather than the generic retry copy.
+	it("parks an oversize PDF as failed with a too-large message and no model call", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const generate = vi.fn(async () => extraction);
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: async () => ({
+				bytes: new Uint8Array(4_500_001),
+				mediaType: "application/pdf",
+			}),
+			generate,
+			hash: () => "hash-big",
+		});
+
+		await run(1);
+
+		expect(generate).not.toHaveBeenCalled();
+		const failed = findUpdate(h.updates, "error");
+		expect(failed?.status).toBe(ReceiptStatus.Failed);
+		expect(failed?.error).toContain("too large");
+		expect(failed?.error).toContain("4.5 MB");
+		expect(failed?.error).not.toContain("Retry");
+	});
+
+	it("parks an oversize image with the smaller image cap in the message", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const generate = vi.fn(async () => extraction);
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: async () => ({
+				bytes: new Uint8Array(3_750_001),
+				mediaType: "image/jpeg",
+			}),
+			generate,
+			hash: () => "hash-big",
+		});
+
+		await run(1);
+
+		expect(generate).not.toHaveBeenCalled();
+		expect(findUpdate(h.updates, "error")?.error).toContain("3.75 MB");
+	});
+
+	it("sends a document exactly at the cap through to the model", async () => {
+		const h = harness({ receipt: baseReceipt(), categories: [] });
+		const generate = vi.fn(async () => extraction);
+		const run = makeRunProcessReceipt({
+			db: h.db,
+			fetchBlob: async () => ({
+				bytes: new Uint8Array(4_500_000),
+				mediaType: "application/pdf",
+			}),
+			generate,
+			hash: () => "hash-cap",
+		});
+
+		await run(1);
+
+		expect(generate).toHaveBeenCalledOnce();
+		expect(findUpdate(h.updates, "status")?.status).toBe(
+			ReceiptStatus.Processed,
+		);
 	});
 });

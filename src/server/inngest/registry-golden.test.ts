@@ -39,7 +39,11 @@ describe("worker golden", () => {
 
 		makeSweepWorker({ db: {} as never, inngest: spy });
 		makePruneWorker({ db: {} as never, inngest: spy });
-		makeProcessReceiptWorker({ db: {} as never, inngest: spy });
+		makeProcessReceiptWorker({
+			db: {} as never,
+			inngest: spy,
+			model: {} as never,
+		});
 
 		expect(declared).toEqual([
 			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },
