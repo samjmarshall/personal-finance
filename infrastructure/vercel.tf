@@ -20,6 +20,13 @@ resource "vercel_project" "this" {
     on_commit       = false
     on_pull_request = true
   }
+  # Optional+Computed: undeclared they plan `-> (known after apply)`, which hides
+  # whether the apply keeps them. Declared, they plan as unchanged.
+  build_machine_type = "elastic"
+  resource_config = {
+    fluid                    = true
+    function_default_regions = ["iad1"]
+  }
 
   # install_command is deliberately unset. The dashboard had `yarn install`,
   # which built prod with yarn v1 and *no lockfile*; null lets Vercel detect

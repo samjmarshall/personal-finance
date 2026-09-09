@@ -41,7 +41,7 @@ make force-unlock env=preview ID=<id> # only after a killed apply left the lock
    - `aws iam list-open-id-connect-providers` → both IdPs listed.
    - `aws bedrock list-inference-profiles --region ap-southeast-2` → `au.anthropic.claude-sonnet-4-6`.
    - Vercel project → Settings → Security → OIDC issuer mode is *Team*. If not, step 4 sets it.
-1. **Deployer role.** `aws cloudformation deploy --stack-name personal-finance-github-actions --template-file docs/cloudformation-templates/github-actions.yaml --capabilities CAPABILITY_IAM --parameter-overrides GitHubOidcProviderArn=arn:aws:iam::139035987018:oidc-provider/token.actions.githubusercontent.com`. Copy the `Role` output.
+1. **Deployer role.** `aws cloudformation deploy --stack-name personal-finance-github-actions --template-file docs/cloudformation-templates/github-actions.yaml --capabilities CAPABILITY_IAM --parameter-overrides GitHubOidcProviderArn=arn:aws:iam::139035987018:oidc-provider/token.actions.githubusercontent.com`. Copy the `Role` output. (Done differently: the account's existing `github-actions` stack role, whose trust `sub` is `repo:samjmarshall/*`, was reused instead. Deploy the per-repo stack above when that trust should narrow to this repo.)
 2. **GitHub.** Secret `DEPLOYER_ROLE_ARN` = that output. Vars `AWS_ACCOUNT_ID=139035987018`, `AWS_REGION=ap-southeast-2`. (`VERCEL_TOKEN`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` already exist.)
 3. **Import production state** from this branch:
    ```sh
