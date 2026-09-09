@@ -12,6 +12,19 @@ resource "vercel_project" "this" {
 
   node_version = "24.x"
 
+  # Pinned to the values the project had before import. Both are Optional-only
+  # in the provider, so leaving them out would plan `<live> -> null` and switch
+  # the feature off on apply.
+  skew_protection = "12 hours"
+  git_comments = {
+    on_commit       = false
+    on_pull_request = true
+  }
+
+  # install_command is deliberately unset. The dashboard had `yarn install`,
+  # which built prod with yarn v1 and *no lockfile*; null lets Vercel detect
+  # pnpm from pnpm-lock.yaml + package.json#packageManager, same as CI and local.
+
   # Team issuer mode puts the team slug in `iss`; iam.tf's trust policy and the
   # IdP in data.tf are both keyed on that URL.
   oidc_token_config = {
