@@ -82,3 +82,15 @@ jobs:
 
       - name: Unit Tests
         run: make test
+
+  terraform-fmt:
+    name: Terraform Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format
+        run: make fmt-check

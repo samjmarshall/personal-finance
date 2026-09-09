@@ -1,22 +1,82 @@
-name: Post-Deploy Migration
+name: Deployment
 
-# Fired by Vercel's Repository Dispatch integration once a deployment is live.
-# Migrations therefore run *after* the new code is serving traffic — a failure
-# leaves the schema behind the code, which is why the rollback job below exists.
-on:
-  repository_dispatch:
-    types:
-      - "vercel.deployment.ready"
+# The only deploy path. Vercel's git auto-deploy is off (vercel.json), so every
+# push to every branch lands here: terraform apply creates the Vercel deployment,
+# then the matching Neon branch is migrated. `main` → production; anything else →
+# the shared preview state (last apply wins, deployments are never deleted).
+on: push
+
+env:
+  ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
 
 jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # id-token lets configure-aws-credentials mint the GitHub OIDC token the
+    # deployer role trusts (docs/cloudformation-templates/github-actions.yaml).
+    permissions:
+      id-token: write
+      contents: read
+      deployments: write
+    # One apply per branch at a time, never cancelled: a killed apply leaves the
+    # state lock held and the shared preview state half-written.
+    concurrency:
+      group: deploy-${{ github.ref_name }}
+      cancel-in-progress: false
+    environment:
+      name: ${{ github.ref_name == 'main' && 'Production' || 'Preview' }}
+      url: ${{ steps.apply.outputs.url }}
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # Branch name, not SHA: Vercel stamps it as meta.githubCommitRef, which is
+      # what the Neon integration names the `preview/<branch>` database after and
+      # what teardown.yml matches on. The SHA only forces a fresh deployment per
+      # push (terraform_data.deploy_sha in infrastructure/vercel.tf).
+      TF_VAR_deploy_ref: ${{ github.ref_name }}
+      TF_VAR_deploy_sha: ${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # The default wrapper echoes stdout, which corrupts `$(terraform output -raw)`.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.DEPLOYER_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Terraform cache
+        uses: actions/cache@v4
+        with:
+          path: infrastructure/.terraform/providers
+          key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
+
+      - name: Terraform apply
+        id: apply
+        run: |
+          make apply env="$ENVIRONMENT"
+          echo "url=$(terraform -chdir=infrastructure output -raw app_url)" >> "$GITHUB_OUTPUT"
+
+  # Migrations run *after* the new code is serving traffic — a failure leaves the
+  # schema behind the code, which is why the rollback job below exists.
   migrate:
     name: DB Migration
+    needs: deploy
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
-      actions: read
-      statuses: write
+    # Serialise migrations per branch; never cancel one mid-flight.
+    concurrency:
+      group: migrate-${{ github.ref_name }}
+      cancel-in-progress: false
     # NOTE: the database URLs are deliberately NOT job outputs. GitHub silently
     # scrubs any job output whose value contains a registered secret (the Neon
     # URI embeds the role password) → it arrives empty in
@@ -28,38 +88,25 @@ jobs:
       pre_migrate_timestamp: ${{ steps.pre_migrate.outputs.timestamp }}
 
     steps:
-      - name: Report job & status
-        uses: vercel/repository-dispatch/actions/status@v1
-        with:
-          name: "DB Migration"
+      - uses: actions/checkout@v6
 
-      - name: Debug - Log client_payload
-        env:
-          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
-        run: echo "$PAYLOAD"
+      - uses: pnpm/action-setup@v4
 
-      - name: Checkout
-        uses: vercel/repository-dispatch/actions/checkout@v1
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - run: make install
 
+      # Preview databases are named `preview/<branch>` by the Neon-Vercel
+      # integration, keyed off the deployment's githubCommitRef (= deploy_ref).
       - name: Resolve Neon branch
         id: neon
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
-          GIT_REF: ${{ github.event.client_payload.git.ref }}
-          ENVIRONMENT: ${{ github.event.client_payload.environment }}
+          GIT_REF: ${{ github.ref_name }}
         run: |
           BRANCHES=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
             "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")
@@ -122,7 +169,7 @@ jobs:
 
     steps:
       - name: Rollback (preview — reset branch to parent)
-        if: ${{ github.event.client_payload.environment != 'production' }}
+        if: ${{ env.ENVIRONMENT != 'production' }}
         uses: neondatabase/reset-branch-action@v1
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
@@ -134,7 +181,7 @@ jobs:
       # itself — it keeps the post-migration state around under that name
       # rather than discarding it.
       - name: Rollback (production — point-in-time restore)
-        if: ${{ github.event.client_payload.environment == 'production' }}
+        if: ${{ env.ENVIRONMENT == 'production' }}
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
