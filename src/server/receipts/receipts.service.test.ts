@@ -1,0 +1,508 @@
+import { createHash } from "node:crypto";
+import { APICallError, type LanguageModel } from "ai";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ExtractionCategory, ReceiptExtraction } from "~/domain/receipts";
+import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import type { FetchedBlob } from "~/server/blob-store/blob-store";
+import type {
+	ExtractionValues,
+	ReceiptItemInsert,
+	ReceiptRow,
+	ReceiptsRepository,
+} from "./receipts.repository";
+import {
+	buildExtractionContent,
+	buildExtractionPrompt,
+	ReceiptsService,
+} from "./receipts.service";
+
+const baseReceipt = (over: Partial<ReceiptRow> = {}): ReceiptRow => ({
+	id: 1,
+	status: ReceiptStatus.Pending,
+	channel: ReceiptChannel.Upload,
+	userId: "u1",
+	blobUrl: "https://blob.example/r1.jpg",
+	blobPathname: "r1.jpg",
+	contentType: "image/jpeg",
+	contentHash: null,
+	vendor: null,
+	receiptDate: null,
+	total: null,
+	currency: null,
+	rawJson: null,
+	error: null,
+	transactionId: null,
+	duplicateOfId: null,
+	createdAt: new Date(),
+	updatedAt: null,
+	...over,
+});
+
+const extraction: ReceiptExtraction = {
+	vendor: "Corner Grocer",
+	receiptDate: "2026-08-14",
+	total: 8.99,
+	currency: "USD",
+	items: [
+		{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
+		{ name: "Bread", price: 2.5, quantity: 2, expenseCategoryId: null },
+	],
+};
+
+const okBlob: FetchedBlob = {
+	bytes: new Uint8Array([1, 2, 3]),
+	mediaType: "image/jpeg",
+};
+const sha256 = (bytes: Uint8Array) =>
+	createHash("sha256").update(bytes).digest("hex");
+
+// Fake ports are plain object literals against the interfaces. Every repository
+// write lands in `calls`, and `log` keeps the cross-port order so a test can assert
+// what happened before what (hash persisted before the model call, etc.).
+function harness(
+	opts: {
+		receipt?: ReceiptRow;
+		dup?: { id: number };
+		categories?: ExtractionCategory[];
+		blob?: FetchedBlob;
+		extract?: () => Promise<ReceiptExtraction>;
+	} = {},
+) {
+	const log: string[] = [];
+	const calls = {
+		setContentHash: [] as { id: number; contentHash: string }[],
+		markDuplicate: [] as { id: number; duplicateOfId: number }[],
+		saveExtraction: [] as {
+			id: number;
+			values: ExtractionValues;
+			items: ReceiptItemInsert[];
+		}[],
+		markFailed: [] as { id: number; error: string }[],
+	};
+
+	const repository: ReceiptsRepository = {
+		findById: async () => opts.receipt,
+		setContentHash: async (id, contentHash) => {
+			log.push("setContentHash");
+			calls.setContentHash.push({ id, contentHash });
+		},
+		findProcessedByHash: async () => opts.dup,
+		markDuplicate: async (id, duplicateOfId) => {
+			log.push("markDuplicate");
+			calls.markDuplicate.push({ id, duplicateOfId });
+		},
+		listExpenseCategories: async () => opts.categories ?? [],
+		saveExtraction: async (id, values, items) => {
+			log.push("saveExtraction");
+			calls.saveExtraction.push({ id, values, items });
+		},
+		markFailed: async (id, error) => {
+			log.push("markFailed");
+			calls.markFailed.push({ id, error });
+		},
+	};
+	const blobStore = {
+		read: vi.fn(async () => opts.blob ?? okBlob),
+		write: vi.fn(async () => {
+			throw new Error("unused");
+		}),
+	};
+	// `languageModel` is injected but never reached: analyzeReceipt is spied below, so
+	// `generateObject` never runs — a bare stub is enough to satisfy the constructor.
+	const service = new ReceiptsService({
+		repository,
+		blobStore,
+		languageModel: {} as LanguageModel,
+	});
+	// Stub the private method on the instance to run process()'s flow offline. Faking a
+	// whole LanguageModel for generateObject is heavier than pinning the flow this way.
+	// `opts.extract` drives the return (or throw); the builders are covered directly below.
+	const analyze = vi
+		.spyOn(
+			service as unknown as {
+				analyzeReceipt(input: {
+					mediaType: string;
+				}): Promise<ReceiptExtraction>;
+			},
+			"analyzeReceipt",
+		)
+		.mockImplementation(async () => {
+			log.push("extract");
+			return opts.extract ? opts.extract() : extraction;
+		});
+
+	return {
+		service,
+		calls,
+		log,
+		blobStore,
+		analyze,
+	};
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe("ReceiptsService.process", () => {
+	it("extracts, then saves the receipt processed with its items", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			categories: [{ id: 7, name: "Groceries" }],
+		});
+
+		await h.service.process(1);
+
+		expect(h.analyze).toHaveBeenCalledOnce();
+		// contentHash is persisted before the AI call (so dedup can catch a re-upload).
+		expect(h.calls.setContentHash).toEqual([
+			{ id: 1, contentHash: sha256(okBlob.bytes) },
+		]);
+		expect(h.log.indexOf("setContentHash")).toBeLessThan(
+			h.log.indexOf("extract"),
+		);
+		expect(h.calls.saveExtraction).toHaveLength(1);
+		const saved = h.calls.saveExtraction[0];
+		expect(saved?.id).toBe(1);
+		expect(saved?.values).toEqual({
+			vendor: "Corner Grocer",
+			receiptDate: "2026-08-14",
+			total: 8.99,
+			currency: "USD",
+			rawJson: extraction,
+		});
+		expect(saved?.items).toEqual([
+			{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
+			{ name: "Bread", price: 2.5, quantity: 2, expenseCategoryId: null },
+		]);
+		expect(h.calls.markFailed).toEqual([]);
+	});
+
+	// The email Channel must land in the same terminal states as an upload: the
+	// service stays media-type-blind and passes whatever the blob carried to the
+	// extractor, which is what lets buildExtractionContent make the text-vs-image call.
+	it("passes an html body's media type through to the extractor and still processes it", async () => {
+		const h = harness({
+			receipt: baseReceipt({
+				channel: ReceiptChannel.Email,
+				contentType: "text/html",
+				blobPathname: "receipts/email/abc.html",
+			}),
+			categories: [{ id: 7, name: "Groceries" }],
+			blob: {
+				bytes: new TextEncoder().encode("<html>Total $8.99</html>"),
+				mediaType: "text/html",
+			},
+		});
+
+		await h.service.process(1);
+
+		expect(h.analyze).toHaveBeenCalledOnce();
+		expect(h.analyze).toHaveBeenCalledWith(
+			expect.objectContaining({ mediaType: "text/html" }),
+		);
+		expect(h.calls.saveExtraction).toHaveLength(1);
+		expect(h.calls.saveExtraction[0]?.values.vendor).toBe("Corner Grocer");
+	});
+
+	it("nulls a category id the model invented instead of failing the whole extraction", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			categories: [{ id: 7, name: "Groceries" }],
+			extract: async () => ({
+				...extraction,
+				items: [
+					{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
+					{ name: "Soap", price: 1.5, quantity: 1, expenseCategoryId: 99 },
+				],
+			}),
+		});
+
+		await h.service.process(1);
+
+		expect(h.calls.saveExtraction[0]?.items).toEqual([
+			expect.objectContaining({ name: "Milk", expenseCategoryId: 7 }),
+			expect.objectContaining({ name: "Soap", expenseCategoryId: null }),
+		]);
+	});
+
+	it("nulls a non-ISO receipt date instead of failing the whole extraction", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => ({ ...extraction, receiptDate: "14/08/2026" }),
+		});
+
+		await h.service.process(1);
+
+		expect(h.calls.saveExtraction).toHaveLength(1);
+		expect(h.calls.saveExtraction[0]?.values.receiptDate).toBeNull();
+	});
+
+	it("marks a re-upload duplicate without spending on the AI call", async () => {
+		const h = harness({ receipt: baseReceipt(), dup: { id: 42 } });
+
+		await h.service.process(1);
+
+		expect(h.analyze).not.toHaveBeenCalled();
+		expect(h.calls.markDuplicate).toEqual([{ id: 1, duplicateOfId: 42 }]);
+		expect(h.calls.saveExtraction).toEqual([]);
+	});
+
+	it("returns early on an already-processed receipt (at-least-once re-delivery, no re-spend)", async () => {
+		const h = harness({
+			receipt: baseReceipt({ status: ReceiptStatus.Processed }),
+		});
+
+		await h.service.process(1);
+
+		expect(h.blobStore.read).not.toHaveBeenCalled();
+		expect(h.analyze).not.toHaveBeenCalled();
+		expect(h.log).toEqual([]);
+	});
+
+	it("returns early when the receipt no longer exists", async () => {
+		const h = harness();
+
+		await h.service.process(1);
+
+		expect(h.blobStore.read).not.toHaveBeenCalled();
+		expect(h.log).toEqual([]);
+	});
+
+	it("marks the receipt failed when extraction throws", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => {
+				throw new Error("model unavailable");
+			},
+		});
+
+		await h.service.process(1);
+
+		expect(h.calls.markFailed).toHaveLength(1);
+		expect(h.calls.markFailed[0]?.error).toBeTruthy();
+		expect(h.calls.saveExtraction).toEqual([]);
+	});
+
+	// `error` is rendered to the member verbatim, and a drizzle/postgres error message
+	// carries the failing SQL with its bound parameters. Nothing internal may reach it.
+	it("stores an actionable message, not the raw driver error", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => {
+				throw new Error(
+					'insert into "receipt_item" ... params: 7, secret-vendor',
+				);
+			},
+		});
+
+		await h.service.process(1);
+
+		const error = h.calls.markFailed[0]?.error;
+		expect(error).not.toContain("insert into");
+		expect(error).not.toContain("secret-vendor");
+		expect(error).toContain("Retry");
+	});
+
+	const bedrockUrl =
+		"https://bedrock-runtime.ap-southeast-2.amazonaws.com/model/au.anthropic.claude-sonnet-4-6/converse";
+
+	const overloaded = () =>
+		new APICallError({
+			message: "Overloaded",
+			url: bedrockUrl,
+			requestBodyValues: {},
+			statusCode: 529,
+			isRetryable: true,
+		});
+
+	it("rethrows a retryable API error while attempts remain so Inngest retries", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => {
+				throw overloaded();
+			},
+		});
+
+		await expect(
+			h.service.process(1, { isFinalAttempt: false }),
+		).rejects.toThrow("Overloaded");
+
+		expect(h.calls.markFailed).toEqual([]);
+	});
+
+	it("parks a retryable API error as failed on the final attempt", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => {
+				throw overloaded();
+			},
+		});
+
+		await h.service.process(1, { isFinalAttempt: true });
+
+		expect(h.calls.markFailed[0]?.error).toContain("extraction service");
+	});
+
+	// A 400 (ValidationException) or 403 (AccessDenied) from Bedrock is deterministic:
+	// the same bytes fail the same way next time, so "Retry in a moment" would mislead.
+	it("parks a non-retryable API error at once, without the retry copy", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => {
+				throw new APICallError({
+					message: "ValidationException",
+					url: bedrockUrl,
+					requestBodyValues: {},
+					statusCode: 400,
+					isRetryable: false,
+				});
+			},
+		});
+
+		await h.service.process(1, { isFinalAttempt: false });
+
+		expect(h.calls.markFailed).toHaveLength(1);
+		expect(h.calls.markFailed[0]?.error).not.toContain("Retry in a moment");
+	});
+
+	// Bedrock Converse caps a message at 3.75 MB per image and 4.5 MB per document,
+	// while uploads and inbound attachments accept 10 MB. Anything over would 400
+	// deterministically — so the service refuses first, without spending the call, and
+	// says "too large" rather than the generic retry copy.
+	it("parks an oversize PDF as failed with a too-large message and no model call", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = harness({
+			receipt: baseReceipt(),
+			blob: { bytes: new Uint8Array(4_500_001), mediaType: "application/pdf" },
+		});
+
+		await h.service.process(1);
+
+		expect(h.analyze).not.toHaveBeenCalled();
+		const error = h.calls.markFailed[0]?.error;
+		expect(error).toContain("too large");
+		expect(error).toContain("4.5 MB");
+		expect(error).not.toContain("Retry");
+	});
+
+	it("parks an oversize image with the smaller image cap in the message", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const h = harness({
+			receipt: baseReceipt(),
+			blob: { bytes: new Uint8Array(3_750_001), mediaType: "image/jpeg" },
+		});
+
+		await h.service.process(1);
+
+		expect(h.analyze).not.toHaveBeenCalled();
+		expect(h.calls.markFailed[0]?.error).toContain("3.75 MB");
+	});
+
+	it("sends a document exactly at the cap through to the model", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			blob: { bytes: new Uint8Array(4_500_000), mediaType: "application/pdf" },
+		});
+
+		await h.service.process(1);
+
+		expect(h.analyze).toHaveBeenCalledOnce();
+		expect(h.calls.saveExtraction).toHaveLength(1);
+	});
+});
+
+describe("buildExtractionPrompt", () => {
+	it("lists every category's id and name so the model prefills expenseCategoryId", () => {
+		const prompt = buildExtractionPrompt([
+			{ id: 7, name: "Groceries" },
+			{ id: 9, name: "Household" },
+		]);
+		expect(prompt).toContain("7");
+		expect(prompt).toContain("Groceries");
+		expect(prompt).toContain("9");
+		expect(prompt).toContain("Household");
+	});
+
+	// Stage 5's upload path must not drift: the forwarded-email preamble is written
+	// for markup, and on a photo it tells the model to read past a greeting that
+	// isn't there. Nothing else pinned this, so a prompt edit went unnoticed once.
+	it.each([undefined, "image/jpeg", "application/pdf"])(
+		"omits the forwarded-email hint for %s",
+		(mediaType) => {
+			expect(
+				buildExtractionPrompt([{ id: 7, name: "Groceries" }], mediaType),
+			).not.toContain("forwarded e-receipt email");
+		},
+	);
+
+	it.each(["text/html", "text/plain", "text/html; charset=utf-8"])(
+		"includes the forwarded-email hint for %s",
+		(mediaType) => {
+			expect(
+				buildExtractionPrompt([{ id: 7, name: "Groceries" }], mediaType),
+			).toContain("forwarded e-receipt email");
+		},
+	);
+});
+
+describe("buildExtractionContent", () => {
+	const prompt = "Extract the receipt.";
+	const bytes = new TextEncoder().encode(
+		"<html><body>Total $9.20</body></html>",
+	);
+
+	it.each(["application/pdf", "application/pdf; charset=binary"])(
+		"sends %s as a file part carrying the bare media type",
+		(mediaType) => {
+			const content = buildExtractionContent({ prompt, bytes, mediaType });
+			expect(content).toEqual([
+				{ type: "text", text: prompt },
+				{ type: "file", data: bytes, mediaType: "application/pdf" },
+			]);
+		},
+	);
+
+	it.each(["image/jpeg", "image/png", "image/heic"])(
+		"sends %s as an image part",
+		(mediaType) => {
+			const content = buildExtractionContent({ prompt, bytes, mediaType });
+			expect(content).toEqual([
+				{ type: "text", text: prompt },
+				{ type: "image", image: bytes },
+			]);
+		},
+	);
+
+	// The charset form is what the worker actually sees: `mediaType` is the blob's raw
+	// HTTP content-type header, not the bare string the producer stored on the row.
+	it.each(["text/html", "text/plain", "text/html; charset=utf-8"])(
+		"folds %s into a single text part and sends no image part",
+		(mediaType) => {
+			const content = buildExtractionContent({ prompt, bytes, mediaType });
+			expect(content).toHaveLength(1);
+			expect(content[0]?.type).toBe("text");
+			// Guard: HTML as an image part reaches the model as noise, not text.
+			expect(content).not.toContainEqual(
+				expect.objectContaining({ type: "image" }),
+			);
+			const [part] = content;
+			expect(part?.type === "text" && part.text).toContain(
+				"<html><body>Total $9.20</body></html>",
+			);
+			expect(part?.type === "text" && part.text).toContain(prompt);
+		},
+	);
+
+	it("decodes html bytes as UTF-8 so non-ASCII vendor names survive", () => {
+		const content = buildExtractionContent({
+			prompt,
+			bytes: new TextEncoder().encode("<p>Café Ubé — €12,50</p>"),
+			mediaType: "text/html",
+		});
+		const [part] = content;
+		expect(part?.type === "text" && part.text).toContain("Café Ubé — €12,50");
+	});
+});
