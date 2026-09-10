@@ -6,12 +6,12 @@ import {
 	type AllowedSenderListItem,
 	allowedSenderCreateDto,
 	allowedSenderRefDto,
-} from "~/domain/receipts";
+} from "~/domain/email";
 import { assertRow } from "~/server/api/lib/assert-row";
 import { isPgError } from "~/server/api/lib/pg-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { user } from "~/server/auth/auth.schema";
-import { allowedSenders } from "~/server/receipts/allowed-sender.schema";
+import { allowedSenders } from "~/server/email/allowed-sender.schema";
 
 export const allowedSenderRouter = createTRPCRouter({
 	// The whole allowlist, not just the caller's: it is household config, and a member

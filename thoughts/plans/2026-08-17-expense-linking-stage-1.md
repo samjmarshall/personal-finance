@@ -184,7 +184,7 @@ Executes plan `2026-08-11-transaction-expense-category-fk.md` Phase 3.
 - Adopted plans (executed by Phases 1–4): `thoughts/plans/2026-08-11-transaction-expense-mapping.md`, `thoughts/plans/2026-08-11-transaction-expense-category-fk.md`
 - ADRs:
   - `docs/adr/adr010-single-nullable-fk-transaction-expense-link.md` (Proposed) — implemented by Phases 1–2 (flip to Accepted); its Unplanned-by-absence driver lands in Phases 5–6
-  - `docs/adr/adr012-defer-adr004-plain-routers-for-feature-work.md` (Proposed) — governs style throughout: plain routers, no 3-tier ceremony in this branch
+  - `docs/adr/archived/adr012-defer-adr004-plain-routers-for-feature-work.md` (Proposed) — governs style throughout: plain routers, no 3-tier ceremony in this branch
   - `docs/adr/adr011-one-time-budgets-as-expense-kind.md` (Proposed) — **no implementing phase here by design**: stage 2 work
   - `docs/adr/adr005-per-domain-drizzle-schema-files.md` (Accepted) — schema-file, FK-thunk, and `*.dto.ts` conventions followed
   - `docs/adr/adr004-domain-oriented-3-tier-server-architecture.md` (Accepted, deferred by adr012) — composed with, not implemented

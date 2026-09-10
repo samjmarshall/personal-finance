@@ -131,7 +131,7 @@ Run `/validate` over the whole branch (its standing `/code-review` step). Confir
 - Prior plan: `thoughts/plans/2026-08-17-expense-linking-stage-1.md` (stage-1 conventions this mirrors; its Out of Scope defers `kind`/timing + one-time UI here)
 - ADRs:
   - `docs/adr/adr011-one-time-budgets-as-expense-kind.md` (**Proposed**) — implemented by Phase 1; flip to Accepted, note `kind` shipped as pgEnum (not literal `text`)
-  - `docs/adr/adr012-defer-adr004-plain-routers-for-feature-work.md` (Accepted) — governs style: plain routers, no 3-tier ceremony in feature branches
+  - `docs/adr/archived/adr012-defer-adr004-plain-routers-for-feature-work.md` (Accepted) — governs style: plain routers, no 3-tier ceremony in feature branches
   - `docs/adr/adr005-per-domain-drizzle-schema-files.md` (Accepted) — per-domain `*.schema.ts`, `*.dto.ts`, migration two-step
   - `docs/adr/adr010-single-nullable-fk-transaction-expense-link.md` (Accepted) — the `transaction.expenseId` FK that `expense.consumption` sums
 - Terminology: `CONTEXT.md` (Expense/Income `kind` `recurring`/`one-time`; Basis; Timing; Spend/Inflow signs)

@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, RotateCw, Trash2 } from "lucide-react";
+import { FileText, Mail, RotateCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
@@ -10,7 +10,7 @@ import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
 import { receiptImageUrl } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
-import { cn, formatDate, isPdf } from "~/lib/utils";
+import { cn, formatDate, isPdf, isText } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { SelectField, type SelectFieldOption } from "../select-field";
 import { ReceiptDetail } from "./receipt-detail";
@@ -64,6 +64,15 @@ const MATCH_FILTER_ITEMS: SelectFieldOption<"all" | "unmatched">[] = [
 	{ value: "all", label: "Matched and unmatched" },
 	{ value: "unmatched", label: "Unmatched only" },
 ];
+
+// Only images survive the blob proxy's renderable allowlist; a PDF or a forwarded
+// email body comes back as octet-stream under nosniff, so an <img> would render
+// broken. Null means "safe to show the real thing".
+function previewIcon(contentType: string | null) {
+	if (isPdf(contentType)) return FileText;
+	if (isText(contentType)) return Mail;
+	return null;
+}
 
 export function ReceiptsView() {
 	const [status, setStatus] = useState<ReceiptStatus | null>(null);
@@ -149,6 +158,7 @@ export function ReceiptsView() {
 							{rows.map((r) => {
 								const style = STATUS_STYLE[r.status];
 								const isDuplicate = r.status === ReceiptStatus.Duplicate;
+								const PreviewIcon = previewIcon(r.contentType);
 								return (
 									<tr className="group hover:bg-muted/30" key={r.id}>
 										<td className="px-4 py-2.5">
@@ -158,9 +168,9 @@ export function ReceiptsView() {
 												onClick={() => setDetailId(r.id)}
 												type="button"
 											>
-												{isPdf(r.contentType) ? (
+												{PreviewIcon ? (
 													<span className="flex h-full w-full items-center justify-center text-muted-foreground">
-														<FileText className="h-4 w-4" />
+														<PreviewIcon className="h-4 w-4" />
 													</span>
 												) : (
 													// biome-ignore lint/performance/noImgElement: private-blob proxy, not a static asset for next/image

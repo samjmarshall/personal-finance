@@ -199,7 +199,7 @@ Run `/validate` over the whole branch (its standing `/code-review` step — do n
 - Design doc: `thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md` (Build order item 3; "Cash flow chart" `:104-121`; decisions 4/5/10 `:25-31`; carries `## Related ADRs`)
 - Prior plan: `thoughts/plans/2026-08-29-expense-linking-stage-2.md` (stage-2 conventions this mirrors; Out of Scope `:30-31` defers Timing UI + Planned actual column here; Basis-not-stored `:9`)
 - ADRs (all Accepted; stage 3 implements **no new ADR**):
-  - `docs/adr/adr012-defer-adr004-plain-routers-for-feature-work.md` — governs style: plain routers, no 3-tier ceremony
+  - `docs/adr/archived/adr012-defer-adr004-plain-routers-for-feature-work.md` — governs style: plain routers, no 3-tier ceremony
   - `docs/adr/adr005-per-domain-drizzle-schema-files.md` — `balance_snapshot` goes in `src/server/balances/balances.schema.ts`; two-step migration
   - `docs/adr/adr008-shadcn-on-base-ui-for-shared-primitives.md` — shadcn `chart` (standalone Recharts wrapper) is compatible
   - `docs/adr/adr010-single-nullable-fk-transaction-expense-link.md` — the `transaction.expenseId` FK the projection sums for one-time remaining

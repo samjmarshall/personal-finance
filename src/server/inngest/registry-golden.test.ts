@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import {
-	makePruneWorker,
-	makeSweepWorker,
-} from "~/server/outbox/outbox.workers";
-import { makeProcessReceiptWorker } from "~/server/receipts/receipts.workers";
+import { OutboxController } from "~/server/outbox/outbox.controller";
+import { ReceiptsController } from "~/server/receipts/receipts.controller";
 
 import { EVENT_REGISTRY } from "./events";
 
@@ -23,7 +20,7 @@ describe("event registry golden", () => {
 
 // Function ids + triggers are also frozen: Inngest keys scheduled runs by id (a rename
 // silently drops the old schedule) and event triggers are the same wire strings as the
-// registry above. Drive the worker factories with a spy client to read what they declare
+// registry above. Drive the controllers with a spy client to read what they declare
 // — avoids importing the real db/client (env-free, like the block above).
 describe("worker golden", () => {
 	it("pins the frozen function ids + triggers", () => {
@@ -37,9 +34,8 @@ describe("worker golden", () => {
 			// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
 		} as any;
 
-		makeSweepWorker({ db: {} as never, inngest: spy });
-		makePruneWorker({ db: {} as never, inngest: spy });
-		makeProcessReceiptWorker({ db: {} as never, inngest: spy });
+		new OutboxController({ inngest: spy, service: {} as never });
+		new ReceiptsController({ inngest: spy, service: {} as never });
 
 		expect(declared).toEqual([
 			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },

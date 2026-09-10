@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("~/server/db", () => ({ db: {} }));
 vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 
-// commitWithOutbox is exercised in outbox/commit.test.ts; here we only assert what
+// The write door is exercised in outbox/outbox.service.test.ts; here we only assert what
 // retry hands it (the conditional update + the derived receipt/retry event).
 const { commitWithOutbox } = vi.hoisted(() => ({ commitWithOutbox: vi.fn() }));
 vi.mock("~/server/outbox", () => ({ commitWithOutbox }));

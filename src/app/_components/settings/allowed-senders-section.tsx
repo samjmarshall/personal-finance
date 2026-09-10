@@ -10,7 +10,7 @@ import { Input } from "~/components/ui/input";
 import {
 	type AllowedSenderListItem,
 	allowedSenderCreateDto,
-} from "~/domain/receipts";
+} from "~/domain/email";
 import { api } from "~/trpc/react";
 import { SettingsSection } from "./settings-section";
 import type { SettingsViewProps } from "./settings-view";

@@ -5,4 +5,6 @@ paths:
 
 # GitHub Actions
 
-`repository_dispatch`, `schedule`, and `workflow_dispatch` triggers always run from the **default branch (`main`)** — not from the branch that triggered the event. A fix pushed to a feature branch will not take effect until it is merged into `main`. This is how GitHub Actions works by design (see `.github/workflows/quality-control.yml:48` for the existing `repository_dispatch` usage).
+`repository_dispatch`, `schedule`, and `workflow_dispatch` triggers always run from the **default branch (`main`)** — not from the branch that triggered the event. A fix pushed to a feature branch will not take effect until it is merged into `main`. This is how GitHub Actions works by design.
+
+`push` triggers (`deploy.yml`, `quality-control.yml`) run from the pushed branch, so a workflow fix is exercised by that branch's own preview deploy before merge. `deploy.yml` is the only deploy path — Vercel's git auto-deploy is off (`vercel.json`). Deploy by **branch name** (`TF_VAR_deploy_ref`), never the SHA: `teardown.yml` and the Neon `preview/<branch>` naming both key off Vercel's `meta.githubCommitRef`.

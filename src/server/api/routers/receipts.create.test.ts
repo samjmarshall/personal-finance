@@ -7,7 +7,7 @@ import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 vi.mock("~/server/db", () => ({ db: {} }));
 vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 
-// The injected fake: the real commitWithOutbox is exercised in outbox/commit.test.ts;
+// The injected fake: the real write door is exercised in outbox/outbox.service.test.ts;
 // here we only assert what the producer hands it (the writes + the derived events).
 const { commitWithOutbox } = vi.hoisted(() => ({ commitWithOutbox: vi.fn() }));
 vi.mock("~/server/outbox", () => ({ commitWithOutbox }));

@@ -150,5 +150,5 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 
 - [adr010](../../docs/adr/adr010-single-nullable-fk-transaction-expense-link.md) — single nullable FK for transaction→expense linking; per-item granularity via receipt line items
 - [adr011](../../docs/adr/adr011-one-time-budgets-as-expense-kind.md) — one-time budgets as `expense` rows behind a `kind` discriminator
-- [adr012](../../docs/adr/adr012-defer-adr004-plain-routers-for-feature-work.md) — feature work stays plain-router; executing adr004 deferred
+- [adr012](../../docs/adr/archived/adr012-defer-adr004-plain-routers-for-feature-work.md) — feature work stays plain-router; executing adr004 deferred
 - [adr002](../../docs/adr/adr002-canonical-postgres-store-transactional-outbox.md) — already covers outbox + Inngest; reaffirmed against Vercel Workflow here, no new ADR

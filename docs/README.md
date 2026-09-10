@@ -22,12 +22,18 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | `INNGEST_EVENT_KEY` | production | Inngest Cloud key for sending events. |
 | `INNGEST_SIGNING_KEY` | production | Inngest Cloud key `serve` uses to verify inbound requests. |
 | `BLOB_READ_WRITE_TOKEN` | production | Vercel Blob token; mints client-upload tokens at `/api/receipts/upload` (private store) and signs reads for the `/api/receipts/[id]/image` proxy. Injected by the Blob integration in prod. |
-| `ANTHROPIC_API_KEY` | production | Claude Vision key the `process-receipt` worker uses to extract vendor/total/date + line items. |
+| `AWS_REGION` | optional | Bedrock region, default `ap-southeast-2`. Terraform sets it on Vercel; `assume` exports it locally. |
+| `AWS_ROLE_ARN` | Vercel only | IAM role the deployment's OIDC token is exchanged for (`src/server/aws/credentials.ts`). Set by Terraform per environment; leave unset locally. |
+| `BEDROCK_RECEIPT_MODEL` | optional | Bedrock inference-profile id the `process-receipt` worker calls, default `au.anthropic.claude-sonnet-4-6`. Set by Terraform from `infrastructure/locals.tf`. |
 | `RESEND_API_KEY` | production | Resend key the inbound webhook uses to fetch the email body and attachment bytes, which the `email.received` payload omits. |
 | `RESEND_WEBHOOK_SECRET` | production | Svix signing secret verifying the raw body at `/api/receipts/inbound`. Without it the route refuses every request. |
 | `RESEND_INBOUND_ADDRESS` | optional | The address members forward receipts to. Display-only, shown on `/settings`; nothing routes on it. |
 
 `next build` runs with `NODE_ENV=production`, so `make build` and `pnpm run preview` fail locally unless the production-required variables are in `.env`.
+
+### Claude on Bedrock
+
+Receipt extraction calls Claude through Amazon Bedrock (`src/server/aws/bedrock.ts`), never the Anthropic API. `@ai-sdk/amazon-bedrock` has **no default credential chain**: on Vercel the deployment's OIDC token is exchanged for `AWS_ROLE_ARN`; locally you must `assume <profile>` first (it exports `AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN`) — `AWS_PROFILE` alone does nothing. Model switching and IAM live in Terraform; see [infrastructure](infrastructure.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md) and `.claude/rules/bedrock-invocation.md`.
 
 ### Upstash Redis
 
@@ -45,6 +51,10 @@ Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), whic
 | --- | --- | --- |
 | `outbox-sweep` | `0 * * * *` | Re-deliver unacked rows older than 30s; failures stay unacked for the next run. |
 | `outbox-prune` | `0 3 * * *` | Delete rows acked over 7 days ago; never touches unacked or stuck rows. |
-| `process-receipt` | `receipt/uploaded`, `receipt/retry`, `receipt/email.received` | Extract vendor/total/date + line items from a receipt via Claude Vision, or short-circuit an identical re-upload as a `duplicate` on its content hash. All three triggers carry the same `{ receiptId }`, so an emailed receipt rides the upload path unchanged. |
+| `process-receipt` | `receipt/uploaded`, `receipt/retry`, `receipt/email.received` | Extract vendor/total/date + line items from a receipt via Claude on Bedrock, or short-circuit an identical re-upload as a `duplicate` on its content hash. All three triggers carry the same `{ receiptId }`, so an emailed receipt rides the upload path unchanged. |
 
 Local runs use the Inngest Dev Server (no keys needed). Run `make setup` once — it trusts the Portless CA so the Go Dev Server binary trusts the app's HTTPS cert — then `make start` boots the app plus the Dev Server as sibling Portless processes. The Dev Server syncs the app's `/api/inngest`, lists `outbox-sweep` + `outbox-prune` + `process-receipt`, and can invoke them from its dashboard at `https://inngest.personal-finance.localhost` (worktree: `https://<branch>.inngest.personal-finance.localhost`).
+
+## Deploy
+
+Terraform in `infrastructure/` owns the Vercel project, the per-environment AWS IAM role, the Bedrock env vars and the deployment itself; Vercel's git auto-deploy is off (`vercel.json`). `.github/workflows/deploy.yml` runs on every push: `terraform apply` (`main` → production, any other branch → the shared preview state) → Neon migration of the matching branch → rollback if the migration fails. Locally: `assume <profile>`, `export VERCEL_API_TOKEN=…`, then `make plan env=preview`. Bootstrap, cutover and model switching: [infrastructure.md](infrastructure.md). Decisions: [adr013](adr/adr013-terraform-owned-vercel-deployments.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md).

@@ -1,0 +1,48 @@
+# Deployer role that .github/workflows/deploy.yml assumes via GitHub OIDC.
+# Deployed once by hand — see docs/infrastructure.md. The GitHub IdP already
+# exists in the account (one per URL), so it is a parameter, not a resource.
+#
+#   aws cloudformation deploy \
+#     --stack-name personal-finance-github-actions \
+#     --template-file docs/cloudformation-templates/github-actions.yaml \
+#     --capabilities CAPABILITY_IAM \
+#     --parameter-overrides \
+#       GitHubOidcProviderArn=arn:aws:iam::139035987018:oidc-provider/token.actions.githubusercontent.com
+Parameters:
+  GitHubOrg:
+    Description: GitHub organization slug (case sensitive)
+    Type: String
+    Default: samjmarshall
+  RepositoryName:
+    Description: GitHub repository name (case sensitive)
+    Type: String
+    Default: personal-finance
+  GitHubOidcProviderArn:
+    Description: ARN of the account's existing token.actions.githubusercontent.com OIDC provider
+    Type: String
+
+Resources:
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRoleWithWebIdentity
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${RepositoryName}:*
+      # Terraform creates IAM roles and policies from this role, so a scoped policy
+      # would need iam:* anyway. Matches the reference stack.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+Outputs:
+  Role:
+    Description: Store as the DEPLOYER_ROLE_ARN GitHub secret
+    Value: !GetAtt Role.Arn

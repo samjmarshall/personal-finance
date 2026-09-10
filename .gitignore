@@ -61,3 +61,6 @@ thoughts/*
 
 # Worktrees
 .worktrees/
+
+# misc
+__pycache__/
