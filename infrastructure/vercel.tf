@@ -20,6 +20,12 @@ resource "vercel_project" "this" {
     on_commit       = false
     on_pull_request = true
   }
+  # Keep automatic production aliasing on. Promotion is gated by the "DB Migration"
+  # Deployment Check (post-deploy.yml): Vercel holds the alias until it passes,
+  # then aliases automatically. The check itself is dashboard-only — the provider
+  # has no Deployment Checks resource/attribute (vercel/vercel ~> 5.0).
+  auto_assign_custom_domains = true
+
   # Optional+Computed: undeclared they plan `-> (known after apply)`, which hides
   # whether the apply keeps them. Declared, they plan as unchanged.
   build_machine_type = "elastic"

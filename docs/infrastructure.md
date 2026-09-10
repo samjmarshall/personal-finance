@@ -1,6 +1,6 @@
 # Infrastructure
 
-Terraform in `infrastructure/` owns the Vercel project, per-environment AWS IAM role (Bedrock via Vercel OIDC), the three Bedrock env vars and the Vercel deployment. `.github/workflows/deploy.yml` applies it on every push, then migrates the matching Neon branch. Decisions: [adr013](adr/adr013-terraform-owned-vercel-deployments.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md).
+Terraform in `infrastructure/` owns the Vercel project, per-environment AWS IAM role (Bedrock via Vercel OIDC), the three Bedrock env vars and the Vercel deployment. `.github/workflows/deploy.yml` applies it on every push. Migrations run separately in `.github/workflows/post-deploy.yml`, fired by Vercel's `vercel.deployment.ready` dispatch as the `DB Migration` Deployment Check, which gates production promotion (Vercel holds the production alias until the migration passes). Decisions: [adr013](adr/adr013-terraform-owned-vercel-deployments.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md).
 
 ## Layout
 
@@ -52,14 +52,14 @@ make force-unlock env=preview ID=<id> # only after a killed apply left the lock
    ```
    Read the plan. `vercel_project.this[0]` must show **update in-place** (at most `oidc_token_config`), never replace — a replace drops every integration on the project. Adjust attributes in `vercel.tf` until it does.
 4. **Apply production once locally**: `make apply env=production`. Creates the prod role + env vars and redeploys `main` (still on `ANTHROPIC_API_KEY`; harmless).
-5. **Uninstall the Vercel Repository Dispatch integration now**, before pushing. Otherwise `post-deploy.yml` (still on `main`) fires on every Terraform-created deployment and races the branch's `migrate` job on the same Neon branch. Until step 7 lands, a migration merged to `main` must be run by hand (`make db_migrate`).
+5. **Install the Vercel Repository Dispatch integration** and enable Deployment Checks: in the Vercel project add a **required** GitHub Actions check named exactly `DB Migration` (must match the `name` in `post-deploy.yml`'s status step) with automatic production aliasing left on. The integration fires `vercel.deployment.ready` on every Terraform-created deployment, which triggers `post-deploy.yml` (from `main`) to migrate the matching Neon branch; the check then gates production promotion. Because `repository_dispatch` runs the copy on `main`, the branch that first adds `post-deploy.yml` won't migrate its own preview — run `make db_migrate` by hand for that branch until it merges.
 6. **Push the branch.** `deploy.yml` creates the preview role/env vars/deployment, then migrates `preview/<branch>`. `vercel.json` in the same commit stops Vercel's own git deploy for it.
 7. **Merge** → production deploy on Bedrock.
 8. After a production receipt processes: delete `ANTHROPIC_API_KEY` from Vercel. Flip adr013/adr014 to Accepted.
 
 ## Verify after cutover
 
-- Actions: `deploy` → `migrate` green on the branch; `vercel inspect <url>` shows `githubCommitRef=<branch>`; Neon has `preview/<branch>`.
+- Actions: `deploy` green on the branch; the `Post-Deploy Migration` run (fired by `vercel.deployment.ready`) is green as the `DB Migration` check; `vercel inspect <url>` shows `githubCommitRef=<branch>`; Neon has `preview/<branch>`. On `main`, confirm Vercel holds the production alias until the check passes, then promotes.
 - Preview app: upload a receipt → `process-receipt` succeeds. `AccessDenied` / `Could not load credentials` → check `AWS_ROLE_ARN` on the deployment and the role's trust `sub`.
 - >4.5 MB PDF parks as "Receipt is too large to read", not "Retry in a moment".
 - Second push to the branch: plan replaces only `terraform_data.deploy_sha` + `vercel_deployment.this`; the previous deployment stays live.
