@@ -49,7 +49,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ secrets.DEPLOYER_ROLE_ARN }}
+          role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Terraform cache
