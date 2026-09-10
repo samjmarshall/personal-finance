@@ -9,31 +9,34 @@
 #     --parameter-overrides \
 #       GitHubOidcProviderArn=arn:aws:iam::139035987018:oidc-provider/token.actions.githubusercontent.com
 #
-# Scopes on `job_workflow_ref`, not `sub`. IAM requires a GitHub OIDC trust to
-# scope on `sub` OR `job_workflow_ref` ("must evaluate ... :sub or
-# :job_workflow_ref which is not scoped to all") — other claims like
-# `repository_id` may only be *extra* conditions, never the sole scope.
-#
-# We pick `job_workflow_ref` because GitHub's immutable-subject rollout (numeric
-# ids in `sub`: `repo:<org>@<orgId>/<repo>@<repoId>:...`, default for
-# new/renamed/transferred repos from 2026-07-15) rewrites ONLY `sub`.
-# `job_workflow_ref` stays name-based (`<org>/<repo>/<path>@<ref>`), so this trust
-# needs no numeric ids and is tighter: only deploy.yml can assume the role, on any
-# branch (`@*`). Rename/move deploy.yml → update this trust. deploy.yml is the only
-# workflow that assumes AWS (teardown/quality-control use Vercel/Neon tokens).
+# Trust scopes on the immutable `sub`. Two facts force this exact shape:
+#   1. IAM requires a GitHub OIDC trust to scope on `sub` or `job_workflow_ref`
+#      ("must evaluate ... :sub or :job_workflow_ref which is not scoped to all").
+#      `repository_id` may only be an *extra* condition, never the sole scope.
+#   2. STS in this account does NOT evaluate `job_workflow_ref` at assume-time
+#      (an assume with a provably-matching job_workflow_ref value still denied),
+#      so `sub` is the only claim that actually works here.
+# GitHub mints this repo's `sub` in immutable id form
+# (`repo:<org>@<orgId>/<repo>@<repoId>:...`) — verified from a decoded token — so
+# the two numeric ids are unavoidable. They are stable: unchanged by rename or
+# transfer. Get them with: gh api repos/samjmarshall/personal-finance --jq '.owner.id, .id'
 Parameters:
   GitHubOrg:
     Description: GitHub organization slug (case sensitive)
     Type: String
     Default: samjmarshall
+  GitHubOrgId:
+    Description: Numeric GitHub org/owner id (owner.id from the repos API), for the immutable sub claim
+    Type: String
+    Default: "8191402"
   RepositoryName:
     Description: GitHub repository name (case sensitive)
     Type: String
     Default: personal-finance
-  DeployWorkflowPath:
-    Description: Path of the workflow file allowed to assume this role, relative to the repo root
+  RepositoryId:
+    Description: Numeric GitHub repository id (.id from the repos API), for the immutable sub claim
     Type: String
-    Default: .github/workflows/deploy.yml
+    Default: "1329348861"
   GitHubOidcProviderArn:
     Description: ARN of the account's existing token.actions.githubusercontent.com OIDC provider
     Type: String
@@ -53,7 +56,7 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:job_workflow_ref: !Sub ${GitHubOrg}/${RepositoryName}/${DeployWorkflowPath}@*
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}@${GitHubOrgId}/${RepositoryName}@${RepositoryId}:*
       # Terraform creates IAM roles and policies from this role, so a scoped policy
       # would need iam:* anyway. Matches the reference stack.
       ManagedPolicyArns:
