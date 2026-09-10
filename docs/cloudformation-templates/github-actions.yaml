@@ -8,6 +8,19 @@
 #     --capabilities CAPABILITY_IAM \
 #     --parameter-overrides \
 #       GitHubOidcProviderArn=arn:aws:iam::139035987018:oidc-provider/token.actions.githubusercontent.com
+#
+# Scopes on `job_workflow_ref`, not `sub`. IAM requires a GitHub OIDC trust to
+# scope on `sub` OR `job_workflow_ref` ("must evaluate ... :sub or
+# :job_workflow_ref which is not scoped to all") — other claims like
+# `repository_id` may only be *extra* conditions, never the sole scope.
+#
+# We pick `job_workflow_ref` because GitHub's immutable-subject rollout (numeric
+# ids in `sub`: `repo:<org>@<orgId>/<repo>@<repoId>:...`, default for
+# new/renamed/transferred repos from 2026-07-15) rewrites ONLY `sub`.
+# `job_workflow_ref` stays name-based (`<org>/<repo>/<path>@<ref>`), so this trust
+# needs no numeric ids and is tighter: only deploy.yml can assume the role, on any
+# branch (`@*`). Rename/move deploy.yml → update this trust. deploy.yml is the only
+# workflow that assumes AWS (teardown/quality-control use Vercel/Neon tokens).
 Parameters:
   GitHubOrg:
     Description: GitHub organization slug (case sensitive)
@@ -17,6 +30,10 @@ Parameters:
     Description: GitHub repository name (case sensitive)
     Type: String
     Default: personal-finance
+  DeployWorkflowPath:
+    Description: Path of the workflow file allowed to assume this role, relative to the repo root
+    Type: String
+    Default: .github/workflows/deploy.yml
   GitHubOidcProviderArn:
     Description: ARN of the account's existing token.actions.githubusercontent.com OIDC provider
     Type: String
@@ -36,7 +53,7 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${RepositoryName}:*
+                token.actions.githubusercontent.com:job_workflow_ref: !Sub ${GitHubOrg}/${RepositoryName}/${DeployWorkflowPath}@*
       # Terraform creates IAM roles and policies from this role, so a scoped policy
       # would need iam:* anyway. Matches the reference stack.
       ManagedPolicyArns:
@@ -44,5 +61,5 @@ Resources:
 
 Outputs:
   Role:
-    Description: Store as the DEPLOYER_ROLE_ARN GitHub secret
+    Description: Store as the DEPLOYER_ROLE_ARN GitHub variable
     Value: !GetAtt Role.Arn
