@@ -1,15 +1,22 @@
 name: Deployment
 
 # The only deploy path. Vercel's git auto-deploy is off (vercel.json), so every
-# push to every branch lands here: terraform apply creates the Vercel deployment.
-# `main` → production; anything else → the shared preview state (last apply wins,
-# deployments are never deleted). Migrations are NOT run here: they run in
-# post-deploy.yml as the "DB Migration" Deployment Check, fired by Vercel's
-# `vercel.deployment.ready` dispatch, which gates production promotion.
+# push to every branch lands here as one staged flow:
+# terraform apply (infra only) → vercel deploy (CLI, un-aliased) → resolve the
+# Neon DB branch → db check + migrate (unpooled). For `main` (production) it then
+# gates the staged deployment on /api/health behind the protection-bypass header
+# and only then `vercel promote`s it onto the domain — so the alias never lands on
+# an un-migrated build. Preview just deploys + migrates (no gate/promote).
+# A failed migrate fails the job before promote; the previous production
+# deployment stays Current. Migrations are expand-only (old Current code runs
+# against the new schema during the gate window).
 on: push
 
 env:
   ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
+  # Pin the Vercel CLI so a CLI release never silently changes deploy/promote
+  # behaviour mid-flow.
+  VERCEL_CLI: vercel@59.15.1
 
 jobs:
   deploy:
@@ -22,24 +29,24 @@ jobs:
       id-token: write
       contents: read
       deployments: write
-    # One apply per branch at a time, never cancelled: a killed apply leaves the
+    # One deploy per branch at a time, never cancelled: a killed apply leaves the
     # state lock held and the shared preview state half-written.
     concurrency:
       group: deploy-${{ github.ref_name }}
       cancel-in-progress: false
     environment:
       name: ${{ github.ref_name == 'main' && 'Production' || 'Preview' }}
-      url: ${{ steps.apply.outputs.url }}
+      url: ${{ steps.env_url.outputs.url }}
     env:
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ vars.AWS_REGION }}
+      # Terraform's vercel provider reads VERCEL_API_TOKEN; the CLI reads
+      # VERCEL_TOKEN and is scoped by VERCEL_ORG_ID / VERCEL_PROJECT_ID (team +
+      # project ids are non-secret, so they live in vars, like teardown.yml).
       VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      # Branch name, not SHA: Vercel stamps it as meta.githubCommitRef, which is
-      # what the Neon integration names the `preview/<branch>` database after and
-      # what teardown.yml matches on. The SHA only forces a fresh deployment per
-      # push (terraform_data.deploy_sha in infrastructure/vercel.tf).
-      TF_VAR_deploy_ref: ${{ github.ref_name }}
-      TF_VAR_deploy_sha: ${{ github.sha }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_TEAM_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
 
     steps:
       - uses: actions/checkout@v6
@@ -54,14 +61,139 @@ jobs:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: make install
+
       - name: Terraform cache
         uses: actions/cache@v4
         with:
           path: infrastructure/.terraform/providers
           key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
 
+      # Infra only now — no deployment resource, no alias wait. Production also
+      # reads the protection-bypass secret (masked) and the promoted-domain URL.
       - name: Terraform apply
         id: apply
         run: |
           make apply env="$ENVIRONMENT"
-          echo "url=$(terraform -chdir=infrastructure output -raw app_url)" >> "$GITHUB_OUTPUT"
+          if [ "$ENVIRONMENT" = "production" ]; then
+            BYPASS="$(terraform -chdir=infrastructure output -raw protection_bypass_secret)"
+            echo "::add-mask::$BYPASS"
+            echo "bypass=$BYPASS" >> "$GITHUB_OUTPUT"
+            echo "app_url=$(terraform -chdir=infrastructure output -raw app_url)" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Stdout is just the deployment URL (CLI writes progress to stderr).
+      # --meta githubCommitRef is load-bearing: the Neon integration names the DB
+      # branch preview/<ref> after it and teardown.yml deletes by it. Production
+      # stages un-aliased (--prod --skip-domain); promote moves the domain later.
+      - name: Vercel deploy
+        id: deploy
+        run: |
+          args=(deploy --token="$VERCEL_TOKEN" --yes \
+            --meta "githubCommitRef=${GITHUB_REF_NAME}" \
+            --meta "githubCommitSha=${GITHUB_SHA}")
+          if [ "$ENVIRONMENT" = "production" ]; then
+            args+=(--prod --skip-domain)
+          fi
+          url="$(pnpm dlx "$VERCEL_CLI" "${args[@]}" | tail -n1)"
+          echo "deployment_url=$url" >> "$GITHUB_OUTPUT"
+
+      # The CLI deploy triggers Neon provisioning, so a fresh preview branch may
+      # not exist yet — poll the branches API until it appears, then fail loud.
+      # branch_id is NOT a secret: it crosses no job boundary but is emitted the
+      # same way, and the DB URLs are re-derived from it (they embed the password).
+      - name: Resolve Neon branch
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          api="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches"
+          for attempt in $(seq 1 20); do
+            branches="$(curl -s -H "Authorization: Bearer $NEON_API_KEY" "$api")"
+            if [ "$ENVIRONMENT" = "production" ]; then
+              branch_id="$(echo "$branches" | jq -r '.branches[] | select(.primary == true) | .id' 2>/dev/null)"
+            else
+              branch_id="$(echo "$branches" | jq -r --arg ref "preview/$GITHUB_REF_NAME" \
+                '.branches[] | select(.name == $ref) | .id' 2>/dev/null)"
+            fi
+            if [ -n "$branch_id" ]; then
+              echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Neon branch not ready (attempt $attempt/20), retrying in 15s…"
+            sleep 15
+          done
+          echo "::error::Could not resolve Neon branch for 'preview/$GITHUB_REF_NAME' (environment '$ENVIRONMENT') after polling. Failing at the source so the cause is one clear error, not a wall of downstream connection failures."
+          exit 1
+
+      - name: Resolve database URLs
+        id: dburl
+        uses: ./.github/actions/neon-db-url
+        with:
+          neon_api_key: ${{ secrets.NEON_API_KEY }}
+          neon_project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_id: ${{ steps.neon.outputs.branch_id }}
+
+      # Catches journal/snapshot collisions before anything is applied.
+      - name: Run database check
+        run: make db_check
+        env:
+          SKIP_ENV_VALIDATION: 1
+          DATABASE_URL_UNPOOLED: ${{ steps.dburl.outputs.db_url_unpooled }}
+
+      # Unpooled: DDL must not go through PgBouncer. One transaction — any failure
+      # fails the job here, before gate/promote, leaving the old deployment Current.
+      - name: Run database migrations
+        run: make db_migrate
+        env:
+          SKIP_ENV_VALIDATION: 1
+          DATABASE_URL_UNPOOLED: ${{ steps.dburl.outputs.db_url_unpooled }}
+
+      # Gate: the staged production deployment must report healthy against the
+      # freshly-migrated DB before it takes the domain. It is behind Deployment
+      # Protection (SSO), so reach it with the bypass header. Retry briefly for
+      # cold start; a non-200 fails the job and the old deployment stays Current.
+      - name: Health gate
+        if: env.ENVIRONMENT == 'production'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          BYPASS: ${{ steps.apply.outputs.bypass }}
+        run: |
+          for attempt in $(seq 1 5); do
+            status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+              -H "x-vercel-protection-bypass: $BYPASS" \
+              "$DEPLOYMENT_URL/api/health" || echo 000)"
+            if [ "$status" = "200" ]; then
+              echo "Health gate passed (200)."
+              exit 0
+            fi
+            echo "Health gate got $status (attempt $attempt/5), retrying in 10s…"
+            sleep 10
+          done
+          echo "::error::Health gate failed — /api/health did not return 200. Refusing to promote; the previous deployment stays Current."
+          exit 1
+
+      - name: Vercel promote
+        if: env.ENVIRONMENT == 'production'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: pnpm dlx "$VERCEL_CLI" promote "$DEPLOYMENT_URL" --token="$VERCEL_TOKEN" --yes
+
+      # Production shows the promoted custom domain (the staged URL is behind SSO);
+      # preview shows the deployment URL directly.
+      - name: Environment URL
+        id: env_url
+        run: |
+          if [ "$ENVIRONMENT" = "production" ]; then
+            echo "url=${{ steps.apply.outputs.app_url }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=${{ steps.deploy.outputs.deployment_url }}" >> "$GITHUB_OUTPUT"
+          fi

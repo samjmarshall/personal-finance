@@ -9,6 +9,12 @@ output "vercel_project_id" {
 }
 
 output "app_url" {
-  description = "Where this apply's deployment is reachable. deploy.yml publishes it as the GitHub environment URL."
-  value       = local.is_prod ? "https://${local.prod_domain}" : "https://${vercel_deployment.this.url}"
+  description = "Production custom domain. deploy.yml publishes it as the GitHub environment URL after promote (the staged deployment URL is behind SSO)."
+  value       = "https://${local.prod_domain}"
+}
+
+output "protection_bypass_secret" {
+  description = "x-vercel-protection-bypass header value the promote gate uses to reach /api/health on the staged deployment. Prod-state only; null in preview."
+  sensitive   = true
+  value       = one(vercel_project_protection_bypass.this[*].secret)
 }

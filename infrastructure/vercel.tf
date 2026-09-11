@@ -20,11 +20,11 @@ resource "vercel_project" "this" {
     on_commit       = false
     on_pull_request = true
   }
-  # Keep automatic production aliasing on. Promotion is gated by the "DB Migration"
-  # Deployment Check (post-deploy.yml): Vercel holds the alias until it passes,
-  # then aliases automatically. The check itself is dashboard-only — the provider
-  # has no Deployment Checks resource/attribute (vercel/vercel ~> 5.0).
-  auto_assign_custom_domains = true
+  # No automatic production aliasing. deploy.yml stages each production deployment
+  # un-aliased, gates it (migrate + /api/health behind the bypass header), then
+  # runs `vercel promote` to move the domain — so the alias never sits on an
+  # un-migrated build. The deployment lifecycle lives in deploy.yml, not here.
+  auto_assign_custom_domains = false
 
   # Optional+Computed: undeclared they plan `-> (known after apply)`, which hides
   # whether the apply keeps them. Declared, they plan as unchanged.
@@ -81,29 +81,13 @@ resource "vercel_project_environment_variable" "this" {
   sensitive  = each.value.sensitive
 }
 
-# vercel_deployment is immutable and `ref` is a branch name that never changes,
-# so this is what makes each push ship: a new SHA replaces it, and
-# replace_triggered_by drags the deployment along.
-resource "terraform_data" "deploy_sha" {
-  triggers_replace = var.deploy_sha
-}
+# Deployment Protection bypass secret. deploy.yml reads it from Terraform output
+# and sends it as the `x-vercel-protection-bypass` header so the promote gate can
+# curl /api/health on the staged (SSO-protected) deployment before promoting.
+# Prod-state only: the single project is owned by production state; preview reads
+# the project via data.vercel_project and has no gate, so needs no bypass.
+resource "vercel_project_protection_bypass" "this" {
+  count = local.is_prod ? 1 : 0
 
-# Terraform is the sole deploy path: vercel.json at the repo root turns off
-# Vercel's git auto-deploy. `ref` is the branch, not the SHA, so Vercel stamps
-# meta.githubCommitRef=<branch>; the Neon integration names the DB branch
-# preview/<branch> and teardown.yml deletes deployments by that same field.
-resource "vercel_deployment" "this" {
   project_id = local.vercel_project_id
-  ref        = var.deploy_ref
-  production = local.is_prod
-  # The preview state is shared by every branch (last apply wins), so a replace
-  # here must not delete another branch's live deployment. Prod keeps old
-  # deployments for instant rollback. teardown.yml deletes per branch.
-  delete_on_destroy = false
-
-  depends_on = [vercel_project_environment_variable.this]
-
-  lifecycle {
-    replace_triggered_by = [terraform_data.deploy_sha]
-  }
 }
