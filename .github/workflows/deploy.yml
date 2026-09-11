@@ -22,7 +22,7 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 5
     # id-token lets configure-aws-credentials mint the GitHub OIDC token the
     # deployer role trusts (docs/cloudformation-templates/github-actions.yaml).
     permissions:
