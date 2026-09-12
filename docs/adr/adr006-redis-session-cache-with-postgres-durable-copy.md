@@ -62,7 +62,7 @@ Two settings follow from it and are part of this decision:
 
 ### Negative Consequences
 
-- `session` rows accumulate. Redis-first reads mean expired rows are never touched, and Better Auth only deletes a row when someone tries to use it. At current usage this is roughly 52 rows a year; a scheduled `DELETE FROM session WHERE expires_at < now()` is deferred until it matters, and does not require Inngest — `.github/workflows/post-deploy.yml:96-103` already runs SQL against the database on a workflow trigger.
+- `session` rows accumulate. Redis-first reads mean expired rows are never touched, and Better Auth only deletes a row when someone tries to use it. At current usage this is roughly 52 rows a year; a scheduled `DELETE FROM session WHERE expires_at < now()` is deferred until it matters, and does not require Inngest — `.github/workflows/deploy.yml`'s `db_migrate` step already runs SQL against the database on a workflow trigger.
 - `preserveSessionInDatabase` is a live footgun. It reads as the safer setting and is the opposite: it keeps revoked rows, so Better Auth disables the Postgres fallback to stop revoked sessions resurrecting. It must stay at its `false` default.
 - Two stores hold session state, so any future change to session shape has to consider both.
 - Adds Upstash and `@upstash/redis` as production dependencies.

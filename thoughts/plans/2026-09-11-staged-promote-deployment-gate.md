@@ -133,13 +133,13 @@ new schema during the gate window).
 ### Success
 
 - [x] `make fmt-check` passes
-- [ ] (CI-only — local init has no AWS S3-backend creds) `make plan env=production` succeeds and shows: `vercel_deployment.this` +
+- [x] (CI-only — local init has no AWS S3-backend creds) `make plan env=production` succeeds and shows: `vercel_deployment.this` +
       `terraform_data.deploy_sha` **destroyed**, `vercel_project_protection_bypass.this`
       **created**, `vercel_project.this` updated (`auto_assign_custom_domains false`),
       no reference errors
 - [ ] `make plan env=preview` succeeds with no reference errors (no bypass resource
       in preview state)
-- [ ] `terraform -chdir=infrastructure output -raw protection_bypass_secret` returns a
+- [x] `terraform -chdir=infrastructure output -raw protection_bypass_secret` returns a
       non-empty value after a production apply (verified during Phase 3 rollout)
 
 ## Phase 3: deploy.yml staged flow; remove post-deploy.yml
@@ -196,10 +196,10 @@ new schema during the gate window).
 - [ ] Branch preview run of `deploy.yml` is green end to end: Terraform apply, CLI
       deploy, Neon branch resolved, `db_migrate` applied to `preview/<branch>` — no
       gate/promote on preview
-- [ ] `main` run is green through gate + promote; the staged deployment is marked
+- [x] `main` run is green through gate + promote; the staged deployment is marked
       `Current` and `https://finance.sammarshall.co/api/health` returns 200
 - [x] `post-deploy.yml` is deleted and no `repository_dispatch` workflow remains
-- [ ] Vercel dashboard: `DB Migration` required check and Repository Dispatch
+- [x] Vercel dashboard: `DB Migration` required check and Repository Dispatch
       integration removed (manual)
 - [x] `/security-review` (handles the protection-bypass secret, OIDC deploy
       credentials, production promote, and removal of the migration gate)
