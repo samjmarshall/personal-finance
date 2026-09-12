@@ -8,7 +8,7 @@ import {
 	allowedSenderRefDto,
 } from "~/domain/email";
 import { assertRow } from "~/server/api/lib/assert-row";
-import { isPgError } from "~/server/api/lib/pg-error";
+import { PgViolation, parseError } from "~/server/api/lib/parse-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { user } from "~/server/auth/auth.schema";
 import { allowedSenders } from "~/server/email/allowed-sender.schema";
@@ -46,10 +46,15 @@ export const allowedSenderRouter = createTRPCRouter({
 			} catch (error) {
 				// One address maps to one Member, so a re-add (in any casing — the DTO
 				// normalised it) trips the unique index. Say so rather than 500.
-				if (isPgError(error, "23505"))
+				const parsed = parseError(error);
+				if (
+					parsed.kind === "pg" &&
+					parsed.violation === PgViolation.UniqueViolation
+				)
 					throw new TRPCError({
 						code: "CONFLICT",
 						message: "That address is already on the allowlist.",
+						cause: error,
 					});
 				throw error;
 			}

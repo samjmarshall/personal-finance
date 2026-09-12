@@ -22,7 +22,7 @@ function caller(db: unknown) {
 	} as never);
 }
 
-// postgres.js surfaces a SQLSTATE on the thrown error; that code is all isPgError reads.
+// postgres.js surfaces a SQLSTATE on the thrown error; that code is all parseError reads.
 function pgError(code: string) {
 	return Object.assign(new Error("postgres"), { code });
 }
