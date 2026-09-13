@@ -8,7 +8,7 @@ import {
 	categoryUpdateDto,
 } from "~/domain/categories";
 import { assertRow } from "~/server/api/lib/assert-row";
-import { PgViolation, parseError } from "~/server/api/lib/parse-error";
+import { isPgViolation, PgViolation } from "~/server/api/lib/parse-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
@@ -59,11 +59,7 @@ export const categoryRouter = createTRPCRouter({
 
 				return assertRow(row, "create category");
 			} catch (error) {
-				const parsed = parseError(error);
-				if (
-					parsed.kind === "pg" &&
-					parsed.violation === PgViolation.UniqueViolation
-				) {
+				if (isPgViolation(error, PgViolation.UniqueViolation)) {
 					throw new TRPCError({
 						code: "CONFLICT",
 						message: "A category with that name already exists.",
@@ -113,11 +109,7 @@ export const categoryRouter = createTRPCRouter({
 
 				return assertRow(row, "update category");
 			} catch (error) {
-				const parsed = parseError(error);
-				if (
-					parsed.kind === "pg" &&
-					parsed.violation === PgViolation.UniqueViolation
-				) {
+				if (isPgViolation(error, PgViolation.UniqueViolation)) {
 					throw new TRPCError({
 						code: "CONFLICT",
 						message: "A category with that name already exists.",

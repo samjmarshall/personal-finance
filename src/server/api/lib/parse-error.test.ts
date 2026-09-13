@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PgViolation, parseError } from "./parse-error";
+import { isPgViolation, PgViolation, parseError } from "./parse-error";
 
 // Stands in for postgres.js's PostgresError — only the SQLSTATE and constraint
 // name are read. postgres.js throws this shape with `.code` at the top level.
@@ -75,5 +75,44 @@ describe("parseError", () => {
 			kind: "unknown",
 			error: expect.any(Error),
 		});
+	});
+
+	// The unwrap is deliberately one hop deep (drizzle wraps exactly once). Pin the
+	// boundary: a second wrapper reads as unknown, so a future driver change that
+	// nests deeper turns this red rather than silently 500ing every conflict.
+	it("does not unwrap past one .cause hop", () => {
+		const twoDeep = Object.assign(new Error("outer"), {
+			cause: Object.assign(new Error("Failed query"), {
+				cause: pgError("23505", "x"),
+			}),
+		});
+		expect(parseError(twoDeep)).toEqual({ kind: "unknown", error: twoDeep });
+	});
+});
+
+describe("isPgViolation", () => {
+	it("is true only for the matching named violation", () => {
+		expect(isPgViolation(pgError("23505"), PgViolation.UniqueViolation)).toBe(
+			true,
+		);
+		expect(
+			isPgViolation(pgError("23505"), PgViolation.ForeignKeyViolation),
+		).toBe(false);
+	});
+
+	it("sees through the drizzle .cause wrap (the production shape)", () => {
+		const wrapped = Object.assign(new Error("Failed query"), {
+			cause: pgError("23503"),
+		});
+		expect(isPgViolation(wrapped, PgViolation.ForeignKeyViolation)).toBe(true);
+	});
+
+	it("is false for an unmapped code and for a non-pg error", () => {
+		expect(isPgViolation(pgError("40001"), PgViolation.UniqueViolation)).toBe(
+			false,
+		);
+		expect(isPgViolation(new Error("boom"), PgViolation.UniqueViolation)).toBe(
+			false,
+		);
 	});
 });

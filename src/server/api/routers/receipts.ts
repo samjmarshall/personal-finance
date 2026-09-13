@@ -28,7 +28,7 @@ import {
 } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import { assertRow } from "~/server/api/lib/assert-row";
-import { PgViolation, parseError } from "~/server/api/lib/parse-error";
+import { isPgViolation, PgViolation } from "~/server/api/lib/parse-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { user } from "~/server/auth/auth.schema";
 import { expenseCategories } from "~/server/expenses/categories.schema";
@@ -48,11 +48,7 @@ const ITEM_FK_CONFLICT_MESSAGE =
 // Rethrow a Postgres FK violation (23503) as a CONFLICT with the given message;
 // pass anything else through untouched.
 function rethrowFkConflict(error: unknown, message: string): never {
-	const parsed = parseError(error);
-	if (
-		parsed.kind === "pg" &&
-		parsed.violation === PgViolation.ForeignKeyViolation
-	) {
+	if (isPgViolation(error, PgViolation.ForeignKeyViolation)) {
 		throw new TRPCError({ code: "CONFLICT", message, cause: error });
 	}
 	throw error;
@@ -286,13 +282,9 @@ export const receiptRouter = createTRPCRouter({
 					.where(eq(receipts.id, input.receiptId))
 					.returning();
 			} catch (error) {
-				const parsed = parseError(error);
 				// The unique index on transactionId is the dup-photo catcher: two photos
 				// of one purchase race here and the loser is told why, not 500'd.
-				if (
-					parsed.kind === "pg" &&
-					parsed.violation === PgViolation.UniqueViolation
-				)
+				if (isPgViolation(error, PgViolation.UniqueViolation))
 					throw new TRPCError({
 						code: "CONFLICT",
 						message: "That transaction already has a receipt.",

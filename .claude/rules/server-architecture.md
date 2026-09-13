@@ -74,8 +74,10 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
 - Compose the pre-built router objects in `src/server/api/root.ts`
   (`balance, cashflow, category, expense, income, setting, transaction`).
 - Errors are thrown inline as `TRPCError`. Two shared helpers, not an error tier:
-  `isPgError(error, "23505")` (SQLSTATE guard, `src/server/api/lib/pg-error.ts`)
-  and `assertRow(row, "op")` (`.returning()` presence, `src/server/api/lib/assert-row.ts`).
+  `parseError(error)` (normalises a driver error into a tagged union — branch on
+  `kind === "pg"` + a named `PgViolation`, never a bare SQLSTATE;
+  `src/server/api/lib/parse-error.ts`) and `assertRow(row, "op")` (`.returning()`
+  presence, `src/server/api/lib/assert-row.ts`).
 - When a router domain migrates, the router becomes the controller tier over a
   `<domain>.service.ts`; same construction rules apply.
 

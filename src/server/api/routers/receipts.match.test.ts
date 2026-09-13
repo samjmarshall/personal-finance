@@ -22,9 +22,13 @@ function caller(db: unknown) {
 	} as never);
 }
 
-// postgres.js surfaces a SQLSTATE on the thrown error; that code is all parseError reads.
+// Mirrors production: drizzle wraps the postgres.js PostgresError in a
+// DrizzleQueryError with the driver error on `.cause`. Throwing this shape (not a
+// bare {code}) is what pins the parser's `.cause` unwrap at the router layer —
+// drop the hop and these CONFLICT tests go red instead of silently 500ing.
 function pgError(code: string) {
-	return Object.assign(new Error("postgres"), { code });
+	const driver = Object.assign(new Error("postgres"), { code });
+	return Object.assign(new Error("Failed query"), { cause: driver });
 }
 
 // Fake db whose update().set().where().returning() throws `throws` or yields `rows`,

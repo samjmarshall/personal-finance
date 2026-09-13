@@ -30,8 +30,9 @@ export type ParsedError =
 // snake_case `constraint_name`.
 type PgLike = { code: string; constraint_name?: unknown };
 
-// SQLSTATE is exactly five chars from [0-9A-Z]; the length gate is what keeps a
-// Node `ENOENT` from reading as a driver error.
+// SQLSTATE is exactly five chars from [0-9A-Z]. Shape-only, so a long errno
+// (`ENOENT`) is rejected but a 5-char one (`EPIPE`, `EPERM`) still reads as pg —
+// harmless: it maps to no PgViolation, and callers only act on a named one.
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 
 function asPgError(value: unknown): PgLike | null {
@@ -41,8 +42,10 @@ function asPgError(value: unknown): PgLike | null {
 	return value as PgLike;
 }
 
-// One `.cause` hop is enough today: postgres.js throws the raw PostgresError with
-// a top-level `.code` on every live path (ADR003 — db.batch swap deferred).
+// Drizzle 0.45 wraps the driver error in a DrizzleQueryError and hangs the raw
+// postgres.js PostgresError off `.cause` (one level), so the `.cause` hop is the
+// load-bearing path, not a fallback — a top-level-only check silently 500'd a
+// real 23505 in stage-5. Do not drop it. One hop suffices: drizzle wraps once.
 function findPgError(error: unknown): PgLike | null {
 	return asPgError(error) ?? asPgError((error as { cause?: unknown })?.cause);
 }
@@ -62,4 +65,11 @@ function parsePg(error: unknown): ParsedError | null {
 // The `??` seam is where a future Zod/auth parser slots in.
 export function parseError(error: unknown): ParsedError {
 	return parsePg(error) ?? { kind: "unknown", error };
+}
+
+// The yes/no guard almost every catch wants: is this a specific named violation?
+// Callers that need `code`/`constraint` reach for parseError directly.
+export function isPgViolation(error: unknown, violation: PgViolation): boolean {
+	const parsed = parseError(error);
+	return parsed.kind === "pg" && parsed.violation === violation;
 }
