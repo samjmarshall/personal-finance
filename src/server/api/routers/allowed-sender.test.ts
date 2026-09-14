@@ -51,6 +51,14 @@ function deleteDb(returning: any[]) {
 	};
 }
 
+// Mirrors production: drizzle wraps the postgres.js PostgresError in a
+// DrizzleQueryError with the driver error on `.cause`. Throwing this shape (not a
+// bare {code}) is what pins the parser's `.cause` unwrap at the router layer.
+function pgError(code: string) {
+	const driver = Object.assign(new Error("postgres"), { code });
+	return Object.assign(new Error("Failed query"), { cause: driver });
+}
+
 describe("allowedSender.add", () => {
 	// The owning Member is taken from the session, never the input — otherwise a
 	// client could point someone else's address at their own inbox.
@@ -79,7 +87,7 @@ describe("allowedSender.add", () => {
 	// The unique index is what keeps one address on exactly one Member. A member
 	// re-adding an address must be told why, not handed a 500.
 	it("maps a 23505 unique violation to CONFLICT", async () => {
-		const { db } = insertDb([], { code: "23505" });
+		const { db } = insertDb([], pgError("23505"));
 
 		await expect(
 			caller(db).add({ email: "sam@example.com" }),
@@ -89,7 +97,7 @@ describe("allowedSender.add", () => {
 	// Only 23505 means "already on the allowlist"; anything else must stay a fault,
 	// or a real outage would read to the member as a duplicate address.
 	it("does not map an unrelated database error to CONFLICT", async () => {
-		const { db } = insertDb([], { code: "23503" });
+		const { db } = insertDb([], pgError("23503"));
 
 		await expect(
 			caller(db).add({ email: "sam@example.com" }),
