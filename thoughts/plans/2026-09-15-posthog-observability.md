@@ -121,9 +121,9 @@ Implements adr015 clauses 5 (baggage → span attrs, `posthog.distinct_id`) and 
 - Note for the implementer: AI SDK 5.0.252 passes `ai.prompt.messages` in the span's **start** attributes (`recordSpan` → `startActiveSpan(name, { attributes })`), so `onStart` sees it. Confirm on the installed `node_modules/ai/dist/index.mjs` before coding; if it turns out to be set post-start, move redaction to `onEnd` on the mutable `span.attributes` object — same tests, different hook.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] A 3 MB base64 file part reduces to a <200-byte stub in the test (asserts the 4 MB PostHog cap is respected)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] A 3 MB base64 file part reduces to a <200-byte stub in the test (asserts the 4 MB PostHog cap is respected)
 
 ---
 
