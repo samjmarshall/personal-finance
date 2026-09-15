@@ -157,3 +157,7 @@ _Avoid_: source
 - **Household** is domain language today, not a boundary in the data — the records are
   unscoped, and household scoping is planned. Resolved: use the term freely in conversation;
   do not assume it is enforced.
+- **"user" / "person"** arrive with the analytics and auth tooling (PostHog shows "persons",
+  better-auth's table is `user`) and both mean **Member**. Resolved: activity, errors and AI
+  spend are attributed to a **Member**, and to the **Household** once scoping exists;
+  dashboards, alerts and cost reports say Member and Household, never "user".
