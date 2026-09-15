@@ -15,6 +15,10 @@ if [ "$TOOL" = "Read" ]; then
     exit 0
   fi
   BASENAME=$(basename "$FILE_PATH")
+  # Allow the git-tracked template — it holds no secrets.
+  if [ "$BASENAME" = ".env.example" ]; then
+    exit 0
+  fi
   # Match .env, .env.local, .env.production, etc. but not .envrc or .environment
   if echo "$BASENAME" | grep -qE '^\.env(\.[a-zA-Z0-9_.-]+)?$'; then
     echo "BLOCKED: Reading '$FILE_PATH' is not allowed — .env files may contain secrets. Use \`make env_pull\` to sync env vars from Vercel." >&2
@@ -28,7 +32,10 @@ if [ "$TOOL" = "Bash" ]; then
   # Matches: cat .env, head /app/.env.local, grep SECRET .env.production
   # Does not match: NODE_ENV=, process.env.FOO, cat .envrc, cat .environment
   ENV_PATTERN='(^|[[:space:]]|/|"|'"'"')\.env(\.[a-zA-Z0-9_.-]+)?([[:space:]]|$|[";'"'"'|&>])'
+  # The git-tracked template .env.example holds no secrets; drop it before matching.
+  EXAMPLE_PATTERN='(^|[[:space:]]|/|"|'"'"')\.env\.example([[:space:]]|$|[";'"'"'|&>])'
   while IFS= read -r line; do
+    line=$(echo "$line" | sed -E "s#$EXAMPLE_PATTERN#\1\2#g")
     if echo "$line" | grep -qE "$ENV_PATTERN"; then
       echo "BLOCKED: The command references a .env file — .env files may contain secrets. Use \`make env_pull\` to sync env vars from Vercel." >&2
       exit 2
