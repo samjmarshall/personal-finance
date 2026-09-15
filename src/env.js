@@ -86,6 +86,21 @@ export const env = createEnv({
 		 */
 		RESEND_INBOUND_ADDRESS: z.string().optional(),
 		RESEND_WEBHOOK_SECRET: requiredInProd(z.string()),
+		/**
+		 * PostHog project token for the Rekurve project. Must start with `phc_`; a
+		 * personal `phx_` key intentionally fails. Unset: OTel registration skipped,
+		 * logger writes stdout only, captureException is a no-op.
+		 */
+		POSTHOG_KEY: z.string().startsWith("phc_").optional(),
+		/** PostHog ingestion endpoint. Defaults to the US cloud. */
+		POSTHOG_HOST: z.url().default("https://us.i.posthog.com"),
+		LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+		/**
+		 * Bedrock token prices for cost stamping on AI spans (Decision 11 — unset
+		 * until Phase 11 confirms native cost is emitted or missing).
+		 */
+		BEDROCK_INPUT_TOKEN_PRICE_USD: z.coerce.number().positive().optional(),
+		BEDROCK_OUTPUT_TOKEN_PRICE_USD: z.coerce.number().positive().optional(),
 	},
 
 	/**
@@ -119,6 +134,11 @@ export const env = createEnv({
 		RESEND_API_KEY: process.env.RESEND_API_KEY,
 		RESEND_INBOUND_ADDRESS: process.env.RESEND_INBOUND_ADDRESS,
 		RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+		POSTHOG_KEY: process.env.POSTHOG_KEY,
+		POSTHOG_HOST: process.env.POSTHOG_HOST,
+		LOG_LEVEL: process.env.LOG_LEVEL,
+		BEDROCK_INPUT_TOKEN_PRICE_USD: process.env.BEDROCK_INPUT_TOKEN_PRICE_USD,
+		BEDROCK_OUTPUT_TOKEN_PRICE_USD: process.env.BEDROCK_OUTPUT_TOKEN_PRICE_USD,
 	},
 	/**
 	 * Use `SKIP_ENV_VALIDATION` when skipping env validation is required.

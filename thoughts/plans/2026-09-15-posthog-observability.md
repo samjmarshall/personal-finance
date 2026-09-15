@@ -101,13 +101,13 @@ Implements adr015 clause 3 (the `Logger` port) and clause 5 (baggage keys).
 - `src/server/observability/baggage.test.ts` — new. `setBaggage` round-trips through `readBaggage` under `context.with`; unknown baggage entries are not returned; merge keeps prior keys.
 
 ### Success
-- [ ] `make install` completes with no peer-dependency warnings for the pinned set
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes (new deps bundle under Next 16)
-- [ ] `SKIP_ENV_VALIDATION` unset, app starts with none of the new vars set (all optional/defaulted)
-- [ ] `POSTHOG_KEY=phx_x` fails env validation; `phc_x` passes
-- [ ] `/security-review` (touches `src/env.js`)
+- [x] `make install` completes with no peer-dependency warnings for the pinned set
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes (new deps bundle under Next 16)
+- [x] `SKIP_ENV_VALIDATION` unset, app starts with none of the new vars set (all optional/defaulted)
+- [x] `POSTHOG_KEY=phx_x` fails env validation; `phc_x` passes
+- [x] `/security-review` (touches `src/env.js`)
 
 ---
 
