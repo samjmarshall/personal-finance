@@ -1,4 +1,9 @@
 import type { Instrumentation } from "next";
+import type { Logger } from "./server/observability/logger";
+
+// Cached across errors: an error storm shouldn't rebuild the logger (which
+// re-reads env) each time. Runtime env is fixed, so one build is enough.
+let nextLogger: Logger | undefined;
 
 export async function register(): Promise<void> {
 	if (process.env.NEXT_RUNTIME === "nodejs") {
@@ -36,8 +41,7 @@ export const onRequestError: Instrumentation.onRequestError = async (
 		routeType: ctx.routeType,
 	};
 	captureException(error, attrs);
-	createRootLogger()
-		.with({ domain: "next" })
-		.error("unhandled route error", { error, ...attrs });
+	nextLogger ??= createRootLogger().with({ domain: "next" });
+	nextLogger.error("unhandled route error", { error, ...attrs });
 	await flushTelemetry();
 };

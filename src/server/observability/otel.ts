@@ -11,20 +11,11 @@ import { PostHogSpanProcessor } from "@posthog/ai/otel";
 import { registerOTel } from "@vercel/otel";
 import { registerTelemetry } from "ai";
 import { env } from "~/env";
+import {
+	getRegisteredProcessors,
+	setRegisteredProcessors,
+} from "./otel-registry";
 import { ContextSpanProcessor } from "./span-processor";
-
-interface RegisteredProcessors {
-	traceBatch: BatchSpanProcessor;
-	posthogSpanProcessor: PostHogSpanProcessor;
-	logBatch: BatchLogRecordProcessor;
-}
-
-// Handles kept for flush.ts to force-flush before a serverless freeze.
-let registered: RegisteredProcessors | null = null;
-
-export function getRegisteredProcessors(): RegisteredProcessors | null {
-	return registered;
-}
 
 /**
  * Boots OTel + PostHog once per server instance. A no-op without POSTHOG_KEY,
@@ -33,7 +24,7 @@ export function getRegisteredProcessors(): RegisteredProcessors | null {
 export function registerObservability(): void {
 	const key = env.POSTHOG_KEY;
 	if (!key) return;
-	if (registered) return;
+	if (getRegisteredProcessors()) return;
 
 	const host = env.POSTHOG_HOST;
 	const headers = { Authorization: `Bearer ${key}` };
@@ -68,8 +59,10 @@ export function registerObservability(): void {
 			traceBatch,
 		],
 		logRecordProcessors: [logBatch],
-		// Empty allowlist: never write traceparent/baggage onto outbound fetch, so
-		// no correlation id reaches Bedrock or Resend (adr015 §6).
+		// propagateContextUrls only ADDS extra hosts to receive trace context;
+		// @vercel/otel already propagates just to our own deployment/same-host URL.
+		// Empty = no third party added, so Bedrock/Resend (third-party https) get no
+		// traceparent/baggage. Self-fetches to our deployment still carry it (adr015 §6).
 		instrumentationConfig: { fetch: { propagateContextUrls: [] } },
 	});
 
@@ -80,5 +73,5 @@ export function registerObservability(): void {
 	// `OpenTelemetry` (gen_ai.* semconv) is a deliberate follow-up, not this phase.
 	registerTelemetry(new LegacyOpenTelemetry());
 
-	registered = { traceBatch, posthogSpanProcessor, logBatch };
+	setRegisteredProcessors({ traceBatch, posthogSpanProcessor, logBatch });
 }

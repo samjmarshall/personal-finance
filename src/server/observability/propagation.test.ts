@@ -1,4 +1,4 @@
-import { context, propagation, trace } from "@opentelemetry/api";
+import { context, propagation, ROOT_CONTEXT, trace } from "@opentelemetry/api";
 import {
 	CompositePropagator,
 	W3CBaggagePropagator,
@@ -49,18 +49,11 @@ describe("trace propagation", () => {
 		});
 	});
 
-	it("leaves outbound fetch headers untouched — the app never injects on them", () => {
-		context.with(setBaggage({ "member.id": "m1" }), () => {
-			const span = tracer.startSpan("root");
-			context.with(trace.setSpan(context.active(), span), () => {
-				// App code builds outbound request headers directly and never calls
-				// propagation.inject on them, so Bedrock/Resend receive no trace
-				// context (adr015: propagateContextUrls is []).
-				const headers = new Headers({ "content-type": "application/json" });
-				expect(headers.get("traceparent")).toBeNull();
-				expect(headers.get("baggage")).toBeNull();
-			});
-			span.end();
-		});
+	it("injects nothing on a context with no active span or baggage (the empty carrier captureTraceCarrier relies on)", () => {
+		const carrier: Record<string, string> = {};
+		propagation.inject(ROOT_CONTEXT, carrier);
+
+		expect(carrier.traceparent).toBeUndefined();
+		expect(carrier.baggage).toBeUndefined();
 	});
 });
