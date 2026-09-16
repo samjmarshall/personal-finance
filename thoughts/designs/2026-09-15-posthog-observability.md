@@ -343,11 +343,24 @@ surfaces `EventName`, the mirror goes.
 
 ## AI SDK v7 upgrade path
 
-Add `@ai-sdk/otel`; call `registerTelemetry(new OpenTelemetry({ enrichSpan }))`
-in `otel.ts`; move `posthog.distinct_id`, `$groups`, `$ai_session_id` from the
-processor into `enrichSpan`; `experimental_telemetry` → `telemetry`; handle the
-`generateObject` deprecation. Image redaction stays in the processor.
-Transport, logs, error tracking, baggage, outbox carrier: unchanged.
+The dep bump landed early (2026-09-16): `ai` 5.0.252 → 7.0.101,
+`@ai-sdk/amazon-bedrock` 3.0.129 → 5.0.82. Every symbol the receipts tier uses
+(`generateObject`, `APICallError`, `LanguageModel`, `TextPart`/`FilePart`)
+survives — zero source change was needed. `generateObject` is deprecated since
+v6 but still exported and still returns `{ object }`; the `generateText` +
+`Output.object` migration is out of scope for the bump. `experimental_telemetry`
+→ `telemetry` (Phase 8; the alias still compiles).
+
+OTel wiring (Phase 3): add `@ai-sdk/otel` (peer `@opentelemetry/api` 1.9.1 — bump
+the exact 1.9.0 pin) and `registerTelemetry(new LegacyOpenTelemetry())`, **not**
+the SDK-recommended `new OpenTelemetry({ enrichSpan })`. `LegacyOpenTelemetry`
+keeps the `ai.*` span names + `ai.prompt.messages` attribute the `ContextSpanProcessor`
+redaction keys on; `OpenTelemetry` emits `gen_ai.*` semconv, which would silently
+no-op redaction and ship raw receipt bytes. Moving to `gen_ai.*` + `enrichSpan`
+(and moving `posthog.distinct_id` / `$groups` / `$ai_session_id` from the
+processor into `enrichSpan`) is a deliberate follow-up that must re-key redaction
+in the same change. Image redaction stays in the processor. Transport, logs,
+error tracking, baggage, outbox carrier: unchanged.
 
 ## Out of scope
 
