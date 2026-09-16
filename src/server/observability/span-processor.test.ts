@@ -9,8 +9,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { setBaggage } from "./baggage";
 import { ContextSpanProcessor } from "./span-processor";
 
-// Helpers -------------------------------------------------------------------
-
 function makeMessages(parts: unknown[]) {
 	return JSON.stringify([{ role: "user", content: parts }]);
 }
@@ -22,8 +20,6 @@ function filePart(b64: string, mediaType = "image/jpeg") {
 function textPart(text: string) {
 	return { type: "text", text };
 }
-
-// Suite setup ---------------------------------------------------------------
 
 const exporter = new InMemorySpanExporter();
 const processor = new ContextSpanProcessor({
@@ -51,8 +47,6 @@ function runSpan(
 	});
 	return exporter.getFinishedSpans()[0];
 }
-
-// Tests ---------------------------------------------------------------------
 
 describe("ContextSpanProcessor", () => {
 	describe("baggage → span attrs", () => {
@@ -87,7 +81,6 @@ describe("ContextSpanProcessor", () => {
 				"ai.prompt.messages": messages,
 			});
 
-			// Attribute is present but untouched.
 			expect(span?.attributes["ai.prompt.messages"]).toBe(messages);
 		});
 
@@ -177,6 +170,105 @@ describe("ContextSpanProcessor", () => {
 		});
 	});
 
+	describe("binary redaction — real payload shapes", () => {
+		it("redacts an image part carrying raw Uint8Array bytes (receipts shape)", () => {
+			// receipts.service.ts emits { type: "image", image: <Uint8Array> }, which
+			// serializes to a numeric-keyed object — not a base64 string.
+			const bytes = new Uint8Array(Buffer.from("raw-receipt-jpeg-bytes"));
+			const sha = createHash("sha256").update(bytes).digest("hex");
+			const messages = makeMessages([
+				{ type: "image", image: bytes, mediaType: "image/jpeg" },
+			]);
+
+			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
+				"ai.prompt.messages": messages,
+			});
+
+			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
+			expect(out[0].content[0].image).toBe(
+				`<redacted image/jpeg ${bytes.byteLength} sha256:${sha}>`,
+			);
+		});
+
+		it("redacts a Node Buffer-shaped payload ({ type: 'Buffer', data })", () => {
+			const buf = Buffer.from("node-buffer-pdf-bytes");
+			const sha = createHash("sha256").update(buf).digest("hex");
+			const messages = makeMessages([
+				{ type: "file", data: buf, mediaType: "application/pdf" },
+			]);
+
+			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
+				"ai.prompt.messages": messages,
+			});
+
+			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
+			expect(out[0].content[0].data).toBe(
+				`<redacted application/pdf ${buf.byteLength} sha256:${sha}>`,
+			);
+		});
+
+		it("redacts binary in the outer ai.prompt attribute", () => {
+			// The generate* outer span wraps messages in { system, prompt, messages }
+			// under `ai.prompt` — a separate leak path from `ai.prompt.messages`.
+			const bytes = new Uint8Array(Buffer.from("outer-span-receipt-bytes"));
+			const sha = createHash("sha256").update(bytes).digest("hex");
+			const prompt = JSON.stringify({
+				system: "extract the receipt",
+				messages: [
+					{
+						role: "user",
+						content: [
+							{ type: "image", image: bytes, mediaType: "image/jpeg" },
+							textPart("extract"),
+						],
+					},
+				],
+			});
+
+			const span = runSpan("ai.generateObject", context.active(), {
+				"ai.prompt": prompt,
+			});
+
+			const out = JSON.parse(span?.attributes["ai.prompt"] as string);
+			expect(out.messages[0].content[0].image).toBe(
+				`<redacted image/jpeg ${bytes.byteLength} sha256:${sha}>`,
+			);
+			expect(out.messages[0].content[1].text).toBe("extract");
+			expect(out.system).toBe("extract the receipt");
+		});
+
+		it("leaves an http reference URL untouched (not decoded as base64)", () => {
+			const url = "https://blob.example/receipt.jpg";
+			const messages = makeMessages([
+				{ type: "image", image: url, mediaType: "image/jpeg" },
+			]);
+
+			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
+				"ai.prompt.messages": messages,
+			});
+
+			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
+			expect(out[0].content[0].image).toBe(url);
+		});
+	});
+
+	describe("typed attributes preserved over baggage", () => {
+		it("does not clobber a number attr set at start with a baggage string", () => {
+			// receipt.id is stamped as a number at span start; the baggage copy is a
+			// string — the typed value must win so filters don't split on type.
+			const ctx = setBaggage({ "receipt.id": "42" });
+			tracer.startActiveSpan(
+				"receipt.process",
+				{ attributes: { "receipt.id": 42 } },
+				ctx,
+				(span) => span.end(),
+			);
+
+			const span = exporter.getFinishedSpans()[0];
+			expect(span?.attributes["receipt.id"]).toBe(42);
+		});
+	});
+
 	describe("price attributes", () => {
 		it("stamps price attrs on ai.* spans when configured", () => {
 			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
@@ -195,7 +287,6 @@ describe("ContextSpanProcessor", () => {
 		});
 
 		it("omits price attrs on ai.* spans when processor has no prices", () => {
-			// Use a separate processor instance with no prices.
 			const noPrice = new ContextSpanProcessor();
 			const exp = new InMemorySpanExporter();
 			const prov = new NodeTracerProvider({

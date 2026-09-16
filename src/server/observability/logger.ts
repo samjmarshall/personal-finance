@@ -76,7 +76,6 @@ export class OtelLogger implements Logger {
 			? { trace_id: spanCtx.traceId, span_id: spanCtx.spanId }
 			: {};
 
-		// Exception shape from the error field.
 		const errorAttrs: LogAttributes = {};
 		if (error !== undefined) {
 			if (error instanceof Error) {
@@ -93,10 +92,13 @@ export class OtelLogger implements Logger {
 			}
 		}
 
+		// Precedence low→high: ambient baggage is weakest, so an explicit call arg
+		// (e.g. the row id a warn names) wins over the active baggage id. Span/error
+		// attrs are system-computed and win last so a caller can't spoof them.
 		const allAttrs: LogAttributes = {
+			...readBaggage(),
 			...this.bound,
 			...callAttrs,
-			...readBaggage(),
 			...spanAttrs,
 			...errorAttrs,
 		};
@@ -153,21 +155,24 @@ export class OtelLogger implements Logger {
 	}
 }
 
-const VALID_LEVELS = new Set<string>(["debug", "info", "warn", "error"]);
-
 /**
  * Builds the root logger bound to the OTel global logger and process.stdout.
- * Reads LOG_LEVEL and NODE_ENV from process.env so test files importing
- * OtelLogger directly don't trigger ~/env validation. Call once per
- * composition root; tiers call `root.with({ domain, component })`.
+ * Reads LOG_LEVEL and NODE_ENV from process.env — not ~/env — so test files
+ * importing OtelLogger don't trigger full env validation. Throws on a mistyped
+ * LOG_LEVEL instead of degrading to "info", mirroring ~/env's z.enum. Call once
+ * per composition root; tiers call `root.with({ domain, component })`.
  */
 export function createRootLogger(): OtelLogger {
 	const raw = process.env.LOG_LEVEL ?? "info";
-	const level: LogLevel = VALID_LEVELS.has(raw) ? (raw as LogLevel) : "info";
+	if (!(raw in LEVEL_RANK)) {
+		throw new Error(
+			`Invalid LOG_LEVEL "${raw}" — expected one of ${Object.keys(LEVEL_RANK).join(", ")}`,
+		);
+	}
 	return new OtelLogger({
 		emitter: logs.getLogger("personal-finance"),
 		stdout: process.stdout,
-		level,
+		level: raw as LogLevel,
 		pretty: process.env.NODE_ENV === "development",
 	});
 }
