@@ -4,9 +4,11 @@ import {
 	type Logger as OtelApiLogger,
 	SeverityNumber,
 } from "@opentelemetry/api-logs";
+import { env } from "~/env";
 import { readBaggage } from "./baggage";
+import { LogLevel } from "./log-level";
 
-export type LogLevel = "debug" | "info" | "warn" | "error";
+export { LogLevel };
 
 /**
  * Attrs callers pass to each log call. Accepts unknown values so `error: Error`
@@ -129,19 +131,19 @@ export class OtelLogger implements Logger {
 	}
 
 	debug(msg: string, attrs?: LogAttributes): void {
-		this.log("debug", msg, attrs);
+		this.log(LogLevel.DEBUG, msg, attrs);
 	}
 
 	info(msg: string, attrs?: LogAttributes): void {
-		this.log("info", msg, attrs);
+		this.log(LogLevel.INFO, msg, attrs);
 	}
 
 	warn(msg: string, attrs?: LogAttributes): void {
-		this.log("warn", msg, attrs);
+		this.log(LogLevel.WARN, msg, attrs);
 	}
 
 	error(msg: string, attrs?: LogAttributes & { error?: unknown }): void {
-		this.log("error", msg, attrs);
+		this.log(LogLevel.ERROR, msg, attrs);
 	}
 
 	with(attrs: LogAttributes): Logger {
@@ -157,22 +159,16 @@ export class OtelLogger implements Logger {
 
 /**
  * Builds the root logger bound to the OTel global logger and process.stdout.
- * Reads LOG_LEVEL and NODE_ENV from process.env — not ~/env — so test files
- * importing OtelLogger don't trigger full env validation. Throws on a mistyped
- * LOG_LEVEL instead of degrading to "info", mirroring ~/env's z.enum. Call once
- * per composition root; tiers call `root.with({ domain, component })`.
+ * LOG_LEVEL comes validated from ~/env — its z.enum throws on a typo, so a bad
+ * value fails at boot rather than silently degrading to dropped logs; pretty
+ * output keys off NODE_ENV. Call once per composition root; tiers call
+ * `root.with({ domain, component })`.
  */
 export function createRootLogger(): OtelLogger {
-	const raw = process.env.LOG_LEVEL ?? "info";
-	if (!(raw in LEVEL_RANK)) {
-		throw new Error(
-			`Invalid LOG_LEVEL "${raw}" — expected one of ${Object.keys(LEVEL_RANK).join(", ")}`,
-		);
-	}
 	return new OtelLogger({
 		emitter: logs.getLogger("personal-finance"),
 		stdout: process.stdout,
-		level: raw as LogLevel,
+		level: env.LOG_LEVEL,
 		pretty: process.env.NODE_ENV === "development",
 	});
 }

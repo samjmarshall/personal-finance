@@ -8,11 +8,11 @@ import {
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setBaggage } from "./baggage";
-import { type LogLevel, OtelLogger } from "./logger";
+import { LogLevel, OtelLogger } from "./logger";
 
 type FakeRecord = LogRecord & { body?: string };
 
-function makeHarness(level: LogLevel = "debug", pretty = false) {
+function makeHarness(level: LogLevel = LogLevel.DEBUG, pretty = false) {
 	const emitCalls: FakeRecord[] = [];
 	const stdoutLines: string[] = [];
 	const emitter = { emit: (r: LogRecord) => emitCalls.push(r as FakeRecord) };
@@ -44,7 +44,7 @@ describe("OtelLogger", () => {
 	});
 
 	it("drops records below configured level from both sinks", () => {
-		const { logger, emitCalls, stdoutLines } = makeHarness("warn");
+		const { logger, emitCalls, stdoutLines } = makeHarness(LogLevel.WARN);
 		logger.debug("d");
 		logger.info("i");
 		logger.warn("w");

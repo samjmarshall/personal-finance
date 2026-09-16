@@ -1,5 +1,6 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
+import { LogLevel } from "~/server/observability/log-level";
 
 /** @type {<T extends z.ZodType>(schema: T) => T | z.ZodOptional<T>} */
 const requiredInProd = (schema) =>
@@ -92,9 +93,8 @@ export const env = createEnv({
 		 * logger writes stdout only, captureException is a no-op.
 		 */
 		POSTHOG_KEY: z.string().startsWith("phc_").optional(),
-		/** PostHog ingestion endpoint. Defaults to the US cloud. */
 		POSTHOG_HOST: z.url().default("https://us.i.posthog.com"),
-		LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+		LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),
 		/**
 		 * Bedrock token prices for cost stamping on AI spans (Decision 11 — unset
 		 * until Phase 11 confirms native cost is emitted or missing).
