@@ -144,11 +144,11 @@ describe("DrizzleEmailRepository", () => {
 			expect(h.emitted()).toEqual([
 				expect.objectContaining({
 					name: "receipt/email.received",
-					data: { receiptId: 1 },
+					data: { receiptId: 1, _trace: expect.any(Object) },
 				}),
 				expect.objectContaining({
 					name: "receipt/email.received",
-					data: { receiptId: 2 },
+					data: { receiptId: 2, _trace: expect.any(Object) },
 				}),
 			]);
 		});

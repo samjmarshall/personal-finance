@@ -164,10 +164,10 @@ Implements adr016 clauses 1 and 2 — `docs/adr/adr016-trace-context-in-outbox-p
 - `src/server/outbox/outbox.service.test.ts` — add one assertion in the `commit` path: the event handed to `inngest.send` carries `data._trace` (the descriptor the fake `events()` callback returned via `buildOutboxEvent` is sent byte-for-byte). Sweep path: a row whose `data` already holds `_trace` is re-sent with the same `_trace` (`outbox.service.ts:83-87` projects `row.data` verbatim).
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `registry-golden.test.ts` unchanged and green
-- [ ] No Drizzle migration generated (`make db_generate` produces nothing; `pnpm run db:check` clean)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `registry-golden.test.ts` unchanged and green
+- [x] No Drizzle migration generated (`make db_generate` produces nothing; `pnpm run db:check` clean)
 
 ---
 

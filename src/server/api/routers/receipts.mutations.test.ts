@@ -58,7 +58,10 @@ describe("receipt.retry", () => {
 
 		expect(outboxEvents).toHaveLength(1);
 		expect(outboxEvents[0].name).toBe("receipt/retry");
-		expect(outboxEvents[0].data).toEqual({ receiptId: 9 });
+		expect(outboxEvents[0].data).toEqual({
+			receiptId: 9,
+			_trace: expect.any(Object),
+		});
 		expect(typeof outboxEvents[0].data.receiptId).toBe("number");
 	});
 

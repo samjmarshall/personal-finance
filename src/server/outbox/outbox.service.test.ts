@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { OutboxEventDescriptor } from "~/server/inngest/events";
+import {
+	buildOutboxEvent,
+	type OutboxEventDescriptor,
+} from "~/server/inngest/events";
 import type { OutboxRepository, OutboxRow } from "./outbox.repository";
 import { OutboxService } from "./outbox.service";
 
@@ -116,6 +119,19 @@ describe("OutboxService.commit", () => {
 		);
 	});
 
+	// adr016: the minted descriptor rides to Inngest byte-for-byte, `_trace` and all.
+	it("sends the minted descriptor unchanged, carrying its _trace pocket", async () => {
+		const h = harness([]);
+		const minted = buildOutboxEvent("receipt/uploaded", { receiptId: 1 });
+
+		await h.service.commit(
+			async () => {},
+			() => [minted],
+		);
+
+		expect(h.sends).toEqual([minted]);
+	});
+
 	it("marks the row processed when the send succeeds", async () => {
 		const h = harness([]);
 
@@ -214,6 +230,26 @@ describe("OutboxService.sweep", () => {
 		}
 		expect(h.processed).toEqual(["r1", "r2"]);
 		expect(h.failed).toEqual([]);
+	});
+
+	// adr016: a late re-delivery must carry the producer's carrier, not the cron's.
+	it("re-sends a stored row's _trace pocket unchanged", async () => {
+		const carrier = { traceparent: "00-abc-def-01" };
+		const stuck: OutboxRow = {
+			...row("r1"),
+			data: { receiptId: "r1", _trace: carrier },
+		};
+		const h = harness([stuck]);
+
+		await h.service.sweep();
+
+		expect(h.sends).toEqual([
+			{
+				id: "r1",
+				name: "receipt/uploaded",
+				data: { receiptId: "r1", _trace: carrier },
+			},
+		]);
 	});
 
 	it("swallows a failing send: records the error message and leaves the row unacked", async () => {

@@ -83,7 +83,10 @@ describe("receipt.create producer", () => {
 
 		expect(outboxEvents).toHaveLength(1);
 		expect(outboxEvents[0].name).toBe("receipt/uploaded");
-		expect(outboxEvents[0].data).toEqual({ receiptId: 7 });
+		expect(outboxEvents[0].data).toEqual({
+			receiptId: 7,
+			_trace: expect.any(Object),
+		});
 		// buildOutboxEvent parses against the registry (number); a string would throw.
 		expect(typeof outboxEvents[0].data.receiptId).toBe("number");
 	});

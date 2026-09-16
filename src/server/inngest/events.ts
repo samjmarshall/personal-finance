@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+	captureTraceCarrier,
+	TRACE_CARRIER_KEY,
+} from "~/server/observability/trace-carrier";
 
 /**
  * Single naming + payload authority for outbox events (adr002 clause 7). Keys are
@@ -28,9 +32,12 @@ export function buildOutboxEvent<K extends EventName>(
 	name: K,
 	payload: EventPayload<K>,
 ): OutboxEventDescriptor {
+	// The `_trace` pocket is appended after parse so `z.object` stripping never
+	// removes it (adr016 clause 1). Nothing else writes this key.
+	const data = EVENT_REGISTRY[name].parse(payload);
 	return {
 		id: crypto.randomUUID(),
 		name,
-		data: EVENT_REGISTRY[name].parse(payload),
+		data: { ...data, [TRACE_CARRIER_KEY]: captureTraceCarrier() },
 	};
 }
