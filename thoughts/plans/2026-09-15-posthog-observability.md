@@ -147,7 +147,7 @@ Read first: `node_modules/next/dist/docs/03-api-reference/03-file-conventions/in
 - [x] `make build` passes (OTel bundles under Next 16 Turbopack; no `serverExternalPackages` needed; the env-gate failure on `DEPLOYMENT_URL`/`INNGEST_*` is pre-existing prod-env validation, unrelated to Phase 3 — verified bundling with `SKIP_ENV_VALIDATION=1`)
 - [x] `make start` with no `POSTHOG_KEY`: `registerObservability()` no-op, nothing registered, no OTel warnings (verified directly)
 - [x] `make start` with `POSTHOG_KEY` set: SDK registered once, idempotent on a second call, all three processor handles present (verified directly)
-- [x] `/security-review` (touches `src/instrumentation.ts`; `next.config.js` unchanged — no bundling fix needed) — clean, no new vulns; error→PostHog PII is the pre-existing tracked TODO(security), not a Phase 3 defect
+- [ ] `/security-review` (touches `src/instrumentation.ts`; `next.config.js` unchanged — no bundling fix needed) — **NOT clean.** New HIGH finding on re-validation: `@vercel/otel` "auto" fetch instrumentation records `http.url`/`http.target` on outbound fetch spans, unscrubbed, and ships them to PostHog. `inngest.send` posts to `https://inn.gs/e/<INNGEST_EVENT_KEY>` (Inngest.js:611) via the OTel-patched `globalThis.fetch` (Inngest.js:178), so the production Inngest event key leaks into PostHog on every outbox delivery. Fix in `otel.ts`: `fetch.ignoreUrls: [/^https?:\/\/inn\.gs\//]`. Rotate `INNGEST_EVENT_KEY` if any env deployed with `POSTHOG_KEY` set. (error→PostHog PII is the separate pre-existing tracked TODO(security).)
 
 ---
 

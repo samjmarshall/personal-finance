@@ -46,6 +46,12 @@ Better Auth secondary storage — sessions and verification records dual-write t
 
 The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `ba:<VERCEL_ENV>:<db-fingerprint>:`, so environments and Neon branches sharing one Upstash database cannot authenticate each other's sessions.
 
+### PostHog (traces, logs, LLM analytics, error tracking)
+
+`src/instrumentation.ts` `register()` boots OpenTelemetry once per Node server instance via `@vercel/otel`, exporting spans and log records over OTLP to the PostHog project; `onRequestError` is the one place an unhandled route error is captured, logged and flushed before the serverless freeze. Tiers never touch the SDK — they take an injected `Logger` and the ambient `@opentelemetry/api` tracer.
+
+Everything is gated on `POSTHOG_KEY`: unset, nothing registers, the logger writes stdout only and exception capture is a no-op, so tests and keyless local runs need no key. Outbound `fetch` carries no `traceparent`/`baggage`, so no correlation id reaches Bedrock or Resend. See [adr015](adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md) and [adr016](adr/adr016-trace-context-in-outbox-payload.md).
+
 ## Async platform (outbox + Inngest)
 
 Side-effecting writes commit their canonical rows and an `outbox` row in one `db.transaction()`, then best-effort `inngest.send`; a cron re-delivers anything the send missed. At-least-once, idempotent on the outbox row `id`. See [adr002](adr/adr002-canonical-postgres-store-transactional-outbox.md); event names live in `src/server/inngest/events.ts` (`EVENT_REGISTRY`).

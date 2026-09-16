@@ -36,7 +36,6 @@ beforeEach(() => exporter.reset());
 
 const tracer = provider.getTracer("test");
 
-// Helper: start + immediately end a span with explicit context and attributes.
 function runSpan(
 	name: string,
 	ctx = context.active(),

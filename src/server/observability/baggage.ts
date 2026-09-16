@@ -1,6 +1,5 @@
 import { type Context, context, propagation } from "@opentelemetry/api";
 
-/** All baggage keys this app manages. */
 export const BAGGAGE_KEYS = {
 	memberId: "member.id",
 	receiptId: "receipt.id",
