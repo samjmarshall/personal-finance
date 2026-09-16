@@ -108,8 +108,8 @@ importers:
         specifier: 1.5.2
         version: 1.5.2
       inngest:
-        specifier: 4.19.0
-        version: 4.19.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.0))(express@5.2.1)(hono@4.13.7)(next@16.3.5(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(typescript@7.0.2)(zod@4.4.3)
+        specifier: 4.20.0
+        version: 4.20.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.0))(express@5.2.1)(hono@4.13.7)(next@16.3.5(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(typescript@7.0.2)(zod@4.4.3)
       lucide-react:
         specifier: 1.31.0
         version: 1.31.0(react@19.2.8)
@@ -3400,8 +3400,8 @@ packages:
     resolution: {integrity: sha512-Z21HkFQlrfCXKiu+uWncrBg3Mn/NwzicFwVPcDfMe4N0bkBblVzbXpfGndIxfHAnR9+FdCw807TCWw9vQ0JeLQ==}
     hasBin: true
 
-  inngest@4.19.0:
-    resolution: {integrity: sha512-P8xN0pBk4+0xPTsA3rtJqQh4QJXY9ODHuLOtQfyY8+xmDXGkEO5TllGDG1u1yX/4stZUiVPAwfnmI6D2e6ZCIA==}
+  inngest@4.20.0:
+    resolution: {integrity: sha512-U6ro6cG+Y2ys79Qxo6hliDhjSjU/616XO1QzaViinSj8jGOpaei+iQ7cB66bL/M3sLceumn2r5i/SKfrevdbsw==}
     engines: {node: '>=20'}
     peerDependencies:
       '@sveltejs/kit': '>=1.27.3'
@@ -7760,7 +7760,7 @@ snapshots:
       - encoding
       - supports-color
 
-  inngest@4.19.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.0))(express@5.2.1)(hono@4.13.7)(next@16.3.5(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(typescript@7.0.2)(zod@4.4.3):
+  inngest@4.20.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.0))(express@5.2.1)(hono@4.13.7)(next@16.3.5(@babel/core@7.29.7)(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(typescript@7.0.2)(zod@4.4.3):
     dependencies:
       '@bufbuild/protobuf': 2.14.1
       '@inngest/ai': 0.1.8

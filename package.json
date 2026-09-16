@@ -62,7 +62,7 @@
 		"date-fns": "4.4.0",
 		"drizzle-orm": "0.45.2",
 		"heic-to": "1.5.2",
-		"inngest": "4.19.0",
+		"inngest": "4.20.0",
 		"lucide-react": "1.31.0",
 		"next": "16.3.5",
 		"next-themes": "0.4.6",
