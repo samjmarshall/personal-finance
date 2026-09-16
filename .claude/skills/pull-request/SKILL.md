@@ -115,3 +115,4 @@ This is a solo personal project, not an enterprise repo. PR bodies are flat bull
 - **Portable:** templates live in `templates/` next to this file. Drop the skill into any repo and it works — no `.github/` or `docs/` setup required.
 - Be extremely concise and sacrifice grammar for the sake of concision.
 - Short beats complete. Nobody but the author reads these.
+- Never append `🤖 Generated with [Claude Code](https://claude.com/claude-code)` to PR bodies.
