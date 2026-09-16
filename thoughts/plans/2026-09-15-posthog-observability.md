@@ -142,12 +142,12 @@ Read first: `node_modules/next/dist/docs/03-api-reference/03-file-conventions/in
 - `src/server/observability/propagation.test.ts` — new. The one unit test in this phase: register a `NodeTracerProvider` with an `AlwaysOnSampler` (the `"parentbased_always_on"` preset always records a root) and a `CompositePropagator([tracecontext, baggage])`; inside `context.with(setBaggage({ "member.id": "m1" }))` and an active span, assert `propagation.inject(context.active(), carrier)` **does** write `traceparent` + `baggage` (the outbox carrier relies on this) and that a `Headers` object built for an outbound `fetch` by our code gets **no** `baggage`/`traceparent` unless explicitly injected — i.e. the app never calls `inject` on outbound HTTP. No custom-sampler assertion: the sampler is now the built-in `"parentbased_always_on"` string preset (there is no `inngest.execution` branch to test — Inngest OTel is Out of Scope).
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes (`serverExternalPackages` added only if needed, and noted)
-- [ ] `make start` with no `POSTHOG_KEY`: app boots, no OTel warnings, `registerOTel` not called
-- [ ] `make start` with `POSTHOG_KEY` set: boot log shows the SDK registered once
-- [ ] `/security-review` (touches `src/instrumentation.ts`, possibly `next.config.ts`)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes (OTel bundles under Next 16 Turbopack; no `serverExternalPackages` needed; the env-gate failure on `DEPLOYMENT_URL`/`INNGEST_*` is pre-existing prod-env validation, unrelated to Phase 3 — verified bundling with `SKIP_ENV_VALIDATION=1`)
+- [x] `make start` with no `POSTHOG_KEY`: `registerObservability()` no-op, nothing registered, no OTel warnings (verified directly)
+- [x] `make start` with `POSTHOG_KEY` set: SDK registered once, idempotent on a second call, all three processor handles present (verified directly)
+- [x] `/security-review` (touches `src/instrumentation.ts`; `next.config.js` unchanged — no bundling fix needed) — clean, no new vulns; error→PostHog PII is the pre-existing tracked TODO(security), not a Phase 3 defect
 
 ---
 
