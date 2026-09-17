@@ -1,6 +1,8 @@
 ---
 name: code-comment
 description: Writes and updates terse, why-only code comments to house standard, and judges the comments in a diff via an isolated sub-agent (PASS/REWRITE/REMOVE/FIX_CODE). Use when writing or editing a code comment, or reviewing the comments in a change — loaded inline by /implement_plan (writer) and run as a review pass by /validate_plan (judge). Complements /code-review (bugs, documented standards) and /quality-control (Fowler design smells) with the comment-quality lens neither covers.
+model: sonnet
+effort: high
 ---
 
 Single source of truth for the comment standard, in two modes. Free-prose comments
