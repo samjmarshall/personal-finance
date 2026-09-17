@@ -16,6 +16,7 @@ import {
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import {
 	afterAll,
+	afterEach,
 	beforeAll,
 	beforeEach,
 	describe,
@@ -44,6 +45,9 @@ beforeAll(() =>
 );
 afterAll(() => provider.shutdown());
 beforeEach(() => exporter.reset());
+// Restore any global spy (e.g. process.stdout.write) even if a test throws
+// before its own mockRestore — a leaked stdout mock corrupts sibling tests.
+afterEach(() => vi.restoreAllMocks());
 
 const tracer = provider.getTracer("test");
 
@@ -239,6 +243,46 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		expect(warnLine).toBeDefined();
 	});
 
+	it("cron run (inngest/* event) with no _trace → root span, no warn", async () => {
+		const lines: string[] = [];
+		const spy = vi
+			.spyOn(process.stdout, "write")
+			.mockImplementation((chunk) => {
+				if (typeof chunk === "string") lines.push(chunk);
+				return true;
+			});
+
+		const mw = buildMw();
+		const ctx = buildCtx({ data: {}, name: "inngest/scheduled.timer" });
+		const next = vi.fn(async () => {});
+
+		try {
+			await mw.wrapFunctionHandler({
+				ctx,
+				fn: buildFn("outbox-sweep"),
+				next,
+			} as never);
+		} finally {
+			spy.mockRestore();
+		}
+
+		const warnLine = lines.find((l) => {
+			try {
+				return JSON.parse(l)["event.name"] === "trace.carrier.missing";
+			} catch {
+				return false;
+			}
+		});
+		expect(warnLine).toBeUndefined();
+
+		const fnSpan = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "inngest.function.outbox-sweep");
+		expect(fnSpan).toBeDefined();
+		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
+		expect(fnSpan!.parentSpanContext).toBeUndefined();
+	});
+
 	it("next throws → span status ERROR, exception recorded, error rethrown", async () => {
 		const producerSpan = tracer.startSpan("producer");
 		const carrier = context.with(
@@ -309,8 +353,46 @@ describe("TracingMiddleware.onRunError", () => {
 		const parsed = JSON.parse(errorLine!);
 		expect(parsed["inngest.function_id"]).toBe("process-receipt");
 		expect(parsed["inngest.run_id"]).toBe("run-err");
-		expect(parsed["inngest.attempt"]).toBe(2);
+		expect(parsed["inngest.attempt"]).toBe("2");
 		expect(parsed.isFinalAttempt).toBe(true);
 		expect(parsed["receipt.id"]).toBe("5");
+	});
+
+	it("re-attaches the carrier — error line carries the producer trace_id", async () => {
+		const producerSpan = tracer.startSpan("producer");
+		const producerTraceId = producerSpan.spanContext().traceId;
+		const carrier = context.with(
+			trace.setSpan(context.active(), producerSpan),
+			() => captureTraceCarrier(),
+		);
+		producerSpan.end();
+
+		const lines: string[] = [];
+		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+			if (typeof chunk === "string") lines.push(chunk);
+			return true;
+		});
+
+		const mw = buildMw();
+		const ctx = buildCtx({ data: { _trace: carrier } });
+
+		await mw.onRunError({
+			ctx,
+			error: new Error("boom"),
+			fn: buildFn(),
+			isFinalAttempt: true,
+		} as never);
+
+		const errorLine = lines.find((l) => {
+			try {
+				const p = JSON.parse(l);
+				return p.level === "error" && p.msg === "inngest run failed";
+			} catch {
+				return false;
+			}
+		});
+		expect(errorLine).toBeDefined();
+		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
+		expect(JSON.parse(errorLine!).trace_id).toBe(producerTraceId);
 	});
 });
