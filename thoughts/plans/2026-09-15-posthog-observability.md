@@ -184,8 +184,8 @@ Implements adr016 clauses 3–6 (restore, continue + link, missing pocket, drop 
 - `src/server/inngest/registry-golden.test.ts:26-53` — **unchanged**; it constructs controllers with a spy client, not `client.ts`, so the middleware never enters it. Confirm green.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
+- [x] `make check` passes
+- [x] `make test` passes
 - [ ] `make start` + Inngest dev server: a hand-sent `receipt/retry` event from the Inngest dashboard (no `_trace`) runs to completion and logs one `trace.carrier.missing` warn — never fails the run
 - [ ] A real upload produces a run whose stdout log lines all carry the same `trace_id` as the tRPC request line
 - [ ] Known consequence: with no `POSTHOG_KEY` locally, every run logs `trace.carrier.missing` once (no propagator registered, so the producer wrote `{}`). Accepted per design Decision 13.
