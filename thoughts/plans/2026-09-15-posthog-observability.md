@@ -173,7 +173,7 @@ Implements adr016 clauses 1 and 2 — `docs/adr/adr016-trace-context-in-outbox-p
 
 ## Phase 5: Inngest `tracingMiddleware` + client wiring
 
-Implements adr016 clauses 3–6 (restore, continue + link, missing pocket, drop Inngest's root) and adr015 clause 7's third choke point (`onRunError`) — `docs/adr/adr016-trace-context-in-outbox-payload.md`, `docs/adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md`.
+Implements adr016 clauses 3–5 (restore + continue + link, not-stripped, missing pocket) and adr015 clause 7's third choke point (`onRunError`) — `docs/adr/adr016-trace-context-in-outbox-payload.md`, `docs/adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md`. adr016 clause 6 (drop Inngest's own `inngest.execution` root) is a **sampler** concern owned by the adr015 boot (`otel.ts`), not this middleware — currently unimplemented (`otel.ts:51` is `parentbased_always_on`, no name-drop), tracked as Follow-up F3.
 
 ### Changes
 - `src/server/observability/inngest-middleware.ts` — new. **Inngest 4.19 middleware is a class, not the v3 `new InngestMiddleware({ init })` factory**, and the client news it up per request via a fixed `constructor({ client })` (`Middleware.Class` in `node_modules/inngest/components/middleware/middleware.d.ts`) — so deps **cannot** be constructor-injected. `export class TracingMiddleware extends Middleware.BaseMiddleware` (`import { Middleware } from "inngest"`) with `readonly id = "tracing"` and no constructor of its own (inherits `({ client })`). Its logging/capture deps are **module-level roots**, not fields: `const logger = createRootLogger().with({ domain: "inngest", component: "tracing" })` and the imported `captureException`. This file is core wiring, a root — building a root logger here is the same adr004-sanctioned exception route files and `onRequestError` use; no DI seam exists because the base constructor is fixed. Hooks are flat methods on the class (all args are `DeepReadonly` per the `.d.ts` — the event/ctx are read-only, never mutated):
@@ -188,6 +188,7 @@ Implements adr016 clauses 3–6 (restore, continue + link, missing pocket, drop 
 - [x] `make test` passes
 - [ ] `make start` + Inngest dev server: a hand-sent `receipt/retry` event from the Inngest dashboard (no `_trace`) runs to completion and logs one `trace.carrier.missing` warn — never fails the run
 - [ ] A real upload produces a run whose stdout log lines all carry the same `trace_id` as the tRPC request line
+- [ ] **`outbox.event_id` join (one-time live check — see Follow-up F1):** on that run, the logged `outbox.event_id` is the outbox row UUID PK, **not** an Inngest ULID. Inngest docs don't guarantee the sent `id` is echoed as `ctx.event.id`, and no unit test can cover this server hop (all circular). If it's a ULID, stamp the PK into the event `data` (alongside `_trace`) and read that instead. A real integration harness (F1) will guard this against future Inngest releases.
 - [ ] Known consequence: with no `POSTHOG_KEY` locally, every run logs `trace.carrier.missing` once (no propagator registered, so the producer wrote `{}`). Accepted per design Decision 13.
 
 ---
@@ -239,8 +240,12 @@ Implements adr015 clause 4 (LLM analytics via AI SDK telemetry, `functionId: "re
 
 Constraint: `.claude/rules/bedrock-invocation.md:14` — nothing under `src/server/receipts/` imports `~/env`. `experimental_telemetry` needs no env. `Logger` arrives injected.
 
+> **Why the park path MUST capture its own error (Phase 5 gap).** The Inngest `TracingMiddleware.onRunError` hook (Phase 5) is the run-failure choke point that calls `captureException` → PostHog Error Tracking. It only fires when a run **throws**. But `process()` deliberately parks-not-throws (`receipts.service.ts:184-193`, the frozen retry contract): a deterministic failure (schema/FK/blob/too-large) parks on the first catch and **never throws**, and a retryable failure on the **final** attempt also parks. So `onRunError` sees a *successful* run for every terminal receipt failure — the only cases that are actually broken — and creates **zero** Error Tracking issues for them. `onRunError` only ever catches transient mid-retry blips. A `logger.error("receipt.failed", …)` log line is NOT an Error Tracking issue — the log exporter and `captureException` are different sinks (adr015 clause 7). Therefore Phase 8 owns the terminal-failure Error Tracking signal at the domain tier; it must not rely on the middleware.
+>
+> **Required:** at the park path (below), in addition to the `receipt.failed` log, call PostHog `captureException(error, { "receipt.id", "receipt.channel", "member.id", "receipt.reason" })` **inside** the active `receipt.extract` span + baggage context, so the issue carries `$trace_id` + `member.id` and joins the run's trace. Do NOT make the service throw on final to trigger `onRunError` — that would break the parking contract. The retryable-not-final path already throws, so the middleware still covers those; do not double-capture there.
+
 ### Changes
-- `src/server/receipts/receipts.service.ts:132-153` — `ReceiptsServiceDeps` gains `logger: Logger`. `process()` (`:164-194`): wrap the body after the status guard in `tracer.startActiveSpan("receipt.extract", { attributes: { "receipt.id": receiptId, "receipt.channel": receipt.channel, "receipt.is_final_attempt": isFinalAttempt } }, ...)` inside `context.with(setBaggage({ "receipt.id": String(receiptId), "member.id": receipt.userId }))` (confirm the column name on `receipts.schema.ts` — the Member FK; `email.service.ts:121` calls it `sender.userId`). Outcomes as span attrs: `receipt.outcome` = `processed` | `duplicate` | `failed` | `retry`. Catch (`:184-193`): retryable + not final → `this.logger.warn("receipt extraction retrying", { error, "receipt.id", "receipt.channel", "receipt.is_final_attempt" })`, span status ERROR, rethrow; park path → `this.logger.error("receipt extraction failed", { error, "event.name": "receipt.failed", "receipt.id", "receipt.channel", "receipt.is_final_attempt", "receipt.reason": memberFacingError(error) })` replacing `:191`, then `markFailed` (`:192`). Values reuse the code's words: `ReceiptStatus.Failed` → `receipt.failed`.
+- `src/server/receipts/receipts.service.ts:132-153` — `ReceiptsServiceDeps` gains `logger: Logger`. `process()` (`:164-194`): wrap the body after the status guard in `tracer.startActiveSpan("receipt.extract", { attributes: { "receipt.id": receiptId, "receipt.channel": receipt.channel, "receipt.is_final_attempt": isFinalAttempt } }, ...)` inside `context.with(setBaggage({ "receipt.id": String(receiptId), "member.id": receipt.userId }))` (confirm the column name on `receipts.schema.ts` — the Member FK; `email.service.ts:121` calls it `sender.userId`). Outcomes as span attrs: `receipt.outcome` = `processed` | `duplicate` | `failed` | `retry`. Catch (`:184-193`): retryable + not final → `this.logger.warn("receipt extraction retrying", { error, "receipt.id", "receipt.channel", "receipt.is_final_attempt" })`, span status ERROR, rethrow; park path → `this.logger.error("receipt extraction failed", { error, "event.name": "receipt.failed", "receipt.id", "receipt.channel", "receipt.is_final_attempt", "receipt.reason": memberFacingError(error) })` replacing `:191`, **and** `captureException(error, { "receipt.id": String(receiptId), "receipt.channel", "member.id": receipt.userId, "receipt.reason": memberFacingError(error) })` (this is the Error Tracking signal `onRunError` can't provide for parked runs — see the note above; it runs inside the `receipt.extract` span + baggage so `$trace_id`/`member.id` attach), then `markFailed` (`:192`). Values reuse the code's words: `ReceiptStatus.Failed` → `receipt.failed`.
 - `src/server/receipts/receipts.service.ts:264-268` — `generateObject({ model, schema, messages, telemetry: { isEnabled: true, recordInputs: true, recordOutputs: true, functionId: "receipt.extract" } })`. In `ai` v7 the option is `telemetry` (the `experimental_telemetry` alias still compiles). No `metadata` (PostHog drops `ai.telemetry.metadata.*` — correlation comes from baggage via the processor). v7 telemetry is **opt-out**: once `@ai-sdk/otel` is registered (Phase 3), inputs record by default, so `ContextSpanProcessor` redaction MUST be registered before telemetry fires — the base64 receipt image would otherwise ship raw.
 - `src/server/inngest/functions.ts:22-28` — `new ReceiptsService({ ..., logger: createRootLogger().with({ domain: "receipts", component: "service" }) })`.
 - `src/server/receipts/receipts.service.test.ts:59-141` — harness gains the fake `logger` (same shape as Phase 7) and an `InMemorySpanExporter`. Replace the `console.error` spies at `:271`, `:288`, `:352` with assertions on recorded `error` entries. New slices: parked receipt → exactly one `error` with `event.name: "receipt.failed"` and `receipt.id`; retryable-not-final → one `warn`, no `receipt.failed`, error rethrown; duplicate path → span `receipt.outcome = duplicate`, no error log; the stub `languageModel` path already used (`{} as LanguageModel`) keeps `generateObject` un-invoked in the guard/duplicate tests — for the telemetry option, add one test with a `MockLanguageModelV4` (from `ai/test` — `LanguageModel` is `LanguageModelV4` in v7; the old `MockLanguageModelV2` name is gone) asserting the `receipt.extract` span exists and that an `ai.generateObject` child span is present under the same trace (with `@ai-sdk/otel`'s `LegacyOpenTelemetry` registered — see Phase 3 — the child keeps the `ai.generateObject` name the redaction path keys on; the SDK emits it on the global tracer registered by the test provider).
@@ -251,6 +256,8 @@ Constraint: `.claude/rules/bedrock-invocation.md:14` — nothing under `src/serv
 - [ ] `make test` passes
 - [ ] `grep -rn "console\." src/server/receipts` returns nothing
 - [ ] `make start` + Inngest dev + a real upload (with AWS creds via `assume`): stdout shows `receipt.extract` span-bearing log lines, and forcing a parse failure (e.g. temporarily invalid `BEDROCK_RECEIPT_MODEL`) logs `event.name=receipt.failed` on the final attempt
+- [ ] the same forced failure produces a PostHog **Error Tracking** issue carrying `$trace_id` + `member.id` (the domain-tier `captureException`; confirms parked failures surface as issues without `onRunError`)
+- [ ] add a `receipts.service.test.ts` slice asserting the park path calls `captureException` once (fake capture in the harness), alongside the `receipt.failed` log assertion
 - [ ] `registry-golden.test.ts` unchanged and green
 
 ---
@@ -331,6 +338,39 @@ Resolves the design's runtime unknowns (Risks 1, 2, 3, 4, 5, 8) against the fall
 - [ ] Six alerts exist and are filtered to production
 - [ ] Each of Risks 1–8 has a one-line recorded outcome in adr015/adr016 Open Questions; both ADRs read `Accepted`
 - [ ] `make check` and `make test` pass on the final branch
+
+---
+
+## Follow-ups (post-plan)
+
+Do these **after** the plan is fully implemented (Phase 11 done). Not blockers for this plan.
+
+### F1: Inngest send→receive integration test harness
+
+**Why.** Phase 5's middleware sets `"outbox.event_id": ctx.event.id`, assuming Inngest hands the function the same `id` we sent (the outbox row PK), so telemetry joins back to the `outbox` table. That hop runs on **Inngest's server** and is **not** covered by any test we can write today:
+- **Unit tests can't** — the fake `ctx` sets `event.id` ourselves, so asserting it is circular.
+- **`@inngest/test` can't** — it runs functions in-process with mocks, no real server, no `send()` round trip; you supply the event, so reading `ctx.event.id` back is the same circular test (confirmed against README, v4 docs, RFC #1680, JSR; also 0.x + not installed).
+- Inngest's own docs are ambiguous: a sent `id` is documented as a **dedup key**, and `send()` returns **server-assigned ULIDs** — so `ctx.event.id` might be a ULID, not our PK. Only a real round trip settles it.
+
+Our-side links are already unit-tested (`outbox.repository.test.ts:117` PK→row, `outbox.service.test.ts:106-120,216-233` PK→sent id, `inngest-middleware.test.ts:146` received id→`outbox.event_id`). The harness closes the one remaining hop and guards it against future Inngest releases.
+
+**What to build.** An integration harness that boots the **Inngest Dev Server** (`inngest-cli`, already a devDep) + the app's `serve` endpoint, sends a real event with a known UUID `id`, polls for the run, and asserts the handler observed `ctx.event.id === <that UUID>` (and, more broadly, that a full send→receive→telemetry chain lands). Portless caveat: no ports locally, so the harness needs a reachable URL (the `portless proxy --port 1355` fallback, or a CI-only port). Keep it out of the fast `make test` unit path — its own target (e.g. `make test_integration`), opt-in / CI-gated, since it spawns processes.
+
+**First assertion to add** (the one that motivated it): `outbox.event_id` from a real run equals the outbox row PK we sent — the log→row join Phase 5 depends on. Then generalise to guard the whole trace chain on Inngest upgrades.
+
+> Interim: until F1 exists, Phase 5's `outbox.event_id` correctness is confirmed by a **one-time live run** (read the field on the first real upload; it must be the UUID PK, not a ULID). If it's a ULID, stamp the PK into the event `data` (alongside `_trace`) and read that instead — see Phase 5 notes.
+
+### F2: Move domain ids onto baggage at the producer (de-leak the middleware)
+
+**Why.** `TracingMiddleware` is generic Inngest infra but hardcodes a domain field: it reads `data.receiptId` and stamps `receipt.id` (see `src/server/observability/inngest-middleware.ts` `domainAttrs`). Every new domain that wants its id on spans/logs would add another branch here — a domain leak. `member.id` already avoids this: the producer sets it on baggage, it rides the `_trace` carrier, `restoreTraceCarrier` brings it back, and the middleware stays generic.
+
+**What to build.** Make the receipt-create producers (tRPC `receipt.create`, Phase 6; inbound email route, Phase 9) set `receipt.id` on baggage **before** `buildOutboxEvent` mints the event, so it rides the carrier like `member.id`. Then delete `domainAttrs` and its two call sites from the middleware. Kept as a stopgap now (not a blocker) because removing it before those producers set baggage would drop `receipt.id` from receipt-run telemetry until Phase 6/9 land.
+
+### F3: Drop Inngest's own `inngest.execution` root (adr016 clause 6)
+
+**Why.** adr016 clause 6 says the timeline should show our `inngest.function.*` span under the producer, not Inngest's unrelated `inngest.execution` root. Inngest starts that root on the global tracer (adr016 Context), and `otel.ts:51` samples with `parentbased_always_on` and **no name-drop**, so the orphan root still exports to PostHog. **adr016 clause 6 is unmet** — this is the remaining gap before adr016 can be marked fully `Accepted`.
+
+**What to build.** In the adr015 boot (`src/server/observability/otel.ts`), drop spans named `inngest.execution` — a name-filtering span processor (skip export on match) or a custom `Sampler` that returns `NOT_RECORD` for that name (mind the `parentbased` composition). Then live-verify in PostHog that the orphan root is gone and our function span sits under the producer. It's a sampler/processor change needing the live surface, so it's a follow-up, not part of the Phase 5 middleware.
 
 ---
 
