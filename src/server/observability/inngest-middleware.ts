@@ -7,8 +7,7 @@ import {
 import { Middleware } from "inngest";
 import { setBaggage } from "./baggage";
 import { createRootLogger } from "./logger";
-import { captureException } from "./posthog";
-import { restoreTraceCarrier } from "./trace-carrier";
+import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
 
 // Module-level roots — the BaseMiddleware ctor is fixed `({ client })`; no DI
 // seam exists, same exception adr004 makes for route files and onRequestError.
@@ -21,54 +20,70 @@ const tracer = trace.getTracer("personal-finance");
 export class TracingMiddleware extends Middleware.BaseMiddleware {
 	readonly id = "tracing";
 
+	// Stopgap: promote known domain ids from event data onto telemetry. Generic
+	// infra shouldn't know "receiptId" — drop this once producers put domain ids
+	// on baggage before buildOutboxEvent (like member.id). Tracked as Follow-up F2.
+	private domainAttrs(
+		data: Record<string, unknown> | undefined,
+	): Record<string, string> {
+		return data?.receiptId !== undefined
+			? { "receipt.id": String(data.receiptId) }
+			: {};
+	}
+
 	async wrapFunctionHandler({
 		ctx,
 		fn,
 		next,
 	}: Middleware.WrapFunctionHandlerArgs): Promise<unknown> {
 		const data = ctx.event.data as Record<string, unknown> | undefined;
-		let parent = restoreTraceCarrier(data?._trace);
+		let parent = restoreTraceCarrier(data?.[TRACE_CARRIER_KEY]);
 
 		if (parent === null) {
-			logger.warn("trace carrier missing", {
-				"event.name": "trace.carrier.missing",
-				"inngest.function_id": fn.id(),
-				"inngest.run_id": ctx.runId,
-			});
+			// Cron/invoke runs (inngest/* events) never carry a _trace; warn only for
+			// event-triggered runs, where a missing carrier is a real bug.
+			if (!ctx.event.name.startsWith("inngest/")) {
+				logger.warn("trace carrier missing", {
+					"event.name": "trace.carrier.missing",
+					"inngest.function_id": fn.id(),
+					"inngest.run_id": ctx.runId,
+				});
+			}
 			parent = ROOT_CONTEXT;
 		}
 
 		const parentSpanCtx = trace.getSpanContext(parent);
+
+		// Add baggage before the span starts — the span copies it once at start, so
+		// anything added later is lost. Skip member.id; the parent already carries it.
+		const enriched = setBaggage(
+			{
+				"inngest.run_id": ctx.runId,
+				"inngest.attempt": String(ctx.attempt),
+				"outbox.event_id": ctx.event.id,
+				...this.domainAttrs(data),
+			},
+			parent,
+		);
+
 		const span = tracer.startSpan(
 			`inngest.function.${fn.id()}`,
 			{
 				links: parentSpanCtx ? [{ context: parentSpanCtx }] : [],
 				attributes: {
 					"inngest.run_id": ctx.runId,
-					"inngest.attempt": ctx.attempt,
+					"inngest.attempt": String(ctx.attempt),
 					"inngest.function_id": fn.id(),
 					"inngest.event_name": ctx.event.name,
 				},
 			},
-			parent,
+			enriched,
 		);
 
-		// don't re-pass member.id — it's already on parent's baggage (restored from
-		// the _trace pocket) and setBaggage preserves prior keys (baggage.ts:22-28).
-		const baggageCtx = setBaggage(
-			{
-				"inngest.run_id": ctx.runId,
-				"inngest.attempt": String(ctx.attempt),
-				"outbox.event_id": ctx.event.id,
-				...(data?.receiptId !== undefined
-					? { "receipt.id": String(data.receiptId) }
-					: {}),
-			},
-			trace.setSpan(parent, span),
-		);
+		const runCtx = trace.setSpan(enriched, span);
 
 		try {
-			return await context.with(baggageCtx, () => next());
+			return await context.with(runCtx, () => next());
 		} catch (err) {
 			span.recordException(err as Error);
 			span.setStatus({ code: SpanStatusCode.ERROR });
@@ -85,18 +100,26 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		isFinalAttempt,
 	}: Middleware.OnRunErrorArgs): Promise<void> {
 		const data = ctx.event.data as Record<string, unknown> | undefined;
+		// Inngest fires error hooks after the run's trace window closes — no active
+		// trace here. Re-attach the stored carrier so this error links to its trace.
+		const restored =
+			restoreTraceCarrier(data?.[TRACE_CARRIER_KEY]) ?? ROOT_CONTEXT;
+
 		const attrs: Record<string, unknown> = {
 			"inngest.function_id": fn.id(),
 			"inngest.run_id": ctx.runId,
-			"inngest.attempt": ctx.attempt,
+			"inngest.attempt": String(ctx.attempt),
 			isFinalAttempt,
 		};
 
-		if (data?.receiptId !== undefined) {
-			attrs["receipt.id"] = String(data.receiptId);
-		}
+		Object.assign(attrs, this.domainAttrs(data));
 
-		captureException(error, attrs);
-		logger.error("inngest run failed", { error, ...attrs });
+		// Dynamic import keeps the heavy analytics library out of every module that
+		// just sends events — only needed on the worker execution path.
+		const { captureException } = await import("./posthog");
+		context.with(restored, () => {
+			captureException(error, attrs);
+			logger.error("inngest run failed", { error, ...attrs });
+		});
 	}
 }

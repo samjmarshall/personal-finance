@@ -13,8 +13,7 @@ import { createRootLogger } from "~/server/observability/logger";
 // naming/payload authority; validation happens at the mint boundary (buildOutboxEvent),
 // which every send goes through, so an untyped `send` here is safe.
 //
-// wrapStringFirstLogger adapts OtelLogger (string-first) to Inngest's Pino-style
-// object-first logger interface.
+// Inngest logger is Pino-style object-first; OtelLogger is string-first.
 export const inngest = new Inngest({
 	id: "personal-finance",
 	eventKey: env.INNGEST_EVENT_KEY,

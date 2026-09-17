@@ -70,27 +70,30 @@ export class OtelLogger implements Logger {
 	): void {
 		if (LEVEL_RANK[level] < LEVEL_RANK[this.level]) return;
 
-		const { error, ...callAttrs } = attrs ?? {};
+		const { error, err, ...callAttrs } = attrs ?? {};
+		// `err` is the Pino/Inngest convention (Inngest.js logs `{ err }`); alias it
+		// to `error` so object-first loggers get exception decomposition instead of
+		// shipping a raw Error that serialises to {} and leaks into OTLP attributes.
+		const exception = error ?? err;
 
-		// Active span context — present when inside an instrumented request.
 		const spanCtx = trace.getActiveSpan()?.spanContext();
 		const spanAttrs: LogAttributes = spanCtx
 			? { trace_id: spanCtx.traceId, span_id: spanCtx.spanId }
 			: {};
 
 		const errorAttrs: LogAttributes = {};
-		if (error !== undefined) {
-			if (error instanceof Error) {
-				errorAttrs["exception.type"] = error.name;
+		if (exception !== undefined) {
+			if (exception instanceof Error) {
+				errorAttrs["exception.type"] = exception.name;
 				// TODO(security): exception.message/.stacktrace can carry PII (inbound
 				// emails, pg constraint values, account ids) and are exported to
 				// PostHog. Sanitise before emit — keep full detail on stdout only.
 				// See Phase 1 /security-review finding.
-				errorAttrs["exception.message"] = error.message;
-				errorAttrs["exception.stacktrace"] = error.stack ?? "";
+				errorAttrs["exception.message"] = exception.message;
+				errorAttrs["exception.stacktrace"] = exception.stack ?? "";
 			} else {
-				errorAttrs["exception.type"] = typeof error;
-				errorAttrs["exception.message"] = String(error);
+				errorAttrs["exception.type"] = typeof exception;
+				errorAttrs["exception.message"] = String(exception);
 			}
 		}
 
@@ -159,10 +162,8 @@ export class OtelLogger implements Logger {
 
 /**
  * Builds the root logger bound to the OTel global logger and process.stdout.
- * LOG_LEVEL comes validated from ~/env — its z.enum throws on a typo, so a bad
- * value fails at boot rather than silently degrading to dropped logs; pretty
- * output keys off NODE_ENV. Call once per composition root; tiers call
- * `root.with({ domain, component })`.
+ * pretty output keys off NODE_ENV.
+ * Call once per composition root; tiers call `root.with({ domain, component })`.
  */
 export function createRootLogger(): OtelLogger {
 	return new OtelLogger({
