@@ -38,6 +38,19 @@ export function setBaggage(
 }
 
 /**
+ * Returns a Context whose baggage is stripped to `BAGGAGE_KEYS` — foreign or
+ * inbound baggage is dropped. Use before serializing baggage for persistence so
+ * only our non-secret ids leave the process (adr016 clause 2).
+ */
+export function scrubBaggage(ctx = context.active()): Context {
+	const entries: Record<string, { value: string }> = {};
+	for (const [key, value] of Object.entries(readBaggage(ctx))) {
+		entries[key] = { value };
+	}
+	return propagation.setBaggage(ctx, propagation.createBaggage(entries));
+}
+
+/**
  * Reads only our known baggage keys from the active (or supplied) context.
  * Unknown keys written by upstream services are ignored.
  */

@@ -14,7 +14,7 @@ import { buildOutboxEvent, type EventName, type EventPayload } from "./events";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// The pocket the mint appends; every event's `data` carries it.
+// Invariant: buildOutboxEvent appends _trace to every event's data.
 type WithTrace = { _trace: TraceCarrier };
 
 // No provider is registered in this block, so `captureTraceCarrier` returns `{}`.

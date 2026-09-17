@@ -6,6 +6,7 @@ import {
 	ROOT_CONTEXT,
 	trace,
 } from "@opentelemetry/api";
+import { scrubBaggage } from "./baggage";
 
 export interface TraceCarrier {
 	traceparent?: string;
@@ -19,7 +20,10 @@ export const TRACE_CARRIER_KEY = "_trace" as const;
 /** Captures W3C traceparent, tracestate, and baggage from the active (or supplied) context. Returns `{}` when no SDK is registered. */
 export function captureTraceCarrier(ctx = context.active()): TraceCarrier {
 	const carrier: TraceCarrier = {};
-	propagation.inject(ctx, carrier);
+	// Scrub baggage to BAGGAGE_KEYS before injecting: foreign/inbound baggage must
+	// never ride into the persisted pocket (adr016 clause 2). traceparent/tracestate
+	// come from the span context, which scrubBaggage leaves untouched.
+	propagation.inject(scrubBaggage(ctx), carrier);
 	return carrier;
 }
 

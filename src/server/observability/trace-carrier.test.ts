@@ -41,6 +41,27 @@ describe("captureTraceCarrier", () => {
 	it("returns an empty carrier when no span or baggage is active", () => {
 		expect(captureTraceCarrier()).toEqual({});
 	});
+
+	// adr016 clause 2: only BAGGAGE_KEYS may reach the persisted pocket. A foreign
+	// key (e.g. an inbound `baggage` header) must be dropped, not injected.
+	it("drops baggage keys outside BAGGAGE_KEYS from the captured carrier", () => {
+		const seeded = propagation.setBaggage(
+			context.active(),
+			propagation.createBaggage({
+				"member.id": { value: "m1" },
+				secret: { value: "leaked" },
+			}),
+		);
+		context.with(seeded, () => {
+			const span = tracer.startSpan("root");
+			context.with(trace.setSpan(context.active(), span), () => {
+				const carrier = captureTraceCarrier();
+				expect(carrier.baggage).toContain("member.id");
+				expect(carrier.baggage).not.toContain("secret");
+			});
+			span.end();
+		});
+	});
 });
 
 describe("restoreTraceCarrier", () => {
