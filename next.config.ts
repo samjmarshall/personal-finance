@@ -1,7 +1,7 @@
-import "./src/env.js";
+import type { NextConfig } from "next";
+import "~/env";
 
-/** @type {import("next").NextConfig} */
-const config = {
+const config: NextConfig = {
 	// Portless serves the dev app from https://personal-finance.localhost (and
 	// <branch>.personal-finance.localhost per worktree) — a different origin than the
 	// localhost:PORT the dev server binds, so Next must trust it.

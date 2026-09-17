@@ -1,13 +1,7 @@
 /**
- * Log severity levels (debug→error), in their own leaf module so `~/env` — which
- * every client and edge bundle imports — can read the enum without dragging
- * logger.ts and its @opentelemetry/api-logs graph into those bundles. logger.ts
- * imports and re-exports it as the public logging name; no imports here keeps
- * both sides cycle-proof.
+ * Public `LogLevel` name for logging code. Re-exported from env.ts, the single
+ * source — env.ts defines the enum inline because Next's config transpiler
+ * compiles env.ts (via next.config.ts) and can't resolve a deep `~` import out
+ * of it. Importing here keeps logger.ts off the `~/env` graph directly.
  */
-export enum LogLevel {
-	DEBUG = "debug",
-	INFO = "info",
-	WARN = "warn",
-	ERROR = "error",
-}
+export { LogLevel } from "~/env";
