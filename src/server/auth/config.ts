@@ -5,7 +5,10 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
+import { createRootLogger } from "~/server/observability/logger";
 import { createSecondaryStorage } from "./secondary-storage";
+
+const logger = createRootLogger().with({ domain: "auth" });
 
 /**
  * Binds cached sessions to the database that issued them. Every environment and
@@ -33,9 +36,10 @@ const secondaryStorage =
 if (!secondaryStorage) {
 	// Loudest in production, where it is a defect rather than the normal local state:
 	// rate limiting falls back to per-lambda memory and every session read hits Neon.
-	const say =
-		process.env.NODE_ENV === "production" ? console.error : console.warn;
-	say("[auth:redis] KV not configured — sessions falling back to Postgres");
+	const level = process.env.NODE_ENV === "production" ? "error" : "warn";
+	logger[level]("KV not configured — sessions falling back to Postgres", {
+		"event.name": "auth.kv.missing",
+	});
 }
 
 export const auth = betterAuth({
@@ -85,12 +89,12 @@ export const auth = betterAuth({
 			} catch (error) {
 				// Name only. The adapter already logged its own redacted reason, and a
 				// Postgres failure here carries the session token in the query params —
-				// the thing adr007 keeps out of runtime logs. The name is still enough
-				// to tell a Redis outage from a database one.
-				console.error(
-					"[auth] sign-out revocation failed",
-					error instanceof Error ? error.name : typeof error,
-				);
+				// the thing adr007 keeps out of runtime logs. Passing `error` would ship
+				// its message/stack to PostHog; the name alone still tells a Redis outage
+				// from a database one.
+				logger.error("sign-out revocation failed", {
+					"error.name": error instanceof Error ? error.name : typeof error,
+				});
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: "Could not sign out. Please try again.",
 				});

@@ -206,11 +206,11 @@ Implements adr015 data-flow step 1 and clause 7's second choke point, Decision 1
 - `src/server/auth/secondary-storage.ts:53-59` — `fail()` → `logger.error(\`${operation} failed\`, { operation, reason })` with a module-level root logger `with({ domain: "auth", component: "redis" })`. `src/server/auth/secondary-storage.test.ts:47` currently mocks `console.error` — switch to asserting the returned `RedisUnavailableError` message (the redacted reason is already in it).
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes (existing router tests untouched and green)
-- [ ] `grep -rn "console\." src/server/api src/server/auth src/app/api/trpc` returns nothing
-- [ ] `make start`, hit any tRPC route: stdout shows one JSON log line per failing call with `trace_id`, none for success (duration lives on the span, not a log)
-- [ ] Non-dev test: procedure resolves in <50 ms (no fake latency)
+- [x] `make check` passes
+- [x] `make test` passes (existing router tests untouched and green)
+- [x] `grep -rn "console\." src/server/api src/server/auth src/app/api/trpc` returns nothing (two pre-existing comment references to `console.error` reworded to drop the literal token; no calls remain)
+- [ ] `make start`, hit any tRPC route: stdout shows one JSON log line per failing call with `trace_id`, none for success (duration lives on the span, not a log) — **not run live**; unit-covered by `trpc.test.ts` (failing call → span ERROR + code; success → zero stdout lines) + `logger.test.ts` (trace_id stamped from active span)
+- [x] Non-dev test: procedure resolves in <50 ms (no fake latency) — `trpc.test.ts` "production has no artificial delay"
 
 ---
 

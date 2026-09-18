@@ -7,12 +7,22 @@
  * need to use are documented accordingly near the end.
  */
 
+import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
 
+import { env } from "~/env";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import { setBaggage } from "~/server/observability/baggage";
+import { createRootLogger } from "~/server/observability/logger";
+import { captureException } from "~/server/observability/posthog";
+
+// Core wiring, a root — builds its own logger/tracer, same adr004 exception route
+// files make. Tiers receive an injected `logger`; middleware has no DI seam.
+const logger = createRootLogger().with({ domain: "trpc" });
+const tracer = trace.getTracer(env.PROJECT_NAME);
 
 /**
  * 1. CONTEXT
@@ -80,27 +90,58 @@ export const createCallerFactory = t.createCallerFactory;
 export const createTRPCRouter = t.router;
 
 /**
- * Middleware for timing procedure execution and adding an artificial delay in development.
- *
- * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
- * network latency that would occur in production but not in local development.
+ * Simulates production network latency in dev only, so local work surfaces the
+ * waterfalls a fast localhost hides. Outside the trace span (adr015 Decision 16):
+ * the delay is a dev artefact, not real request time.
  */
-const timingMiddleware = t.middleware(async ({ next, path }) => {
-	const start = Date.now();
-
+const devLatencyMiddleware = t.middleware(async ({ next }) => {
 	if (t._config.isDev) {
-		// artificial delay in dev
 		const waitMs = Math.floor(Math.random() * 400) + 100;
 		await new Promise((resolve) => setTimeout(resolve, waitMs));
 	}
-
-	const result = await next();
-
-	const end = Date.now();
-	console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
-
-	return result;
+	return next();
 });
+
+/**
+ * Opens the `trpc.<path>` span that roots the request trace and puts the Member on
+ * baggage before the auth check, so downstream spans/logs carry it. Duration lives
+ * on the span, not a log line; a failed call records the code and a 500 is also
+ * sent to Error Tracking.
+ */
+const tracingMiddleware = t.middleware(async ({ ctx, next, path, type }) =>
+	tracer.startActiveSpan(
+		`trpc.${path}`,
+		{ attributes: { "trpc.type": type, "trpc.path": path } },
+		async (span) => {
+			const baggageCtx = setBaggage({ "member.id": ctx.session?.user?.id });
+			try {
+				return await context.with(baggageCtx, async () => {
+					const result = await next();
+					if (!result.ok) {
+						span.setAttribute("trpc.error_code", result.error.code);
+						span.recordException(result.error);
+						span.setStatus({ code: SpanStatusCode.ERROR });
+						if (result.error.code === "INTERNAL_SERVER_ERROR") {
+							captureException(result.error, { "trpc.path": path });
+							logger.error("trpc internal error", {
+								error: result.error,
+								"trpc.path": path,
+							});
+						} else {
+							logger.warn("trpc request failed", {
+								"trpc.path": path,
+								"trpc.error_code": result.error.code,
+							});
+						}
+					}
+					return result;
+				});
+			} finally {
+				span.end();
+			}
+		},
+	),
+);
 
 /**
  * Public (unauthenticated) procedure
@@ -109,7 +150,9 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  * guarantee that a user querying is authorized, but you can still access user session data if they
  * are logged in.
  */
-export const publicProcedure = t.procedure.use(timingMiddleware);
+export const publicProcedure = t.procedure
+	.use(devLatencyMiddleware)
+	.use(tracingMiddleware);
 
 /**
  * Protected (authenticated) procedure
@@ -120,7 +163,8 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  * @see https://trpc.io/docs/procedures
  */
 export const protectedProcedure = t.procedure
-	.use(timingMiddleware)
+	.use(devLatencyMiddleware)
+	.use(tracingMiddleware)
 	.use(({ ctx, next }) => {
 		if (!ctx.session?.user) {
 			throw new TRPCError({ code: "UNAUTHORIZED" });

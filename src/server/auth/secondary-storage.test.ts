@@ -28,6 +28,8 @@ import { createSecondaryStorage } from "./secondary-storage";
 const storage = () =>
 	createSecondaryStorage({ url: "https://kv", token: "t", prefix: "ba:test:" });
 
+let stdoutLines: string[];
+
 beforeEach(() => {
 	for (const fn of Object.values(client)) fn.mockReset();
 	for (const fn of Object.values(pipeline)) fn.mockReset();
@@ -35,16 +37,20 @@ beforeEach(() => {
 	pipeline.incr.mockReturnValue(pipeline);
 	pipeline.expire.mockReturnValue(pipeline);
 	pipeline.exec.mockResolvedValue([1, 1]);
-	// Restored in afterEach so one failed assertion cannot leak the stub into the
-	// rest of the file, and so the fail-open cases stop printing to real stderr.
-	vi.spyOn(console, "error").mockImplementation(() => {});
+	// The logger writes redacted JSON to stdout. Capture it (restored in afterEach)
+	// so the fail-open cases stay off real stdout and the redaction is assertable.
+	stdoutLines = [];
+	vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+		if (typeof chunk === "string") stdoutLines.push(chunk);
+		return true;
+	});
 });
 
 afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-const loggedOutput = () => vi.mocked(console.error).mock.calls.flat().join(" ");
+const loggedOutput = () => stdoutLines.join(" ");
 
 describe("get", () => {
 	it("re-stringifies an object the REST client already parsed", async () => {
@@ -183,8 +189,8 @@ describe("failure redaction", () => {
 		expect(loggedOutput()).not.toContain("sess_tok_SECRET");
 	});
 
-	// Better Auth logs whatever we throw as a whole error object, straight to
-	// console.error — so the rethrown error has to be redacted too, not just the log.
+	// Better Auth logs whatever we throw as a whole error object, straight to the
+	// console — so the rethrown error has to be redacted too, not just the log.
 	it("rethrows a redacted error, never the client's own", async () => {
 		client.del.mockRejectedValue(upstashError());
 
