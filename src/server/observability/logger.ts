@@ -167,7 +167,7 @@ export class OtelLogger implements Logger {
  */
 export function createRootLogger(): OtelLogger {
 	return new OtelLogger({
-		emitter: logs.getLogger("personal-finance"),
+		emitter: logs.getLogger(env.PROJECT_NAME),
 		stdout: process.stdout,
 		level: env.LOG_LEVEL,
 		pretty: process.env.NODE_ENV === "development",

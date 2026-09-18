@@ -15,7 +15,7 @@ import { createRootLogger } from "~/server/observability/logger";
 //
 // Inngest logger is Pino-style object-first; OtelLogger is string-first.
 export const inngest = new Inngest({
-	id: "personal-finance",
+	id: env.PROJECT_NAME,
 	eventKey: env.INNGEST_EVENT_KEY,
 	logger: wrapStringFirstLogger(createRootLogger().with({ domain: "inngest" })),
 	middleware: [TracingMiddleware],

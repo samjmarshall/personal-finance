@@ -5,6 +5,7 @@ import {
 	trace,
 } from "@opentelemetry/api";
 import { Middleware } from "inngest";
+import { env } from "~/env";
 import { setBaggage } from "./baggage";
 import { createRootLogger } from "./logger";
 import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
@@ -15,7 +16,7 @@ const logger = createRootLogger().with({
 	domain: "inngest",
 	component: "tracing",
 });
-const tracer = trace.getTracer("personal-finance");
+const tracer = trace.getTracer(env.PROJECT_NAME);
 
 export class TracingMiddleware extends Middleware.BaseMiddleware {
 	readonly id = "tracing";

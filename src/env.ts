@@ -1,5 +1,6 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
+import pkg from "../package.json" with { type: "json" };
 
 /**
  * Log severity levels (debug→error). Defined here as the single source: env.ts is
@@ -101,6 +102,11 @@ export const env = createEnv({
 		RESEND_INBOUND_ADDRESS: z.string().optional(),
 		RESEND_WEBHOOK_SECRET: requiredInProd(z.string()),
 		/**
+		 * Project name. Sourced from package.json `name` (not process.env) — the
+		 * single source for the Inngest app id + OTel service name.
+		 */
+		PROJECT_NAME: z.string().min(1),
+		/**
 		 * PostHog project token for the Rekurve project. Must start with `phc_`; a
 		 * personal `phx_` key intentionally fails. Unset: OTel registration skipped,
 		 * logger writes stdout only, captureException is a no-op.
@@ -147,6 +153,7 @@ export const env = createEnv({
 		RESEND_API_KEY: process.env.RESEND_API_KEY,
 		RESEND_INBOUND_ADDRESS: process.env.RESEND_INBOUND_ADDRESS,
 		RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+		PROJECT_NAME: pkg.name,
 		POSTHOG_KEY: process.env.POSTHOG_KEY,
 		POSTHOG_HOST: process.env.POSTHOG_HOST,
 		LOG_LEVEL: process.env.LOG_LEVEL,

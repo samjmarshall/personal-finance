@@ -44,7 +44,7 @@ export function registerObservability(): void {
 	});
 
 	registerOTel({
-		serviceName: "personal-finance",
+		serviceName: env.PROJECT_NAME,
 		propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
 		// Records every root and honours a sampled parent — the outbox-continued
 		// traces need the async side to keep recording (Decision 14).
