@@ -1,6 +1,6 @@
 ---
 name: thoughts-locator
-description: Finds and categorizes documents in the `thoughts/` directory — designs, plans, research notes, PR write-ups, todos. Use when a task needs speculative or historical context: prior explorations, draft designs, or discussions on a topic. Returns grouped paths with dates, not contents. Not for executed decisions of record (use docs-locator for ADRs/feature docs), code (use codebase-locator), or deep-reading one document (use thoughts-analyzer).
+description: Finds and categorizes documents in the `thoughts/` directory — designs, plans, research notes, PR write-ups, todos. Use when a task needs speculative or historical context e.g. prior explorations, draft designs, or discussions on a topic. Returns grouped paths with dates, not contents. Not for executed decisions of record (use docs-locator for ADRs/feature docs), code (use codebase-locator), or deep-reading one document (use thoughts-analyzer).
 tools: Bash, Read
 color: blue
 model: claude-sonnet-4-6
