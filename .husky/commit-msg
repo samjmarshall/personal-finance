@@ -8,7 +8,10 @@ msg_file="$1"
 cleaned=$(sed '/------------------------ >8 ------------------------/,$d' "$msg_file" \
 	| git stripspace --strip-comments)
 
-if printf '%s\n' "$cleaned" | grep -qiE 'co-authored-by:|noreply@anthropic\.com'; then
+# Anchor the trailer key to line start: a real trailer always begins its line,
+# so prose that merely mentions it (this hook's own commit message) is spared.
+# The address stays unanchored — in a real trailer it sits mid-line.
+if printf '%s\n' "$cleaned" | grep -qiE '^[[:space:]]*co-authored-by:|noreply@anthropic\.com'; then
 	echo "commit-msg: blocked — message contains a Claude attribution line" >&2
 	echo "  (matched 'Co-Authored-By:' or 'noreply@anthropic.com'). Remove it and recommit." >&2
 	exit 1
