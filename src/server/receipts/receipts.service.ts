@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { context, SpanStatusCode, trace } from "@opentelemetry/api";
+import { context, type Span, SpanStatusCode, trace } from "@opentelemetry/api";
 import {
 	APICallError,
 	type FilePart,
@@ -18,10 +18,11 @@ import { env } from "~/env";
 import { ReceiptStatus } from "~/lib/constants";
 import { bareMediaType, isPdf, isText } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
-import { setBaggage } from "~/server/observability/baggage";
+import { BAGGAGE_KEYS, setBaggage } from "~/server/observability/baggage";
 import type { Logger } from "~/server/observability/logger";
 import type {
 	ReceiptItemInsert,
+	ReceiptRow,
 	ReceiptsRepository,
 } from "./receipts.repository";
 
@@ -31,6 +32,16 @@ const tracer = trace.getTracer(env.PROJECT_NAME);
 // Terminal states: a re-delivered event (Inngest is at-least-once) for one of these
 // must return without a second AI call.
 const DONE_STATUSES = [ReceiptStatus.Processed, ReceiptStatus.Duplicate];
+
+// Telemetry-only labels for one run's result, not the saved DB status.
+// Two of these ("skipped", "retry") are never persisted.
+enum ReceiptOutcome {
+	Skipped = "skipped",
+	Duplicate = "duplicate",
+	Processed = "processed",
+	Retry = "retry",
+	Failed = "failed",
+}
 
 // The prompt asks for YYYY-MM-DD but the model can drift (regional formats, blank
 // when the receipt has none); anything else would fail the `date` column insert and
@@ -117,29 +128,36 @@ export function buildExtractionContent({
 }): Array<TextPart | ImagePart | FilePart> {
 	// Markup sent as an image part reaches the model as unreadable noise; inline it.
 	// Untrusted third-party HTML — never render it in the browser.
-	if (isText(mediaType)) {
-		return [
-			{
-				type: "text",
-				text: `${prompt}\n\n${new TextDecoder().decode(bytes)}`,
-			},
-		];
-	}
-	return [
-		{ type: "text", text: prompt },
-		isPdf(mediaType)
-			? // Bare type, not the blob's raw header: Anthropic rejects a file part whose
+	switch (bareMediaType(mediaType)) {
+		case "application/pdf":
+			return [
+				{ type: "text", text: prompt },
+				// Bare type, not the blob's raw header: Anthropic rejects a file part whose
 				// media type carries parameters.
-				{ type: "file", data: bytes, mediaType: bareMediaType(mediaType) }
-			: { type: "image", image: bytes },
-	];
+				{ type: "file", data: bytes, mediaType: bareMediaType(mediaType) },
+			];
+		case "text/html":
+		case "text/plain":
+			return [
+				{
+					type: "text",
+					text: `${prompt}\n\n${new TextDecoder().decode(bytes)}`,
+				},
+			];
+		case "image/jpeg":
+		case "image/png":
+		case "image/webp":
+			return [
+				{ type: "text", text: prompt },
+				{ type: "image", image: bytes },
+			];
+		default:
+			throw new Error(`Unsupported media type: ${mediaType}`);
+	}
 }
 
-// Error Tracking sink, an object port so the test fakes it as a plain literal.
-// The park path captures its own terminal failures: process() parks, it does not
-// throw (the frozen retry contract), so Inngest's onRunError choke point (adr015 §7)
-// never sees a terminal receipt failure. Bound to posthog captureException in the
-// composition root; a no-op without POSTHOG_KEY.
+// Park path never throws, so Inngest's run-error hook misses terminal failures —
+// this port lets the service own the Error Tracking signal (adr015 §7).
 export interface ErrorReporter {
 	captureException(error: unknown, props?: Record<string, unknown>): void;
 }
@@ -193,27 +211,34 @@ export class ReceiptsService {
 		{ isFinalAttempt = false }: { isFinalAttempt?: boolean } = {},
 	): Promise<void> {
 		const receipt = await this.repository.findById(receiptId);
-		if (!receipt || DONE_STATUSES.includes(receipt.status)) return;
+		const receiptIdStr = String(receiptId);
 
-		// One span + baggage scope per attempt: member.id/receipt.id ride the baggage so
-		// the AI generation, the failure log and the captured exception all correlate to
-		// this trace. member.id may be null (auth row deleted) — setBaggage skips it.
+		// Baggage carries the receipt + member ids so every downstream span, log and
+		// captured error lands on this trace; member is left off when the sign-in row
+		// is gone.
 		const baggageCtx = setBaggage({
-			"receipt.id": String(receiptId),
-			"member.id": receipt.userId ?? undefined,
+			[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+			[BAGGAGE_KEYS.memberId]: receipt?.userId ?? undefined,
 		});
 		await context.with(baggageCtx, () =>
 			tracer.startActiveSpan(
 				"receipt.extract",
 				{
 					attributes: {
-						"receipt.id": receiptId,
-						"receipt.channel": receipt.channel,
+						[BAGGAGE_KEYS.receiptId]: receiptIdStr,
 						"receipt.is_final_attempt": isFinalAttempt,
 					},
 				},
 				async (span) => {
 					try {
+						// A re-delivered event for a finished receipt, or one whose row is gone,
+						// does no work — tagged so the trace still shows why nothing happened.
+						if (!receipt || DONE_STATUSES.includes(receipt.status)) {
+							span.setAttribute("receipt.outcome", ReceiptOutcome.Skipped);
+							return;
+						}
+						span.setAttribute("receipt.channel", receipt.channel);
+
 						// Read by store-relative pathname, never the member-supplied blobUrl: the
 						// store resolves a pathname against our own token, so a foreign URL can't be
 						// fetched and fed to the model (the DTO already rejects a URL pathname).
@@ -223,58 +248,82 @@ export class ReceiptsService {
 						const contentHash = sha256(bytes);
 						await this.repository.setContentHash(receiptId, contentHash);
 						if (await this.linkDuplicate(receiptId, contentHash)) {
-							span.setAttribute("receipt.outcome", "duplicate");
+							span.setAttribute("receipt.outcome", ReceiptOutcome.Duplicate);
 							return;
 						}
 
 						assertWithinModelCap(bytes, mediaType);
 						await this.extractAndSave(receiptId, bytes, mediaType);
-						span.setAttribute("receipt.outcome", "processed");
+						span.setAttribute("receipt.outcome", ReceiptOutcome.Processed);
 					} catch (error) {
 						span.recordException(error as Error);
 						span.setStatus({ code: SpanStatusCode.ERROR });
-
-						// A retryable provider error (429/5xx/network) is worth another go with
-						// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
-						const retryable =
-							APICallError.isInstance(error) && error.isRetryable === true;
-						if (retryable && !isFinalAttempt) {
-							span.setAttribute("receipt.outcome", "retry");
-							this.logger.warn("receipt extraction retrying", {
-								error,
-								"receipt.id": receiptId,
-								"receipt.channel": receipt.channel,
-								"receipt.is_final_attempt": isFinalAttempt,
-							});
-							throw error;
-						}
-
-						span.setAttribute("receipt.outcome", "failed");
-						const reason = memberFacingError(error);
-						this.logger.error("receipt extraction failed", {
-							error,
-							"event.name": "receipt.failed",
-							"receipt.id": receiptId,
-							"receipt.channel": receipt.channel,
-							"receipt.is_final_attempt": isFinalAttempt,
-							"receipt.reason": reason,
+						await this.parkFailure(span, error, {
+							receipt,
+							receiptId,
+							receiptIdStr,
+							isFinalAttempt,
 						});
-						// onRunError never sees a parked run, so the domain tier owns the Error
-						// Tracking signal for terminal failures (adr015 §7 note). Inside the span
-						// + baggage above, so the issue carries $trace_id + member.id.
-						this.errorReporter.captureException(error, {
-							"receipt.id": String(receiptId),
-							"receipt.channel": receipt.channel,
-							"member.id": receipt.userId,
-							"receipt.reason": reason,
-						});
-						await this.repository.markFailed(receiptId, reason);
 					} finally {
 						span.end();
 					}
 				},
 			),
 		);
+	}
+
+	// Rethrows the original error for a retryable failure with attempts left (Inngest
+	// then retries); otherwise parks the row and reports the terminal failure.
+	private async parkFailure(
+		span: Span,
+		error: unknown,
+		{
+			receipt,
+			receiptId,
+			receiptIdStr,
+			isFinalAttempt,
+		}: {
+			receipt: ReceiptRow | undefined;
+			receiptId: number;
+			receiptIdStr: string;
+			isFinalAttempt: boolean;
+		},
+	): Promise<void> {
+		// A retryable provider error (429/5xx/network) is worth another go with
+		// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
+		const retryable =
+			APICallError.isInstance(error) && error.isRetryable === true;
+		if (retryable && !isFinalAttempt) {
+			span.setAttribute("receipt.outcome", ReceiptOutcome.Retry);
+			this.logger.warn("receipt extraction retrying", {
+				error,
+				[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+				"receipt.channel": receipt?.channel,
+				"receipt.is_final_attempt": isFinalAttempt,
+			});
+			throw error;
+		}
+
+		span.setAttribute("receipt.outcome", ReceiptOutcome.Failed);
+		const reason = memberFacingError(error);
+		this.logger.error("receipt extraction failed", {
+			error,
+			"event.name": "receipt.failed",
+			[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+			"receipt.channel": receipt?.channel,
+			"receipt.is_final_attempt": isFinalAttempt,
+			"receipt.reason": reason,
+		});
+		// Parked runs don't throw, so Inngest's run-error hook never sees them —
+		// park the row first, then capture (adr015 §7). Span + baggage bind the
+		// issue to this trace and member.
+		await this.repository.markFailed(receiptId, reason);
+		this.errorReporter.captureException(error, {
+			[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+			"receipt.channel": receipt?.channel,
+			[BAGGAGE_KEYS.memberId]: receipt?.userId,
+			"receipt.reason": reason,
+		});
 	}
 
 	// Dedup on the exact bytes: a re-upload of a photo we already extracted links back
@@ -349,9 +398,9 @@ export class ReceiptsService {
 			model: this.languageModel,
 			schema: receiptExtractionDto,
 			messages: [{ role: "user", content }],
-			// v7 telemetry is opt-out once @ai-sdk/otel is registered (otel.ts); inputs
-			// record by default, so ContextSpanProcessor redaction must be registered
-			// first or the base64 receipt image ships raw. functionId groups the runs.
+			// Inputs record by default — the redaction step must be registered first or
+			// the base64 receipt image ships raw to the trace backend. functionId groups
+			// the runs.
 			telemetry: {
 				isEnabled: true,
 				recordInputs: true,

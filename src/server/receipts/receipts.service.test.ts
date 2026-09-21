@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { LegacyOpenTelemetry } from "@ai-sdk/otel";
+import { context, propagation, trace } from "@opentelemetry/api";
 import {
 	InMemorySpanExporter,
 	SimpleSpanProcessor,
@@ -77,9 +78,8 @@ const okBlob: FetchedBlob = {
 const sha256 = (bytes: Uint8Array) =>
 	createHash("sha256").update(bytes).digest("hex");
 
-// The receipt.extract business span and the AI SDK's ai.generateObject span both land
-// on the ambient tracer; register a provider so they're recorded and assertable.
-// LegacyOpenTelemetry is what otel.ts registers in prod — it keeps the ai.* span names.
+// Register a provider so both spans land and are assertable; LegacyOpenTelemetry
+// mirrors prod and preserves the ai.* span name format.
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
 	spanProcessors: [new SimpleSpanProcessor(exporter)],
@@ -89,7 +89,14 @@ beforeAll(() => {
 	provider.register();
 	registerTelemetry(new LegacyOpenTelemetry());
 });
-afterAll(() => provider.shutdown());
+// Restore the global no-op tracer; a shut-down provider left installed would leak
+// into later test files sharing the worker (order-dependent flakes).
+afterAll(async () => {
+	await provider.shutdown();
+	trace.disable();
+	context.disable();
+	propagation.disable();
+});
 beforeEach(() => exporter.reset());
 
 // Fake ports are plain object literals against the interfaces. Every repository
@@ -103,7 +110,6 @@ function harness(
 		blob?: FetchedBlob;
 		extract?: () => Promise<ReceiptExtraction>;
 		languageModel?: LanguageModel;
-		spyAnalyze?: boolean;
 	} = {},
 ) {
 	const log: string[] = [];
@@ -159,9 +165,6 @@ function harness(
 	const errorReporter: ErrorReporter = {
 		captureException: (error, props) => captures.push({ error, props }),
 	};
-	// `languageModel` defaults to a bare stub: analyzeReceipt is spied below, so
-	// `generateObject` never runs. The telemetry test passes a real MockLanguageModelV4
-	// and `spyAnalyze: false` so the ai.generateObject span is actually emitted.
 	const service = new ReceiptsService({
 		repository,
 		blobStore,
@@ -169,25 +172,24 @@ function harness(
 		logger,
 		errorReporter,
 	});
-	// Stub the private method on the instance to run process()'s flow offline. Faking a
-	// whole LanguageModel for generateObject is heavier than pinning the flow this way.
-	// `opts.extract` drives the return (or throw); the builders are covered directly below.
-	const analyze =
-		opts.spyAnalyze === false
-			? undefined
-			: vi
-					.spyOn(
-						service as unknown as {
-							analyzeReceipt(input: {
-								mediaType: string;
-							}): Promise<ReceiptExtraction>;
-						},
-						"analyzeReceipt",
-					)
-					.mockImplementation(async () => {
-						log.push("extract");
-						return opts.extract ? opts.extract() : extraction;
-					});
+	// Spy the extraction so the flow runs offline by default; pass a real model when
+	// the telemetry span must actually emit (the model runs, no spy). `opts.extract`
+	// drives the return (or throw); the builders are covered directly below.
+	const analyze = opts.languageModel
+		? undefined
+		: vi
+				.spyOn(
+					service as unknown as {
+						analyzeReceipt(input: {
+							mediaType: string;
+						}): Promise<ReceiptExtraction>;
+					},
+					"analyzeReceipt",
+				)
+				.mockImplementation(async () => {
+					log.push("extract");
+					return opts.extract ? opts.extract() : extraction;
+				});
 
 	return {
 		service,
@@ -322,6 +324,11 @@ describe("ReceiptsService.process", () => {
 		expect(h.blobStore.read).not.toHaveBeenCalled();
 		expect(h.analyze).not.toHaveBeenCalled();
 		expect(h.log).toEqual([]);
+		// A no-op re-delivery still opens the span so the trace shows why nothing ran.
+		const span = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "receipt.extract");
+		expect(span?.attributes["receipt.outcome"]).toBe("skipped");
 	});
 
 	it("returns early when the receipt no longer exists", async () => {
@@ -331,6 +338,10 @@ describe("ReceiptsService.process", () => {
 
 		expect(h.blobStore.read).not.toHaveBeenCalled();
 		expect(h.log).toEqual([]);
+		const span = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "receipt.extract");
+		expect(span?.attributes["receipt.outcome"]).toBe("skipped");
 	});
 
 	it("marks the receipt failed when extraction throws", async () => {
@@ -348,9 +359,8 @@ describe("ReceiptsService.process", () => {
 		expect(h.calls.saveExtraction).toEqual([]);
 	});
 
-	// A parked run "succeeds" as far as Inngest is concerned (process never throws), so
-	// onRunError can't see it — the domain tier owns the receipt.failed alert signal and
-	// the Error Tracking capture for terminal failures.
+	// A parked run never throws, so Inngest's run-error hook never fires — the service
+	// must emit the failure alert and capture the error itself.
 	it("logs receipt.failed and captures the exception once on the park path", async () => {
 		const boom = new Error("model unavailable");
 		const h = harness({
@@ -366,7 +376,7 @@ describe("ReceiptsService.process", () => {
 		expect(errors).toHaveLength(1);
 		expect(errors[0]?.msg).toBe("receipt extraction failed");
 		expect(errors[0]?.attrs["event.name"]).toBe("receipt.failed");
-		expect(errors[0]?.attrs["receipt.id"]).toBe(1);
+		expect(errors[0]?.attrs["receipt.id"]).toBe("1");
 		expect(h.logs.some((l) => l.level === "warn")).toBe(false);
 
 		expect(h.captures).toHaveLength(1);
@@ -511,9 +521,8 @@ describe("ReceiptsService.process", () => {
 		expect(h.calls.saveExtraction).toHaveLength(1);
 	});
 
-	// The AI SDK telemetry option must emit an ai.generateObject span nested under our
-	// receipt.extract span, on one trace — that's what the redaction + PostHog span
-	// processors key on downstream. Runs the real generateObject with a mock model.
+	// Downstream redaction + PostHog processors key on the ai.generateObject span
+	// sitting under receipt.extract on one trace — this pins that contract.
 	it("emits an ai.generateObject span under receipt.extract when telemetry runs", async () => {
 		const model = new MockLanguageModelV4({
 			doGenerate: async () => ({
@@ -530,7 +539,6 @@ describe("ReceiptsService.process", () => {
 			receipt: baseReceipt(),
 			categories: [{ id: 7, name: "Groceries" }],
 			languageModel: model,
-			spyAnalyze: false,
 		});
 
 		await h.service.process(1);
@@ -596,7 +604,7 @@ describe("buildExtractionContent", () => {
 		},
 	);
 
-	it.each(["image/jpeg", "image/png", "image/heic"])(
+	it.each(["image/jpeg", "image/png", "image/webp"])(
 		"sends %s as an image part",
 		(mediaType) => {
 			const content = buildExtractionContent({ prompt, bytes, mediaType });
@@ -606,6 +614,14 @@ describe("buildExtractionContent", () => {
 			]);
 		},
 	);
+
+	// HEIC is the iPhone default, but the vision model can't read it — reject up front
+	// instead of sending bytes the model would 400 on.
+	it("rejects image/heic as an unsupported media type", () => {
+		expect(() =>
+			buildExtractionContent({ prompt, bytes, mediaType: "image/heic" }),
+		).toThrow("Unsupported media type: image/heic");
+	});
 
 	// The charset form is what the worker actually sees: `mediaType` is the blob's raw
 	// HTTP content-type header, not the bare string the producer stored on the row.
