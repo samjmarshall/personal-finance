@@ -1,12 +1,19 @@
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import type { Resend } from "resend";
 
+import { env } from "~/env";
+import type { Logger } from "~/server/observability/logger";
 import { inboundEmailEventSchema } from "./email.dto";
 import type { EmailService } from "./email.service";
+
+// Ambient tracer, no-op until an SDK is registered (otel.ts).
+const tracer = trace.getTracer(env.PROJECT_NAME);
 
 interface EmailControllerDeps {
 	resend: Pick<Resend, "webhooks">;
 	webhookSecret: string;
 	service: EmailService;
+	logger: Logger;
 }
 
 /**
@@ -18,11 +25,13 @@ export class EmailController {
 	private readonly resend: Pick<Resend, "webhooks">;
 	private readonly webhookSecret: string;
 	private readonly service: EmailService;
+	private readonly logger: Logger;
 
-	constructor({ resend, webhookSecret, service }: EmailControllerDeps) {
+	constructor({ resend, webhookSecret, service, logger }: EmailControllerDeps) {
 		this.resend = resend;
 		this.webhookSecret = webhookSecret;
 		this.service = service;
+		this.logger = logger;
 	}
 
 	async handle(request: Request): Promise<Response> {
@@ -48,19 +57,41 @@ export class EmailController {
 			return unauthorized();
 		}
 
-		const parsed = inboundEmailEventSchema.safeParse(verified);
-		// Signed but unreadable. Retrying will not change the shape, so it is a 200.
-		if (!parsed.success) return json({ status: "ignored" });
+		// Trace root for the inbound event, opened only past verification: an
+		// unauthenticated caller leaves no span, and none of the rejection noise does.
+		return tracer.startActiveSpan("email.inbound", async (span) => {
+			try {
+				const parsed = inboundEmailEventSchema.safeParse(verified);
+				// Signed but unreadable. Retrying will not change the shape, so it is a 200.
+				if (!parsed.success) return json({ status: "ignored" });
 
-		// Resend delivers every subscribed event to one endpoint; the others are not
-		// this route's business, and a non-200 would make Svix retry them forever.
-		if (parsed.data.type !== "email.received")
-			return json({ status: "ignored" });
+				span.setAttribute("email.event_type", parsed.data.type);
+				// Resend delivers every subscribed event to one endpoint; the others are not
+				// this route's business, and a non-200 would make Svix retry them forever.
+				if (parsed.data.type !== "email.received")
+					return json({ status: "ignored" });
 
-		// A genuine failure below is left to throw: a 5xx is what earns a Svix retry,
-		// and an expiring download URL is worth retrying. A drop is a verdict, not a
-		// failure — 200 so it is never redelivered.
-		return json(await this.service.ingest(parsed.data));
+				const emailId = parsed.data.data.email_id;
+				span.setAttribute("email.id", emailId);
+
+				// A genuine failure below is left to throw: a 5xx is what earns a Svix retry,
+				// and an expiring download URL is worth retrying. A drop is a verdict, not a
+				// failure — 200 so it is never redelivered.
+				try {
+					return json(await this.service.ingest(parsed.data));
+				} catch (error) {
+					span.recordException(error as Error);
+					span.setStatus({ code: SpanStatusCode.ERROR });
+					this.logger.error("inbound email failed", {
+						error,
+						"email.id": emailId,
+					});
+					throw error;
+				}
+			} finally {
+				span.end();
+			}
+		});
 	}
 }
 

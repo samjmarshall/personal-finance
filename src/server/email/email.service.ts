@@ -1,4 +1,8 @@
+import { context, trace } from "@opentelemetry/api";
+
 import type { BlobStore } from "~/server/blob-store/blob-store";
+import { BaggageKey, setBaggage } from "~/server/observability/baggage";
+import type { Logger } from "~/server/observability/logger";
 import type { InboundAttachmentMeta, InboundEmailEvent } from "./email.dto";
 import type { InboundMailbox } from "./email.mailbox";
 import type { EmailRepository, StoredBlob } from "./email.repository";
@@ -11,6 +15,13 @@ export function parseFromAddress(from: string): string {
 	// attacker's mail against an allowlisted member.
 	const angled = [...from.matchAll(/<([^>]*)>/g)].at(-1);
 	return (angled?.[1] ?? from).trim().toLowerCase();
+}
+
+// Log the domain, never the address: the full from is a Member identifier, the
+// domain is not. Undefined when there is no `@` so a malformed value never leaks.
+function fromDomain(address: string): string | undefined {
+	const at = address.lastIndexOf("@");
+	return at === -1 ? undefined : address.slice(at + 1);
 }
 
 // What the worker can actually extract from. Deliberately the same three types the
@@ -68,6 +79,7 @@ interface EmailServiceDeps {
 	repository: EmailRepository;
 	mailbox: InboundMailbox;
 	blobStore: BlobStore;
+	logger: Logger;
 }
 
 /** Application tier for the Resend inbound webhook: allowlist gate, blob, mint. */
@@ -75,11 +87,13 @@ export class EmailService {
 	private readonly repository: EmailRepository;
 	private readonly mailbox: InboundMailbox;
 	private readonly blobStore: BlobStore;
+	private readonly logger: Logger;
 
-	constructor({ repository, mailbox, blobStore }: EmailServiceDeps) {
+	constructor({ repository, mailbox, blobStore, logger }: EmailServiceDeps) {
 		this.repository = repository;
 		this.mailbox = mailbox;
 		this.blobStore = blobStore;
+		this.logger = logger;
 	}
 
 	/**
@@ -93,35 +107,48 @@ export class EmailService {
 		// Design decision 8: dropped, not quarantined — and dropped here, before any
 		// fetch, blob write or model call, so unknown mail costs nothing.
 		if (!sender) {
-			console.info("[email] dropped mail from an unknown sender", {
-				from,
-				emailId: event.data.email_id,
+			this.logger.info("inbound email dropped: unknown sender", {
+				"email.id": event.data.email_id,
+				"email.from_domain": fromDomain(from),
 			});
 			return { status: "dropped" };
 		}
 
-		const qualifying = event.data.attachments
-			.filter(isReceiptAttachment)
-			.slice(0, MAX_EMAIL_ATTACHMENTS);
-		const stored = qualifying.length
-			? await this.storeAttachments(event.data.email_id, qualifying)
-			: await this.storeBody(event.data.email_id);
+		// Member on baggage so the blob writes, the mint and the controller's
+		// `email.inbound` span all carry who the receipt is for.
+		return context.with(
+			setBaggage({ [BaggageKey.MemberId]: sender.userId }),
+			async (): Promise<IngestResult> => {
+				const qualifying = event.data.attachments
+					.filter(isReceiptAttachment)
+					.slice(0, MAX_EMAIL_ATTACHMENTS);
+				const stored = qualifying.length
+					? await this.storeAttachments(event.data.email_id, qualifying)
+					: await this.storeBody(event.data.email_id);
 
-		if (!stored.length) {
-			// Resend listed attachments the metadata promised and none came back. Not
-			// worth a 5xx retry storm — the mail is still in Resend if it matters.
-			if (qualifying.length)
-				console.warn("[email] qualifying attachments resolved to nothing", {
-					emailId: event.data.email_id,
+				if (!stored.length) {
+					// Resend listed attachments the metadata promised and none came back.
+					// Not worth a 5xx retry storm — the mail is still in Resend if it matters.
+					if (qualifying.length)
+						this.logger.warn("inbound email attachments resolved to nothing", {
+							"email.id": event.data.email_id,
+							"email.qualifying": qualifying.length,
+						});
+					return { status: "empty" };
+				}
+
+				const receiptIds = await this.repository.createPendingReceipts(
+					sender.userId,
+					stored,
+				);
+				this.logger.info("inbound email ingested", {
+					"email.id": event.data.email_id,
+					"receipt.ids": receiptIds,
 				});
-			return { status: "empty" };
-		}
-
-		const receiptIds = await this.repository.createPendingReceipts(
-			sender.userId,
-			stored,
+				trace.getActiveSpan()?.setAttribute("receipt.ids", receiptIds);
+				return { status: "ingested", receiptIds };
+			},
 		);
-		return { status: "ingested", receiptIds };
 	}
 
 	// The webhook carries attachment metadata but no bytes, so the download URLs

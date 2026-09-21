@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { Resend } from "resend";
 
 import { env } from "~/env";
@@ -7,7 +8,11 @@ import { EmailController } from "~/server/email/email.controller";
 import { ResendInboundMailbox } from "~/server/email/email.mailbox";
 import { DrizzleEmailRepository } from "~/server/email/email.repository";
 import { EmailService } from "~/server/email/email.service";
+import { flushTelemetry } from "~/server/observability/flush";
+import { createRootLogger } from "~/server/observability/logger";
 import { outboxService } from "~/server/outbox/outbox.module";
+
+const rootLogger = createRootLogger().with({ domain: "email" });
 
 // Attachment bytes are fetched and blobbed inline, because the download URLs
 // expire and the frozen `{ receiptId }` payload needs its row to exist before the
@@ -32,19 +37,27 @@ function compose(apiKey: string, webhookSecret: string): EmailController {
 			}),
 			mailbox: new ResendInboundMailbox({ resend }),
 			blobStore: new VercelBlobStore(),
+			logger: rootLogger.with({ component: "service" }),
 		}),
+		logger: rootLogger.with({ component: "controller" }),
 	});
 	return controller;
 }
 
 export async function POST(request: Request): Promise<Response> {
+	// Drain telemetry after the response is sent, before the lambda freezes (adr015 §8).
+	after(flushTelemetry);
 	// Both are optional outside production, so an unconfigured deployment would
 	// otherwise verify against an empty secret. Refuse rather than define what
 	// that means.
 	const webhookSecret = env.RESEND_WEBHOOK_SECRET;
 	const apiKey = env.RESEND_API_KEY;
 	if (!webhookSecret || !apiKey) {
-		console.error("[inbound] Resend credentials are not configured");
+		rootLogger
+			.with({ component: "route" })
+			.error("Resend credentials are not configured", {
+				"event.name": "email.route.unconfigured",
+			});
 		return new Response("Not configured", { status: 500 });
 	}
 	return compose(apiKey, webhookSecret).handle(request);
