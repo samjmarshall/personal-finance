@@ -26,15 +26,22 @@ export function captureException(
 	const posthog = getClient();
 	if (!posthog) return;
 
-	const distinctId = readBaggage()[BAGGAGE_KEYS.memberId] ?? "server";
-	const spanCtx = trace.getActiveSpan()?.spanContext();
+	try {
+		const distinctId = readBaggage()[BAGGAGE_KEYS.memberId] ?? "server";
+		const spanCtx = trace.getActiveSpan()?.spanContext();
 
-	posthog.captureException(error, distinctId, {
-		...(spanCtx
-			? { $trace_id: spanCtx.traceId, $span_id: spanCtx.spanId }
-			: {}),
-		...props,
-	});
+		posthog.captureException(error, distinctId, {
+			...(spanCtx
+				? { $trace_id: spanCtx.traceId, $span_id: spanCtx.spanId }
+				: {}),
+			...props,
+		});
+	} catch (captureError) {
+		// Error Tracking is best-effort; a telemetry failure must never break the
+		// caller's path (e.g. turn a parked receipt run into a thrown one). Surface it
+		// on stderr so the failure is still visible in process logs.
+		console.error("posthog captureException failed", captureError);
+	}
 }
 
 /** Drains queued events before a serverless freeze. No-op without a client. */
