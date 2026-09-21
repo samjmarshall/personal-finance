@@ -158,7 +158,10 @@ describe("tracing span", () => {
 		expect(lines).toHaveLength(0);
 	});
 
-	it("a broken sink fires the alert key and still throws the original error", async () => {
+	// The logger owns the never-throw guarantee (it swallows a dead sink and falls
+	// back to console), so a broken sink can't change the result or fire trpc's own
+	// observability_sink_failed catch — that catch now only guards span/captureException.
+	it("a broken log sink can't fail the request — the logger swallows it and falls back to console", async () => {
 		vi.spyOn(process.stdout, "write").mockImplementation(() => {
 			throw new Error("stdout down");
 		});
@@ -170,8 +173,7 @@ describe("tracing span", () => {
 			code: "INTERNAL_SERVER_ERROR",
 		});
 		expect(consoleError).toHaveBeenCalledWith(
-			"observability_sink_failed",
-			expect.objectContaining({ "trpc.path": "boom" }),
+			expect.stringContaining("logging_failed"),
 		);
 	});
 });

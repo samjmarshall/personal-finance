@@ -152,15 +152,12 @@ const observabilityMiddleware = t.middleware(
 									});
 								}
 							}
-						} catch (sinkError) {
-							// A sink threw (span or log write). Don't fail the request over
-							// it, but don't hide it: write straight to the console — the
-							// logger may be the thing down — under a fixed key a Vercel
-							// alert can watch.
-							console.error("observability_sink_failed", {
+						} catch (error) {
+							// Ensure that observability failures do not crash the application
+							console.error("observability_failed", {
 								"trpc.path": path,
 								result,
-								sinkError,
+								error,
 							});
 						}
 					}
