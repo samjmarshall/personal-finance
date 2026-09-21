@@ -277,7 +277,7 @@ Implements adr015 clause 3 (`email.inbound` span, `member.id` on resolve, `recei
 
 ### Success
 - [x] `make check` passes
-- [x] `make test` passes (562 passed)
+- [x] `make test` passes (record the verdict, not the count — it drifts commit to commit)
 - [x] `grep -rn "console\." src/server/email src/app/api/receipts` returns nothing
 - [x] Every enumerated `console.*` site migrated — the 11 domain sites + the trpc/inngest/inbound route roots + the `/api/health` probe root. `grep -rn "console\." src/server src/app/api` is **not** literally empty and cannot be: the only remaining calls are the observability spine's crash-proof last-resort sinks (`logger.ts:142`, `posthog.ts:43`, `trpc.ts:159` `observability_failed`), which fire when the logger/telemetry itself failed and so cannot route through the logger. Plus comment/test-description mentions of the token in `logger.ts`/`logger.test.ts`.
 - [ ] Local Resend webhook replay (or the existing e2e path): stdout shows `email.inbound`-scoped lines with one `trace_id`, and a subsequent `outbox delivered` + `receipt.extract` line share it — _deferred; needs a live server + Inngest + real webhook, and no `POSTHOG_KEY` locally means no SDK/real trace id (Phase 11 preview spike)_

@@ -1,4 +1,19 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { context, trace } from "@opentelemetry/api";
+import {
+	InMemorySpanExporter,
+	SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import type { LogAttributes, Logger } from "~/server/observability/logger";
 import type { InboundEmailEvent } from "./email.dto";
 import type { AttachmentDownload, EmailBody } from "./email.mailbox";
@@ -14,6 +29,18 @@ import {
 const SENDER_USER_ID = "user-1";
 
 type LogEntry = { level: string; msg: string; attrs: LogAttributes };
+
+// The service tags the minted ids onto whatever span is active and runs the mint
+// inside member.id baggage; both are no-ops with no SDK registered, so register one
+// to prove the wiring is live.
+const exporter = new InMemorySpanExporter();
+const provider = new NodeTracerProvider({
+	spanProcessors: [new SimpleSpanProcessor(exporter)],
+});
+
+beforeAll(() => provider.register());
+afterAll(() => provider.shutdown());
+beforeEach(() => exporter.reset());
 
 describe("parseFromAddress", () => {
 	// The stored allowlist is lower-cased and bare, so the parsed sender has to land
@@ -114,8 +141,8 @@ function harness({
 		})),
 	};
 
-	// Object-literal fake against the interface — records each call; `with` returns
-	// itself (the service never re-binds; the module root does that once).
+	// Child-logger factory returns the same instance — the service never re-binds;
+	// only the route module does that once on startup.
 	const logs: LogEntry[] = [];
 	const logger: Logger = {
 		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
@@ -169,11 +196,12 @@ describe("EmailService.ingest", () => {
 	it("logs the drop by domain, never the sender's address", async () => {
 		const h = harness({ allowlist: [] });
 
-		await h.service.ingest(event({ from: "Sam <sam@example.com>" }));
+		await h.service.ingest(event());
 
 		const drop = h.logs.find(
 			(l) => l.msg === "inbound email dropped: unknown sender",
 		);
+		expect(drop?.level).toBe("info");
 		expect(drop?.attrs["email.from_domain"]).toBe("example.com");
 		expect(JSON.stringify(drop?.attrs)).not.toContain("sam@example.com");
 	});
@@ -333,6 +361,23 @@ describe("EmailService.ingest", () => {
 		const ingested = h.logs.find((l) => l.msg === "inbound email ingested");
 		expect(ingested?.level).toBe("info");
 		expect(ingested?.attrs["receipt.ids"]).toEqual([1]);
+	});
+
+	// The controller opens email.inbound; the service tags the minted ids onto the
+	// active span (adr015 §3). Open one here so the attribute is not a dead no-op.
+	it("tags the active span with the minted receipt ids", async () => {
+		const h = harness({ email: { html: "<p>Total $9</p>", text: null } });
+		const span = trace.getTracer("test").startSpan("email.inbound");
+
+		await context.with(trace.setSpan(context.active(), span), () =>
+			h.service.ingest(event()),
+		);
+		span.end();
+
+		const recorded = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "email.inbound");
+		expect(recorded?.attributes["receipt.ids"]).toEqual([1]);
 	});
 
 	// html carries the line-item table; text is the flattened fallback the sender's

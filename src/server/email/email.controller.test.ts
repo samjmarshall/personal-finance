@@ -1,3 +1,4 @@
+import { SpanStatusCode } from "@opentelemetry/api";
 import {
 	InMemorySpanExporter,
 	SimpleSpanProcessor,
@@ -186,6 +187,12 @@ describe("EmailController.handle", () => {
 		expect(failed).toHaveLength(1);
 		expect(failed[0]?.level).toBe("error");
 		expect(failed[0]?.attrs["email.id"]).toBe("email-1");
+
+		// The failure must show red in the trace view, with the exception recorded.
+		const spans = exporter.getFinishedSpans();
+		expect(spans).toHaveLength(1);
+		expect(spans[0]?.status.code).toBe(SpanStatusCode.ERROR);
+		expect(spans[0]?.events.map((e) => e.name)).toContain("exception");
 	});
 
 	// The span is the root of the inbound trace; it must exist for a verified event
@@ -199,16 +206,18 @@ describe("EmailController.handle", () => {
 		expect(spans).toHaveLength(1);
 		expect(spans[0]?.name).toBe("email.inbound");
 		expect(spans[0]?.attributes["email.id"]).toBe("email-1");
+		expect(spans[0]?.attributes["email.event_type"]).toBe("email.received");
 	});
 
 	it("opens no span for a caller the signature rejected", async () => {
 		const h = harness();
-
-		await h.post(RECEIVED_EVENT, {
-			"svix-timestamp": "1700000000",
-			"svix-signature": "v1,abc",
+		h.verify.mockImplementation(() => {
+			throw new Error("no match");
 		});
 
+		const response = await h.post(RECEIVED_EVENT);
+
+		expect(response.status).toBe(401);
 		expect(exporter.getFinishedSpans()).toHaveLength(0);
 	});
 });

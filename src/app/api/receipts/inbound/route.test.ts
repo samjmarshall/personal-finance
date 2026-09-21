@@ -29,9 +29,16 @@ vi.mock("resend", () => ({
 	},
 }));
 
-// `after` runs post-response in prod; invoke it synchronously so the test can see
-// the flush it schedules.
-vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
+// `after` runs post-response in prod; spy it (invoking synchronously) so the test
+// can assert the flush is handed to `after` — deferred, not run inline and blocking
+// the response. Spread the real module so any other next/server export stays live.
+const { after } = vi.hoisted(() => ({
+	after: vi.fn((fn: () => unknown) => fn()),
+}));
+vi.mock("next/server", async (orig) => ({
+	...(await orig<typeof import("next/server")>()),
+	after,
+}));
 const { flushTelemetry } = vi.hoisted(() => ({ flushTelemetry: vi.fn() }));
 vi.mock("~/server/observability/flush", () => ({ flushTelemetry }));
 
@@ -83,12 +90,13 @@ describe("POST /api/receipts/inbound", () => {
 	);
 
 	// The flush is scheduled before the config gate, so even a refused request drains.
-	it("schedules a telemetry flush before the config gate", async () => {
+	// It must be handed to `after` (deferred), never run inline before the response.
+	it("defers a telemetry flush via after(), before the config gate", async () => {
 		env.RESEND_API_KEY = undefined;
 
 		const response = await post();
 
-		expect(flushTelemetry).toHaveBeenCalled();
+		expect(after).toHaveBeenCalledWith(flushTelemetry);
 		expect(response.status).toBe(500);
 	});
 
