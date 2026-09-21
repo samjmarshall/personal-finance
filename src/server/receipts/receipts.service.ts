@@ -18,7 +18,7 @@ import { env } from "~/env";
 import { ReceiptStatus } from "~/lib/constants";
 import { bareMediaType, isPdf, isText } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
-import { BAGGAGE_KEYS, setBaggage } from "~/server/observability/baggage";
+import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import type { Logger } from "~/server/observability/logger";
 import type {
 	ReceiptItemInsert,
@@ -217,15 +217,15 @@ export class ReceiptsService {
 		// captured error lands on this trace; member is left off when the sign-in row
 		// is gone.
 		const baggageCtx = setBaggage({
-			[BAGGAGE_KEYS.receiptId]: receiptIdStr,
-			[BAGGAGE_KEYS.memberId]: receipt?.userId ?? undefined,
+			[BaggageKey.ReceiptId]: receiptIdStr,
+			[BaggageKey.MemberId]: receipt?.userId ?? undefined,
 		});
 		await context.with(baggageCtx, () =>
 			tracer.startActiveSpan(
 				"receipt.extract",
 				{
 					attributes: {
-						[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+						[BaggageKey.ReceiptId]: receiptIdStr,
 						"receipt.is_final_attempt": isFinalAttempt,
 					},
 				},
@@ -297,7 +297,7 @@ export class ReceiptsService {
 			span.setAttribute("receipt.outcome", ReceiptOutcome.Retry);
 			this.logger.warn("receipt extraction retrying", {
 				error,
-				[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+				[BaggageKey.ReceiptId]: receiptIdStr,
 				"receipt.channel": receipt?.channel,
 				"receipt.is_final_attempt": isFinalAttempt,
 			});
@@ -309,7 +309,7 @@ export class ReceiptsService {
 		this.logger.error("receipt extraction failed", {
 			error,
 			"event.name": "receipt.failed",
-			[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+			[BaggageKey.ReceiptId]: receiptIdStr,
 			"receipt.channel": receipt?.channel,
 			"receipt.is_final_attempt": isFinalAttempt,
 			"receipt.reason": reason,
@@ -319,9 +319,9 @@ export class ReceiptsService {
 		// issue to this trace and member.
 		await this.repository.markFailed(receiptId, reason);
 		this.errorReporter.captureException(error, {
-			[BAGGAGE_KEYS.receiptId]: receiptIdStr,
+			[BaggageKey.ReceiptId]: receiptIdStr,
 			"receipt.channel": receipt?.channel,
-			[BAGGAGE_KEYS.memberId]: receipt?.userId,
+			[BaggageKey.MemberId]: receipt?.userId,
 			"receipt.reason": reason,
 		});
 	}

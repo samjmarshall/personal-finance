@@ -6,7 +6,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "./baggage";
 import { ContextSpanProcessor } from "./span-processor";
 
 function makeMessages(parts: unknown[]) {
@@ -50,7 +50,10 @@ function runSpan(
 describe("ContextSpanProcessor", () => {
 	describe("baggage → span attrs", () => {
 		it("copies known baggage keys onto the span", () => {
-			const ctx = setBaggage({ "member.id": "m1", "receipt.id": "42" });
+			const ctx = setBaggage({
+				[BaggageKey.MemberId]: "m1",
+				[BaggageKey.ReceiptId]: "42",
+			});
 			const span = runSpan("some.op", ctx);
 
 			expect(span?.attributes["member.id"]).toBe("m1");
@@ -58,14 +61,14 @@ describe("ContextSpanProcessor", () => {
 		});
 
 		it("sets posthog.distinct_id from member.id", () => {
-			const ctx = setBaggage({ "member.id": "m1" });
+			const ctx = setBaggage({ [BaggageKey.MemberId]: "m1" });
 			const span = runSpan("some.op", ctx);
 
 			expect(span?.attributes["posthog.distinct_id"]).toBe("m1");
 		});
 
 		it("does not set posthog.distinct_id when member.id absent", () => {
-			const ctx = setBaggage({ "receipt.id": "7" });
+			const ctx = setBaggage({ [BaggageKey.ReceiptId]: "7" });
 			const span = runSpan("some.op", ctx);
 
 			expect(span?.attributes["posthog.distinct_id"]).toBeUndefined();
@@ -255,7 +258,7 @@ describe("ContextSpanProcessor", () => {
 		it("does not clobber a number attr set at start with a baggage string", () => {
 			// receipt.id is stamped as a number at span start; the baggage copy is a
 			// string — the typed value must win so filters don't split on type.
-			const ctx = setBaggage({ "receipt.id": "42" });
+			const ctx = setBaggage({ [BaggageKey.ReceiptId]: "42" });
 			tracer.startActiveSpan(
 				"receipt.process",
 				{ attributes: { "receipt.id": 42 } },

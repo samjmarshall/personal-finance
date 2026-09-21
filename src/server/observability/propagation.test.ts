@@ -11,7 +11,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "./baggage";
 
 // Mirrors otel.ts's propagator + sampler choice: the "parentbased_always_on"
 // preset always records a root, and the composite carries both W3C tracecontext
@@ -37,7 +37,7 @@ const tracer = provider.getTracer("test");
 
 describe("trace propagation", () => {
 	it("injects traceparent + baggage from an active span + baggage context", () => {
-		context.with(setBaggage({ "member.id": "m1" }), () => {
+		context.with(setBaggage({ [BaggageKey.MemberId]: "m1" }), () => {
 			const span = tracer.startSpan("root");
 			context.with(trace.setSpan(context.active(), span), () => {
 				const carrier: Record<string, string> = {};

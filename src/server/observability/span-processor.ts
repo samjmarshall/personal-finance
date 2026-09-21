@@ -5,7 +5,7 @@ import type {
 	Span,
 	SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { BAGGAGE_KEYS, readBaggage } from "./baggage";
+import { BaggageKey, readBaggage } from "./baggage";
 
 export interface ContextSpanProcessorDeps {
 	inputTokenPriceUsd?: number;
@@ -45,7 +45,7 @@ export class ContextSpanProcessor implements SpanProcessor {
 				span.setAttribute(key, value);
 			}
 		}
-		const memberId = bag[BAGGAGE_KEYS.memberId];
+		const memberId = bag[BaggageKey.MemberId];
 		if (memberId && span.attributes["posthog.distinct_id"] === undefined) {
 			span.setAttribute("posthog.distinct_id", memberId);
 		}

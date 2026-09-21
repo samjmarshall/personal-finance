@@ -1,7 +1,7 @@
 import { context } from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readBaggage, setBaggage } from "./baggage";
+import { BaggageKey, readBaggage, setBaggage } from "./baggage";
 
 // AsyncLocalStorageContextManager (registered by NodeTracerProvider) is
 // required for context.with to propagate — the default NoopContextManager is
@@ -13,7 +13,10 @@ afterAll(() => provider.shutdown());
 
 describe("setBaggage / readBaggage", () => {
 	it("round-trips known keys through context.with", () => {
-		const ctx = setBaggage({ "member.id": "m1", "receipt.id": "42" });
+		const ctx = setBaggage({
+			[BaggageKey.MemberId]: "m1",
+			[BaggageKey.ReceiptId]: "42",
+		});
 		context.with(ctx, () => {
 			const result = readBaggage();
 			expect(result["member.id"]).toBe("m1");
@@ -22,7 +25,7 @@ describe("setBaggage / readBaggage", () => {
 	});
 
 	it("unknown baggage entries are not returned", () => {
-		const ctx = setBaggage({ "member.id": "m1" });
+		const ctx = setBaggage({ [BaggageKey.MemberId]: "m1" });
 		context.with(ctx, () => {
 			const keys = Object.keys(readBaggage());
 			expect(keys).not.toContain("some.unknown.key");
@@ -31,8 +34,10 @@ describe("setBaggage / readBaggage", () => {
 	});
 
 	it("merges new keys without losing prior ones", () => {
-		const ctx1 = setBaggage({ "member.id": "m1" });
-		const ctx2 = context.with(ctx1, () => setBaggage({ "receipt.id": "99" }));
+		const ctx1 = setBaggage({ [BaggageKey.MemberId]: "m1" });
+		const ctx2 = context.with(ctx1, () =>
+			setBaggage({ [BaggageKey.ReceiptId]: "99" }),
+		);
 		context.with(ctx2, () => {
 			const result = readBaggage();
 			expect(result["member.id"]).toBe("m1");
@@ -45,8 +50,10 @@ describe("setBaggage / readBaggage", () => {
 	});
 
 	it("later setBaggage overwrites an existing key", () => {
-		const ctx1 = setBaggage({ "member.id": "old" });
-		const ctx2 = context.with(ctx1, () => setBaggage({ "member.id": "new" }));
+		const ctx1 = setBaggage({ [BaggageKey.MemberId]: "old" });
+		const ctx2 = context.with(ctx1, () =>
+			setBaggage({ [BaggageKey.MemberId]: "new" }),
+		);
 		context.with(ctx2, () => {
 			expect(readBaggage()["member.id"]).toBe("new");
 		});

@@ -6,7 +6,7 @@ import {
 } from "@opentelemetry/core";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "./baggage";
 import { captureTraceCarrier, restoreTraceCarrier } from "./trace-carrier";
 
 const provider = new NodeTracerProvider();
@@ -27,7 +27,7 @@ const tracer = provider.getTracer("test");
 
 describe("captureTraceCarrier", () => {
 	it("captures traceparent matching the active span and baggage carrying member.id", () => {
-		context.with(setBaggage({ "member.id": "m1" }), () => {
+		context.with(setBaggage({ [BaggageKey.MemberId]: "m1" }), () => {
 			const span = tracer.startSpan("root");
 			context.with(trace.setSpan(context.active(), span), () => {
 				const carrier = captureTraceCarrier();
@@ -42,9 +42,9 @@ describe("captureTraceCarrier", () => {
 		expect(captureTraceCarrier()).toEqual({});
 	});
 
-	// adr016 clause 2: only BAGGAGE_KEYS may reach the persisted pocket. A foreign
+	// adr016 clause 2: only BaggageKey may reach the persisted pocket. A foreign
 	// key (e.g. an inbound `baggage` header) must be dropped, not injected.
-	it("drops baggage keys outside BAGGAGE_KEYS from the captured carrier", () => {
+	it("drops baggage keys outside BaggageKey from the captured carrier", () => {
 		const seeded = propagation.setBaggage(
 			context.active(),
 			propagation.createBaggage({
@@ -66,7 +66,7 @@ describe("captureTraceCarrier", () => {
 
 describe("restoreTraceCarrier", () => {
 	it("round-trips a captured carrier: same traceId and baggage member.id", () => {
-		context.with(setBaggage({ "member.id": "m1" }), () => {
+		context.with(setBaggage({ [BaggageKey.MemberId]: "m1" }), () => {
 			const span = tracer.startSpan("root");
 			const traceId = span.spanContext().traceId;
 			const carrier = context.with(trace.setSpan(context.active(), span), () =>

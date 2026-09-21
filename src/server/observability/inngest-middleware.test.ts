@@ -24,7 +24,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "./baggage";
 import { TracingMiddleware } from "./inngest-middleware";
 import { captureTraceCarrier } from "./trace-carrier";
 
@@ -84,7 +84,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		const producerTraceId = producerSpan.spanContext().traceId;
 		const carrier = context.with(
 			setBaggage(
-				{ "member.id": "m1" },
+				{ [BaggageKey.MemberId]: "m1" },
 				trace.setSpan(context.active(), producerSpan),
 			),
 			() => captureTraceCarrier(),
@@ -113,7 +113,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		const producerSpan = tracer.startSpan("producer");
 		const carrier = context.with(
 			setBaggage(
-				{ "member.id": "m1" },
+				{ [BaggageKey.MemberId]: "m1" },
 				trace.setSpan(context.active(), producerSpan),
 			),
 			() => captureTraceCarrier(),

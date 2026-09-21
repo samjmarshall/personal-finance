@@ -6,7 +6,7 @@ import {
 } from "@opentelemetry/core";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BAGGAGE_KEYS, setBaggage } from "~/server/observability/baggage";
+import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import type { TraceCarrier } from "~/server/observability/trace-carrier";
 import type { Equal, Expect } from "~/test/type-contracts";
 
@@ -71,12 +71,15 @@ describe("buildOutboxEvent (active trace)", () => {
 		expect(carrier.traceparent).toContain(traceId);
 	});
 
-	it("persists no baggage key outside BAGGAGE_KEYS", () => {
+	it("persists no baggage key outside BaggageKey", () => {
 		const span = provider.getTracer("test").startSpan("root");
-		const known = new Set<string>(Object.values(BAGGAGE_KEYS));
+		const known = new Set<string>(Object.values(BaggageKey));
 
 		const event = context.with(
-			setBaggage({ "member.id": "m1" }, trace.setSpan(context.active(), span)),
+			setBaggage(
+				{ [BaggageKey.MemberId]: "m1" },
+				trace.setSpan(context.active(), span),
+			),
 			() => buildOutboxEvent("receipt/uploaded", { receiptId: 1 }),
 		);
 		span.end();

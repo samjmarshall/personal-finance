@@ -1,14 +1,12 @@
 import { type Context, context, propagation } from "@opentelemetry/api";
 
-export const BAGGAGE_KEYS = {
-	memberId: "member.id",
-	receiptId: "receipt.id",
-	outboxEventId: "outbox.event_id",
-	inngestRunId: "inngest.run_id",
-	inngestAttempt: "inngest.attempt",
-} as const;
-
-type BaggageKey = (typeof BAGGAGE_KEYS)[keyof typeof BAGGAGE_KEYS];
+export enum BaggageKey {
+	MemberId = "member.id",
+	ReceiptId = "receipt.id",
+	OutboxEventId = "outbox.event_id",
+	InngestRunId = "inngest.run_id",
+	InngestAttempt = "inngest.attempt",
+}
 
 /**
  * Merges `attrs` into the active (or supplied) baggage context and returns a
@@ -38,7 +36,7 @@ export function setBaggage(
 }
 
 /**
- * Returns a Context whose baggage is stripped to `BAGGAGE_KEYS` — foreign or
+ * Returns a Context whose baggage is stripped to `BaggageKey` — foreign or
  * inbound baggage is dropped. Use before serializing baggage for persistence so
  * only our non-secret ids leave the process (adr016 clause 2).
  */
@@ -59,7 +57,7 @@ export function readBaggage(ctx = context.active()): Record<string, string> {
 	if (!bag) return {};
 
 	const result: Record<string, string> = {};
-	const ourKeys = new Set<string>(Object.values(BAGGAGE_KEYS));
+	const ourKeys = new Set<string>(Object.values(BaggageKey));
 
 	for (const [key, entry] of bag.getAllEntries()) {
 		if (ourKeys.has(key)) {

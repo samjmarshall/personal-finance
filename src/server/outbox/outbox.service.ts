@@ -3,7 +3,7 @@ import type { Inngest } from "inngest";
 
 import { env } from "~/env";
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
-import { setBaggage } from "~/server/observability/baggage";
+import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import type { Logger } from "~/server/observability/logger";
 
 import type {
@@ -97,7 +97,7 @@ export class OutboxService implements OutboxWriteDoor {
 				"outbox.sweep.row",
 				{
 					attributes: {
-						"outbox.event_id": row.id,
+						[BaggageKey.OutboxEventId]: row.id,
 						"outbox.attempts": row.attempts,
 						"outbox.age_s": ageS,
 					},
@@ -107,7 +107,7 @@ export class OutboxService implements OutboxWriteDoor {
 						if (row.attempts >= STUCK_AFTER_ATTEMPTS) {
 							this.logger.warn("outbox row stuck", {
 								"event.name": "outbox.sweep.stuck",
-								"outbox.event_id": row.id,
+								[BaggageKey.OutboxEventId]: row.id,
 								"outbox.event_name": row.name,
 								"outbox.attempts": row.attempts,
 								"outbox.age_s": ageS,
@@ -149,13 +149,13 @@ export class OutboxService implements OutboxWriteDoor {
 		event: OutboxEventDescriptor,
 		deliveryContext: DeliveryContext,
 	): Promise<boolean> {
-		const baggageCtx = setBaggage({ "outbox.event_id": event.id });
+		const baggageCtx = setBaggage({ [BaggageKey.OutboxEventId]: event.id });
 		return context.with(baggageCtx, () =>
 			tracer.startActiveSpan(
 				"outbox.deliver",
 				{
 					attributes: {
-						"outbox.event_id": event.id,
+						[BaggageKey.OutboxEventId]: event.id,
 						"outbox.event_name": event.name,
 						"outbox.delivery_context": deliveryContext,
 					},
@@ -173,7 +173,7 @@ export class OutboxService implements OutboxWriteDoor {
 						const acked = await this.ack(event.id, deliveryContext);
 						if (acked) {
 							this.logger.info("outbox delivered", {
-								"outbox.event_id": event.id,
+								[BaggageKey.OutboxEventId]: event.id,
 								"outbox.event_name": event.name,
 								"outbox.delivery_context": deliveryContext,
 							});
@@ -208,7 +208,7 @@ export class OutboxService implements OutboxWriteDoor {
 		} catch (error) {
 			this.logger.error("outbox ack failed", {
 				error,
-				"outbox.event_id": id,
+				[BaggageKey.OutboxEventId]: id,
 				"outbox.delivery_context": deliveryContext,
 			});
 			return false;
@@ -222,7 +222,7 @@ export class OutboxService implements OutboxWriteDoor {
 	): Promise<void> {
 		this.logger.error("outbox delivery failed", {
 			error,
-			"outbox.event_id": id,
+			[BaggageKey.OutboxEventId]: id,
 			"outbox.delivery_context": deliveryContext,
 		});
 		const message = error instanceof Error ? error.message : String(error);
@@ -231,7 +231,7 @@ export class OutboxService implements OutboxWriteDoor {
 		} catch (recordError) {
 			this.logger.error("outbox failure-record failed", {
 				error: recordError,
-				"outbox.event_id": id,
+				[BaggageKey.OutboxEventId]: id,
 				"outbox.delivery_context": deliveryContext,
 			});
 		}

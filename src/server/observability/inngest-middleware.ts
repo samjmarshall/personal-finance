@@ -6,7 +6,7 @@ import {
 } from "@opentelemetry/api";
 import { Middleware } from "inngest";
 import { env } from "~/env";
-import { setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "./baggage";
 import { createRootLogger } from "./logger";
 import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
 
@@ -28,7 +28,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		data: Record<string, unknown> | undefined,
 	): Record<string, string> {
 		return data?.receiptId !== undefined
-			? { "receipt.id": String(data.receiptId) }
+			? { [BaggageKey.ReceiptId]: String(data.receiptId) }
 			: {};
 	}
 
@@ -47,7 +47,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 				logger.warn("trace carrier missing", {
 					"event.name": "trace.carrier.missing",
 					"inngest.function_id": fn.id(),
-					"inngest.run_id": ctx.runId,
+					[BaggageKey.InngestRunId]: ctx.runId,
 				});
 			}
 			parent = ROOT_CONTEXT;
@@ -59,9 +59,9 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		// anything added later is lost. Skip member.id; the parent already carries it.
 		const enriched = setBaggage(
 			{
-				"inngest.run_id": ctx.runId,
-				"inngest.attempt": String(ctx.attempt),
-				"outbox.event_id": ctx.event.id,
+				[BaggageKey.InngestRunId]: ctx.runId,
+				[BaggageKey.InngestAttempt]: String(ctx.attempt),
+				[BaggageKey.OutboxEventId]: ctx.event.id,
 				...this.domainAttrs(data),
 			},
 			parent,
@@ -72,8 +72,8 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 			{
 				links: parentSpanCtx ? [{ context: parentSpanCtx }] : [],
 				attributes: {
-					"inngest.run_id": ctx.runId,
-					"inngest.attempt": String(ctx.attempt),
+					[BaggageKey.InngestRunId]: ctx.runId,
+					[BaggageKey.InngestAttempt]: String(ctx.attempt),
 					"inngest.function_id": fn.id(),
 					"inngest.event_name": ctx.event.name,
 				},
@@ -108,8 +108,8 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 
 		const attrs: Record<string, unknown> = {
 			"inngest.function_id": fn.id(),
-			"inngest.run_id": ctx.runId,
-			"inngest.attempt": String(ctx.attempt),
+			[BaggageKey.InngestRunId]: ctx.runId,
+			[BaggageKey.InngestAttempt]: String(ctx.attempt),
 			isFinalAttempt,
 		};
 

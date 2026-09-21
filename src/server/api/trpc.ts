@@ -15,7 +15,7 @@ import { flattenError, ZodError } from "zod";
 import { env } from "~/env";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
-import { setBaggage } from "~/server/observability/baggage";
+import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { createRootLogger } from "~/server/observability/logger";
 import { captureException } from "~/server/observability/posthog";
 
@@ -118,7 +118,9 @@ const observabilityMiddleware = t.middleware(
 	async ({ ctx, next, path, type }) => {
 		// Baggage before the span starts — the span copies member.id once at start, so
 		// setting it inside the callback would land too late to stamp the person on it.
-		const baggageCtx = setBaggage({ "member.id": ctx.session?.user?.id });
+		const baggageCtx = setBaggage({
+			[BaggageKey.MemberId]: ctx.session?.user?.id,
+		});
 
 		return tracer.startActiveSpan(
 			`trpc.${path}`,

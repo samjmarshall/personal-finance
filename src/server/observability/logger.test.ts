@@ -15,7 +15,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "./baggage";
 import { LogLevel, OtelLogger } from "./logger";
 
 type FakeRecord = LogRecord & { body?: string };
@@ -77,7 +77,7 @@ describe("OtelLogger", () => {
 
 	it("copies active baggage keys set via setBaggage + context.with", () => {
 		const { logger, emitCalls } = makeHarness();
-		const ctx = setBaggage({ "member.id": "m1" });
+		const ctx = setBaggage({ [BaggageKey.MemberId]: "m1" });
 		context.with(ctx, () => logger.info("msg"));
 		expect(emitCalls[0]?.attributes?.["member.id"]).toBe("m1");
 	});
