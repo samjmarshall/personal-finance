@@ -1,12 +1,39 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	InMemorySpanExporter,
+	SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import {
 	buildOutboxEvent,
 	type OutboxEventDescriptor,
 } from "~/server/inngest/events";
+import type { LogAttributes, Logger } from "~/server/observability/logger";
 import type { OutboxRepository, OutboxRow } from "./outbox.repository";
 import { OutboxService } from "./outbox.service";
 
 type SentEvent = { id: string; name: string; data: unknown };
+type LogEntry = { level: string; msg: string; attrs: LogAttributes };
+
+// Business spans land on the ambient tracer; register a provider so start/end are
+// recorded and the outbox.deliver / outbox.sweep.row spans can be asserted.
+const exporter = new InMemorySpanExporter();
+const provider = new NodeTracerProvider({
+	spanProcessors: [new SimpleSpanProcessor(exporter)],
+});
+
+beforeAll(() => provider.register());
+afterAll(() => provider.shutdown());
+beforeEach(() => exporter.reset());
 
 // Fake repository is a plain object literal against the interface — no db, no casts.
 // Each write records its arguments, and every interaction lands on one ordered log,
@@ -26,6 +53,7 @@ function harness(
 	const processed: string[] = [];
 	const failed: { id: string; message: string }[] = [];
 	const committed: OutboxEventDescriptor[][] = [];
+	const logs: LogEntry[] = [];
 
 	const repository: OutboxRepository = {
 		commit: async (writes, events) => {
@@ -58,27 +86,39 @@ function harness(
 		},
 	};
 
+	// Object-literal fake against the interface — records each call; `with` returns
+	// itself (the service never re-binds; the module root does that once).
+	const logger: Logger = {
+		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
+		info: (msg, attrs = {}) => logs.push({ level: "info", msg, attrs }),
+		warn: (msg, attrs = {}) => logs.push({ level: "warn", msg, attrs }),
+		error: (msg, attrs = {}) => logs.push({ level: "error", msg, attrs }),
+		with: () => logger,
+	};
+
 	return {
 		service: new OutboxService({
 			repository,
 			// biome-ignore lint/suspicious/noExplicitAny: hand-rolled fake stands in for the inngest client.
 			inngest: inngest as any,
+			logger,
 		}),
 		log,
 		sends,
 		processed,
 		failed,
 		committed,
+		logs,
 	};
 }
 
 // Full stored-row shape: the fake must carry the internal columns
 // (attempts/processedAt/lastError) a projection bug would leak to Inngest.
-const row = (id: string): OutboxRow => ({
+const row = (id: string, createdAt = new Date()): OutboxRow => ({
 	id,
 	name: "receipt/uploaded",
 	data: { receiptId: id },
-	createdAt: new Date(),
+	createdAt,
 	processedAt: null,
 	attempts: 0,
 	lastError: null,
@@ -144,8 +184,43 @@ describe("OutboxService.commit", () => {
 		expect(h.failed).toEqual([]);
 	});
 
+	it("logs one 'outbox delivered' heartbeat once the send is acked", async () => {
+		const h = harness([]);
+
+		await h.service.commit(
+			async () => {},
+			() => [event],
+		);
+
+		expect(h.logs.filter((l) => l.msg === "outbox delivered")).toEqual([
+			{
+				level: "info",
+				msg: "outbox delivered",
+				attrs: {
+					"outbox.event_id": event.id,
+					"outbox.event_name": event.name,
+					"outbox.delivery_context": "send",
+				},
+			},
+		]);
+	});
+
+	it("opens one outbox.deliver span per send carrying the event id", async () => {
+		const h = harness([]);
+
+		await h.service.commit(
+			async () => {},
+			() => [event],
+		);
+
+		const deliverSpans = exporter
+			.getFinishedSpans()
+			.filter((s) => s.name === "outbox.deliver");
+		expect(deliverSpans).toHaveLength(1);
+		expect(deliverSpans[0]?.attributes["outbox.event_id"]).toBe(event.id);
+	});
+
 	it("swallows a failing send: records the message and leaves the row unacked", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness([], { sendThrows: true });
 
 		await expect(
@@ -162,7 +237,6 @@ describe("OutboxService.commit", () => {
 	// The ack runs after the tx has committed, so a throw there must never escape —
 	// else the caller retries an already-durable write and duplicates rows + events.
 	it("swallows a failing ack: send succeeds, markProcessed throws, commit still resolves", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness([], { markProcessedThrows: true });
 
 		await expect(
@@ -173,7 +247,15 @@ describe("OutboxService.commit", () => {
 		).resolves.toBeUndefined();
 
 		expect(h.sends).toHaveLength(1);
-		expect(console.error).toHaveBeenCalled();
+		expect(h.logs).toContainEqual(
+			expect.objectContaining({
+				level: "error",
+				msg: "outbox ack failed",
+				attrs: expect.objectContaining({ "outbox.event_id": event.id }),
+			}),
+		);
+		// The heartbeat must not claim delivery for a row that never acked.
+		expect(h.logs.some((l) => l.msg === "outbox delivered")).toBe(false);
 	});
 
 	it("returns the writes' result unchanged", async () => {
@@ -252,8 +334,49 @@ describe("OutboxService.sweep", () => {
 		]);
 	});
 
+	it("opens one outbox.sweep.row span per swept row carrying the event id", async () => {
+		const h = harness([row("r1"), row("r2")]);
+
+		await h.service.sweep();
+
+		const sweepSpans = exporter
+			.getFinishedSpans()
+			.filter((s) => s.name === "outbox.sweep.row");
+		expect(sweepSpans).toHaveLength(2);
+		expect(
+			sweepSpans.map((s) => s.attributes["outbox.event_id"]).sort(),
+		).toEqual(["r1", "r2"]);
+	});
+
+	it("warns once with event.name outbox.sweep.stuck for a row past the sweep interval", async () => {
+		const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+		const h = harness([row("r1", twoHoursAgo)]);
+
+		await h.service.sweep();
+
+		const stuck = h.logs.filter(
+			(l) => l.attrs["event.name"] === "outbox.sweep.stuck",
+		);
+		expect(stuck).toHaveLength(1);
+		expect(stuck[0]?.level).toBe("warn");
+		expect(stuck[0]?.attrs["outbox.event_id"]).toBe("r1");
+		expect(stuck[0]?.attrs["outbox.age_s"] as number).toBeGreaterThanOrEqual(
+			60 * 60,
+		);
+	});
+
+	it("does not warn stuck for a freshly-created row", async () => {
+		const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+		const h = harness([row("r1", fiveMinutesAgo)]);
+
+		await h.service.sweep();
+
+		expect(
+			h.logs.some((l) => l.attrs["event.name"] === "outbox.sweep.stuck"),
+		).toBe(false);
+	});
+
 	it("swallows a failing send: records the error message and leaves the row unacked", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness([row("r1")], { sendThrows: true });
 
 		const result = await h.service.sweep();
@@ -266,7 +389,6 @@ describe("OutboxService.sweep", () => {
 	// A throw in the post-send ack must never escape the sweep — else one stuck row
 	// aborts the whole run and starves every later row behind it.
 	it("swallows a failing ack: send succeeds, markProcessed throws, sweep still resolves", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness([row("r1"), row("r2")], { markProcessedThrows: true });
 
 		await expect(h.service.sweep()).resolves.toEqual({
@@ -274,11 +396,10 @@ describe("OutboxService.sweep", () => {
 			failed: 0,
 		});
 		expect(h.sends).toHaveLength(2);
-		expect(console.error).toHaveBeenCalled();
+		expect(h.logs.filter((l) => l.msg === "outbox ack failed")).toHaveLength(2);
 	});
 
 	it("swallows a failing failure-record: send throws, markFailed throws, sweep still resolves", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness([row("r1"), row("r2")], {
 			sendThrows: true,
 			markFailedThrows: true,

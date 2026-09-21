@@ -226,10 +226,10 @@ Implements adr015 clause 3 (business spans `outbox.deliver`, `outbox.sweep.row`)
 - `src/server/inngest/functions.ts:17-20` — no change for outbox (service comes from the module).
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `grep -rn "console\." src/server/outbox` returns nothing
-- [ ] `registry-golden.test.ts` unchanged and green (ids/crons untouched)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `grep -rn "console\." src/server/outbox` returns nothing
+- [x] `registry-golden.test.ts` unchanged and green (ids/crons untouched)
 - [ ] `make start`: one upload → stdout shows `outbox delivered` with `trace_id` equal to the tRPC line's
 
 ---

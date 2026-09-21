@@ -1,7 +1,9 @@
 import { serve } from "inngest/next";
+import { after, type NextRequest } from "next/server";
 
 import { inngest } from "~/server/inngest/client";
 import { functions } from "~/server/inngest/functions";
+import { flushTelemetry } from "~/server/observability/flush";
 
 // Public webhook Inngest polls to discover + invoke the cron workers. `serve` verifies
 // every request against INNGEST_SIGNING_KEY in prod (the local Dev Server needs no
@@ -9,4 +11,19 @@ import { functions } from "~/server/inngest/functions";
 // many rows, so lift the Vercel function ceiling.
 export const maxDuration = 300;
 
-export const { GET, POST, PUT } = serve({ client: inngest, functions });
+const handlers = serve({ client: inngest, functions });
+
+// Drain telemetry after each response, before the lambda freezes (adr015 §8) — a
+// worker run's spans/logs would otherwise be lost when the invocation is frozen.
+export const GET = (req: NextRequest, ctx: unknown) => {
+	after(flushTelemetry);
+	return handlers.GET(req, ctx);
+};
+export const POST = (req: NextRequest, ctx: unknown) => {
+	after(flushTelemetry);
+	return handlers.POST(req, ctx);
+};
+export const PUT = (req: NextRequest, ctx: unknown) => {
+	after(flushTelemetry);
+	return handlers.PUT(req, ctx);
+};

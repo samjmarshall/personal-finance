@@ -1,12 +1,22 @@
+import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import type { Inngest } from "inngest";
 
+import { env } from "~/env";
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
+import { setBaggage } from "~/server/observability/baggage";
+import type { Logger } from "~/server/observability/logger";
 
 import type {
 	OutboxEvents,
 	OutboxRepository,
 	OutboxWrites,
 } from "./outbox.repository";
+
+const tracer = trace.getTracer(env.PROJECT_NAME);
+
+// One sweep interval (outbox.controller.ts cron is hourly): a row still unacked
+// past this is stuck — a poison send or a consumer that never runs (adr002).
+const STUCK_AFTER_MS = 60 * 60 * 1000;
 
 /**
  * The write door (adr002 clause 3): what a domain repository injects to emit events.
@@ -27,6 +37,7 @@ type DeliveryContext = "send" | "sweep";
 interface OutboxServiceDeps {
 	repository: OutboxRepository;
 	inngest: Pick<Inngest, "send">;
+	logger: Logger;
 }
 
 /**
@@ -36,10 +47,12 @@ interface OutboxServiceDeps {
 export class OutboxService implements OutboxWriteDoor {
 	private readonly repository: OutboxRepository;
 	private readonly inngest: Pick<Inngest, "send">;
+	private readonly logger: Logger;
 
-	constructor({ repository, inngest }: OutboxServiceDeps) {
+	constructor({ repository, inngest, logger }: OutboxServiceDeps) {
 		this.repository = repository;
 		this.inngest = inngest;
+		this.logger = logger;
 	}
 
 	async commit<T>(
@@ -78,14 +91,41 @@ export class OutboxService implements OutboxWriteDoor {
 		let delivered = 0;
 		let failed = 0;
 		for (const row of rows) {
-			// Project to the wire fields only — never ship internal columns
-			// (attempts/processedAt/lastError, incl. raw error text) to the event store.
-			const event: OutboxEventDescriptor = {
-				id: row.id,
-				name: row.name,
-				data: row.data,
-			};
-			if (await this.deliver(event, "sweep")) delivered++;
+			const ageS = Math.round((Date.now() - row.createdAt.getTime()) / 1000);
+			const acked = await tracer.startActiveSpan(
+				"outbox.sweep.row",
+				{
+					attributes: {
+						"outbox.event_id": row.id,
+						"outbox.attempts": row.attempts,
+						"outbox.age_s": ageS,
+					},
+				},
+				async (span) => {
+					try {
+						if (ageS * 1000 >= STUCK_AFTER_MS) {
+							this.logger.warn("outbox row stuck", {
+								"event.name": "outbox.sweep.stuck",
+								"outbox.event_id": row.id,
+								"outbox.event_name": row.name,
+								"outbox.attempts": row.attempts,
+								"outbox.age_s": ageS,
+							});
+						}
+						// Project to the wire fields only — never ship internal columns
+						// (attempts/processedAt/lastError, incl. raw error text) to Inngest.
+						const event: OutboxEventDescriptor = {
+							id: row.id,
+							name: row.name,
+							data: row.data,
+						};
+						return await this.deliver(event, "sweep");
+					} finally {
+						span.end();
+					}
+				},
+			);
+			if (acked) delivered++;
 			else failed++;
 		}
 
@@ -98,46 +138,93 @@ export class OutboxService implements OutboxWriteDoor {
 		return { deleted };
 	}
 
-	/** Send one event then ack it. Never throws: the committed row is the contract. */
+	/**
+	 * Send one event then ack it. Never throws: the committed row is the contract.
+	 * The `outbox delivered` heartbeat fires only on a durable ack — a swallowed
+	 * markProcessed failure leaves the row for the next sweep, so claiming delivery
+	 * would be a lie.
+	 */
 	private async deliver(
 		event: OutboxEventDescriptor,
-		context: DeliveryContext,
+		deliveryContext: DeliveryContext,
 	): Promise<boolean> {
-		try {
-			await this.inngest.send(event);
-		} catch (error) {
-			await this.recordFailure(event.id, error, context);
-			return false;
-		}
-		await this.ack(event.id, context);
-		return true;
+		const baggageCtx = setBaggage({ "outbox.event_id": event.id });
+		return context.with(baggageCtx, () =>
+			tracer.startActiveSpan(
+				"outbox.deliver",
+				{
+					attributes: {
+						"outbox.event_id": event.id,
+						"outbox.event_name": event.name,
+						"outbox.delivery_context": deliveryContext,
+					},
+				},
+				async (span) => {
+					try {
+						try {
+							await this.inngest.send(event);
+						} catch (error) {
+							span.recordException(error as Error);
+							span.setStatus({ code: SpanStatusCode.ERROR });
+							await this.recordFailure(event.id, error, deliveryContext);
+							return false;
+						}
+						const acked = await this.ack(event.id, deliveryContext);
+						if (acked) {
+							this.logger.info("outbox delivered", {
+								"outbox.event_id": event.id,
+								"outbox.event_name": event.name,
+								"outbox.delivery_context": deliveryContext,
+							});
+						}
+						return true;
+					} finally {
+						span.end();
+					}
+				},
+			),
+		);
 	}
 
 	// Both bookkeeping writes run *after* a successful commit, so a throw must never
 	// surface — a producer would retry an already-durable write and duplicate rows,
 	// and one stuck row would abort a sweep and starve every row behind it.
-	private async ack(id: string, context: DeliveryContext): Promise<void> {
+	private async ack(
+		id: string,
+		deliveryContext: DeliveryContext,
+	): Promise<boolean> {
 		try {
 			await this.repository.markProcessed(id);
+			return true;
 		} catch (error) {
-			console.error(`outbox ack failed for ${id} (${context})`, error);
+			this.logger.error("outbox ack failed", {
+				error,
+				"outbox.event_id": id,
+				"outbox.delivery_context": deliveryContext,
+			});
+			return false;
 		}
 	}
 
 	private async recordFailure(
 		id: string,
 		error: unknown,
-		context: DeliveryContext,
+		deliveryContext: DeliveryContext,
 	): Promise<void> {
-		console.error(`outbox ${context} delivery failed for ${id}`, error);
+		this.logger.error("outbox delivery failed", {
+			error,
+			"outbox.event_id": id,
+			"outbox.delivery_context": deliveryContext,
+		});
 		const message = error instanceof Error ? error.message : String(error);
 		try {
 			await this.repository.markFailed(id, message);
 		} catch (recordError) {
-			console.error(
-				`outbox failure-record failed for ${id} (${context})`,
-				recordError,
-			);
+			this.logger.error("outbox failure-record failed", {
+				error: recordError,
+				"outbox.event_id": id,
+				"outbox.delivery_context": deliveryContext,
+			});
 		}
 	}
 }
