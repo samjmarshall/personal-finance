@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { LogAttributes, Logger } from "~/server/observability/logger";
 import type { InboundEmailEvent } from "./email.dto";
 import type { AttachmentDownload, EmailBody } from "./email.mailbox";
 import type { EmailRepository, StoredBlob } from "./email.repository";
@@ -11,6 +12,8 @@ import {
 } from "./email.service";
 
 const SENDER_USER_ID = "user-1";
+
+type LogEntry = { level: string; msg: string; attrs: LogAttributes };
 
 describe("parseFromAddress", () => {
 	// The stored allowlist is lower-cased and bare, so the parsed sender has to land
@@ -111,11 +114,23 @@ function harness({
 		})),
 	};
 
+	// Object-literal fake against the interface — records each call; `with` returns
+	// itself (the service never re-binds; the module root does that once).
+	const logs: LogEntry[] = [];
+	const logger: Logger = {
+		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
+		info: (msg, attrs = {}) => logs.push({ level: "info", msg, attrs }),
+		warn: (msg, attrs = {}) => logs.push({ level: "warn", msg, attrs }),
+		error: (msg, attrs = {}) => logs.push({ level: "error", msg, attrs }),
+		with: () => logger,
+	};
+
 	return {
-		service: new EmailService({ repository, mailbox, blobStore }),
+		service: new EmailService({ repository, mailbox, blobStore, logger }),
 		mailbox,
 		blobStore,
 		created,
+		logs,
 	};
 }
 
@@ -143,7 +158,6 @@ describe("EmailService.ingest", () => {
 	// Design decision 8: an unknown sender is dropped, not quarantined — and dropped
 	// before anything that costs money or leaves a trace.
 	it("drops mail from an address that is not on the allowlist", async () => {
-		vi.spyOn(console, "info").mockImplementation(() => {});
 		const h = harness({ allowlist: [] });
 
 		await expect(h.service.ingest(event())).resolves.toEqual({
@@ -151,8 +165,20 @@ describe("EmailService.ingest", () => {
 		});
 	});
 
+	// The full from is a Member identifier; only the domain may reach the logs.
+	it("logs the drop by domain, never the sender's address", async () => {
+		const h = harness({ allowlist: [] });
+
+		await h.service.ingest(event({ from: "Sam <sam@example.com>" }));
+
+		const drop = h.logs.find(
+			(l) => l.msg === "inbound email dropped: unknown sender",
+		);
+		expect(drop?.attrs["email.from_domain"]).toBe("example.com");
+		expect(JSON.stringify(drop?.attrs)).not.toContain("sam@example.com");
+	});
+
 	it("touches no fetch, blob or write door for an unknown sender", async () => {
-		vi.spyOn(console, "info").mockImplementation(() => {});
 		const h = harness({ allowlist: [] });
 
 		await h.service.ingest(event({ attachments: [pdf("a1")] }));
@@ -250,7 +276,6 @@ describe("EmailService.ingest", () => {
 	// Resend listed attachments the metadata promised and none came back. Not worth
 	// a 5xx retry storm — the mail is still in Resend if it matters.
 	it("answers empty, with a warning, when no listed download matches the metadata", async () => {
-		vi.spyOn(console, "warn").mockImplementation(() => {});
 		const h = harness({ attachments: [] });
 
 		const result = await h.service.ingest(event({ attachments: [pdf("a1")] }));
@@ -258,7 +283,11 @@ describe("EmailService.ingest", () => {
 		expect(result).toEqual({ status: "empty" });
 		expect(h.mailbox.getBody).not.toHaveBeenCalled();
 		expect(h.created).toEqual([]);
-		expect(console.warn).toHaveBeenCalled();
+		const warn = h.logs.find(
+			(l) => l.msg === "inbound email attachments resolved to nothing",
+		);
+		expect(warn?.level).toBe("warn");
+		expect(warn?.attrs["email.qualifying"]).toBe(1);
 	});
 
 	// A branded e-receipt is a logo plus the receipt itself in the body. Treating the
@@ -294,6 +323,16 @@ describe("EmailService.ingest", () => {
 			"<p>Total $9</p>",
 			"text/html",
 		);
+	});
+
+	it("logs the minted receipt ids on a successful ingest", async () => {
+		const h = harness({ email: { html: "<p>Total $9</p>", text: null } });
+
+		await h.service.ingest(event());
+
+		const ingested = h.logs.find((l) => l.msg === "inbound email ingested");
+		expect(ingested?.level).toBe("info");
+		expect(ingested?.attrs["receipt.ids"]).toEqual([1]);
 	});
 
 	// html carries the line-item table; text is the flattened fallback the sender's

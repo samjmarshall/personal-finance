@@ -1,4 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import {
+	InMemorySpanExporter,
+	SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import type { LogAttributes, Logger } from "~/server/observability/logger";
 import { EmailController } from "./email.controller";
 import type { InboundEmailEvent } from "./email.dto";
 import type { EmailService, IngestResult } from "./email.service";
@@ -14,17 +28,39 @@ const RECEIVED_EVENT = {
 	data: { email_id: "email-1", from: "sam@example.com", attachments: [] },
 };
 
+type LogEntry = { level: string; msg: string; attrs: LogAttributes };
+
+// The email.inbound span lands on the ambient tracer; register a provider so
+// start/end are recorded and the span can be asserted per verified event.
+const exporter = new InMemorySpanExporter();
+const provider = new NodeTracerProvider({
+	spanProcessors: [new SimpleSpanProcessor(exporter)],
+});
+
+beforeAll(() => provider.register());
+afterAll(() => provider.shutdown());
+beforeEach(() => exporter.reset());
+
 // Spy verifier + fake service: the controller is a pure unit over the gate order.
 function harness() {
 	const verify = vi.fn(() => RECEIVED_EVENT);
 	const ingest = vi.fn<(event: InboundEmailEvent) => Promise<IngestResult>>(
 		async () => ({ status: "dropped" }),
 	);
+	const logs: LogEntry[] = [];
+	const logger: Logger = {
+		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
+		info: (msg, attrs = {}) => logs.push({ level: "info", msg, attrs }),
+		warn: (msg, attrs = {}) => logs.push({ level: "warn", msg, attrs }),
+		error: (msg, attrs = {}) => logs.push({ level: "error", msg, attrs }),
+		with: () => logger,
+	};
 	const controller = new EmailController({
 		// biome-ignore lint/suspicious/noExplicitAny: narrow stand-in for the Resend client.
 		resend: { webhooks: { verify } } as any,
 		webhookSecret: "whsec_test",
 		service: { ingest } as unknown as EmailService,
+		logger,
 	});
 
 	const post = (
@@ -39,7 +75,7 @@ function harness() {
 			}),
 		);
 
-	return { post, verify, ingest };
+	return { post, verify, ingest, logs };
 }
 
 describe("EmailController.handle", () => {
@@ -145,5 +181,34 @@ describe("EmailController.handle", () => {
 		h.ingest.mockRejectedValue(new Error("blob store down"));
 
 		await expect(h.post(RECEIVED_EVENT)).rejects.toThrow("blob store down");
+
+		const failed = h.logs.filter((l) => l.msg === "inbound email failed");
+		expect(failed).toHaveLength(1);
+		expect(failed[0]?.level).toBe("error");
+		expect(failed[0]?.attrs["email.id"]).toBe("email-1");
+	});
+
+	// The span is the root of the inbound trace; it must exist for a verified event
+	// and never for a caller the signature rejected.
+	it("opens one email.inbound span for a verified event", async () => {
+		const h = harness();
+
+		await h.post(RECEIVED_EVENT);
+
+		const spans = exporter.getFinishedSpans();
+		expect(spans).toHaveLength(1);
+		expect(spans[0]?.name).toBe("email.inbound");
+		expect(spans[0]?.attributes["email.id"]).toBe("email-1");
+	});
+
+	it("opens no span for a caller the signature rejected", async () => {
+		const h = harness();
+
+		await h.post(RECEIVED_EVENT, {
+			"svix-timestamp": "1700000000",
+			"svix-signature": "v1,abc",
+		});
+
+		expect(exporter.getFinishedSpans()).toHaveLength(0);
 	});
 });

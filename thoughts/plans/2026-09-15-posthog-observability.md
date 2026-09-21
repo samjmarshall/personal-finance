@@ -276,11 +276,11 @@ Implements adr015 clause 3 (`email.inbound` span, `member.id` on resolve, `recei
 - `src/app/api/receipts/inbound/route.test.ts:6-91` — mocks already stub the tier modules; add `vi.mock("~/server/observability/flush", ...)` and assert `flushTelemetry` is scheduled via `after` (mock `next/server` `after` to invoke synchronously). Assert the 500 path still returns 500 with no controller constructed.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `grep -rn "console\." src/server/email src/app/api/receipts` returns nothing
-- [ ] `grep -rn "console\." src/server src/app/api` returns nothing (every `console.*` migrated: the 11 domain sites + the trpc/inngest/inbound route roots + the `/api/health` probe root)
-- [ ] Local Resend webhook replay (or the existing e2e path): stdout shows `email.inbound`-scoped lines with one `trace_id`, and a subsequent `outbox delivered` + `receipt.extract` line share it
+- [x] `make check` passes
+- [x] `make test` passes (562 passed)
+- [x] `grep -rn "console\." src/server/email src/app/api/receipts` returns nothing
+- [x] Every enumerated `console.*` site migrated — the 11 domain sites + the trpc/inngest/inbound route roots + the `/api/health` probe root. `grep -rn "console\." src/server src/app/api` is **not** literally empty and cannot be: the only remaining calls are the observability spine's crash-proof last-resort sinks (`logger.ts:142`, `posthog.ts:43`, `trpc.ts:159` `observability_failed`), which fire when the logger/telemetry itself failed and so cannot route through the logger. Plus comment/test-description mentions of the token in `logger.ts`/`logger.test.ts`.
+- [ ] Local Resend webhook replay (or the existing e2e path): stdout shows `email.inbound`-scoped lines with one `trace_id`, and a subsequent `outbox delivered` + `receipt.extract` line share it — _deferred; needs a live server + Inngest + real webhook, and no `POSTHOG_KEY` locally means no SDK/real trace id (Phase 11 preview spike)_
 
 ---
 

@@ -7,9 +7,15 @@ const { env } = vi.hoisted(() => ({
 	env: {
 		RESEND_API_KEY: "re_test" as string | undefined,
 		RESEND_WEBHOOK_SECRET: "whsec_test" as string | undefined,
+		PROJECT_NAME: "personal-finance",
+		LOG_LEVEL: "info",
 	},
 }));
-vi.mock("~/env", () => ({ env }));
+// The root logger re-exports LogLevel from ~/env, so the mock must carry it too.
+vi.mock("~/env", () => ({
+	env,
+	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
+}));
 vi.mock("~/server/db", () => ({ db: {} }));
 vi.mock("~/server/outbox/outbox.module", () => ({ outboxService: {} }));
 vi.mock("resend", () => ({
@@ -22,6 +28,12 @@ vi.mock("resend", () => ({
 		}
 	},
 }));
+
+// `after` runs post-response in prod; invoke it synchronously so the test can see
+// the flush it schedules.
+vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
+const { flushTelemetry } = vi.hoisted(() => ({ flushTelemetry: vi.fn() }));
+vi.mock("~/server/observability/flush", () => ({ flushTelemetry }));
 
 const { handle, constructed } = vi.hoisted(() => ({
 	handle: vi.fn<(request: Request) => Promise<Response>>(
@@ -61,7 +73,6 @@ describe("POST /api/receipts/inbound", () => {
 	it.each(["RESEND_API_KEY", "RESEND_WEBHOOK_SECRET"] as const)(
 		"500s without touching the controller when %s is unset",
 		async (key) => {
-			vi.spyOn(console, "error").mockImplementation(() => {});
 			env[key] = undefined;
 
 			const response = await post();
@@ -70,6 +81,16 @@ describe("POST /api/receipts/inbound", () => {
 			expect(handle).not.toHaveBeenCalled();
 		},
 	);
+
+	// The flush is scheduled before the config gate, so even a refused request drains.
+	it("schedules a telemetry flush before the config gate", async () => {
+		env.RESEND_API_KEY = undefined;
+
+		const response = await post();
+
+		expect(flushTelemetry).toHaveBeenCalled();
+		expect(response.status).toBe(500);
+	});
 
 	// One controller for the life of the module: the Resend client and the tiers
 	// behind it are built on the first request and reused by every later one.
