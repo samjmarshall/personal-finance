@@ -7,7 +7,7 @@
  * need to use are documented accordingly near the end.
  */
 
-import { context, SpanStatusCode, trace } from "@opentelemetry/api";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
@@ -19,8 +19,8 @@ import { setBaggage } from "~/server/observability/baggage";
 import { createRootLogger } from "~/server/observability/logger";
 import { captureException } from "~/server/observability/posthog";
 
-// Core wiring, a root — builds its own logger/tracer, same adr004 exception route
-// files make. Tiers receive an injected `logger`; middleware has no DI seam.
+// Composition root: builds its own logger + tracer. Middleware has no injection
+// point, so it takes the adr004 root exception route files also take.
 const logger = createRootLogger().with({ domain: "trpc" });
 const tracer = trace.getTracer(env.PROJECT_NAME);
 
@@ -91,8 +91,7 @@ export const createTRPCRouter = t.router;
 
 /**
  * Simulates production network latency in dev only, so local work surfaces the
- * waterfalls a fast localhost hides. Outside the trace span (adr015 Decision 16):
- * the delay is a dev artefact, not real request time.
+ * waterfalls a fast localhost hides.
  */
 const devLatencyMiddleware = t.middleware(async ({ next }) => {
 	if (t._config.isDev) {
@@ -102,45 +101,77 @@ const devLatencyMiddleware = t.middleware(async ({ next }) => {
 	return next();
 });
 
+// Routine client faults — a signed-out tab polling a protected query, a probe on
+// a missing route. Tag the code but don't fail the span or log, or normal traffic
+// spams Error Tracking and drowns real failures. Zod BAD_REQUEST stays a warn.
+const EXPECTED_ERROR_CODES = new Set([
+	"UNAUTHORIZED",
+	"FORBIDDEN",
+	"NOT_FOUND",
+]);
+
 /**
- * Opens the `trpc.<path>` span that roots the request trace and puts the Member on
- * baggage before the auth check, so downstream spans/logs carry it. Duration lives
- * on the span, not a log line; a failed call records the code and a 500 is also
- * sent to Error Tracking.
+ * Member stamped on baggage before auth so every downstream span/log carries it.
+ * Duration lives on the span, not a log — 500s are also sent to Error Tracking.
  */
-const tracingMiddleware = t.middleware(async ({ ctx, next, path, type }) =>
-	tracer.startActiveSpan(
-		`trpc.${path}`,
-		{ attributes: { "trpc.type": type, "trpc.path": path } },
-		async (span) => {
-			const baggageCtx = setBaggage({ "member.id": ctx.session?.user?.id });
-			try {
-				return await context.with(baggageCtx, async () => {
+const observabilityMiddleware = t.middleware(
+	async ({ ctx, next, path, type }) => {
+		// Baggage before the span starts — the span copies member.id once at start, so
+		// setting it inside the callback would land too late to stamp the person on it.
+		const baggageCtx = setBaggage({ "member.id": ctx.session?.user?.id });
+
+		return tracer.startActiveSpan(
+			`trpc.${path}`,
+			{ attributes: { "trpc.type": type, "trpc.path": path } },
+			baggageCtx,
+			async (span) => {
+				try {
 					const result = await next();
+
 					if (!result.ok) {
-						span.setAttribute("trpc.error_code", result.error.code);
-						span.recordException(result.error);
-						span.setStatus({ code: SpanStatusCode.ERROR });
-						if (result.error.code === "INTERNAL_SERVER_ERROR") {
-							captureException(result.error, { "trpc.path": path });
-							logger.error("trpc internal error", {
-								error: result.error,
+						try {
+							// Every failure keeps its code for counting; expected client
+							// faults stop there — see EXPECTED_ERROR_CODES above.
+							span.setAttribute("trpc.error_code", result.error.code);
+
+							if (!EXPECTED_ERROR_CODES.has(result.error.code)) {
+								span.recordException(result.error);
+								span.setStatus({ code: SpanStatusCode.ERROR });
+
+								if (result.error.code === "INTERNAL_SERVER_ERROR") {
+									captureException(result.error, { "trpc.path": path });
+
+									logger.error("trpc internal error", {
+										error: result.error,
+										"trpc.path": path,
+									});
+								} else {
+									logger.warn("trpc request failed", {
+										"trpc.path": path,
+										"trpc.error_code": result.error.code,
+									});
+								}
+							}
+						} catch (sinkError) {
+							// A sink threw (span or log write). Don't fail the request over
+							// it, but don't hide it: write straight to the console — the
+							// logger may be the thing down — under a fixed key a Vercel
+							// alert can watch.
+							console.error("observability_sink_failed", {
 								"trpc.path": path,
-							});
-						} else {
-							logger.warn("trpc request failed", {
-								"trpc.path": path,
-								"trpc.error_code": result.error.code,
+								result,
+								sinkError,
 							});
 						}
 					}
+
 					return result;
-				});
-			} finally {
-				span.end();
-			}
-		},
-	),
+				} finally {
+					span.end();
+				}
+			},
+		);
+	},
 );
 
 /**
@@ -152,7 +183,7 @@ const tracingMiddleware = t.middleware(async ({ ctx, next, path, type }) =>
  */
 export const publicProcedure = t.procedure
 	.use(devLatencyMiddleware)
-	.use(tracingMiddleware);
+	.use(observabilityMiddleware);
 
 /**
  * Protected (authenticated) procedure
@@ -164,11 +195,12 @@ export const publicProcedure = t.procedure
  */
 export const protectedProcedure = t.procedure
 	.use(devLatencyMiddleware)
-	.use(tracingMiddleware)
+	.use(observabilityMiddleware)
 	.use(({ ctx, next }) => {
 		if (!ctx.session?.user) {
 			throw new TRPCError({ code: "UNAUTHORIZED" });
 		}
+
 		return next({
 			ctx: {
 				// infers the `session` as non-nullable

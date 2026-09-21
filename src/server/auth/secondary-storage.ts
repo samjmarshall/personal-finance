@@ -56,7 +56,9 @@ class RedisUnavailableError extends Error {
 /** Logs the redacted reason; returns the error to rethrow on fail-closed paths. */
 function fail(operation: string, error: unknown) {
 	const reason = redactReason(error);
-	logger.error(`${operation} failed`, { operation, reason });
+	// Static body + operation as an attribute so every Redis failure lands in one
+	// filterable group, not one per operation name.
+	logger.error("redis operation failed", { operation, reason });
 	return new RedisUnavailableError(
 		`[auth:redis] ${operation} failed: ${reason}`,
 	);

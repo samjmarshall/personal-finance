@@ -22,11 +22,13 @@ export async function flushTelemetry(): Promise<void> {
 }
 
 function withTimeout(task: Promise<unknown>): Promise<unknown> {
-	return Promise.race([
-		task,
-		new Promise((resolve) => {
-			// unref so a slow exporter can't hold the process open past freeze.
-			setTimeout(resolve, FLUSH_TIMEOUT_MS).unref();
-		}),
-	]);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise((resolve) => {
+		// unref so a slow exporter can't hold the process open past freeze.
+		timer = setTimeout(resolve, FLUSH_TIMEOUT_MS);
+		timer.unref();
+	});
+	// Clear the timer once the winner settles, so a fast flush leaves no pending
+	// timer behind on a long-lived (dev / warm) process.
+	return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
 }

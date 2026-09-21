@@ -9,6 +9,9 @@ export default defineConfig({
 		// throw here (e.g. DATABASE_URL unset). Skip it so a bare `make test` needs no
 		// real env; the schema is still enforced at build/boot.
 		env: { SKIP_ENV_VALIDATION: "1" },
+		// Auto-restore vi.stubEnv before each test so a stubbed env can't leak into
+		// the next one and make a test's result depend on run order.
+		unstubEnvs: true,
 		// Scoped to src/ so .claude/skills/**/*.test.ts stays with node:test, which
 		// vitest would otherwise collect and fail on.
 		include: ["src/**/*.test.ts"],

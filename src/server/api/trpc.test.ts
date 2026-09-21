@@ -16,6 +16,8 @@ import {
 	vi,
 } from "vitest";
 
+import { ContextSpanProcessor } from "~/server/observability/span-processor";
+
 // Importing trpc pulls in the real db + auth (and through them ~/env). Stub them
 // so this stays a pure unit test.
 vi.mock("~/server/db", () => ({ db: {} }));
@@ -23,7 +25,11 @@ vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
-	spanProcessors: [new SimpleSpanProcessor(exporter)],
+	spanProcessors: [
+		// Registered so span-start baggage stamping is exercised, not just export.
+		new ContextSpanProcessor(),
+		new SimpleSpanProcessor(exporter),
+	],
 });
 
 beforeAll(() => provider.register());
@@ -44,6 +50,9 @@ function caller(session: unknown = { user: { id: "member-1" } }) {
 		}),
 		bad: publicProcedure.query(() => {
 			throw new TRPCError({ code: "BAD_REQUEST" });
+		}),
+		unauth: publicProcedure.query(() => {
+			throw new TRPCError({ code: "UNAUTHORIZED" });
 		}),
 	});
 	return createCallerFactory(router)({
@@ -117,5 +126,52 @@ describe("tracing span", () => {
 		});
 		await caller().ok();
 		expect(lines).toHaveLength(0);
+	});
+
+	it("stamps member.id + posthog.distinct_id from baggage set before the span", async () => {
+		await caller({ user: { id: "member-1" } }).ok();
+
+		const span = exporter.getFinishedSpans().find((s) => s.name === "trpc.ok");
+		expect(span).toBeDefined();
+		// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
+		expect(span!.attributes["member.id"]).toBe("member-1");
+		// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
+		expect(span!.attributes["posthog.distinct_id"]).toBe("member-1");
+	});
+
+	it("an expected client fault (UNAUTHORIZED) tags the code but doesn't fail the span or log", async () => {
+		const lines: string[] = [];
+		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+			if (typeof chunk === "string") lines.push(chunk);
+			return true;
+		});
+		await expect(caller().unauth()).rejects.toThrow();
+
+		const span = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "trpc.unauth");
+		expect(span).toBeDefined();
+		// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
+		expect(span!.status.code).toBe(SpanStatusCode.UNSET);
+		// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
+		expect(span!.attributes["trpc.error_code"]).toBe("UNAUTHORIZED");
+		expect(lines).toHaveLength(0);
+	});
+
+	it("a broken sink fires the alert key and still throws the original error", async () => {
+		vi.spyOn(process.stdout, "write").mockImplementation(() => {
+			throw new Error("stdout down");
+		});
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
+		await expect(caller().boom()).rejects.toMatchObject({
+			code: "INTERNAL_SERVER_ERROR",
+		});
+		expect(consoleError).toHaveBeenCalledWith(
+			"observability_sink_failed",
+			expect.objectContaining({ "trpc.path": "boom" }),
+		);
 	});
 });

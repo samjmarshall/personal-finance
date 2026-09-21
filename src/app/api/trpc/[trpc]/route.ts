@@ -1,14 +1,9 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { after, type NextRequest } from "next/server";
 
-import { env } from "~/env";
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
 import { flushTelemetry } from "~/server/observability/flush";
-import { createRootLogger } from "~/server/observability/logger";
-
-// Root composition point for the tRPC route — builds its own logger.
-const logger = createRootLogger().with({ domain: "trpc", component: "route" });
 
 /**
  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
@@ -23,17 +18,13 @@ const createContext = async (req: NextRequest) => {
 const handler = (req: NextRequest) => {
 	// Drain telemetry after the response is sent, before the lambda freezes (adr015 §8).
 	after(flushTelemetry);
+	// No onError — the tracing middleware is the single place tRPC errors are
+	// logged, with the right trace id. A handler-level log would just duplicate it.
 	return fetchRequestHandler({
 		endpoint: "/api/trpc",
 		req,
 		router: appRouter,
 		createContext: () => createContext(req),
-		onError:
-			env.NODE_ENV === "development"
-				? ({ path, error }) => {
-						logger.error("trpc handler error", { error, "trpc.path": path });
-					}
-				: undefined,
 	});
 };
 

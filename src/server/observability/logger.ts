@@ -85,10 +85,10 @@ export class OtelLogger implements Logger {
 		if (exception !== undefined) {
 			if (exception instanceof Error) {
 				errorAttrs["exception.type"] = exception.name;
-				// TODO(security): exception.message/.stacktrace can carry PII (inbound
-				// emails, pg constraint values, account ids) and are exported to
-				// PostHog. Sanitise before emit — keep full detail on stdout only.
-				// See Phase 1 /security-review finding.
+				// TODO(security): an error's message and stack can carry private data
+				// (emails, database values, ids) and reach the analytics service three
+				// ways — the log, the trace, and error tracking. Scrub before it
+				// leaves; keep the full text in local output only.
 				errorAttrs["exception.message"] = exception.message;
 				errorAttrs["exception.stacktrace"] = exception.stack ?? "";
 			} else {

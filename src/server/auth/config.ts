@@ -87,11 +87,9 @@ export const auth = betterAuth({
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
 			} catch (error) {
-				// Name only. The adapter already logged its own redacted reason, and a
-				// Postgres failure here carries the session token in the query params —
-				// the thing adr007 keeps out of runtime logs. Passing `error` would ship
-				// its message/stack to PostHog; the name alone still tells a Redis outage
-				// from a database one.
+				// Name only — the failure can carry the session token, and a full error
+				// ships its message/stack to PostHog (adr007). Name still tells a Redis
+				// outage from a database one.
 				logger.error("sign-out revocation failed", {
 					"error.name": error instanceof Error ? error.name : typeof error,
 				});
