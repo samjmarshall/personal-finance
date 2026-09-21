@@ -14,9 +14,10 @@ import type {
 
 const tracer = trace.getTracer(env.PROJECT_NAME);
 
-// One sweep interval (outbox.controller.ts cron is hourly): a row still unacked
-// past this is stuck — a poison send or a consumer that never runs (adr002).
-const STUCK_AFTER_MS = 60 * 60 * 1000;
+// A row the sweep has already failed to deliver this many times is stuck — a
+// poison send or a consumer that never runs (adr002). Gate on attempts, not
+// age: age past one sweep interval also tags a healthy first re-delivery.
+const STUCK_AFTER_ATTEMPTS = 3;
 
 /**
  * The write door (adr002 clause 3): what a domain repository injects to emit events.
@@ -103,7 +104,7 @@ export class OutboxService implements OutboxWriteDoor {
 				},
 				async (span) => {
 					try {
-						if (ageS * 1000 >= STUCK_AFTER_MS) {
+						if (row.attempts >= STUCK_AFTER_ATTEMPTS) {
 							this.logger.warn("outbox row stuck", {
 								"event.name": "outbox.sweep.stuck",
 								"outbox.event_id": row.id,
@@ -176,8 +177,16 @@ export class OutboxService implements OutboxWriteDoor {
 								"outbox.event_name": event.name,
 								"outbox.delivery_context": deliveryContext,
 							});
+						} else {
+							// Sent but the ack write failed: the row stays unsent and the next
+							// sweep retries it. Fail the span and return false so the trace and
+							// the sweep's failed count both match reality.
+							span.setStatus({
+								code: SpanStatusCode.ERROR,
+								message: "ack failed",
+							});
 						}
-						return true;
+						return acked;
 					} finally {
 						span.end();
 					}

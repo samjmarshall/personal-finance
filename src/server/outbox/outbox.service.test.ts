@@ -1,3 +1,4 @@
+import { SpanStatusCode } from "@opentelemetry/api";
 import {
 	InMemorySpanExporter,
 	SimpleSpanProcessor,
@@ -258,6 +259,21 @@ describe("OutboxService.commit", () => {
 		expect(h.logs.some((l) => l.msg === "outbox delivered")).toBe(false);
 	});
 
+	it("fails the outbox.deliver span when the send succeeds but the ack write throws", async () => {
+		const h = harness([], { markProcessedThrows: true });
+
+		await h.service.commit(
+			async () => {},
+			() => [event],
+		);
+
+		const deliver = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "outbox.deliver");
+		// Sent-but-unacked isn't delivered, so the trace must read ERROR not a false OK.
+		expect(deliver?.status.code).toBe(SpanStatusCode.ERROR);
+	});
+
 	it("returns the writes' result unchanged", async () => {
 		const h = harness([]);
 
@@ -348,9 +364,8 @@ describe("OutboxService.sweep", () => {
 		).toEqual(["r1", "r2"]);
 	});
 
-	it("warns once with event.name outbox.sweep.stuck for a row past the sweep interval", async () => {
-		const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-		const h = harness([row("r1", twoHoursAgo)]);
+	it("warns once with event.name outbox.sweep.stuck for a row past the retry threshold", async () => {
+		const h = harness([{ ...row("r1"), attempts: 3 }]);
 
 		await h.service.sweep();
 
@@ -360,14 +375,16 @@ describe("OutboxService.sweep", () => {
 		expect(stuck).toHaveLength(1);
 		expect(stuck[0]?.level).toBe("warn");
 		expect(stuck[0]?.attrs["outbox.event_id"]).toBe("r1");
-		expect(stuck[0]?.attrs["outbox.age_s"] as number).toBeGreaterThanOrEqual(
-			60 * 60,
+		expect(stuck[0]?.attrs["outbox.attempts"] as number).toBeGreaterThanOrEqual(
+			3,
 		);
 	});
 
-	it("does not warn stuck for a freshly-created row", async () => {
-		const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-		const h = harness([row("r1", fiveMinutesAgo)]);
+	// Regression: age alone must not flag stuck — an old row still on its first
+	// re-delivery (low attempts) is healthy, not poison.
+	it("does not warn stuck for an old row still within its early attempts", async () => {
+		const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+		const h = harness([{ ...row("r1", twoHoursAgo), attempts: 1 }]);
 
 		await h.service.sweep();
 
@@ -387,16 +404,19 @@ describe("OutboxService.sweep", () => {
 	});
 
 	// A throw in the post-send ack must never escape the sweep — else one stuck row
-	// aborts the whole run and starves every later row behind it.
-	it("swallows a failing ack: send succeeds, markProcessed throws, sweep still resolves", async () => {
+	// aborts the whole run and starves every later row behind it. And a sent-but-
+	// unacked row counts as failed, not delivered: it stays unsent, next sweep retries.
+	it("counts a send-but-unacked row as failed, and the sweep still resolves", async () => {
 		const h = harness([row("r1"), row("r2")], { markProcessedThrows: true });
 
 		await expect(h.service.sweep()).resolves.toEqual({
-			delivered: 2,
-			failed: 0,
+			delivered: 0,
+			failed: 2,
 		});
 		expect(h.sends).toHaveLength(2);
 		expect(h.logs.filter((l) => l.msg === "outbox ack failed")).toHaveLength(2);
+		// The heartbeat must not claim delivery for a row that never acked.
+		expect(h.logs.some((l) => l.msg === "outbox delivered")).toBe(false);
 	});
 
 	it("swallows a failing failure-record: send throws, markFailed throws, sweep still resolves", async () => {
