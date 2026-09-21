@@ -1,0 +1,15 @@
+# Backstop for the commit skill's no-attribution rule: hard-fail any commit whose
+# message carries a Claude attribution trailer, however it got there.
+msg_file="$1"
+
+# Scan only what will actually be committed: drop the `git commit -v` scissors diff
+# (a staged diff can itself contain the banned string — e.g. this repo's SKILL.md),
+# then strip comment lines. Avoids false-positives on the diff/comments.
+cleaned=$(sed '/------------------------ >8 ------------------------/,$d' "$msg_file" \
+	| git stripspace --strip-comments)
+
+if printf '%s\n' "$cleaned" | grep -qiE 'co-authored-by:|noreply@anthropic\.com'; then
+	echo "commit-msg: blocked — message contains a Claude attribution line" >&2
+	echo "  (matched 'Co-Authored-By:' or 'noreply@anthropic.com'). Remove it and recommit." >&2
+	exit 1
+fi
