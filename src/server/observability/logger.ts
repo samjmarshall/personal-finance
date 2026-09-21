@@ -68,69 +68,79 @@ export class OtelLogger implements Logger {
 		msg: string,
 		attrs?: LogAttributes & { error?: unknown },
 	): void {
-		if (LEVEL_RANK[level] < LEVEL_RANK[this.level]) return;
+		try {
+			if (LEVEL_RANK[level] < LEVEL_RANK[this.level]) return;
 
-		const { error, err, ...callAttrs } = attrs ?? {};
-		// `err` is the Pino/Inngest convention (Inngest.js logs `{ err }`); alias it
-		// to `error` so object-first loggers get exception decomposition instead of
-		// shipping a raw Error that serialises to {} and leaks into OTLP attributes.
-		const exception = error ?? err;
+			const { error, err, ...callAttrs } = attrs ?? {};
+			// `err` is the Pino/Inngest convention (Inngest.js logs `{ err }`); alias it
+			// to `error` so object-first loggers get exception decomposition instead of
+			// shipping a raw Error that serialises to {} and leaks into OTLP attributes.
+			const exception = error ?? err;
 
-		const spanCtx = trace.getActiveSpan()?.spanContext();
-		const spanAttrs: LogAttributes = spanCtx
-			? { trace_id: spanCtx.traceId, span_id: spanCtx.spanId }
-			: {};
+			const spanCtx = trace.getActiveSpan()?.spanContext();
+			const spanAttrs: LogAttributes = spanCtx
+				? { trace_id: spanCtx.traceId, span_id: spanCtx.spanId }
+				: {};
 
-		const errorAttrs: LogAttributes = {};
-		if (exception !== undefined) {
-			if (exception instanceof Error) {
-				errorAttrs["exception.type"] = exception.name;
-				// TODO(security): an error's message and stack can carry private data
-				// (emails, database values, ids) and reach the analytics service three
-				// ways — the log, the trace, and error tracking. Scrub before it
-				// leaves; keep the full text in local output only.
-				errorAttrs["exception.message"] = exception.message;
-				errorAttrs["exception.stacktrace"] = exception.stack ?? "";
-			} else {
-				errorAttrs["exception.type"] = typeof exception;
-				errorAttrs["exception.message"] = String(exception);
+			const errorAttrs: LogAttributes = {};
+			if (exception !== undefined) {
+				if (exception instanceof Error) {
+					errorAttrs["exception.type"] = exception.name;
+					// TODO(security): an error's message and stack can carry private data
+					// (emails, database values, ids) and reach the analytics service three
+					// ways — the log, the trace, and error tracking. Scrub before it
+					// leaves; keep the full text in local output only.
+					errorAttrs["exception.message"] = exception.message;
+					errorAttrs["exception.stacktrace"] = exception.stack ?? "";
+				} else {
+					errorAttrs["exception.type"] = typeof exception;
+					errorAttrs["exception.message"] = String(exception);
+				}
 			}
+
+			// Precedence low→high: ambient baggage is weakest, so an explicit call arg
+			// (e.g. the row id a warn names) wins over the active baggage id. Span/error
+			// attrs are system-computed and win last so a caller can't spoof them.
+			const allAttrs: LogAttributes = {
+				...readBaggage(),
+				...this.bound,
+				...callAttrs,
+				...spanAttrs,
+				...errorAttrs,
+			};
+
+			// event.name is mirrored onto the record's eventName field (adr015 §5)
+			// so PostHog exposes it as a filterable field; the attribute is kept too.
+			const eventName = allAttrs["event.name"] as string | undefined;
+
+			const { number: severityNumber, text: severityText } = SEVERITY[level];
+
+			// allAttrs contains only primitives we built (strings, numbers, booleans).
+			// Cast to AnyValueMap — the Error is decomposed to strings above before here.
+			this.emitter.emit({
+				severityNumber,
+				severityText,
+				body: msg,
+				// biome-ignore lint/suspicious/noExplicitAny: AnyValueMap requires a cast here; allAttrs holds only primitives
+				attributes: allAttrs as any,
+				...(eventName !== undefined ? { eventName } : {}),
+			});
+
+			const line = JSON.stringify(
+				{ level, msg, ...allAttrs },
+				null,
+				this.pretty ? 2 : 0,
+			);
+			this.stdout.write(`${line}\n`);
+		} catch (error) {
+			// Logging must not crash the caller (the outbox logs after its tx commits —
+			// adr002 — so a throw duplicates a durable write). console.error won't throw
+			// on a broken stream (Node ignoreErrors); a string arg dodges a util.inspect
+			// throw. Keep level+msg so the event isn't wholly lost.
+			const detail =
+				error instanceof Error ? (error.stack ?? error.message) : String(error);
+			console.error(`logging_failed level=${level} msg=${msg} ${detail}`);
 		}
-
-		// Precedence low→high: ambient baggage is weakest, so an explicit call arg
-		// (e.g. the row id a warn names) wins over the active baggage id. Span/error
-		// attrs are system-computed and win last so a caller can't spoof them.
-		const allAttrs: LogAttributes = {
-			...readBaggage(),
-			...this.bound,
-			...callAttrs,
-			...spanAttrs,
-			...errorAttrs,
-		};
-
-		// event.name is mirrored onto the record's eventName field (adr015 §5)
-		// so PostHog exposes it as a filterable field; the attribute is kept too.
-		const eventName = allAttrs["event.name"] as string | undefined;
-
-		const { number: severityNumber, text: severityText } = SEVERITY[level];
-
-		// allAttrs contains only primitives we built (strings, numbers, booleans).
-		// Cast to AnyValueMap — the Error is decomposed to strings above before here.
-		this.emitter.emit({
-			severityNumber,
-			severityText,
-			body: msg,
-			// biome-ignore lint/suspicious/noExplicitAny: AnyValueMap requires a cast here; allAttrs holds only primitives
-			attributes: allAttrs as any,
-			...(eventName !== undefined ? { eventName } : {}),
-		});
-
-		const line = JSON.stringify(
-			{ level, msg, ...allAttrs },
-			null,
-			this.pretty ? 2 : 0,
-		);
-		this.stdout.write(`${line}\n`);
 	}
 
 	debug(msg: string, attrs?: LogAttributes): void {

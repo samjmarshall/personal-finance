@@ -6,7 +6,15 @@ import {
 	SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { setBaggage } from "./baggage";
 import { LogLevel, OtelLogger } from "./logger";
 
@@ -27,6 +35,7 @@ const provider = new NodeTracerProvider({
 
 beforeAll(() => provider.register());
 afterAll(() => provider.shutdown());
+afterEach(() => vi.restoreAllMocks());
 
 describe("OtelLogger", () => {
 	it("maps debug/info/warn/error to correct severity numbers", () => {
@@ -124,5 +133,44 @@ describe("OtelLogger", () => {
 		const attrs = emitCalls[0]?.attributes ?? {};
 		expect(typeof attrs.trace_id).toBe("string");
 		expect(typeof attrs.span_id).toBe("string");
+	});
+
+	// A sink throw must not reach the caller: the outbox logs after its tx commits
+	// (adr002), so a throw would fail a durable write and duplicate rows.
+	it("never throws when the emitter sink throws; falls back to console.error with the message", () => {
+		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const logger = new OtelLogger({
+			emitter: {
+				emit: () => {
+					throw new Error("otlp down");
+				},
+			},
+			stdout: { write: () => {} },
+			level: LogLevel.DEBUG,
+			pretty: false,
+		});
+
+		expect(() => logger.info("hi")).not.toThrow();
+		expect(consoleSpy).toHaveBeenCalledWith(
+			expect.stringContaining("logging_failed"),
+		);
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("hi"));
+	});
+
+	it("never throws when the stdout sink throws; falls back to console.error with the message", () => {
+		const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const logger = new OtelLogger({
+			emitter: { emit: () => {} },
+			stdout: {
+				write: () => {
+					throw new Error("EPIPE");
+				},
+			},
+			level: LogLevel.DEBUG,
+			pretty: false,
+		});
+
+		expect(() => logger.error("boom")).not.toThrow();
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("boom"));
 	});
 });
