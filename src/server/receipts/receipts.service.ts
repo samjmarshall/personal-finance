@@ -146,7 +146,6 @@ export function buildExtractionContent({
 			];
 		case "image/jpeg":
 		case "image/png":
-		case "image/webp":
 			return [
 				{ type: "text", text: prompt },
 				{ type: "image", image: bytes },

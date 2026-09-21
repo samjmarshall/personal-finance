@@ -604,7 +604,7 @@ describe("buildExtractionContent", () => {
 		},
 	);
 
-	it.each(["image/jpeg", "image/png", "image/webp"])(
+	it.each(["image/jpeg", "image/png"])(
 		"sends %s as an image part",
 		(mediaType) => {
 			const content = buildExtractionContent({ prompt, bytes, mediaType });
