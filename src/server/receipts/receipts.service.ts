@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { context, SpanStatusCode, trace } from "@opentelemetry/api";
 import {
 	APICallError,
 	type FilePart,
@@ -13,14 +14,19 @@ import {
 	type ReceiptExtraction,
 	receiptExtractionDto,
 } from "~/domain/receipts";
+import { env } from "~/env";
 import { ReceiptStatus } from "~/lib/constants";
 import { bareMediaType, isPdf, isText } from "~/lib/utils";
-
 import type { BlobStore } from "~/server/blob-store/blob-store";
+import { setBaggage } from "~/server/observability/baggage";
+import type { Logger } from "~/server/observability/logger";
 import type {
 	ReceiptItemInsert,
 	ReceiptsRepository,
 } from "./receipts.repository";
+
+// Ambient tracer, no-op until an SDK is registered (otel.ts).
+const tracer = trace.getTracer(env.PROJECT_NAME);
 
 // Terminal states: a re-delivered event (Inngest is at-least-once) for one of these
 // must return without a second AI call.
@@ -129,12 +135,23 @@ export function buildExtractionContent({
 	];
 }
 
+// Error Tracking sink, an object port so the test fakes it as a plain literal.
+// The park path captures its own terminal failures: process() parks, it does not
+// throw (the frozen retry contract), so Inngest's onRunError choke point (adr015 §7)
+// never sees a terminal receipt failure. Bound to posthog captureException in the
+// composition root; a no-op without POSTHOG_KEY.
+export interface ErrorReporter {
+	captureException(error: unknown, props?: Record<string, unknown>): void;
+}
+
 interface ReceiptsServiceDeps {
 	repository: ReceiptsRepository;
 	blobStore: BlobStore;
 	// The provider is bound once in the composition root (functions.ts), so this tier
 	// never touches `~/env` or `~/server/aws/bedrock` — see bedrock-invocation.md.
 	languageModel: LanguageModel;
+	logger: Logger;
+	errorReporter: ErrorReporter;
 }
 
 /**
@@ -145,11 +162,21 @@ export class ReceiptsService {
 	private readonly repository: ReceiptsRepository;
 	private readonly blobStore: BlobStore;
 	private readonly languageModel: LanguageModel;
+	private readonly logger: Logger;
+	private readonly errorReporter: ErrorReporter;
 
-	constructor({ repository, blobStore, languageModel }: ReceiptsServiceDeps) {
+	constructor({
+		repository,
+		blobStore,
+		languageModel,
+		logger,
+		errorReporter,
+	}: ReceiptsServiceDeps) {
 		this.repository = repository;
 		this.blobStore = blobStore;
 		this.languageModel = languageModel;
+		this.logger = logger;
+		this.errorReporter = errorReporter;
 	}
 
 	/**
@@ -168,29 +195,86 @@ export class ReceiptsService {
 		const receipt = await this.repository.findById(receiptId);
 		if (!receipt || DONE_STATUSES.includes(receipt.status)) return;
 
-		try {
-			// Read by store-relative pathname, never the member-supplied blobUrl: the
-			// store resolves a pathname against our own token, so a foreign URL can't be
-			// fetched and fed to the model (the DTO already rejects a URL pathname).
-			const { bytes, mediaType } = await this.blobStore.read(
-				receipt.blobPathname,
-			);
-			const contentHash = sha256(bytes);
-			await this.repository.setContentHash(receiptId, contentHash);
-			if (await this.linkDuplicate(receiptId, contentHash)) return;
+		// One span + baggage scope per attempt: member.id/receipt.id ride the baggage so
+		// the AI generation, the failure log and the captured exception all correlate to
+		// this trace. member.id may be null (auth row deleted) — setBaggage skips it.
+		const baggageCtx = setBaggage({
+			"receipt.id": String(receiptId),
+			"member.id": receipt.userId ?? undefined,
+		});
+		await context.with(baggageCtx, () =>
+			tracer.startActiveSpan(
+				"receipt.extract",
+				{
+					attributes: {
+						"receipt.id": receiptId,
+						"receipt.channel": receipt.channel,
+						"receipt.is_final_attempt": isFinalAttempt,
+					},
+				},
+				async (span) => {
+					try {
+						// Read by store-relative pathname, never the member-supplied blobUrl: the
+						// store resolves a pathname against our own token, so a foreign URL can't be
+						// fetched and fed to the model (the DTO already rejects a URL pathname).
+						const { bytes, mediaType } = await this.blobStore.read(
+							receipt.blobPathname,
+						);
+						const contentHash = sha256(bytes);
+						await this.repository.setContentHash(receiptId, contentHash);
+						if (await this.linkDuplicate(receiptId, contentHash)) {
+							span.setAttribute("receipt.outcome", "duplicate");
+							return;
+						}
 
-			assertWithinModelCap(bytes, mediaType);
-			await this.extractAndSave(receiptId, bytes, mediaType);
-		} catch (error) {
-			// A retryable provider error (429/5xx/network) is worth another go with
-			// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
-			const retryable =
-				APICallError.isInstance(error) && error.isRetryable === true;
-			if (retryable && !isFinalAttempt) throw error;
+						assertWithinModelCap(bytes, mediaType);
+						await this.extractAndSave(receiptId, bytes, mediaType);
+						span.setAttribute("receipt.outcome", "processed");
+					} catch (error) {
+						span.recordException(error as Error);
+						span.setStatus({ code: SpanStatusCode.ERROR });
 
-			console.error(`process-receipt failed for ${receiptId}`, error);
-			await this.repository.markFailed(receiptId, memberFacingError(error));
-		}
+						// A retryable provider error (429/5xx/network) is worth another go with
+						// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
+						const retryable =
+							APICallError.isInstance(error) && error.isRetryable === true;
+						if (retryable && !isFinalAttempt) {
+							span.setAttribute("receipt.outcome", "retry");
+							this.logger.warn("receipt extraction retrying", {
+								error,
+								"receipt.id": receiptId,
+								"receipt.channel": receipt.channel,
+								"receipt.is_final_attempt": isFinalAttempt,
+							});
+							throw error;
+						}
+
+						span.setAttribute("receipt.outcome", "failed");
+						const reason = memberFacingError(error);
+						this.logger.error("receipt extraction failed", {
+							error,
+							"event.name": "receipt.failed",
+							"receipt.id": receiptId,
+							"receipt.channel": receipt.channel,
+							"receipt.is_final_attempt": isFinalAttempt,
+							"receipt.reason": reason,
+						});
+						// onRunError never sees a parked run, so the domain tier owns the Error
+						// Tracking signal for terminal failures (adr015 §7 note). Inside the span
+						// + baggage above, so the issue carries $trace_id + member.id.
+						this.errorReporter.captureException(error, {
+							"receipt.id": String(receiptId),
+							"receipt.channel": receipt.channel,
+							"member.id": receipt.userId,
+							"receipt.reason": reason,
+						});
+						await this.repository.markFailed(receiptId, reason);
+					} finally {
+						span.end();
+					}
+				},
+			),
+		);
 	}
 
 	// Dedup on the exact bytes: a re-upload of a photo we already extracted links back
@@ -265,6 +349,15 @@ export class ReceiptsService {
 			model: this.languageModel,
 			schema: receiptExtractionDto,
 			messages: [{ role: "user", content }],
+			// v7 telemetry is opt-out once @ai-sdk/otel is registered (otel.ts); inputs
+			// record by default, so ContextSpanProcessor redaction must be registered
+			// first or the base64 receipt image ships raw. functionId groups the runs.
+			telemetry: {
+				isEnabled: true,
+				recordInputs: true,
+				recordOutputs: true,
+				functionId: "receipt.extract",
+			},
 		});
 
 		return object;

@@ -2,6 +2,8 @@ import { env } from "~/env";
 import { bedrock } from "~/server/aws/bedrock";
 import { VercelBlobStore } from "~/server/blob-store/blob-store";
 import { db } from "~/server/db";
+import { createRootLogger } from "~/server/observability/logger";
+import { captureException } from "~/server/observability/posthog";
 import { OutboxController } from "~/server/outbox/outbox.controller";
 import { outboxService } from "~/server/outbox/outbox.module";
 import { ReceiptsController } from "~/server/receipts/receipts.controller";
@@ -25,6 +27,8 @@ const receiptsService = new ReceiptsService({
 	// The only place the receipts tier is bound to Bedrock; the service stays
 	// provider-agnostic behind `languageModel` (bedrock-invocation.md).
 	languageModel: bedrock(env.BEDROCK_RECEIPT_MODEL),
+	logger: createRootLogger().with({ domain: "receipts", component: "service" }),
+	errorReporter: { captureException },
 });
 const receiptsController = new ReceiptsController({
 	inngest,

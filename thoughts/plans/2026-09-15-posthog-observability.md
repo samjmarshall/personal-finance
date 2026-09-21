@@ -252,13 +252,13 @@ Constraint: `.claude/rules/bedrock-invocation.md:14` — nothing under `src/serv
 - `src/server/receipts/receipts.controller.ts:46-49` — no change; `isFinalAttempt` already flows. Test `receipts.controller.test.ts:5-37` unchanged.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `grep -rn "console\." src/server/receipts` returns nothing
-- [ ] `make start` + Inngest dev + a real upload (with AWS creds via `assume`): stdout shows `receipt.extract` span-bearing log lines, and forcing a parse failure (e.g. temporarily invalid `BEDROCK_RECEIPT_MODEL`) logs `event.name=receipt.failed` on the final attempt
-- [ ] the same forced failure produces a PostHog **Error Tracking** issue carrying `$trace_id` + `member.id` (the domain-tier `captureException`; confirms parked failures surface as issues without `onRunError`)
-- [ ] add a `receipts.service.test.ts` slice asserting the park path calls `captureException` once (fake capture in the harness), alongside the `receipt.failed` log assertion
-- [ ] `registry-golden.test.ts` unchanged and green
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `grep -rn "console\." src/server/receipts` returns nothing
+- [ ] `make start` + Inngest dev + a real upload (with AWS creds via `assume`): stdout shows `receipt.extract` span-bearing log lines, and forcing a parse failure (e.g. temporarily invalid `BEDROCK_RECEIPT_MODEL`) logs `event.name=receipt.failed` on the final attempt — _manual; needs AWS creds + live upload_
+- [ ] the same forced failure produces a PostHog **Error Tracking** issue carrying `$trace_id` + `member.id` (the domain-tier `captureException`; confirms parked failures surface as issues without `onRunError`) — _deferred; PostHog exporter goes live in Phase 11_
+- [x] add a `receipts.service.test.ts` slice asserting the park path calls `captureException` once (fake capture in the harness), alongside the `receipt.failed` log assertion
+- [x] `registry-golden.test.ts` unchanged and green
 
 ---
 

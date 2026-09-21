@@ -1,9 +1,26 @@
 import { createHash } from "node:crypto";
-import { APICallError, type LanguageModel } from "ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { LegacyOpenTelemetry } from "@ai-sdk/otel";
+import {
+	InMemorySpanExporter,
+	SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { APICallError, type LanguageModel, registerTelemetry } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import type { ExtractionCategory, ReceiptExtraction } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import type { FetchedBlob } from "~/server/blob-store/blob-store";
+import type { LogAttributes, Logger } from "~/server/observability/logger";
 import type {
 	ExtractionValues,
 	ReceiptItemInsert,
@@ -13,8 +30,12 @@ import type {
 import {
 	buildExtractionContent,
 	buildExtractionPrompt,
+	type ErrorReporter,
 	ReceiptsService,
 } from "./receipts.service";
+
+type LogEntry = { level: string; msg: string; attrs: LogAttributes };
+type Capture = { error: unknown; props?: Record<string, unknown> };
 
 const baseReceipt = (over: Partial<ReceiptRow> = {}): ReceiptRow => ({
 	id: 1,
@@ -56,6 +77,21 @@ const okBlob: FetchedBlob = {
 const sha256 = (bytes: Uint8Array) =>
 	createHash("sha256").update(bytes).digest("hex");
 
+// The receipt.extract business span and the AI SDK's ai.generateObject span both land
+// on the ambient tracer; register a provider so they're recorded and assertable.
+// LegacyOpenTelemetry is what otel.ts registers in prod — it keeps the ai.* span names.
+const exporter = new InMemorySpanExporter();
+const provider = new NodeTracerProvider({
+	spanProcessors: [new SimpleSpanProcessor(exporter)],
+});
+
+beforeAll(() => {
+	provider.register();
+	registerTelemetry(new LegacyOpenTelemetry());
+});
+afterAll(() => provider.shutdown());
+beforeEach(() => exporter.reset());
+
 // Fake ports are plain object literals against the interfaces. Every repository
 // write lands in `calls`, and `log` keeps the cross-port order so a test can assert
 // what happened before what (hash persisted before the model call, etc.).
@@ -66,6 +102,8 @@ function harness(
 		categories?: ExtractionCategory[];
 		blob?: FetchedBlob;
 		extract?: () => Promise<ReceiptExtraction>;
+		languageModel?: LanguageModel;
+		spyAnalyze?: boolean;
 	} = {},
 ) {
 	const log: string[] = [];
@@ -107,29 +145,49 @@ function harness(
 			throw new Error("unused");
 		}),
 	};
-	// `languageModel` is injected but never reached: analyzeReceipt is spied below, so
-	// `generateObject` never runs — a bare stub is enough to satisfy the constructor.
+	// Object-literal fakes against the interfaces — each call recorded; `with` returns
+	// itself (the service never re-binds; the module root does that once).
+	const logs: LogEntry[] = [];
+	const logger: Logger = {
+		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
+		info: (msg, attrs = {}) => logs.push({ level: "info", msg, attrs }),
+		warn: (msg, attrs = {}) => logs.push({ level: "warn", msg, attrs }),
+		error: (msg, attrs = {}) => logs.push({ level: "error", msg, attrs }),
+		with: () => logger,
+	};
+	const captures: Capture[] = [];
+	const errorReporter: ErrorReporter = {
+		captureException: (error, props) => captures.push({ error, props }),
+	};
+	// `languageModel` defaults to a bare stub: analyzeReceipt is spied below, so
+	// `generateObject` never runs. The telemetry test passes a real MockLanguageModelV4
+	// and `spyAnalyze: false` so the ai.generateObject span is actually emitted.
 	const service = new ReceiptsService({
 		repository,
 		blobStore,
-		languageModel: {} as LanguageModel,
+		languageModel: opts.languageModel ?? ({} as LanguageModel),
+		logger,
+		errorReporter,
 	});
 	// Stub the private method on the instance to run process()'s flow offline. Faking a
 	// whole LanguageModel for generateObject is heavier than pinning the flow this way.
 	// `opts.extract` drives the return (or throw); the builders are covered directly below.
-	const analyze = vi
-		.spyOn(
-			service as unknown as {
-				analyzeReceipt(input: {
-					mediaType: string;
-				}): Promise<ReceiptExtraction>;
-			},
-			"analyzeReceipt",
-		)
-		.mockImplementation(async () => {
-			log.push("extract");
-			return opts.extract ? opts.extract() : extraction;
-		});
+	const analyze =
+		opts.spyAnalyze === false
+			? undefined
+			: vi
+					.spyOn(
+						service as unknown as {
+							analyzeReceipt(input: {
+								mediaType: string;
+							}): Promise<ReceiptExtraction>;
+						},
+						"analyzeReceipt",
+					)
+					.mockImplementation(async () => {
+						log.push("extract");
+						return opts.extract ? opts.extract() : extraction;
+					});
 
 	return {
 		service,
@@ -137,6 +195,8 @@ function harness(
 		log,
 		blobStore,
 		analyze,
+		logs,
+		captures,
 	};
 }
 
@@ -244,6 +304,12 @@ describe("ReceiptsService.process", () => {
 		expect(h.analyze).not.toHaveBeenCalled();
 		expect(h.calls.markDuplicate).toEqual([{ id: 1, duplicateOfId: 42 }]);
 		expect(h.calls.saveExtraction).toEqual([]);
+		// The span records the terminal outcome; a duplicate is not an error.
+		const span = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "receipt.extract");
+		expect(span?.attributes["receipt.outcome"]).toBe("duplicate");
+		expect(h.logs.some((l) => l.level === "error")).toBe(false);
 	});
 
 	it("returns early on an already-processed receipt (at-least-once re-delivery, no re-spend)", async () => {
@@ -268,7 +334,6 @@ describe("ReceiptsService.process", () => {
 	});
 
 	it("marks the receipt failed when extraction throws", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness({
 			receipt: baseReceipt(),
 			extract: async () => {
@@ -283,10 +348,38 @@ describe("ReceiptsService.process", () => {
 		expect(h.calls.saveExtraction).toEqual([]);
 	});
 
+	// A parked run "succeeds" as far as Inngest is concerned (process never throws), so
+	// onRunError can't see it — the domain tier owns the receipt.failed alert signal and
+	// the Error Tracking capture for terminal failures.
+	it("logs receipt.failed and captures the exception once on the park path", async () => {
+		const boom = new Error("model unavailable");
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => {
+				throw boom;
+			},
+		});
+
+		await h.service.process(1);
+
+		const errors = h.logs.filter((l) => l.level === "error");
+		expect(errors).toHaveLength(1);
+		expect(errors[0]?.msg).toBe("receipt extraction failed");
+		expect(errors[0]?.attrs["event.name"]).toBe("receipt.failed");
+		expect(errors[0]?.attrs["receipt.id"]).toBe(1);
+		expect(h.logs.some((l) => l.level === "warn")).toBe(false);
+
+		expect(h.captures).toHaveLength(1);
+		expect(h.captures[0]?.error).toBe(boom);
+		expect(h.captures[0]?.props).toMatchObject({
+			"receipt.id": "1",
+			"member.id": "u1",
+		});
+	});
+
 	// `error` is rendered to the member verbatim, and a drizzle/postgres error message
 	// carries the failing SQL with its bound parameters. Nothing internal may reach it.
 	it("stores an actionable message, not the raw driver error", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness({
 			receipt: baseReceipt(),
 			extract: async () => {
@@ -329,10 +422,18 @@ describe("ReceiptsService.process", () => {
 		).rejects.toThrow("Overloaded");
 
 		expect(h.calls.markFailed).toEqual([]);
+		// A mid-retry blip warns (the middleware's onRunError covers the capture); it must
+		// not fire the terminal receipt.failed signal or double-capture.
+		const warns = h.logs.filter((l) => l.level === "warn");
+		expect(warns).toHaveLength(1);
+		expect(warns[0]?.msg).toBe("receipt extraction retrying");
+		expect(h.logs.some((l) => l.attrs["event.name"] === "receipt.failed")).toBe(
+			false,
+		);
+		expect(h.captures).toEqual([]);
 	});
 
 	it("parks a retryable API error as failed on the final attempt", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness({
 			receipt: baseReceipt(),
 			extract: async () => {
@@ -348,7 +449,6 @@ describe("ReceiptsService.process", () => {
 	// A 400 (ValidationException) or 403 (AccessDenied) from Bedrock is deterministic:
 	// the same bytes fail the same way next time, so "Retry in a moment" would mislead.
 	it("parks a non-retryable API error at once, without the retry copy", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness({
 			receipt: baseReceipt(),
 			extract: async () => {
@@ -373,7 +473,6 @@ describe("ReceiptsService.process", () => {
 	// deterministically — so the service refuses first, without spending the call, and
 	// says "too large" rather than the generic retry copy.
 	it("parks an oversize PDF as failed with a too-large message and no model call", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness({
 			receipt: baseReceipt(),
 			blob: { bytes: new Uint8Array(4_500_001), mediaType: "application/pdf" },
@@ -389,7 +488,6 @@ describe("ReceiptsService.process", () => {
 	});
 
 	it("parks an oversize image with the smaller image cap in the message", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
 		const h = harness({
 			receipt: baseReceipt(),
 			blob: { bytes: new Uint8Array(3_750_001), mediaType: "image/jpeg" },
@@ -411,6 +509,39 @@ describe("ReceiptsService.process", () => {
 
 		expect(h.analyze).toHaveBeenCalledOnce();
 		expect(h.calls.saveExtraction).toHaveLength(1);
+	});
+
+	// The AI SDK telemetry option must emit an ai.generateObject span nested under our
+	// receipt.extract span, on one trace — that's what the redaction + PostHog span
+	// processors key on downstream. Runs the real generateObject with a mock model.
+	it("emits an ai.generateObject span under receipt.extract when telemetry runs", async () => {
+		const model = new MockLanguageModelV4({
+			doGenerate: async () => ({
+				finishReason: { unified: "stop" as const, raw: "stop" },
+				usage: {
+					inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+					outputTokens: { total: 20, text: 20, reasoning: 0 },
+				},
+				content: [{ type: "text", text: JSON.stringify(extraction) }],
+				warnings: [],
+			}),
+		});
+		const h = harness({
+			receipt: baseReceipt(),
+			categories: [{ id: 7, name: "Groceries" }],
+			languageModel: model,
+			spyAnalyze: false,
+		});
+
+		await h.service.process(1);
+
+		expect(h.calls.saveExtraction).toHaveLength(1);
+		const spans = exporter.getFinishedSpans();
+		const extract = spans.find((s) => s.name === "receipt.extract");
+		const ai = spans.find((s) => s.name.startsWith("ai.generateObject"));
+		expect(extract).toBeDefined();
+		expect(ai).toBeDefined();
+		expect(ai?.spanContext().traceId).toBe(extract?.spanContext().traceId);
 	});
 });
 
