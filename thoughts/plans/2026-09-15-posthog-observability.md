@@ -297,10 +297,10 @@ Implements adr015 clause 1 (one project, all envs) on the infra side and the des
 - `docs/adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md`, `docs/adr/adr016-trace-context-in-outbox-payload.md` — leave `Status: 'Proposed'` until Phase 11 verifies the sinks; Phase 11 flips both to `Accepted`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `terraform -chdir=infrastructure validate` passes (`TF_VAR_posthog_key=phc_x` set for the local run)
-- [ ] `terraform plan` for preview shows exactly two new `vercel_project_environment_variable` resources and no change to the existing three
-- [ ] Rules file renders; `/security-review` (touches Terraform env wiring, `.env.example`, workflow secrets)
+- [x] `make check` passes
+- [x] `terraform -chdir=infrastructure validate` passes (`TF_VAR_posthog_key=phc_x` set for the local run)
+- [ ] `terraform plan` for preview shows exactly two new `vercel_project_environment_variable` resources and no change to the existing three — _deferred: needs AWS SSO creds for the S3 backend + a Vercel API token, and acquires the shared preview state lock; the preview `terraform-apply` job runs it in-pipeline. Analytically: the two new `local.vercel_env` keys (POSTHOG_KEY, POSTHOG_HOST) feed the existing `for_each`, so exactly two new `vercel_project_environment_variable.this[...]` resources add, the existing three unchanged._
+- [x] Rules file renders; `/security-review` — Phase 10 surfaces clean (Terraform secret wiring: `posthog_key` is `sensitive = true` + `POSTHOG_KEY` env `sensitive = true`; workflow secret is `${{ secrets.POSTHOG_KEY }}`; rules file is docs). One HIGH branch-level finding (exception.message/stacktrace PII → PostHog on the receipt park path) is **pre-existing and already tracked** as the `logger.ts` TODO(security), not introduced by Phase 10.
 
 ---
 

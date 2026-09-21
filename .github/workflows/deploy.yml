@@ -54,6 +54,7 @@ jobs:
       # Terraform's vercel provider reads VERCEL_API_TOKEN (team + project ids are
       # non-secret and live in vars). The CLI vars are not needed here.
       VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TF_VAR_posthog_key: ${{ secrets.POSTHOG_KEY }}
     outputs:
       app_url: ${{ steps.apply.outputs.app_url }}
     steps:

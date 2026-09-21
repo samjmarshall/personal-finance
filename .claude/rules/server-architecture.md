@@ -13,11 +13,12 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 
 | File                                | Tier         | Owns                                                                                                                                                                | Depends on                         |
 | ----------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `<domain>.controller.ts`            | presentation | Inngest `createFunction` declarations (id, triggers, retries, concurrency) or an HTTP `handle(request: Request): Promise<Response>`. Filters, auth checks, then calls **one** service method. No rules. | the service class                  |
-| `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces  |
+| `<domain>.controller.ts`            | presentation | Inngest `createFunction` declarations (id, triggers, retries, concurrency) or an HTTP `handle(request: Request): Promise<Response>`. Filters, auth checks, then calls **one** service method. No rules. | the service class; `logger: Logger` |
+| `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptsService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
 | `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. `outbox.module.ts` exports `outboxService`. | —                                  |
+| `src/server/observability/`         | shared adapter | Shared observability provider: `Logger` port + `OtelLogger` impl, OTel boot (`otel.ts`), flush (`flush.ts`), PostHog capture (`posthog.ts`), trace carrier (`trace-carrier.ts`), baggage (`baggage.ts`), `ContextSpanProcessor`, `TracingMiddleware`. Like `blob-store/` — lives outside any domain. Tiers see only `Logger` + the ambient OTel API (`@opentelemetry/api`). | OTel SDK + PostHog SDKs            |
 
 Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts` (earned only).
 
@@ -49,6 +50,16 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   `isFinalAttempt: attempt >= RETRIES`. The service rethrows a retryable error
   while attempts remain and parks the row (`markFailed`) on the final or a
   deterministic one. `RETRIES` lives in the controller.
+- **Error capture choke points only.** Services and repositories never call
+  `captureException`. Exceptions are captured only at the three choke points:
+  `onRequestError` (`src/instrumentation.ts`), the tRPC `tracingMiddleware`, and
+  the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptsService` calls
+  `captureException` on the park path because `onRunError` only fires on throws —
+  parked terminal failures never throw, so the domain tier owns that capture.
+  Tiers log through their injected `logger.error`; spans `recordException`.
+- **Inngest handlers read named fields, never spread `event.data`.** Pick
+  `event.data.receiptId` etc. by name — `event.data` carries the adr016 `_trace`
+  pocket and must not be spread or hashed into a new object.
 
 ## Tests (colocated, see unit-testing rule)
 
@@ -56,8 +67,9 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   with `new PgDialect().sqlToQuery(cond).sql` and assert on the text; assert `set()`
   payloads. Never hit Postgres.
 - `*.service.test.ts` — fake repository + adapters as object literals typed
-  against the interfaces, recording calls in arrays. No module mocking. Spy
-  `console.error` on paths that log.
+  against the interfaces, recording calls in arrays. No module mocking. Fake
+  `logger: Logger` (object literal recording `{ level, msg, attrs }`) asserts
+  log calls — never spy `console.error`.
 - `*.controller.test.ts` — spy `createFunction` captures `{ opts, handler }`;
   assert the frozen opts and that each handler routes to the right service method
   with the right args. For an HTTP controller: fake verifier + fake service, call

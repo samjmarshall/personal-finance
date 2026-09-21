@@ -7,3 +7,9 @@ variable "environment" {
     error_message = "environment must be production or preview."
   }
 }
+
+variable "posthog_key" {
+  type        = string
+  sensitive   = true
+  description = "PostHog project token (phc_…) for the Rekurve project; same value for production and preview."
+}
