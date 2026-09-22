@@ -52,6 +52,8 @@ The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `
 
 Everything is gated on `POSTHOG_KEY`: unset, nothing registers, the logger writes stdout only and exception capture is a no-op, so tests and keyless local runs need no key. Outbound `fetch` carries no `traceparent`/`baggage`, so no correlation id reaches Bedrock or Resend. See [adr015](adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md) and [adr016](adr/adr016-trace-context-in-outbox-payload.md).
 
+The browser mints a W3C `traceparent` per request on the two fetches it controls (the tRPC batch POST and better-auth), so the server span parents onto the client's trace and shares one `trace_id`. The tRPC route echoes it back as an `x-trace-id` response header — read it from the Network tab to search PostHog. See [adr018](adr/adr018-client-originated-traceparent.md).
+
 ## Async platform (outbox + Inngest)
 
 Side-effecting writes commit their canonical rows and an `outbox` row in one `db.transaction()`, then best-effort `inngest.send`; a cron re-delivers anything the send missed. At-least-once, idempotent on the outbox row `id`. See [adr002](adr/adr002-canonical-postgres-store-transactional-outbox.md); event names live in `src/server/inngest/events.ts` (`EVENT_REGISTRY`).

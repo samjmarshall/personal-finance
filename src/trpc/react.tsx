@@ -7,8 +7,18 @@ import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import SuperJSON from "superjson";
 
+import { newTraceparent } from "~/lib/traceparent";
 import type { AppRouter } from "~/server/api/root";
 import { createQueryClient } from "./query-client";
+
+// Fresh traceparent per batch POST so the server span parents onto the client
+// trace (adr018).
+export function trpcHeaders(): Headers {
+	const headers = new Headers();
+	headers.set("x-trpc-source", "nextjs-react");
+	headers.set("traceparent", newTraceparent());
+	return headers;
+}
 
 let clientQueryClientSingleton: QueryClient | undefined;
 const getQueryClient = () => {
@@ -52,11 +62,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 				httpBatchStreamLink({
 					transformer: SuperJSON,
 					url: `${getBaseUrl()}/api/trpc`,
-					headers: () => {
-						const headers = new Headers();
-						headers.set("x-trpc-source", "nextjs-react");
-						return headers;
-					},
+					headers: trpcHeaders,
 				}),
 			],
 		}),
