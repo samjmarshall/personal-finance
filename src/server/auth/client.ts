@@ -12,7 +12,11 @@ type FetchImpl = (
 // client trace (adr018). Clones headers — never mutates the caller's init.
 export function withTraceparent(inner: FetchImpl): FetchImpl {
 	return (input, init) => {
-		const headers = new Headers(init?.headers);
+		// Headers can ride on init or on a Request input; init wins per fetch spec.
+		// Miss the Request case and its cookie/content-type get dropped.
+		const source =
+			init?.headers ?? (input instanceof Request ? input.headers : undefined);
+		const headers = new Headers(source);
 		headers.set("traceparent", newTraceparent());
 		return inner(input, { ...init, headers });
 	};

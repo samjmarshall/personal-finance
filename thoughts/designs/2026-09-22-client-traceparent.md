@@ -135,4 +135,4 @@ unknown, so the echo doubles as its test.
 ## Related ADRs
 
 - [adr018](../../docs/adr/adr018-client-originated-traceparent.md) — Mint the
-  trace id in the browser as a W3C `traceparent`; no OTel Web SDK. (Proposed)
+  trace id in the browser as a W3C `traceparent`; no OTel Web SDK. (Accepted)

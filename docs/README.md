@@ -52,7 +52,7 @@ The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `
 
 Everything is gated on `POSTHOG_KEY`: unset, nothing registers, the logger writes stdout only and exception capture is a no-op, so tests and keyless local runs need no key. Outbound `fetch` carries no `traceparent`/`baggage`, so no correlation id reaches Bedrock or Resend. See [adr015](adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md) and [adr016](adr/adr016-trace-context-in-outbox-payload.md).
 
-The browser mints a W3C `traceparent` per request on the two fetches it controls (the tRPC batch POST and better-auth), so the server span parents onto the client's trace and shares one `trace_id`. The tRPC route echoes it back as an `x-trace-id` response header — read it from the Network tab to search PostHog. See [adr018](adr/adr018-client-originated-traceparent.md).
+The browser mints a W3C `traceparent` per request on the two fetches it controls (the tRPC batch POST and better-auth), so the server span parents onto the client's trace and shares one `trace_id`. When telemetry is on (i.e. `POSTHOG_KEY` set, so a span is recording), the tRPC route echoes that id back as an `x-trace-id` response header — read it from the Network tab to search PostHog; keyless local runs record no span, so no header is sent. See [adr018](adr/adr018-client-originated-traceparent.md).
 
 ## Async platform (outbox + Inngest)
 
