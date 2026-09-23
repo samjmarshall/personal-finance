@@ -152,11 +152,10 @@ export const receiptRouter = createTRPCRouter({
 				.where(eq(receiptItems.receiptId, input.id))
 				.orderBy(asc(receiptItems.id));
 
-			const traceUrl = posthogTraceUrl({
-				uiHost: env.POSTHOG_UI_HOST,
-				projectId: env.POSTHOG_PROJECT_ID,
-				traceId: receipt.traceId,
-			});
+			const traceUrl = posthogTraceUrl(
+				{ uiHost: env.POSTHOG_UI_HOST, projectId: env.POSTHOG_PROJECT_ID },
+				receipt.traceId,
+			);
 
 			return { ...receipt, traceUrl, items };
 		}),
@@ -170,8 +169,15 @@ export const receiptRouter = createTRPCRouter({
 				const [row] = await tx
 					.update(receipts)
 					// Overwrite the stale id: the retry run continues under a new trace, so
-					// the deep-link must point at that run, not the failed original.
-					.set({ status: ReceiptStatus.Pending, traceId: currentTraceId() })
+					// the deep-link must point at that run, not the failed original. Clear the
+					// stale error too — it belongs to the prior run, and the diagnostics overlay
+					// (and its "Copy all as JSON") would otherwise show a dead failure message
+					// on the now-pending receipt.
+					.set({
+						status: ReceiptStatus.Pending,
+						traceId: currentTraceId(),
+						error: null,
+					})
 					.where(
 						and(
 							eq(receipts.id, input.id),

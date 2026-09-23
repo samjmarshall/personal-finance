@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { context, type Span, SpanStatusCode, trace } from "@opentelemetry/api";
+import { context, type Span, SpanStatusCode } from "@opentelemetry/api";
 import {
 	APICallError,
 	type FilePart,
@@ -14,20 +14,17 @@ import {
 	type ReceiptExtraction,
 	receiptExtractionDto,
 } from "~/domain/receipts";
-import { env } from "~/env";
 import { ReceiptStatus } from "~/lib/constants";
 import { bareMediaType, isPdf, isText } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
-import type { Logger } from "~/server/observability/logger";
+import type { LogAttributes, Logger } from "~/server/observability/logger";
+import { tracer } from "~/server/observability/tracer";
 import type {
 	ReceiptItemInsert,
 	ReceiptRow,
 	ReceiptsRepository,
 } from "./receipts.repository";
-
-// Ambient tracer, no-op until an SDK is registered (otel.ts).
-const tracer = trace.getTracer(env.PROJECT_NAME);
 
 // Terminal states: a re-delivered event (Inngest is at-least-once) for one of these
 // must return without a second AI call.
@@ -88,6 +85,18 @@ function memberFacingError(error: unknown): string {
 
 function sha256(bytes: Uint8Array): string {
 	return createHash("sha256").update(bytes).digest("hex");
+}
+
+// Attrs that bind a failure log/capture to this receipt + its channel, so the retry
+// warn, the terminal error and the captured exception all land on one trace.
+function failureAttrs(
+	receiptId: number,
+	receipt: ReceiptRow | undefined,
+): LogAttributes {
+	return {
+		[BaggageKey.ReceiptId]: String(receiptId),
+		"receipt.channel": receipt?.channel,
+	};
 }
 
 // Only the email Channel sends markup, so only it gets this. A photo upload has no
@@ -260,7 +269,6 @@ export class ReceiptsService {
 						await this.parkFailure(span, error, {
 							receipt,
 							receiptId,
-							receiptIdStr,
 							isFinalAttempt,
 						});
 					} finally {
@@ -279,15 +287,15 @@ export class ReceiptsService {
 		{
 			receipt,
 			receiptId,
-			receiptIdStr,
 			isFinalAttempt,
 		}: {
 			receipt: ReceiptRow | undefined;
 			receiptId: number;
-			receiptIdStr: string;
 			isFinalAttempt: boolean;
 		},
 	): Promise<void> {
+		const attrs = failureAttrs(receiptId, receipt);
+
 		// A retryable provider error (429/5xx/network) is worth another go with
 		// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
 		const retryable =
@@ -296,8 +304,7 @@ export class ReceiptsService {
 			span.setAttribute("receipt.outcome", ReceiptOutcome.Retry);
 			this.logger.warn("receipt extraction retrying", {
 				error,
-				[BaggageKey.ReceiptId]: receiptIdStr,
-				"receipt.channel": receipt?.channel,
+				...attrs,
 				"receipt.is_final_attempt": isFinalAttempt,
 			});
 			throw error;
@@ -308,8 +315,7 @@ export class ReceiptsService {
 		this.logger.error("receipt extraction failed", {
 			error,
 			"event.name": "receipt.failed",
-			[BaggageKey.ReceiptId]: receiptIdStr,
-			"receipt.channel": receipt?.channel,
+			...attrs,
 			"receipt.is_final_attempt": isFinalAttempt,
 			"receipt.reason": reason,
 		});
@@ -318,8 +324,7 @@ export class ReceiptsService {
 		// issue to this trace and member.
 		await this.repository.markFailed(receiptId, reason);
 		this.errorReporter.captureException(error, {
-			[BaggageKey.ReceiptId]: receiptIdStr,
-			"receipt.channel": receipt?.channel,
+			...attrs,
 			[BaggageKey.MemberId]: receipt?.userId,
 			"receipt.reason": reason,
 		});

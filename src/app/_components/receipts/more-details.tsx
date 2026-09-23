@@ -10,7 +10,7 @@ import {
 	ExternalLink,
 	Loader2,
 } from "lucide-react";
-import { type KeyboardEvent, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 
 import {
 	type ReceiptDetail,
@@ -18,100 +18,7 @@ import {
 	type StageState,
 } from "~/domain/receipts";
 import { cn } from "~/lib/utils";
-
-// ---------------------------------------------------------------------------
-// Display helpers
-// ---------------------------------------------------------------------------
-
-function fmtIso(d: Date | string | null | undefined): string {
-	if (!d) return "—";
-	const t = new Date(d);
-	return Number.isNaN(t.getTime()) ? "—" : t.toISOString();
-}
-
-// Wall-clock createdAt→updatedAt; null when the receipt hasn't been updated yet
-// or the clocks disagree (negative), so callers render "—" rather than a lie.
-function processingMs(data: ReceiptDetail): number | null {
-	if (!data.updatedAt) return null;
-	const ms =
-		new Date(data.updatedAt).getTime() - new Date(data.createdAt).getTime();
-	return ms >= 0 ? ms : null;
-}
-
-function fmtMs(ms: number | null): string {
-	if (ms == null) return "—";
-	return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-}
-
-function metaRows(
-	data: ReceiptDetail,
-	traceId: string | null,
-): Array<[string, string]> {
-	return [
-		["Trace ID", traceId ?? "—"],
-		["Receipt ID", `#${data.id}`],
-		["Status", data.status],
-		["Channel", data.channel],
-		["Content type", data.contentType ?? "—"],
-		["Content hash", data.contentHash ?? "—"],
-		["Blob pathname", data.blobPathname],
-		[
-			"Transaction ID",
-			data.transactionId != null ? `#${data.transactionId}` : "—",
-		],
-		[
-			"Duplicate of",
-			data.duplicateOfId != null ? `#${data.duplicateOfId}` : "—",
-		],
-		["Items extracted", String(data.items.length)],
-		["Created", fmtIso(data.createdAt)],
-		["Updated", fmtIso(data.updatedAt)],
-		["Processing time", fmtMs(processingMs(data))],
-	];
-}
-
-function diagnosticsJson(data: ReceiptDetail, traceId: string | null): string {
-	return JSON.stringify(
-		{
-			traceId,
-			receiptId: data.id,
-			status: data.status,
-			channel: data.channel,
-			contentType: data.contentType,
-			contentHash: data.contentHash,
-			blobPathname: data.blobPathname,
-			transactionId: data.transactionId,
-			duplicateOfId: data.duplicateOfId,
-			createdAt: data.createdAt,
-			updatedAt: data.updatedAt,
-			error: data.error,
-			vendor: data.vendor,
-			total: data.total,
-			currency: data.currency,
-			receiptDate: data.receiptDate,
-			itemCount: data.items.length,
-			rawExtraction: data.rawJson,
-		},
-		null,
-		2,
-	);
-}
-
-function rawJsonText(data: ReceiptDetail): string {
-	if (data.rawJson == null)
-		return "// no raw extraction stored for this receipt";
-	return JSON.stringify(data.rawJson, null, 2);
-}
-
-function useCopy() {
-	const [copiedKey, setCopiedKey] = useState<string | null>(null);
-	function copy(text: string, key: string) {
-		void navigator.clipboard?.writeText(text);
-		setCopiedKey(key);
-		setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1200);
-	}
-	return { copiedKey, copy };
-}
+import { diagnosticsJson, metaRows, rawJsonText } from "./more-details.display";
 
 // ---------------------------------------------------------------------------
 // Pieces
@@ -216,7 +123,6 @@ function StageIcon({ state }: { state: StageState }) {
 	);
 }
 
-// The vertical ingest stepper, driven by the pure status→stages derivation.
 function Timeline({ data }: { data: ReceiptDetail }) {
 	const stages = receiptPipeline(data);
 	return (
@@ -236,7 +142,7 @@ function Timeline({ data }: { data: ReceiptDetail }) {
 								<span className="font-medium text-foreground text-sm">
 									{s.label}
 								</span>
-								{s.at !== "—" && (
+								{s.at != null && (
 									<span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
 										{s.at}
 									</span>
@@ -261,7 +167,7 @@ function Timeline({ data }: { data: ReceiptDetail }) {
 }
 
 // ---------------------------------------------------------------------------
-// Developer details section
+// Extraction pipeline details section
 // ---------------------------------------------------------------------------
 
 type Tab = "timeline" | "raw" | "meta";
@@ -272,20 +178,63 @@ const TABS: Array<[Tab, string]> = [
 ];
 
 export function MoreDetails({ data }: { data: ReceiptDetail }) {
-	const { copiedKey, copy } = useCopy();
+	// Copy-to-clipboard state is modal-local, so it lives here and is passed down as
+	// explicit props — never a custom hook or context (adr001/frontend.md).
+	const [copiedKey, setCopiedKey] = useState<string | null>(null);
+	// Hold the reset timer so it can be cleared: copy-then-close the overlay before
+	// the 1.2s elapses would otherwise fire setCopiedKey on an unmounted component.
+	const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
+		},
+		[],
+	);
+	function copy(text: string, key: string) {
+		// No clipboard API (insecure context / webview) or a denied write must not
+		// flash "Copied" — only claim success once the write actually resolves.
+		const clipboard = navigator.clipboard;
+		if (!clipboard) return;
+		void clipboard.writeText(text).then(
+			() => {
+				setCopiedKey(key);
+				if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
+				copyResetTimer.current = setTimeout(
+					() => setCopiedKey((k) => (k === key ? null : k)),
+					1200,
+				);
+			},
+			(error: unknown) => {
+				// A denied/failed write must not crash or throw a user-facing error, but it
+				// must not be black-holed either — the backend captures every swallowed
+				// failure at its choke points (adr015), and the client should be no different.
+				// TODO: capture this once client-side PostHog error tracking lands (backend-only
+				// today). Until then the button just stays idle.
+				void error;
+			},
+		);
+	}
 	const [tab, setTab] = useState<Tab>("timeline");
 	const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 	const rows = metaRows(data, data.traceId);
 
-	// Roving-tabindex arrow/Home/End movement per the WAI-ARIA tabs pattern —
-	// hand-rolled because the app has no shared Tabs primitive.
+	// Unique per instance so two open overlays never share ids (heading/panel/tab
+	// wiring must stay internally consistent). See settings-section.tsx.
+	const baseId = useId();
+	const headingId = `${baseId}-heading`;
+	const panelId = `${baseId}-panel`;
+	const tabId = (key: Tab) => `${baseId}-tab-${key}`;
+
+	// Roving-tabindex movement per the WAI-ARIA tabs pattern — hand-rolled because the
+	// app has no shared Tabs primitive. This tablist is horizontal, so only Left/Right
+	// (+ Home/End) move between tabs; Up/Down are left to the browser to scroll the page.
 	function onTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
 		const order = TABS.map(([k]) => k);
 		const i = order.indexOf(tab);
 		const to =
-			e.key === "ArrowRight" || e.key === "ArrowDown"
+			e.key === "ArrowRight"
 				? order[(i + 1) % order.length]
-				: e.key === "ArrowLeft" || e.key === "ArrowUp"
+				: e.key === "ArrowLeft"
 					? order[(i - 1 + order.length) % order.length]
 					: e.key === "Home"
 						? order[0]
@@ -300,16 +249,13 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 
 	return (
 		<section
-			aria-labelledby="dev-details-heading"
+			aria-labelledby={headingId}
 			className="mt-1 rounded-lg border border-border bg-muted/10"
 		>
 			<header className="flex items-center gap-2 border-border border-b px-3 py-2">
 				<Braces aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
-				<span
-					className="font-medium text-foreground text-xs"
-					id="dev-details-heading"
-				>
-					Developer details
+				<span className="font-medium text-foreground text-xs" id={headingId}>
+					Extraction pipeline details
 				</span>
 			</header>
 			<div className="p-3">
@@ -322,22 +268,22 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 					/>
 
 					<div
-						aria-label="Developer details views"
+						aria-label="Extraction pipeline details views"
 						className="flex gap-1 border-border border-b"
 						onKeyDown={onTabKeyDown}
 						role="tablist"
 					>
 						{TABS.map(([key, label]) => (
 							<button
-								aria-controls="dev-details-panel"
+								aria-controls={panelId}
 								aria-selected={tab === key}
 								className={cn(
-									"-mb-px rounded-sm border-b-2 px-2.5 py-1.5 font-medium text-xs outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
+									"-mb-px border-b-2 px-2.5 py-1.5 font-medium text-xs outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
 									tab === key
 										? "border-foreground text-foreground"
 										: "border-transparent text-muted-foreground hover:text-foreground",
 								)}
-								id={`dev-details-tab-${key}`}
+								id={tabId(key)}
 								key={key}
 								onClick={() => setTab(key)}
 								ref={(el) => {
@@ -353,9 +299,9 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 					</div>
 
 					<div
-						aria-labelledby={`dev-details-tab-${tab}`}
-						className="rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-						id="dev-details-panel"
+						aria-labelledby={tabId(tab)}
+						className="flex min-h-96 flex-col rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+						id={panelId}
 						role="tabpanel"
 						// biome-ignore lint/a11y/noNoninteractiveTabindex: WAI-ARIA APG — a tabpanel is made focusable so the Timeline panel (which has no focusable content) stays keyboard-reachable
 						tabIndex={0}
@@ -363,8 +309,11 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 						{tab === "timeline" && <Timeline data={data} />}
 
 						{tab === "raw" && (
-							<div className="flex flex-col gap-2">
-								<div className="flex justify-end">
+							<div className="flex flex-1 flex-col">
+								<pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-2 py-2 font-mono text-[11px] text-foreground">
+									{rawJsonText(data)}
+								</pre>
+								<div className="mt-auto flex justify-end">
 									<CopyButton
 										copiedKey={copiedKey}
 										copyKey="raw"
@@ -373,14 +322,11 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 										value={rawJsonText(data)}
 									/>
 								</div>
-								<pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-2 py-2 font-mono text-[11px] text-foreground">
-									{rawJsonText(data)}
-								</pre>
 							</div>
 						)}
 
 						{tab === "meta" && (
-							<div className="flex flex-col gap-2">
+							<div className="flex flex-1 flex-col gap-2">
 								<table className="w-full border-collapse font-mono text-xs">
 									<tbody className="divide-y divide-border">
 										{rows.map(([k, v]) => (
@@ -396,7 +342,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 										))}
 									</tbody>
 								</table>
-								<div className="flex justify-end">
+								<div className="mt-auto flex justify-end">
 									<CopyButton
 										copiedKey={copiedKey}
 										copyKey="all"

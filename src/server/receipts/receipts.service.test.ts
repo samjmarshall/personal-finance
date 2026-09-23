@@ -152,8 +152,7 @@ function harness(
 			throw new Error("unused");
 		}),
 	};
-	// Object-literal fakes against the interfaces — each call recorded; `with` returns
-	// itself (the service never re-binds; the module root does that once).
+	// `with` returns itself: the service never re-binds; the composition root does that once.
 	const logs: LogEntry[] = [];
 	const logger: Logger = {
 		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),

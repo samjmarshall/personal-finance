@@ -19,7 +19,7 @@ import type { ReceiptExtraction } from "./receipt-extraction.dto";
 import { receiptExtractionDto } from "./receipt-extraction.dto";
 import { receiptImageUrl } from "./receipt-media";
 import type { Stage, StageState } from "./receipt-pipeline";
-import { receiptPipeline } from "./receipt-pipeline";
+import { isoOrNull, receiptPipeline } from "./receipt-pipeline";
 
 export type {
 	ExtractionCategory,
@@ -35,6 +35,7 @@ export type {
 	StageState,
 };
 export {
+	isoOrNull,
 	matchCandidates,
 	matchScanWindow,
 	receiptConfirmMatchDto,

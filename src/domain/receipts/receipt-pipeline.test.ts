@@ -103,4 +103,14 @@ describe("receiptPipeline", () => {
 		expect(stages[0]?.at).toBe(CREATED.toISOString());
 		expect(stages[1]?.at).toBe(UPDATED.toISOString());
 	});
+
+	it("does not stamp extraction with the match time once matched", () => {
+		// updatedAt is overwritten by the later match, so it no longer times extraction.
+		const stages = receiptPipeline(
+			receipt({ status: ReceiptStatus.Processed, transactionId: 99 }),
+		);
+		expect(stages[1]?.label).toBe("AI extraction");
+		expect(stages[1]?.at).toBeNull();
+		expect(stages[2]?.at).toBe(UPDATED.toISOString());
+	});
 });

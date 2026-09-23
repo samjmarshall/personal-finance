@@ -58,7 +58,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("receipt.retry", () => {
-	it("flips a failed receipt to pending, overwrites the trace id, and mints one receipt/retry event", async () => {
+	it("flips a failed receipt to pending, overwrites the trace id, clears the error, and mints one receipt/retry event", async () => {
 		// biome-ignore lint/suspicious/noExplicitAny: captured derived events.
 		let outboxEvents: any;
 		// biome-ignore lint/suspicious/noExplicitAny: captured set() payload.
@@ -74,6 +74,7 @@ describe("receipt.retry", () => {
 		expect(setValues).toEqual({
 			status: ReceiptStatus.Pending,
 			traceId: "trace-retry",
+			error: null,
 		});
 		expect(outboxEvents).toHaveLength(1);
 		expect(outboxEvents[0].name).toBe("receipt/retry");
