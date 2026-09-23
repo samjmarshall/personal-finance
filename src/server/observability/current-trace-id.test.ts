@@ -1,4 +1,4 @@
-import { context, trace } from "@opentelemetry/api";
+import { context, INVALID_SPAN_CONTEXT, trace } from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -26,5 +26,13 @@ describe("currentTraceId", () => {
 
 		expect(id).toBe(traceId);
 		expect(id).toMatch(/^[0-9a-f]{32}$/);
+	});
+
+	it("returns null for an all-zero (invalid) span context", () => {
+		const id = context.with(
+			trace.setSpanContext(context.active(), INVALID_SPAN_CONTEXT),
+			() => currentTraceId(),
+		);
+		expect(id).toBeNull();
 	});
 });

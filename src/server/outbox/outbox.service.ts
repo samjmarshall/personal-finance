@@ -1,18 +1,16 @@
-import { context, SpanStatusCode, trace } from "@opentelemetry/api";
+import { context, SpanStatusCode } from "@opentelemetry/api";
 import type { Inngest } from "inngest";
 
-import { env } from "~/env";
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import type { Logger } from "~/server/observability/logger";
+import { tracer } from "~/server/observability/tracer";
 
 import type {
 	OutboxEvents,
 	OutboxRepository,
 	OutboxWrites,
 } from "./outbox.repository";
-
-const tracer = trace.getTracer(env.PROJECT_NAME);
 
 // A row the sweep has already failed to deliver this many times is stuck — a
 // poison send or a consumer that never runs (adr002). Gate on attempts, not

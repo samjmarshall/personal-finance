@@ -6,7 +6,7 @@ import pkg from "../package.json" with { type: "json" };
  * Log severity levels (debug→error). Defined here as the single source: env.ts is
  * compiled by Next's config transpiler (next.config.ts imports it), which can't
  * resolve a deep `~`/TS import out of it — so env.ts imports nothing internal.
- * `log-level.ts` re-exports this as the public logging name.
+ * `logger.ts` re-exports this as the public logging name for logging code.
  */
 export enum LogLevel {
 	DEBUG = "debug",

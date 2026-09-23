@@ -1,13 +1,13 @@
-import { trace } from "@opentelemetry/api";
 import {
 	logs,
 	type Logger as OtelApiLogger,
 	SeverityNumber,
 } from "@opentelemetry/api-logs";
-import { env } from "~/env";
+import { env, LogLevel } from "~/env";
 import { readBaggage } from "./baggage";
-import { LogLevel } from "./log-level";
+import { currentSpanContext } from "./current-trace-id";
 
+// Re-exported so logging code depends on the logger, not env.ts, for the level name.
 export { LogLevel };
 
 /**
@@ -77,7 +77,7 @@ export class OtelLogger implements Logger {
 			// shipping a raw Error that serialises to {} and leaks into OTLP attributes.
 			const exception = error ?? err;
 
-			const spanCtx = trace.getActiveSpan()?.spanContext();
+			const spanCtx = currentSpanContext();
 			const spanAttrs: LogAttributes = spanCtx
 				? { trace_id: spanCtx.traceId, span_id: spanCtx.spanId }
 				: {};

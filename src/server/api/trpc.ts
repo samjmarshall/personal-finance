@@ -7,22 +7,21 @@
  * need to use are documented accordingly near the end.
  */
 
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { SpanStatusCode } from "@opentelemetry/api";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
 
-import { env } from "~/env";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { createRootLogger } from "~/server/observability/logger";
 import { captureException } from "~/server/observability/posthog";
+import { tracer } from "~/server/observability/tracer";
 
 // Composition root: builds its own logger + tracer. Middleware has no injection
 // point, so it takes the adr004 root exception route files also take.
 const logger = createRootLogger().with({ domain: "trpc" });
-const tracer = trace.getTracer(env.PROJECT_NAME);
 
 /**
  * 1. CONTEXT
@@ -155,7 +154,6 @@ const observabilityMiddleware = t.middleware(
 								}
 							}
 						} catch (error) {
-							// Ensure that observability failures do not crash the application
 							console.error("observability_failed", {
 								"trpc.path": path,
 								result,

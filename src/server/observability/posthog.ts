@@ -1,7 +1,7 @@
-import { trace } from "@opentelemetry/api";
 import { PostHog } from "posthog-node";
 import { env } from "~/env";
 import { BaggageKey, readBaggage } from "./baggage";
+import { currentSpanContext } from "./current-trace-id";
 
 // undefined = not yet built; null = no key, a permanent no-op for this process.
 let client: PostHog | null | undefined;
@@ -28,7 +28,7 @@ export function captureException(
 
 	try {
 		const distinctId = readBaggage()[BaggageKey.MemberId] ?? "server";
-		const spanCtx = trace.getActiveSpan()?.spanContext();
+		const spanCtx = currentSpanContext();
 
 		posthog.captureException(error, distinctId, {
 			...(spanCtx

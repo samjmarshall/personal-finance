@@ -14,12 +14,9 @@ export async function register(): Promise<void> {
 	}
 }
 
-// Deps are dynamic-imported under the nodejs guard, never static: this file loads
-// in the edge runtime too, and posthog-node / the OTLP exporters are node-only —
-// a top-level import would drag them into the edge bundle and defeat register()'s
-// deferral. captureException + flushTelemetry are no-ops without POSTHOG_KEY, and
-// flushTelemetry self-bounds each sink to 5 s, so awaiting it per error is the
-// serverless flush-before-freeze choke point (adr015 §7, §8), not an open block.
+// Dynamic: this file loads in edge too, and posthog-node/OTLP exporters are
+// node-only — a static import crashes edge. Each sink self-bounds 5 s, so it's
+// safe to await per-error (the flush-before-freeze point, adr015 §7–8).
 export const onRequestError: Instrumentation.onRequestError = async (
 	error,
 	request,

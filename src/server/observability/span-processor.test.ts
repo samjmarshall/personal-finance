@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { context } from "@opentelemetry/api";
 import {
 	InMemorySpanExporter,
@@ -15,10 +14,6 @@ function makeMessages(parts: unknown[]) {
 
 function filePart(b64: string, mediaType = "image/jpeg") {
 	return { type: "file", data: b64, mediaType };
-}
-
-function textPart(text: string) {
-	return { type: "text", text };
 }
 
 const exporter = new InMemorySpanExporter();
@@ -75,10 +70,14 @@ describe("ContextSpanProcessor", () => {
 		});
 	});
 
-	describe("ai.prompt.messages redaction", () => {
-		it("does not redact file parts on a non-ai.* span", () => {
-			const b64 = Buffer.from("hello").toString("base64");
-			const messages = makeMessages([filePart(b64)]);
+	// Redaction correctness (every payload shape) lives in prompt-redaction.test.ts;
+	// here we prove only the processor's gate + delegation — off for non-ai.* spans,
+	// on for ai.* spans.
+	describe("prompt redaction (delegated)", () => {
+		it("does not redact prompt attributes on a non-ai.* span", () => {
+			const messages = makeMessages([
+				filePart(Buffer.from("hello").toString("base64")),
+			]);
 			const span = runSpan("outbox.deliver", context.active(), {
 				"ai.prompt.messages": messages,
 			});
@@ -86,171 +85,18 @@ describe("ContextSpanProcessor", () => {
 			expect(span?.attributes["ai.prompt.messages"]).toBe(messages);
 		});
 
-		it("redacts file parts on an ai.* span; text parts are unchanged", () => {
-			const bytes = Buffer.from("binary-image-content");
-			const b64 = bytes.toString("base64");
-			const sha = createHash("sha256").update(bytes).digest("hex");
+		it("redacts binary in the prompt attribute on an ai.* span", () => {
 			const messages = makeMessages([
-				filePart(b64, "image/jpeg"),
-				textPart("describe this"),
+				filePart(Buffer.from("binary-image-content").toString("base64")),
 			]);
-
 			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
 				"ai.prompt.messages": messages,
 			});
 
 			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
-			const parts: Array<{ type: string; data?: string; text?: string }> =
-				out[0].content;
-
-			// File part replaced with compact stub.
-			expect(parts[0]?.data).toBe(
-				`<redacted image/jpeg ${bytes.byteLength} sha256:${sha}>`,
+			expect(out[0].content[0].data as string).toMatch(
+				/^<redacted image\/jpeg /,
 			);
-			// Text part untouched.
-			expect(parts[1]?.text).toBe("describe this");
-		});
-
-		it("a 3 MB base64 file part reduces to a stub under 200 bytes", () => {
-			const bigBytes = Buffer.alloc(3 * 1024 * 1024, 0xab);
-			const b64 = bigBytes.toString("base64");
-			const messages = makeMessages([filePart(b64, "image/jpeg")]);
-
-			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
-				"ai.prompt.messages": messages,
-			});
-
-			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
-			const stub: string = out[0].content[0].data;
-
-			expect(stub.startsWith("<redacted")).toBe(true);
-			expect(Buffer.byteLength(stub, "utf8")).toBeLessThan(200);
-		});
-
-		it("handles image type parts as well as file type parts", () => {
-			const bytes = Buffer.from("raw-image");
-			const b64 = bytes.toString("base64");
-			const sha = createHash("sha256").update(bytes).digest("hex");
-			const messages = makeMessages([
-				{ type: "image", data: b64, mediaType: "image/png" },
-			]);
-
-			const span = runSpan("ai.generateText.doGenerate", context.active(), {
-				"ai.prompt.messages": messages,
-			});
-
-			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
-			expect(out[0].content[0].data).toBe(
-				`<redacted image/png ${bytes.byteLength} sha256:${sha}>`,
-			);
-		});
-
-		it("leaves unparsable ai.prompt.messages untouched", () => {
-			const bad = "not valid json {{{";
-			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
-				"ai.prompt.messages": bad,
-			});
-
-			expect(span?.attributes["ai.prompt.messages"]).toBe(bad);
-		});
-
-		it("leaves ai.prompt.messages untouched when mediaType is absent", () => {
-			const bytes = Buffer.from("data");
-			const b64 = bytes.toString("base64");
-			const sha = createHash("sha256").update(bytes).digest("hex");
-			// No mediaType field — falls back to application/octet-stream.
-			const messages = makeMessages([{ type: "file", data: b64 }]);
-
-			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
-				"ai.prompt.messages": messages,
-			});
-
-			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
-			expect(out[0].content[0].data).toBe(
-				`<redacted application/octet-stream ${bytes.byteLength} sha256:${sha}>`,
-			);
-		});
-	});
-
-	describe("binary redaction — real payload shapes", () => {
-		it("redacts an image part carrying raw Uint8Array bytes (receipts shape)", () => {
-			// receipts.service.ts emits { type: "image", image: <Uint8Array> }, which
-			// serializes to a numeric-keyed object — not a base64 string.
-			const bytes = new Uint8Array(Buffer.from("raw-receipt-jpeg-bytes"));
-			const sha = createHash("sha256").update(bytes).digest("hex");
-			const messages = makeMessages([
-				{ type: "image", image: bytes, mediaType: "image/jpeg" },
-			]);
-
-			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
-				"ai.prompt.messages": messages,
-			});
-
-			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
-			expect(out[0].content[0].image).toBe(
-				`<redacted image/jpeg ${bytes.byteLength} sha256:${sha}>`,
-			);
-		});
-
-		it("redacts a Node Buffer-shaped payload ({ type: 'Buffer', data })", () => {
-			const buf = Buffer.from("node-buffer-pdf-bytes");
-			const sha = createHash("sha256").update(buf).digest("hex");
-			const messages = makeMessages([
-				{ type: "file", data: buf, mediaType: "application/pdf" },
-			]);
-
-			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
-				"ai.prompt.messages": messages,
-			});
-
-			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
-			expect(out[0].content[0].data).toBe(
-				`<redacted application/pdf ${buf.byteLength} sha256:${sha}>`,
-			);
-		});
-
-		it("redacts binary in the outer ai.prompt attribute", () => {
-			// The generate* outer span wraps messages in { system, prompt, messages }
-			// under `ai.prompt` — a separate leak path from `ai.prompt.messages`.
-			const bytes = new Uint8Array(Buffer.from("outer-span-receipt-bytes"));
-			const sha = createHash("sha256").update(bytes).digest("hex");
-			const prompt = JSON.stringify({
-				system: "extract the receipt",
-				messages: [
-					{
-						role: "user",
-						content: [
-							{ type: "image", image: bytes, mediaType: "image/jpeg" },
-							textPart("extract"),
-						],
-					},
-				],
-			});
-
-			const span = runSpan("ai.generateObject", context.active(), {
-				"ai.prompt": prompt,
-			});
-
-			const out = JSON.parse(span?.attributes["ai.prompt"] as string);
-			expect(out.messages[0].content[0].image).toBe(
-				`<redacted image/jpeg ${bytes.byteLength} sha256:${sha}>`,
-			);
-			expect(out.messages[0].content[1].text).toBe("extract");
-			expect(out.system).toBe("extract the receipt");
-		});
-
-		it("leaves an http reference URL untouched (not decoded as base64)", () => {
-			const url = "https://blob.example/receipt.jpg";
-			const messages = makeMessages([
-				{ type: "image", image: url, mediaType: "image/jpeg" },
-			]);
-
-			const span = runSpan("ai.generateObject.doGenerate", context.active(), {
-				"ai.prompt.messages": messages,
-			});
-
-			const out = JSON.parse(span?.attributes["ai.prompt.messages"] as string);
-			expect(out[0].content[0].image).toBe(url);
 		});
 	});
 

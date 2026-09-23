@@ -209,7 +209,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 			.getFinishedSpans()
 			.find((s) => s.name === "inngest.function.process-receipt");
 		expect(fnSpan).toBeDefined();
-		// A root span has no parent span context (parentSpanContext is the SDK property).
+		// A root span has no parent — the SDK leaves the parent field empty.
 		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
 		expect(fnSpan!.parentSpanContext).toBeUndefined();
 	});

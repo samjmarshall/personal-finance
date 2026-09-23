@@ -5,10 +5,10 @@ import {
 	trace,
 } from "@opentelemetry/api";
 import { Middleware } from "inngest";
-import { env } from "~/env";
 import { BaggageKey, setBaggage } from "./baggage";
 import { createRootLogger } from "./logger";
 import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
+import { tracer } from "./tracer";
 
 // Module-level roots — the BaseMiddleware ctor is fixed `({ client })`; no DI
 // seam exists, same exception adr004 makes for route files and onRequestError.
@@ -16,7 +16,6 @@ const logger = createRootLogger().with({
 	domain: "inngest",
 	component: "tracing",
 });
-const tracer = trace.getTracer(env.PROJECT_NAME);
 
 export class TracingMiddleware extends Middleware.BaseMiddleware {
 	readonly id = "tracing";

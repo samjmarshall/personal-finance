@@ -87,8 +87,7 @@ function harness(
 		},
 	};
 
-	// Object-literal fake against the interface — records each call; `with` returns
-	// itself (the service never re-binds; the module root does that once).
+	// `with` returns itself: the service never re-binds; the composition root does that once.
 	const logger: Logger = {
 		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
 		info: (msg, attrs = {}) => logs.push({ level: "info", msg, attrs }),

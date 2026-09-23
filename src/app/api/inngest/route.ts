@@ -15,15 +15,19 @@ const handlers = serve({ client: inngest, functions });
 
 // Drain telemetry after each response, before the lambda freezes (adr015 §8) — a
 // worker run's spans/logs would otherwise be lost when the invocation is frozen.
-export const GET = (req: NextRequest, ctx: unknown) => {
+// Direct-call helper (not a closure factory): each verb export delegates here.
+function flushThen(
+	handler: (req: NextRequest, ctx: unknown) => Promise<Response>,
+	req: NextRequest,
+	ctx: unknown,
+): Promise<Response> {
 	after(flushTelemetry);
-	return handlers.GET(req, ctx);
-};
-export const POST = (req: NextRequest, ctx: unknown) => {
-	after(flushTelemetry);
-	return handlers.POST(req, ctx);
-};
-export const PUT = (req: NextRequest, ctx: unknown) => {
-	after(flushTelemetry);
-	return handlers.PUT(req, ctx);
-};
+	return handler(req, ctx);
+}
+
+export const GET = (req: NextRequest, ctx: unknown) =>
+	flushThen(handlers.GET, req, ctx);
+export const POST = (req: NextRequest, ctx: unknown) =>
+	flushThen(handlers.POST, req, ctx);
+export const PUT = (req: NextRequest, ctx: unknown) =>
+	flushThen(handlers.PUT, req, ctx);

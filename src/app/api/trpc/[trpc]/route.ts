@@ -1,16 +1,16 @@
-import { trace } from "@opentelemetry/api";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { after, type NextRequest } from "next/server";
 
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
+import { currentTraceId } from "~/server/observability/current-trace-id";
 import { flushTelemetry } from "~/server/observability/flush";
 
 // Echo the active span's trace id so a developer reads it from the Network tab
 // and searches PostHog with no round-trip (adr018). The client's traceparent is
 // the trace root, so this id equals the one the browser sent.
 export function traceIdResponseMeta(): { headers?: Record<string, string> } {
-	const traceId = trace.getActiveSpan()?.spanContext().traceId;
+	const traceId = currentTraceId();
 	return traceId ? { headers: { "x-trace-id": traceId } } : {};
 }
 

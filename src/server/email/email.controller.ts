@@ -1,13 +1,10 @@
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { SpanStatusCode } from "@opentelemetry/api";
 import type { Resend } from "resend";
 
-import { env } from "~/env";
 import type { Logger } from "~/server/observability/logger";
+import { tracer } from "~/server/observability/tracer";
 import { inboundEmailEventSchema } from "./email.dto";
 import type { EmailService } from "./email.service";
-
-// Ambient tracer, no-op until an SDK is registered (otel.ts).
-const tracer = trace.getTracer(env.PROJECT_NAME);
 
 interface EmailControllerDeps {
 	resend: Pick<Resend, "webhooks">;
