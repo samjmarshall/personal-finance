@@ -30,6 +30,7 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | `RESEND_INBOUND_ADDRESS` | optional | The address members forward receipts to. Display-only, shown on `/settings`; nothing routes on it. |
 | `POSTHOG_KEY` | optional | PostHog project token (`phc_…`) for the Rekurve project. Unset: OTel registration is skipped, the logger writes stdout only and exception capture is a no-op. A personal `phx_` key fails validation on purpose. |
 | `POSTHOG_HOST` | optional | PostHog ingestion endpoint, default `https://us.i.posthog.com`. |
+| `POSTHOG_UI_HOST` | optional | PostHog **UI** host (distinct from the ingest endpoint above), default `https://us.posthog.com`. Sole source of the receipt "Open trace" deep-link; with `POSTHOG_PROJECT_ID` it builds `…/project/<id>/tracing?trace=<traceId>`. |
 | `LOG_LEVEL` | optional | Minimum severity the logger emits (`debug`/`info`/`warn`/`error`), default `info`. |
 | `BEDROCK_INPUT_TOKEN_PRICE_USD` | optional | Per-token input price stamped onto `ai.*` spans so PostHog can compute AI cost. Leave unset while PostHog reports cost natively. |
 | `BEDROCK_OUTPUT_TOKEN_PRICE_USD` | optional | Per-token output price, as above. |
