@@ -1,0 +1,1 @@
+ALTER TABLE "receipt" ADD COLUMN "traceId" text;

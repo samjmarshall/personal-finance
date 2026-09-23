@@ -113,6 +113,10 @@ export const env = createEnv({
 		 */
 		POSTHOG_KEY: z.string().startsWith("phc_").optional(),
 		POSTHOG_HOST: z.url().default("https://us.i.posthog.com"),
+		// PostHog UI host for the trace-viewer deep-link — distinct from POSTHOG_HOST,
+		// which is the ingest endpoint (`us.i.` swallows browser navigations).
+		POSTHOG_UI_HOST: z.url().default("https://us.posthog.com"),
+		POSTHOG_PROJECT_ID: z.string().optional(),
 		LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),
 		/**
 		 * Bedrock token prices for cost stamping on AI spans (Decision 11 — unset
@@ -156,6 +160,8 @@ export const env = createEnv({
 		PROJECT_NAME: pkg.name,
 		POSTHOG_KEY: process.env.POSTHOG_KEY,
 		POSTHOG_HOST: process.env.POSTHOG_HOST,
+		POSTHOG_UI_HOST: process.env.POSTHOG_UI_HOST,
+		POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
 		LOG_LEVEL: process.env.LOG_LEVEL,
 		BEDROCK_INPUT_TOKEN_PRICE_USD: process.env.BEDROCK_INPUT_TOKEN_PRICE_USD,
 		BEDROCK_OUTPUT_TOKEN_PRICE_USD: process.env.BEDROCK_OUTPUT_TOKEN_PRICE_USD,

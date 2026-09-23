@@ -117,12 +117,16 @@ function harness({
 	attachments?: AttachmentDownload[];
 	email?: EmailBody;
 } = {}) {
-	const created: { userId: string; blobs: StoredBlob[] }[] = [];
+	const created: {
+		userId: string;
+		blobs: StoredBlob[];
+		traceId: string | null;
+	}[] = [];
 
 	const repository: EmailRepository = {
 		findAllowedSender: async () => allowlist[0],
-		createPendingReceipts: async (userId, blobs) => {
-			created.push({ userId, blobs });
+		createPendingReceipts: async (userId, blobs, traceId) => {
+			created.push({ userId, blobs, traceId });
 			return blobs.map((_, i) => i + 1);
 		},
 	};
@@ -230,6 +234,8 @@ describe("EmailService.ingest", () => {
 		expect(h.created).toEqual([
 			{
 				userId: SENDER_USER_ID,
+				// No span active in this test, so the persisted id is null.
+				traceId: null,
 				blobs: [
 					{
 						blobUrl: expect.stringContaining("receipts/email/"),
@@ -378,6 +384,9 @@ describe("EmailService.ingest", () => {
 			.getFinishedSpans()
 			.find((s) => s.name === "email.inbound");
 		expect(recorded?.attributes["receipt.ids"]).toEqual([1]);
+		// The mint runs under email.inbound, so the persisted trace id is that span's —
+		// the id the process-receipt worker continues (adr016).
+		expect(h.created[0]?.traceId).toBe(span.spanContext().traceId);
 	});
 
 	// html carries the line-item table; text is the flattened fallback the sender's

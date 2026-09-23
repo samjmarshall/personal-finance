@@ -41,6 +41,9 @@ export const receipts = pgTable(
 		currency: d.text(),
 		rawJson: d.jsonb(),
 		error: d.text(),
+		// The ingest trace id (adr016/adr018) behind the PostHog deep-link; null when
+		// OTel is unregistered. No index — only ever read by receipt id.
+		traceId: d.text(),
 		transactionId: d
 			.integer()
 			.references(() => transactions.id, { onDelete: "set null" }),

@@ -11,7 +11,6 @@ import {
 	lt,
 } from "drizzle-orm";
 import { z } from "zod";
-
 import {
 	type MatchCandidate,
 	matchCandidates,
@@ -26,7 +25,9 @@ import {
 	receiptItemExpenseDto,
 	receiptMatchDto,
 } from "~/domain/receipts";
+import { env } from "~/env";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import { posthogTraceUrl } from "~/lib/posthog-trace-url";
 import { assertRow } from "~/server/api/lib/assert-row";
 import { isPgViolation, PgViolation } from "~/server/api/lib/parse-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -34,6 +35,7 @@ import { user } from "~/server/auth/auth.schema";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { buildOutboxEvent } from "~/server/inngest/events";
+import { currentTraceId } from "~/server/observability/current-trace-id";
 import { commitWithOutbox } from "~/server/outbox";
 import { receiptItems, receipts } from "~/server/receipts/receipts.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
@@ -73,6 +75,7 @@ export const receiptRouter = createTRPCRouter({
 							blobUrl: input.blobUrl,
 							blobPathname: input.blobPathname,
 							contentType: input.contentType,
+							traceId: currentTraceId(),
 						})
 						.returning();
 					return assertRow(row, "create receipt");
@@ -149,7 +152,13 @@ export const receiptRouter = createTRPCRouter({
 				.where(eq(receiptItems.receiptId, input.id))
 				.orderBy(asc(receiptItems.id));
 
-			return { ...receipt, items };
+			const traceUrl = posthogTraceUrl({
+				uiHost: env.POSTHOG_UI_HOST,
+				projectId: env.POSTHOG_PROJECT_ID,
+				traceId: receipt.traceId,
+			});
+
+			return { ...receipt, traceUrl, items };
 		}),
 
 	// Re-run a stuck extraction. The conditional update (id AND status=failed) is
@@ -160,7 +169,9 @@ export const receiptRouter = createTRPCRouter({
 			async (tx) => {
 				const [row] = await tx
 					.update(receipts)
-					.set({ status: ReceiptStatus.Pending })
+					// Overwrite the stale id: the retry run continues under a new trace, so
+					// the deep-link must point at that run, not the failed original.
+					.set({ status: ReceiptStatus.Pending, traceId: currentTraceId() })
 					.where(
 						and(
 							eq(receipts.id, input.id),

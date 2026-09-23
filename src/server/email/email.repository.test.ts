@@ -108,11 +108,11 @@ describe("DrizzleEmailRepository", () => {
 			},
 		];
 
-		it("mints one pending email-channel row per blob, returning ids in order", async () => {
+		it("mints one pending email-channel row per blob, stamping the trace id, returning ids in order", async () => {
 			const h = harness();
 
 			await expect(
-				h.repository.createPendingReceipts("u1", blobs),
+				h.repository.createPendingReceipts("u1", blobs, "trace-email"),
 			).resolves.toEqual([1, 2]);
 
 			expect(h.inserts).toHaveLength(1);
@@ -122,12 +122,14 @@ describe("DrizzleEmailRepository", () => {
 					userId: "u1",
 					status: ReceiptStatus.Pending,
 					channel: ReceiptChannel.Email,
+					traceId: "trace-email",
 					...blobs[0],
 				},
 				{
 					userId: "u1",
 					status: ReceiptStatus.Pending,
 					channel: ReceiptChannel.Email,
+					traceId: "trace-email",
 					...blobs[1],
 				},
 			]);
@@ -138,7 +140,7 @@ describe("DrizzleEmailRepository", () => {
 		it("rides exactly one receipt/email.received per row on the same commit", async () => {
 			const h = harness();
 
-			await h.repository.createPendingReceipts("u1", blobs);
+			await h.repository.createPendingReceipts("u1", blobs, null);
 
 			expect(h.commits()).toBe(1);
 			expect(h.emitted()).toEqual([

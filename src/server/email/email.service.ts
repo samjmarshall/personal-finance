@@ -2,6 +2,7 @@ import { context, trace } from "@opentelemetry/api";
 
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
+import { currentTraceId } from "~/server/observability/current-trace-id";
 import type { Logger } from "~/server/observability/logger";
 import type { InboundAttachmentMeta, InboundEmailEvent } from "./email.dto";
 import type { InboundMailbox } from "./email.mailbox";
@@ -140,6 +141,7 @@ export class EmailService {
 				const receiptIds = await this.repository.createPendingReceipts(
 					sender.userId,
 					stored,
+					currentTraceId(),
 				);
 				this.logger.info("inbound email ingested", {
 					"email.id": event.data.email_id,
