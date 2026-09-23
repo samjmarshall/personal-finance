@@ -107,7 +107,7 @@ export const env = createEnv({
 		 */
 		PROJECT_NAME: z.string().min(1),
 		/**
-		 * PostHog project token for the Rekurve project. Must start with `phc_`; a
+		 * PostHog project token for the project. Must start with `phc_`; a
 		 * personal `phx_` key intentionally fails. Unset: OTel registration skipped,
 		 * logger writes stdout only, captureException is a no-op.
 		 */
