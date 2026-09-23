@@ -103,8 +103,10 @@ _Avoid_: source
   a one-time one carries a single amount and an expected date
 - A **Transaction** may link to at most one **Expense**; a Spend **Transaction** with no link
   is **Unplanned**
-- A **Receipt** belongs to one **Member** and matches at most one **Transaction**; a
-  **Transaction** has at most one **Receipt**
+- A **Receipt** is attributed to at most one **Member** and matches at most one
+  **Transaction**; a **Transaction** has at most one **Receipt**. The **Household**
+  owns the Receipt; Member attribution is optional and detaches (to none) if that
+  Member is removed, because a Receipt is kept as tax evidence.
 
 ## Example dialogue
 
@@ -157,6 +159,12 @@ _Avoid_: source
 - **Household** is domain language today, not a boundary in the data — the records are
   unscoped, and household scoping is planned. Resolved: use the term freely in conversation;
   do not assume it is enforced.
+- **Receipt ownership vs attribution** — the glossary said both "attributed to a Member"
+  (Records) and "belongs to one Member" (Relationships), which disagree. The schema settles
+  it: `receipt.userId` is nullable and detaches (`on delete set null`) so a Receipt outlives
+  the Member as tax evidence. Resolved: the **Household owns** every Receipt (mandatory); a
+  Receipt is **attributed to at most one Member** (optional, soft). "belongs to one Member"
+  was too strong.
 - **"user" / "person"** arrive with the analytics and auth tooling (PostHog shows "persons",
   better-auth's table is `user`) and both mean **Member**. Resolved: activity, errors and AI
   spend are attributed to a **Member**, and to the **Household** once scoping exists;
