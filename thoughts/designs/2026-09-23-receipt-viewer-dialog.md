@@ -226,17 +226,6 @@ caveat as the Stage-6 Phase-4 validation).
   `requireReceiptAccess` helper (behavior unchanged).
 - **Unchanged** `src/lib/utils.ts` — `isPdf` / `isText` already exist.
 
-## ADR Candidates
-
-Run `/domain-model thoughts/designs/2026-09-23-receipt-viewer-dialog.md` to capture
-these as Proposed ADRs.
-
-- **Receipt reads are authenticated but not owner-scoped until households exist.**
-  Decision summary: one shared `requireReceiptAccess` gate checks only for a
-  session; per-household scoping is an explicit, marked TODO. Passes the gate: it is
-  a deliberate, security-relevant scoping decision that a future household boundary
-  must revisit in one known place.
-
 ## Related ADRs
 
 - [adr019 — Render untrusted e-receipt HTML in a sandboxed iframe over a dedicated CSP-locked route](../../docs/adr/adr019-sandboxed-iframe-for-e-receipt-html.md)
