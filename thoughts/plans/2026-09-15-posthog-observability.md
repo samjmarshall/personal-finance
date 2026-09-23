@@ -373,6 +373,12 @@ Our-side links are already unit-tested (`outbox.repository.test.ts:117` PK→row
 
 **What to build.** In the adr015 boot (`src/server/observability/otel.ts`), drop spans named `inngest.execution` — a name-filtering span processor (skip export on match) or a custom `Sampler` that returns `NOT_RECORD` for that name (mind the `parentbased` composition). Then live-verify in PostHog that the orphan root is gone and our function span sits under the producer. It's a sampler/processor change needing the live surface, so it's a follow-up, not part of the Phase 5 middleware.
 
+### F4: `AttrKey` registry for telemetry attribute names (name the bare strings)
+
+**Why.** `BaggageKey` names 5 attrs, but sibling telemetry keys stay bare strings scattered across 7+ files: `"event.name"` (×6), `"inngest.function_id"` (×3), `"inngest.event_name"`, `"receipt.channel"` (×2). Inconsistent, and a typo in one bare string silently drops it from a PostHog filter. `BaggageKey` stays deliberately narrow — only ids that **propagate + get scrubbed** for persistence (adr016), so span/log attrs must **not** merge into it.
+
+**What to build.** A telemetry-attr-name registry split by category — span/log attrs (`receipt.channel`, `inngest.function_id`, `inngest.event_name`), the adr015 §5 `event.name` mirror, and `BaggageKey` kept as the propagating subset. Migrate all producers off bare strings. Decide the taxonomy first — the three categories are semantically distinct, so one flat enum would blur them. Not a blocker; a dedicated change (Shotgun Surgery across producers if bundled into a feature diff).
+
 ---
 
 ## References

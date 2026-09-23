@@ -202,9 +202,12 @@ Recommended workflow:
 1. `/implement` - Execute the implementation
 2. `/commit` - Create atomic commits for changes
 3. `/validate` - Verify implementation correctness (runs `/code-review`, and `/security-review` when security-sensitive paths changed)
-4. `/document-feature {slug}` - Run for user-visible features (new route, flow, or integration). Take `{slug}` from the ticket title. Skip for infra, refactors, bug fixes, or test-only changes.
-5. `/domain-model` - Run when the plan adds or restructures a domain concept or entity boundary. Skip otherwise.
-6. `/pull-request` - Generate a PR. The CI "Claude Code Review" workflow then reviews the PR automatically; for a substantial change, optionally run `/code-review ultra` as a deep pre-merge gate (paid — see CLAUDE.md).
+4. `/resolve-findings` - Run when this validation report lists **Code Review Findings** or **Design smells (judgement calls)** that need addressing. Implements each fix one at a time and shows the applied diff, pausing on each for your keep / revise / revert decision. Skip when the report is clean.
+5. `/document-feature {slug}` - Run for user-visible features (new route, flow, or integration). Take `{slug}` from the ticket title. Skip for infra, refactors, bug fixes, or test-only changes.
+6. `/domain-model` - Run when the plan adds or restructures a domain concept or entity boundary. Skip otherwise.
+7. `/pull-request` - Generate a PR. The CI "Claude Code Review" workflow then reviews the PR automatically; for a substantial change, optionally run `/code-review ultra` as a deep pre-merge gate (paid — see CLAUDE.md).
+
+After generating a Validation Report whose `### Code Review Findings` or **Design smells (judgement calls)** section is non-empty, prompt the user to run `/resolve-findings` to work through them one at a time.
 
 The validation works best after commits are made, as it can analyze the git history to understand what was implemented.
 
