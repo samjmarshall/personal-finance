@@ -141,7 +141,7 @@ importers:
         specifier: 3.8.0
         version: 3.8.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-is@19.2.0)(react@19.2.8)(redux@5.0.1)
       resend:
-        specifier: ^6.26.0
+        specifier: 6.26.0
         version: 6.26.0
       server-only:
         specifier: 0.0.1
