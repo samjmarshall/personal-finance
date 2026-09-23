@@ -494,7 +494,7 @@ export function ReceiptDetail({
 										</p>
 									)}
 
-								{/* `error` is never cleared on retry/success; only a failed row's message is current. */}
+								{/* Show the error only on a failed row — retry clears it, a done row never has one. */}
 								{data.status === ReceiptStatus.Failed && data.error && (
 									<p
 										className="flex items-start gap-2 rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-xs"

@@ -170,6 +170,36 @@ function Timeline({ data }: { data: ReceiptDetail }) {
 // Extraction pipeline details section
 // ---------------------------------------------------------------------------
 
+// Raw extraction JSON + its copy button. Own component so the JSON is stringified
+// once per render, not once for the <pre> and again for the copy value.
+function RawPanel({
+	data,
+	copiedKey,
+	copy,
+}: {
+	data: ReceiptDetail;
+	copiedKey: string | null;
+	copy: (text: string, key: string) => void;
+}) {
+	const text = rawJsonText(data);
+	return (
+		<div className="flex flex-1 flex-col">
+			<pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-2 py-2 font-mono text-[11px] text-foreground">
+				{text}
+			</pre>
+			<div className="mt-auto flex justify-end">
+				<CopyButton
+					copiedKey={copiedKey}
+					copyKey="raw"
+					label="Copy JSON"
+					onCopy={copy}
+					value={text}
+				/>
+			</div>
+		</div>
+	);
+}
+
 type Tab = "timeline" | "raw" | "meta";
 const TABS: Array<[Tab, string]> = [
 	["timeline", "Timeline"],
@@ -309,20 +339,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 						{tab === "timeline" && <Timeline data={data} />}
 
 						{tab === "raw" && (
-							<div className="flex flex-1 flex-col">
-								<pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-2 py-2 font-mono text-[11px] text-foreground">
-									{rawJsonText(data)}
-								</pre>
-								<div className="mt-auto flex justify-end">
-									<CopyButton
-										copiedKey={copiedKey}
-										copyKey="raw"
-										label="Copy JSON"
-										onCopy={copy}
-										value={rawJsonText(data)}
-									/>
-								</div>
-							</div>
+							<RawPanel copiedKey={copiedKey} copy={copy} data={data} />
 						)}
 
 						{tab === "meta" && (
