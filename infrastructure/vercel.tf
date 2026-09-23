@@ -72,8 +72,8 @@ locals {
       value     = var.posthog_key
       sensitive = true
     }
-    POSTHOG_HOST = {
-      value     = "https://us.i.posthog.com"
+    POSTHOG_PROJECT_ID = {
+      value     = var.posthog_project_id
       sensitive = false
     }
   }

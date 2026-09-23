@@ -55,6 +55,7 @@ jobs:
       # non-secret and live in vars). The CLI vars are not needed here.
       VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       TF_VAR_posthog_key: ${{ secrets.POSTHOG_KEY }}
+      TF_VAR_posthog_project_id: ${{ vars.POSTHOG_PROJECT_ID }}
     outputs:
       app_url: ${{ steps.apply.outputs.app_url }}
     steps:

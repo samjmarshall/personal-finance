@@ -11,5 +11,11 @@ variable "environment" {
 variable "posthog_key" {
   type        = string
   sensitive   = true
-  description = "PostHog project token (phc_…) for the Rekurve project; same value for production and preview."
+  description = "PostHog project token (phc_…) for the project; same value for production and preview."
+}
+
+variable "posthog_project_id" {
+  type        = string
+  sensitive   = false
+  description = "PostHog project ID for the project; same value for production and preview."
 }
