@@ -18,6 +18,8 @@ import type {
 import type { ReceiptExtraction } from "./receipt-extraction.dto";
 import { receiptExtractionDto } from "./receipt-extraction.dto";
 import { receiptImageUrl } from "./receipt-media";
+import type { Stage, StageState } from "./receipt-pipeline";
+import { receiptPipeline } from "./receipt-pipeline";
 
 export type {
 	ExtractionCategory,
@@ -29,6 +31,8 @@ export type {
 	ReceiptItem,
 	ReceiptItemDetail,
 	ReceiptListItem,
+	Stage,
+	StageState,
 };
 export {
 	matchCandidates,
@@ -40,4 +44,5 @@ export {
 	receiptItemCategoryDto,
 	receiptItemExpenseDto,
 	receiptMatchDto,
+	receiptPipeline,
 };

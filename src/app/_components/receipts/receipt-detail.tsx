@@ -29,6 +29,7 @@ import { itemsTotalMismatch } from "~/domain/receipts/receipt-total";
 import { ReceiptStatus } from "~/lib/constants";
 import { formatCurrency, formatDate, isPdf, isText } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { MoreDetails } from "./more-details";
 
 type Candidate = RouterOutputs["receipt"]["matchCandidates"][number];
 
@@ -508,6 +509,8 @@ export function ReceiptDetail({
 								)}
 							</div>
 						</div>
+
+						<MoreDetails data={data} />
 					</div>
 				)}
 			</DialogContent>
