@@ -110,7 +110,7 @@ When a phase modifies UI components, pages, or styles in `src/`:
 
 ## Security-Sensitive Phases
 
-When a phase touches security-sensitive paths — `src/lib/**`, `src/env.js`, `next.config.ts`, `**/auth/**`, `**/*.env*` — run `/security-review` after completing that phase. This is the security analogue of the per-phase `/design-review`: catch injection, authn/authz, secret-exposure, and misconfiguration issues while the change is fresh, rather than waiting for `/validate` or CI. Fast `/code-review` is not run per-phase — it runs once over the whole branch in `/validate`.
+When a phase touches security-sensitive paths — `src/lib/**`, `src/env.ts`, `next.config.ts`, `**/auth/**`, `**/*.env*` — run `/security-review` after completing that phase. This is the security analogue of the per-phase `/design-review`: catch injection, authn/authz, secret-exposure, and misconfiguration issues while the change is fresh, rather than waiting for `/validate` or CI. Fast `/code-review` is not run per-phase — it runs once over the whole branch in `/validate`.
 
 ## Documentation
 

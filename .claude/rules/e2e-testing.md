@@ -65,7 +65,7 @@ to the existing `data-testid`, or add one to the source. This is a blocking gate
 
 ## Environment
 
-`src/env.js` validates at import via `@t3-oss/env-nextjs`. A standalone script that imports
+`src/env.ts` validates at import via `@t3-oss/env-nextjs`. A standalone script that imports
 anything reaching `~/env` must either call `dotenv.config()` first or run with
 `SKIP_ENV_VALIDATION=1`.
 
