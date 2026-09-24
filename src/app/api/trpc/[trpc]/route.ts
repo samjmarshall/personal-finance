@@ -3,15 +3,14 @@ import { after, type NextRequest } from "next/server";
 
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
-import { currentTraceId } from "~/server/observability/current-trace-id";
+import { traceIdHeaders } from "~/server/observability/current-trace-id";
 import { flushTelemetry } from "~/server/observability/flush";
 
-// Echo the active span's trace id so a developer reads it from the Network tab
-// and searches PostHog with no round-trip (adr018). The client's traceparent is
-// the trace root, so this id equals the one the browser sent.
-export function traceIdResponseMeta(): { headers?: Record<string, string> } {
-	const traceId = currentTraceId();
-	return traceId ? { headers: { "x-trace-id": traceId } } : {};
+// Echo the root span's trace id so a developer reads it from the Network tab
+// and searches PostHog with no round-trip (adr020). The server span is the root
+// — the browser sends no traceparent — so this is the id the whole tree shares.
+export function traceIdResponseMeta(): { headers: Record<string, string> } {
+	return { headers: traceIdHeaders() };
 }
 
 /**

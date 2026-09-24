@@ -33,12 +33,10 @@ describe("traceIdResponseMeta", () => {
 		);
 		span.end();
 
-		expect((meta.headers as Record<string, string>)["x-trace-id"]).toBe(
-			traceId,
-		);
+		expect(meta.headers["x-trace-id"]).toBe(traceId);
 	});
 
 	it("sets no x-trace-id when there is no active span", () => {
-		expect(traceIdResponseMeta().headers).toBeUndefined();
+		expect(traceIdResponseMeta().headers).toEqual({});
 	});
 });
