@@ -37,20 +37,12 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		next,
 	}: Middleware.WrapFunctionHandlerArgs): Promise<unknown> {
 		const data = ctx.event.data as Record<string, unknown> | undefined;
-		let parent = restoreTraceCarrier(data?.[TRACE_CARRIER_KEY]);
-
-		if (parent === null) {
-			// Cron/invoke runs (inngest/* events) never carry a _trace; warn only for
-			// event-triggered runs, where a missing carrier is a real bug.
-			if (!ctx.event.name.startsWith("inngest/")) {
-				logger.warn("trace carrier missing", {
-					"event.name": "trace.carrier.missing",
-					"inngest.function_id": fn.id(),
-					[BaggageKey.InngestRunId]: ctx.runId,
-				});
-			}
-			parent = ROOT_CONTEXT;
-		}
+		const restored = restoreTraceCarrier(data?.[TRACE_CARRIER_KEY]);
+		// Cron/invoke runs (inngest/* events) never carry a _trace; a missing carrier
+		// is a real bug only for event-triggered runs.
+		const carrierMissing =
+			restored === null && !ctx.event.name.startsWith("inngest/");
+		const parent = restored ?? ROOT_CONTEXT;
 
 		const parentSpanCtx = trace.getSpanContext(parent);
 
@@ -83,7 +75,18 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		const runCtx = trace.setSpan(enriched, span);
 
 		try {
-			return await context.with(runCtx, () => next());
+			return await context.with(runCtx, () => {
+				// Warn under our own span. The ambient one out here is Inngest's dropped
+				// `inngest.execution`, so its trace id would point at nothing exported.
+				if (carrierMissing) {
+					logger.warn("trace carrier missing", {
+						"event.name": "trace.carrier.missing",
+						"inngest.function_id": fn.id(),
+						[BaggageKey.InngestRunId]: ctx.runId,
+					});
+				}
+				return next();
+			});
 		} catch (err) {
 			span.recordException(err as Error);
 			span.setStatus({ code: SpanStatusCode.ERROR });

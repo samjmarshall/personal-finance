@@ -212,6 +212,17 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		// A root span has no parent — the SDK leaves the parent field empty.
 		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
 		expect(fnSpan!.parentSpanContext).toBeUndefined();
+		// The warn must sit on the exported function span, not on whatever span
+		// Inngest had active around the handler (dropped by the sampler).
+		// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
+		const warn = JSON.parse(warnLine!) as {
+			trace_id?: string;
+			span_id?: string;
+		};
+		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
+		expect(warn.trace_id).toBe(fnSpan!.spanContext().traceId);
+		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
+		expect(warn.span_id).toBe(fnSpan!.spanContext().spanId);
 	});
 
 	it("malformed _trace → same as missing: warn log, new root span", async () => {
