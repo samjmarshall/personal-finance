@@ -145,10 +145,14 @@ Vercel proxy preserves the inbound parent — confirmed manually on preview.
 
 ## References
 - Design doc: `thoughts/designs/2026-09-22-client-traceparent.md` (carries `## Related ADRs`)
-- ADRs: `docs/adr/adr018-client-originated-traceparent.md` (Proposed) —
-  implemented across Phases 1–4
-- Related: `src/server/observability/otel.ts:48,51` (propagator + sampler,
-  unchanged), `src/server/observability/posthog.ts:31` (active-span read pattern),
+- ADRs: `docs/adr/adr018-client-originated-traceparent.md` — Accepted 2026-09-22,
+  implemented across Phases 1–4; **Superseded by adr020 on 2026-09-24**: the
+  browser-minted parent was never exported, so every trace was rootless and hidden
+  from PostHog's trace lists. The server span is now the root; `traceparent.ts`,
+  `withTraceparent` and the tRPC `traceparent` header are removed; the `x-trace-id`
+  echo stays.
+- Related: `src/server/observability/otel.ts:53,57` (propagator; sampler, since
+  wrapped in `NameDropSampler` by the observability plan's F3), `src/server/observability/posthog.ts:31` (active-span read pattern),
   `src/app/api/receipts/inbound/route.test.ts` (route-test mocking pattern),
   `src/lib/period.test.ts` (lib-test style), adr015 (server-only stance this refines),
   adr016 (how the trace id crosses the outbox into Inngest)

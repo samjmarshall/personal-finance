@@ -1,7 +1,7 @@
 ---
 status: living
-last-updated: 2026-09-23
-related-adrs: [adr015, adr016, adr018]
+last-updated: 2026-09-24
+related-adrs: [adr015, adr016, adr020]
 related-design: none
 related-epic: none
 related-issues: []
@@ -34,9 +34,9 @@ related-prs: [#20]
 
 **Choice made**: capture the trace id at ingest and store it on the row, then build the PostHog link server-side from env + that id.
 **Rejected alternatives**: build the link in the browser — rejected, it needs a `NEXT_PUBLIC_` project id and leaks config client-side; env stays server-only. Recompute the id on read — impossible, the active span only exists during the ingest request.
-**Trade-offs**: `traceId` is nullable — null on keyless local runs (OTel unregistered) and on rows created before migration `0011`. `retry` overwrites the id with the new run's, dropping the prior run's trace id. The column has no index — the code reads it by receipt id, never queries by trace id.
+**Trade-offs**: `traceId` is nullable — null on keyless local runs (OTel unregistered) and on rows created before migration `0011`. `retry` overwrites the id with the new run's, dropping the prior run's trace id. The column has no index — the code reads it by receipt id, never queries by trace id. The stored id is the **ingest** trace (`receipt.create` → outbox → Inngest → Bedrock), labelled "Ingest trace ID" in the panel; the `POST /api/receipts/upload` request the Upload button fires first is a separate one-span trace (the Blob token mint) that this id does not name — see adr020.
 
-> [!NOTE] This feature builds on three observability ADRs owned elsewhere: adr015 (PostHog-over-OTel) and adr016 (trace context in outbox) are still **Proposed**; adr018 (client-originated traceparent) is **Accepted**. Their status transitions belong to the observability stack, not here.
+> [!NOTE] This feature builds on three observability ADRs owned elsewhere: adr015 (PostHog-over-OTel) is **In Progress** pending its preview spike; adr016 (trace context in outbox) and adr020 (server-rooted traces) are **Accepted**. adr018 (client-originated traceparent) is superseded by adr020. Their status transitions belong to the observability stack, not here.
 
 ### Operations
 
@@ -58,7 +58,7 @@ related-prs: [#20]
 - Ingest — receipt upload (`receipt.create`), retry (`receipt.retry`), inbound email (`email.service.ingest`): each captures `currentTraceId()` and stamps the row.
 - Read — the receipt detail view renders `<MoreDetails>`, which reads `traceId` + `traceUrl` off the `receipt.get` result.
 
-**Data path**: browser `traceparent` (adr018) → server span → `currentTraceId()` at ingest → `receipts.traceId` → `receipt.get` builds `traceUrl` from `POSTHOG_UI_HOST` + `POSTHOG_PROJECT_ID` → `MoreDetails` renders trace header + Timeline / Raw / Metadata.
+**Data path**: server root span (adr020; the browser sends no `traceparent`) → `currentTraceId()` at ingest → `receipts.traceId` → `receipt.get` builds `traceUrl` from `POSTHOG_UI_HOST` + `POSTHOG_PROJECT_ID` → `MoreDetails` renders trace header + Timeline / Raw / Metadata.
 
 ```mermaid
 sequenceDiagram
@@ -96,7 +96,7 @@ flowchart LR
 
 ## Links
 
-- ADRs: [adr015](../adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md), [adr016](../adr/adr016-trace-context-in-outbox-payload.md), [adr018](../adr/adr018-client-originated-traceparent.md)
+- ADRs: [adr015](../adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md), [adr016](../adr/adr016-trace-context-in-outbox-payload.md), [adr020](../adr/adr020-server-rooted-traces.md) (supersedes [adr018](../adr/adr018-client-originated-traceparent.md))
 - Related plans: [Receipt trace diagnostics](../../thoughts/plans/2026-09-23-receipt-trace-diagnostics.md)
 - Shipping PRs: [#20](https://github.com/samjmarshall/personal-finance/pull/20)
 

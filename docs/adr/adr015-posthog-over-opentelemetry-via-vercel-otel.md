@@ -153,7 +153,7 @@ The vendor's default Next.js path: wrap the `LanguageModel` with `withTracing(mo
 
 - Design: [2026-09-15 PostHog observability](../../thoughts/designs/2026-09-15-posthog-observability.md)
 - Refined by: [adr016](adr016-trace-context-in-outbox-payload.md) — how the trace id crosses the outbox into Inngest
-- Refined by: [adr018](adr018-client-originated-traceparent.md) — the browser originates the trace id as a W3C `traceparent`, no OTel Web SDK
+- Refined by: [adr020](adr020-server-rooted-traces.md) — the first server span is the trace root; the browser sends no `traceparent`, no OTel Web SDK (supersedes [adr018](adr018-client-originated-traceparent.md))
 - Closes: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) Links, "Runbook (TBD) … no observability backend yet"
 - Fits: [adr004](adr004-domain-oriented-3-tier-server-architecture.md) — `Logger` is a dep object with methods; fakes are object literals
 - Constrains: [adr014](adr014-bedrock-via-vercel-oidc.md) — the Bedrock provider uses `aws4fetch`, so PostHog's AWS SDK instrumentation path does not apply

@@ -1,7 +1,7 @@
 ---
-Status: 'Accepted'
+Status: 'Superseded by [ADR020](adr020-server-rooted-traces.md)'
 Deciders: 'Sam Marshall'
-Date: '2026-09-22'
+Date: '2026-09-24'
 # prettier-ignore
 ---
 
@@ -44,6 +44,7 @@ Alternatives weighed, and why not:
 
 ## Links
 
+- Superseded by: [adr020](adr020-server-rooted-traces.md) — the unexported browser parent left every trace rootless in PostHog; the server span is now the root and the id is read from the `x-trace-id` response header
 - Design: [2026-09-22 Client-originated traceparent](../../thoughts/designs/2026-09-22-client-traceparent.md)
 - Refines: [adr015](adr015-posthog-over-opentelemetry-via-vercel-otel.md) — extends its server-only stance to a client-originated trace root
 - Builds on: [adr016](adr016-trace-context-in-outbox-payload.md) — how the trace id crosses the outbox into Inngest

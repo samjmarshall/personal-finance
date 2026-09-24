@@ -1,7 +1,7 @@
 ---
-Status: 'In Progress'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-09-23'
+Date: '2026-09-24'
 # prettier-ignore
 ---
 
@@ -45,7 +45,7 @@ The posture, stated once:
 3. **Restore.** `tracingMiddleware.wrapFunctionHandler` reads `ctx.event.data._trace`, calls `propagation.extract(ROOT_CONTEXT, carrier)`, starts `inngest.function.<id>` as a child of the producer span with a link to that same span, sets Baggage `inngest.run_id` and `inngest.attempt`, and runs `next()` inside `context.with`. Each retry repeats this under the same trace id.
 4. **Not stripped.** The event is never rewritten. `event.data` is `any` in v4 with no `schemas` option; handlers pick fields by name (`event.data.receiptId`) and services never see `event.data`. The Inngest dashboard shows `_trace` exactly as sent, which doubles as a manual correlation path.
 5. **Missing pocket.** If `_trace` is absent or does not parse (an event sent by hand from the Inngest dashboard, a row written before this decision), the run starts a new root trace and logs `event.name=trace.carrier.missing` at `warn` (adr015: `eventName` on the record, mirrored as an attribute). It never fails the run.
-6. **Inngest's own root is dropped.** The sampler in adr015 drops spans named `inngest.execution`, so the timeline shows our function span under the producer, not an unrelated Inngest root.
+6. **Inngest's own root is dropped.** The adr015 boot samples through `NameDropSampler` (`src/server/observability/sampler.ts`), which returns `NOT_RECORD` for spans named `inngest.execution` in front of `parentbased_always_on`, so the timeline shows our function span under the producer, not an unrelated Inngest root.
 7. **Fan-in switch.** The first function that consumes N events starts a new trace per run and links to every carrier (option 3 semantics). No producer or wire change.
 
 Carrier locations rejected, one line each:
@@ -71,6 +71,9 @@ Carrier locations rejected, one line each:
 - Every producer is trusted. `propagation.extract` drops a malformed `traceparent` (empty context, new root), but a valid foreign one would join a stranger's trace. All producers are our own code today; an untrusted producer is the third switch signal.
 - `_trace` is visible to any future handler that spreads `event.data` into a write or hashes it for idempotency. Rule: handlers pick named fields, never spread `event.data`. Idempotency keys on the outbox row `id` (adr002), so nothing hashes `data` today.
 - Inngest's own trace view (`extendedTracesMiddleware`, dashboard traces) is not correlated with ours and stays a separate surface.
+- Inngest's server sends a `traceparent` header on each execution request, so Next's `POST /api/inngest` HTTP span parents onto Inngest's trace, not ours. Its parent is Inngest's remote span, never exported to us, so that HTTP span is a rootless orphan (it was before the `inngest.execution` drop too): hidden from PostHog's root-keyed trace lists, reachable by id only. Our `inngest.function.*` span is unaffected — it parents onto the pocket, not the HTTP span. Accepted; dropping the HTTP span too would lose request-level timing for every run.
+- Whether PostHog's Traces UI renders and navigates span links is unverified. Matters only when the option 3 switch happens.
+- Whether OTel context survives Inngest's `step.run` boundary without `wrapStep` is unverified. No handler uses steps today; check when the first one does, and add `wrapStep` with the same `context.with` if not.
 - A few hundred bytes per outbox row. Negligible.
 
 ## Pros and Cons of the Options
@@ -113,15 +116,11 @@ sequenceDiagram
 - Bad, because the stated goal, one trace id from email to Bedrock, is not met; correlation is by link, not id.
 - Bad, because it is premature: no fan-in function exists yet.
 
-## Open Questions
-
-- Does PostHog's Traces UI render span links and allow navigating them? Matters only when the option 3 switch happens.
-- Does OTel context survive Inngest's `step.run` boundary without `wrapStep`? No handler uses steps today; verify when the first one does, and add `wrapStep` with the same `context.with` if not.
-
 ## Links
 
 - Design: [2026-09-15 PostHog observability](../../thoughts/designs/2026-09-15-posthog-observability.md)
 - Refines: [adr015](adr015-posthog-over-opentelemetry-via-vercel-otel.md) — the transport this carrier feeds
+- Refined by: [adr020](adr020-server-rooted-traces.md) — the producer span this pocket captures is now the trace root
 - Extends: [adr002](adr002-canonical-postgres-store-transactional-outbox.md) — the pocket rides in the outbox row's `data`; clause 7's registry is unchanged
 - Fits: [adr004](adr004-domain-oriented-3-tier-server-architecture.md) — the middleware is bound once in `src/server/inngest/client.ts`; tiers are unaware
 - Standards: [W3C Trace Context](https://www.w3.org/TR/trace-context/), [W3C Baggage](https://www.w3.org/TR/baggage/), [CloudEvents Distributed Tracing extension](https://github.com/cloudevents/spec/blob/main/cloudevents/extensions/distributed-tracing.md) (envelope-level, for contrast), [OTel messaging conventions](https://opentelemetry.io/docs/specs/semconv/messaging/messaging-spans/) (mechanism unspecified)
