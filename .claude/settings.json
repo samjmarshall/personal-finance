@@ -15,7 +15,7 @@
 	"env": {
 		"ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
 		"ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-8",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
 		"CLAUDE_CODE_DISABLE_MOUSE": "1",
 		"CLAUDE_CODE_DISABLE_MOUSE_CLICKS": "1",
 		"CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
@@ -38,7 +38,7 @@
 			"CronList"
 		]
 	},
-	"disableWorkflows": true,
+	"disableWorkflows": false,
 	"disableRemoteControl": true,
 	"disableClaudeAiConnectors": true,
 	"disableArtifact": true,

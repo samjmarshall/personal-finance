@@ -1,6 +1,7 @@
 ---
 name: subagent-eval
 description: Empirically evaluate and optimise a Claude Code sub-agent via a blinded head-to-head against the production baseline, then pick its model on data. Use when tuning a sub-agent's prompt, choosing or re-checking its model (e.g. a new model release), proving an agent change before committing, or testing whether a specialist beats native Explore. To author a new agent first, read AUTHORING.md.
+effort: xhigh
 ---
 
 # Sub-agent eval & optimise

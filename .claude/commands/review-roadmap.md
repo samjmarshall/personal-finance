@@ -2,7 +2,7 @@
 description: Review, groom, and schedule GitHub Project issues for PMF alignment
 skills: roadmap-review
 model: opus
-effort: max
+effort: xhigh
 ---
 
 # Roadmap Review

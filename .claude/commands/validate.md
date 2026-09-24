@@ -1,6 +1,6 @@
 ---
-model: claude-opus-5
-effort: ultracode
+model: opus
+effort: xhigh
 ---
 # Validate Plan
 
