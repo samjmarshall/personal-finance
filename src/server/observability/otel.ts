@@ -6,7 +6,11 @@ import {
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import {
+	AlwaysOnSampler,
+	BatchSpanProcessor,
+	ParentBasedSampler,
+} from "@opentelemetry/sdk-trace-base";
 import { PostHogSpanProcessor } from "@posthog/ai/otel";
 import { registerOTel } from "@vercel/otel";
 import { registerTelemetry } from "ai";
@@ -15,6 +19,7 @@ import {
 	getRegisteredProcessors,
 	setRegisteredProcessors,
 } from "./otel-registry";
+import { DROPPED_SPAN_NAMES, NameDropSampler } from "./sampler";
 import { ContextSpanProcessor } from "./span-processor";
 
 /**
@@ -47,8 +52,12 @@ export function registerObservability(): void {
 		serviceName: env.PROJECT_NAME,
 		propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()],
 		// Records every root and honours a sampled parent — the outbox-continued
-		// traces need the async side to keep recording (Decision 14).
-		traceSampler: "parentbased_always_on",
+		// traces need the async side to keep recording (Decision 14). The name-drop
+		// in front keeps Inngest's own `inngest.execution` root out (adr016 §6).
+		traceSampler: new NameDropSampler({
+			inner: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
+			dropNames: DROPPED_SPAN_NAMES,
+		}),
 		spanProcessors: [
 			"auto",
 			new ContextSpanProcessor({
