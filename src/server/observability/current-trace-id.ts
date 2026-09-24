@@ -12,8 +12,15 @@ export function currentSpanContext(): SpanContext | null {
 	return ctx && isSpanContextValid(ctx) ? ctx : null;
 }
 
-// The ingest trace id to persist on a receipt (adr016/adr018). Null when OTel is
+// The ingest trace id to persist on a receipt (adr016/adr020). Null when OTel is
 // unregistered — e.g. POSTHOG_KEY unset locally — so callers store null, not "".
 export function currentTraceId(): string | null {
 	return currentSpanContext()?.traceId ?? null;
+}
+
+// Response header naming the active trace for the Network tab (adr020). Empty
+// when nothing records, so keyless local runs send no header.
+export function traceIdHeaders(): Record<string, string> {
+	const traceId = currentTraceId();
+	return traceId ? { "x-trace-id": traceId } : {};
 }

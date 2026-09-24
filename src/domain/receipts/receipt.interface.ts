@@ -16,7 +16,7 @@ export interface Receipt {
 	currency: string | null;
 	rawJson: unknown;
 	error: string | null;
-	// The ingest trace id (adr016/adr018); null when OTel unregistered at creation.
+	// The ingest trace id (adr016/adr020); null when OTel unregistered at creation.
 	traceId: string | null;
 	transactionId: number | null;
 	duplicateOfId: number | null;
