@@ -51,9 +51,10 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   while attempts remain and parks the row (`markFailed`) on the final or a
   deterministic one. `RETRIES` lives in the controller.
 - **Error capture choke points only.** Services and repositories never call
-  `captureException`. Exceptions are captured only at the three choke points:
-  `onRequestError` (`src/instrumentation.ts`), the tRPC `tracingMiddleware`, and
-  the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptsService` calls
+  `captureException`. Exceptions are captured only at the four choke points:
+  `onRequestError` (`src/instrumentation.ts`), the tRPC `observabilityMiddleware`,
+  the tRPC route's `onError` (context-build failures only, which never reach the
+  middleware), and the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptsService` calls
   `captureException` on the park path because `onRunError` only fires on throws —
   parked terminal failures never throw, so the domain tier owns that capture.
   Tiers log through their injected `logger.error`; spans `recordException`.
