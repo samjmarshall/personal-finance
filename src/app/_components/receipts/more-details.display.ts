@@ -28,7 +28,7 @@ export function metaRows(
 	traceId: string | null,
 ): Array<[string, string]> {
 	return [
-		["Trace ID", traceId ?? "—"],
+		["Ingest trace ID", traceId ?? "—"],
 		["Receipt ID", `#${data.id}`],
 		["Status", data.status],
 		["Channel", data.channel],

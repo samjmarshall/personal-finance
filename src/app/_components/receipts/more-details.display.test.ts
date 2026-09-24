@@ -89,7 +89,7 @@ describe("metaRows", () => {
 		const rows = Object.fromEntries(
 			metaRows(receipt({ transactionId: 99 }), null),
 		);
-		expect(rows["Trace ID"]).toBe("—");
+		expect(rows["Ingest trace ID"]).toBe("—");
 		expect(rows["Processing time"]).toBe("—");
 		expect(rows["Transaction ID"]).toBe("#99");
 	});

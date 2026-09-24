@@ -54,8 +54,10 @@ function CopyButton({
 	);
 }
 
-// X-Trace-ID + Copy + Open-trace. A null id (OTel unregistered at ingest) reads
-// "—" with no Copy; "Open trace" shows only when the server built a viewer URL.
+// Ingest trace id + Copy + Open-trace. "Ingest" because it names the
+// receipt.create → Bedrock trace, not the separate Blob token-mint request
+// (adr020). A null id (OTel unregistered at ingest) reads "—" with no Copy;
+// "Open trace" shows only when the server built a viewer URL.
 function TraceHeader({
 	traceId,
 	traceUrl,
@@ -70,7 +72,7 @@ function TraceHeader({
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2">
 			<div className="min-w-0">
-				<div className="text-muted-foreground text-xs">X-Trace-ID</div>
+				<div className="text-muted-foreground text-xs">Ingest trace ID</div>
 				<div className="truncate font-mono text-foreground text-sm">
 					{traceId ?? "—"}
 				</div>
