@@ -15,7 +15,14 @@ Schema verified empirically against real sessions on Claude Code 2.1.160:
                   Agent tool_use `subagent_type`.
   - prompt    -> first `user` message text (the task the sub-agent received).
   - output    -> last non-empty `assistant` message text (the returned result).
-  - tokens    -> sum of `message.usage` across assistant turns (the cost signal).
+  - tokens    -> `message.usage` counted ONCE per API message (`message.id`): the
+                  transcript writes one record per content block, each repeating
+                  the same usage, so summing records over-counts in/cache tokens.
+                  `output_tokens` is a stream-start snapshot (often 2) on every
+                  record but the final end_turn one, so tokens_out takes the max of
+                  the recorded value and a chars/4 estimate of what the message
+                  emitted (text + thinking + tool_use input) — a floor, since
+                  redacted thinking has no text. Flagged by tokens_out_estimated.
   - latency   -> last `timestamp` - first `timestamp` (wall-clock, incl. tool time).
 
 stdlib only. Examples:
@@ -37,13 +44,20 @@ from pathlib import Path
 PROJECTS_ROOT = Path.home() / ".claude" / "projects"
 DEFAULT_OUT = Path(__file__).resolve().parent / "mined" / "corpus.jsonl"
 
-# PLACEHOLDER list prices (USD per 1M tokens). Pricing drifts — VERIFY before
-# trusting any dollar figure. Only used when --estimate-cost is passed.
+# List prices (USD per 1M tokens; cache_create = 5m write), platform.claude.com
+# pricing page as of 2026-09-24. Pricing drifts — VERIFY before trusting any dollar
+# figure. Matched by model-id PREFIX in insertion order, so specific ids come
+# before the `claude-opus-4` catch-all (Opus 4.0/4.1). Only used with --estimate-cost.
 PRICES = {
-    "claude-haiku-4-5": {"in": 1.00, "out": 5.00, "cache_read": 0.10, "cache_create": 1.25},
+    "claude-opus-5-5": {"in": 4.00, "out": 20.00, "cache_read": 0.20, "cache_create": 5.00},
+    "claude-opus-4-8": {"in": 5.00, "out": 25.00, "cache_read": 0.50, "cache_create": 6.25},
+    "claude-sonnet-5": {"in": 2.00, "out": 10.00, "cache_read": 0.20, "cache_create": 2.50},
     "claude-sonnet-4-6": {"in": 3.00, "out": 15.00, "cache_read": 0.30, "cache_create": 3.75},
+    "claude-haiku-4-5": {"in": 1.00, "out": 5.00, "cache_read": 0.10, "cache_create": 1.25},
     "claude-opus-4": {"in": 15.00, "out": 75.00, "cache_read": 1.50, "cache_create": 18.75},
 }
+
+CHARS_PER_TOKEN = 4
 
 
 def encode_project(path) -> str:
@@ -116,6 +130,46 @@ class SubAgentRun:
     routed_subagent_type: str | None = None
     routed_description: str | None = None
     cost_usd_est: float | None = None
+    # True when any message's tokens_out came from the chars/4 floor, not usage.
+    tokens_out_estimated: bool = False
+
+
+def _emitted_chars(content) -> int:
+    """Chars a model emitted in one content list: text, thinking, tool_use input."""
+    if not isinstance(content, list):
+        return len(content) if isinstance(content, str) else 0
+    n = 0
+    for b in content:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t == "text":
+            n += len(b.get("text") or "")
+        elif t == "thinking":
+            n += len(b.get("thinking") or "")
+        elif t == "tool_use":
+            n += len(json.dumps(b.get("input") or {}, ensure_ascii=False))
+    return n
+
+
+def _group_messages(assistants) -> list[tuple[dict, int, int]]:
+    """Collapse per-block records into one `(usage, emitted_chars, n_tool_uses)` per API message.
+
+    Records sharing a `message.id` are blocks of one message. Usage is taken from the
+    last record (the end_turn one carries the final output count); a record without an
+    id is its own message.
+    """
+    groups: dict = {}
+    for i, a in enumerate(assistants):
+        msg = a.get("message", {})
+        key = msg.get("id") or f"__anon{i}"
+        g = groups.setdefault(key, {"usage": {}, "chars": 0, "tools": 0})
+        g["usage"] = msg.get("usage") or g["usage"]
+        content = msg.get("content")
+        g["chars"] += _emitted_chars(content)
+        if isinstance(content, list):
+            g["tools"] += sum(1 for b in content if isinstance(b, dict) and b.get("type") == "tool_use")
+    return [(g["usage"], g["chars"], g["tools"]) for g in groups.values()]
 
 
 def extract_run(fp: Path) -> SubAgentRun | None:
@@ -150,17 +204,19 @@ def extract_run(fp: Path) -> SubAgentRun | None:
             output = txt
             break
 
+    messages = _group_messages(assistants)
     ti = to = tcr = tcc = n_tool_uses = 0
-    for a in assistants:
-        msg = a.get("message", {})
-        u = msg.get("usage") or {}
+    out_estimated = False
+    for u, chars, tools in messages:
         ti += u.get("input_tokens") or 0
-        to += u.get("output_tokens") or 0
         tcr += u.get("cache_read_input_tokens") or 0
         tcc += u.get("cache_creation_input_tokens") or 0
-        content = msg.get("content")
-        if isinstance(content, list):
-            n_tool_uses += sum(1 for b in content if isinstance(b, dict) and b.get("type") == "tool_use")
+        recorded = u.get("output_tokens") or 0
+        floor = chars // CHARS_PER_TOKEN
+        if floor > recorded:
+            out_estimated = True
+        to += max(recorded, floor)
+        n_tool_uses += tools
 
     stamps = [t for t in (_parse_ts(r.get("timestamp")) for r in records) if t]
     started = min(stamps) if stamps else None
@@ -175,7 +231,7 @@ def extract_run(fp: Path) -> SubAgentRun | None:
         output=output,
         prompt_chars=len(prompt),
         output_chars=len(output),
-        n_assistant_msgs=len(assistants),
+        n_assistant_msgs=len(messages),
         n_tool_uses=n_tool_uses,
         tokens_in=ti,
         tokens_out=to,
@@ -185,6 +241,7 @@ def extract_run(fp: Path) -> SubAgentRun | None:
         latency_s=round(latency, 2),
         started_at=started.isoformat() if started else "",
         source_file=str(fp),
+        tokens_out_estimated=out_estimated,
     )
 
 
