@@ -28,8 +28,8 @@ related-prs: [#20]
 - `src/server/receipts/receipts.schema.ts` — nullable `traceId` text column (migration `0011`).
 - `src/server/api/routers/receipts.ts` — `create` + `retry` stamp `currentTraceId()`; `get` builds `traceUrl`.
 - `src/server/email/email.service.ts` — email ingest stamps the trace id through `createPendingReceipts`.
-- `src/app/_components/receipts/more-details.tsx` — the `MoreDetails` diagnostics panel (trace header + tabs).
-- `src/app/_components/receipts/receipt-detail.tsx` — renders `<MoreDetails>`.
+- `src/app/(dashboard)/receipts/_components/more-details.tsx` — the `MoreDetails` diagnostics panel (trace header + tabs).
+- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx` — renders `<MoreDetails>`.
 - `src/env.ts` — `POSTHOG_UI_HOST` + `POSTHOG_PROJECT_ID`.
 
 **Choice made**: capture the trace id at ingest and store it on the row, then build the PostHog link server-side from env + that id.

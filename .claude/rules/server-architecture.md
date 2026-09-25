@@ -1,3 +1,12 @@
+---
+paths:
+  - "src/server/**"
+  - "src/app/api/**"
+  - "src/domain/**"
+  - "src/instrumentation.ts"
+  - "drizzle.config.ts"
+---
+
 # Server architecture (adr004 / adr005 / adr002)
 
 [adr004](../../docs/adr/adr004-domain-oriented-3-tier-server-architecture.md)
@@ -53,8 +62,8 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
 - **Error capture choke points only.** Services and repositories never call
   `captureException`. Exceptions are captured only at the four choke points:
   `onRequestError` (`src/instrumentation.ts`), the tRPC `observabilityMiddleware`,
-  the tRPC route's `onError` (context-build failures only, which never reach the
-  middleware), and the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptsService` calls
+  the tRPC route's `onError` (pre-procedure 5xx failures only — context build,
+  request read — which never reach the middleware), and the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptsService` calls
   `captureException` on the park path because `onRunError` only fires on throws —
   parked terminal failures never throw, so the domain tier owns that capture.
   Tiers log through their injected `logger.error`; spans `recordException`.
