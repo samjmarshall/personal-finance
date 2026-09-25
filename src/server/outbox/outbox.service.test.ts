@@ -87,14 +87,19 @@ function harness(
 		},
 	};
 
-	// `with` returns itself: the service never re-binds; the composition root does that once.
-	const logger: Logger = {
-		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
-		info: (msg, attrs = {}) => logs.push({ level: "info", msg, attrs }),
-		warn: (msg, attrs = {}) => logs.push({ level: "warn", msg, attrs }),
-		error: (msg, attrs = {}) => logs.push({ level: "error", msg, attrs }),
-		with: () => logger,
-	};
+	// Bound attrs merge under call attrs, like the real logger.
+	const fakeLogger = (bound: Record<string, unknown>): Logger => ({
+		debug: (msg, attrs = {}) =>
+			logs.push({ level: "debug", msg, attrs: { ...bound, ...attrs } }),
+		info: (msg, attrs = {}) =>
+			logs.push({ level: "info", msg, attrs: { ...bound, ...attrs } }),
+		warn: (msg, attrs = {}) =>
+			logs.push({ level: "warn", msg, attrs: { ...bound, ...attrs } }),
+		error: (msg, attrs = {}) =>
+			logs.push({ level: "error", msg, attrs: { ...bound, ...attrs } }),
+		with: (attrs) => fakeLogger({ ...bound, ...attrs }),
+	});
+	const logger = fakeLogger({});
 
 	return {
 		service: new OutboxService({
@@ -363,8 +368,8 @@ describe("OutboxService.sweep", () => {
 		).toEqual(["r1", "r2"]);
 	});
 
-	it("warns once with event.name outbox.sweep.stuck for a row past the retry threshold", async () => {
-		const h = harness([{ ...row("r1"), attempts: 3 }]);
+	it("warns once with event.name outbox.sweep.stuck when a re-send fails at the retry threshold", async () => {
+		const h = harness([{ ...row("r1"), attempts: 2 }], { sendThrows: true });
 
 		await h.service.sweep();
 
@@ -374,9 +379,31 @@ describe("OutboxService.sweep", () => {
 		expect(stuck).toHaveLength(1);
 		expect(stuck[0]?.level).toBe("warn");
 		expect(stuck[0]?.attrs["outbox.event_id"]).toBe("r1");
-		expect(stuck[0]?.attrs["outbox.attempts"] as number).toBeGreaterThanOrEqual(
-			3,
-		);
+		expect(stuck[0]?.attrs["outbox.attempts"]).toBe(3);
+	});
+
+	// A row that finally goes through is healed, not stuck — no false alert.
+	it("does not warn stuck for a past-threshold row this sweep delivers", async () => {
+		const h = harness([{ ...row("r1"), attempts: 5 }]);
+
+		await h.service.sweep();
+
+		expect(
+			h.logs.some((l) => l.attrs["event.name"] === "outbox.sweep.stuck"),
+		).toBe(false);
+	});
+
+	// An ack that keeps failing must still climb toward stuck.
+	it("warns stuck for a past-threshold row whose ack fails", async () => {
+		const h = harness([{ ...row("r1"), attempts: 2 }], {
+			markProcessedThrows: true,
+		});
+
+		await h.service.sweep();
+
+		expect(
+			h.logs.some((l) => l.attrs["event.name"] === "outbox.sweep.stuck"),
+		).toBe(true);
 	});
 
 	// Regression: age alone must not flag stuck — an old row still on its first
@@ -416,6 +443,11 @@ describe("OutboxService.sweep", () => {
 		expect(h.logs.filter((l) => l.msg === "outbox ack failed")).toHaveLength(2);
 		// The heartbeat must not claim delivery for a row that never acked.
 		expect(h.logs.some((l) => l.msg === "outbox delivered")).toBe(false);
+		// The failed ack bumps attempts like a failed send.
+		expect(h.failed).toEqual([
+			{ id: "r1", message: "ack failed: update failed" },
+			{ id: "r2", message: "ack failed: update failed" },
+		]);
 	});
 
 	it("swallows a failing failure-record: send throws, markFailed throws, sweep still resolves", async () => {

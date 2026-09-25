@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { context, type Span, SpanStatusCode } from "@opentelemetry/api";
+import { context, type Span } from "@opentelemetry/api";
 import {
 	APICallError,
 	type FilePart,
@@ -19,7 +19,7 @@ import { bareMediaType, isPdf, isText } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import type { LogAttributes, Logger } from "~/server/observability/logger";
-import { tracer } from "~/server/observability/tracer";
+import { failSpan, tracer } from "~/server/observability/tracer";
 import type {
 	ReceiptItemInsert,
 	ReceiptRow,
@@ -264,8 +264,7 @@ export class ReceiptsService {
 						await this.extractAndSave(receiptId, bytes, mediaType);
 						span.setAttribute("receipt.outcome", ReceiptOutcome.Processed);
 					} catch (error) {
-						span.recordException(error as Error);
-						span.setStatus({ code: SpanStatusCode.ERROR });
+						failSpan(span, error);
 						await this.parkFailure(span, error, {
 							receipt,
 							receiptId,

@@ -25,17 +25,10 @@ vi.mock("~/env", () => ({
 	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 
-// `after` runs post-response in prod; spy it (invoking synchronously) so the test
-// can assert the flush is handed to `after`, not run inline before the response.
-const { after } = vi.hoisted(() => ({
-	after: vi.fn((fn: () => unknown) => fn()),
+const { flushAfterResponse } = vi.hoisted(() => ({
+	flushAfterResponse: vi.fn(),
 }));
-vi.mock("next/server", async (orig) => ({
-	...(await orig<typeof import("next/server")>()),
-	after,
-}));
-const { flushTelemetry } = vi.hoisted(() => ({ flushTelemetry: vi.fn() }));
-vi.mock("~/server/observability/flush", () => ({ flushTelemetry }));
+vi.mock("~/server/observability/flush", () => ({ flushAfterResponse }));
 
 const { getSession } = vi.hoisted(() => ({
 	getSession: vi.fn<() => Promise<{ user: { id: string } } | null>>(),
@@ -117,12 +110,12 @@ const post = (body: string = JSON.stringify(tokenEvent)) =>
 	);
 
 describe("POST /api/receipts/upload", () => {
-	it("400s a malformed body before minting, with the flush still deferred via after()", async () => {
+	it("400s a malformed body before minting, with the flush still scheduled", async () => {
 		const response = await post("{not json");
 
 		expect(response.status).toBe(400);
 		expect(handleUpload).not.toHaveBeenCalled();
-		expect(after).toHaveBeenCalledWith(flushTelemetry);
+		expect(flushAfterResponse).toHaveBeenCalled();
 		expect(exporter.getFinishedSpans()).toEqual([]);
 	});
 

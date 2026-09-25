@@ -5,7 +5,7 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
-import { createRootLogger } from "~/server/observability/logger";
+import { createRootLogger, errorName } from "~/server/observability/logger";
 import { createSecondaryStorage } from "./secondary-storage";
 
 const logger = createRootLogger().with({ domain: "auth" });
@@ -91,7 +91,7 @@ export const auth = betterAuth({
 				// ships its message/stack to PostHog (adr007). Name still tells a Redis
 				// outage from a database one.
 				logger.error("sign-out revocation failed", {
-					"error.name": error instanceof Error ? error.name : typeof error,
+					"error.name": errorName(error),
 				});
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: "Could not sign out. Please try again.",

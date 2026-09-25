@@ -1,6 +1,10 @@
 import { Redis } from "@upstash/redis";
 
-import { createRootLogger } from "~/server/observability/logger";
+import {
+	createRootLogger,
+	errorMessage,
+	errorName,
+} from "~/server/observability/logger";
 
 const logger = createRootLogger().with({ domain: "auth", component: "redis" });
 
@@ -31,10 +35,9 @@ const isRevocationManifest = (key: string) =>
  * session itself, so nothing in it is safe and only the name survives.
  */
 function redactReason(error: unknown) {
-	const name = error instanceof Error ? error.name : typeof error;
+	const name = errorName(error);
 	if (name === "UpstashJSONParseError") return name;
-	const message = error instanceof Error ? error.message : String(error);
-	return message.split(", command was:")[0];
+	return errorMessage(error).split(", command was:")[0];
 }
 
 /**

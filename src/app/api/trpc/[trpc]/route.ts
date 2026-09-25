@@ -1,16 +1,31 @@
+import type { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { after, type NextRequest } from "next/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
+import type { NextRequest } from "next/server";
 
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
 import { traceIdHeaders } from "~/server/observability/current-trace-id";
-import { flushTelemetry } from "~/server/observability/flush";
+import { flushAfterResponse } from "~/server/observability/flush";
+import { createRootLogger } from "~/server/observability/logger";
+import { captureException } from "~/server/observability/posthog";
 
-// Echo the root span's trace id so a developer reads it from the Network tab
-// and searches PostHog with no round-trip (adr020). The server span is the root
-// — the browser sends no traceparent — so this is the id the whole tree shares.
-export function traceIdResponseMeta(): { headers: Record<string, string> } {
-	return { headers: traceIdHeaders() };
+const logger = createRootLogger().with({ domain: "trpc" });
+
+// The middleware logs every procedure error. A failed context build (the session
+// lookup) never reaches it, so without this it would vanish: no log, no issue.
+export function reportContextFailure({
+	error,
+	ctx,
+	path,
+}: {
+	error: TRPCError;
+	ctx: unknown;
+	path: string | undefined;
+}): void {
+	if (ctx !== undefined || getHTTPStatusCodeFromError(error) < 500) return;
+	captureException(error, { "trpc.path": path });
+	logger.error("trpc context failed", { error, "trpc.path": path });
 }
 
 /**
@@ -24,16 +39,16 @@ const createContext = async (req: NextRequest) => {
 };
 
 const handler = (req: NextRequest) => {
-	// Drain telemetry after the response is sent, before the lambda freezes (adr015 §8).
-	after(flushTelemetry);
-	// No onError — the tracing middleware is the single place tRPC errors are
-	// logged, with the right trace id. A handler-level log would just duplicate it.
+	flushAfterResponse();
 	return fetchRequestHandler({
 		endpoint: "/api/trpc",
 		req,
 		router: appRouter,
 		createContext: () => createContext(req),
-		responseMeta: traceIdResponseMeta,
+		// Echo the trace id so a developer reads it from the Network tab (adr020).
+		// The server span is the root, so it's the id the whole tree shares.
+		responseMeta: () => ({ headers: traceIdHeaders() }),
+		onError: reportContextFailure,
 	});
 };
 

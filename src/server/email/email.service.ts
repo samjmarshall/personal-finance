@@ -1,5 +1,6 @@
-import { context, trace } from "@opentelemetry/api";
+import { context } from "@opentelemetry/api";
 
+import { isReceiptFileType } from "~/domain/receipts";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { currentTraceId } from "~/server/observability/current-trace-id";
@@ -25,14 +26,6 @@ function fromDomain(address: string): string | undefined {
 	return at === -1 ? undefined : address.slice(at + 1);
 }
 
-// What the worker can actually extract from. Deliberately the same three types the
-// image proxy will serve (`api/receipts/[id]/image/route.ts`).
-const RECEIPT_CONTENT_TYPES = new Set([
-	"image/jpeg",
-	"image/png",
-	"application/pdf",
-]);
-
 /**
  * Ceiling on how many attachments one email may mint. Each costs a download, a
  * blob write, a row and a Claude Vision call, and the trigger is an inbound
@@ -43,8 +36,7 @@ export const MAX_EMAIL_ATTACHMENTS = 10;
 
 /** Whether an attachment is a receipt rather than part of the mail's furniture. */
 export function isReceiptAttachment(a: InboundAttachmentMeta): boolean {
-	if (!a.content_type || !RECEIPT_CONTENT_TYPES.has(a.content_type))
-		return false;
+	if (!a.content_type || !isReceiptFileType(a.content_type)) return false;
 	// Inline parts are the sender's signature image and the vendor's logo. They
 	// pass the content-type check, so without this every branded e-receipt would
 	// mint a junk Receipt per decoration.
@@ -147,7 +139,6 @@ export class EmailService {
 					"email.id": event.data.email_id,
 					"receipt.ids": receiptIds,
 				});
-				trace.getActiveSpan()?.setAttribute("receipt.ids", receiptIds);
 				return { status: "ingested", receiptIds };
 			},
 		);

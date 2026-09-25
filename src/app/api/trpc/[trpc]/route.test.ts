@@ -1,42 +1,61 @@
-import { context, trace } from "@opentelemetry/api";
-import {
-	InMemorySpanExporter,
-	SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { TRPCError } from "@trpc/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // route.ts is a composition root over the whole app router; stub what it wires
-// so this stays a unit over the responseMeta trace-id echo.
+// so this stays a unit over the context-failure report.
 vi.mock("~/server/api/root", () => ({ appRouter: {} }));
 vi.mock("~/server/api/trpc", () => ({ createTRPCContext: vi.fn() }));
-vi.mock("~/server/observability/flush", () => ({ flushTelemetry: vi.fn() }));
-vi.mock("next/server", () => ({ after: vi.fn() }));
+vi.mock("~/server/observability/flush", () => ({
+	flushAfterResponse: vi.fn(),
+}));
+vi.mock("~/server/observability/posthog", () => ({
+	captureException: vi.fn(),
+}));
 
-const { traceIdResponseMeta } = await import("./route");
+const { reportContextFailure } = await import("./route");
+const { captureException } = await import("~/server/observability/posthog");
 
-// A registered provider installs the async-hooks context manager, so context.with
-// actually propagates the active span (a bare @opentelemetry/api uses a noop one).
-const provider = new NodeTracerProvider({
-	spanProcessors: [new SimpleSpanProcessor(new InMemorySpanExporter())],
-});
-beforeAll(() => provider.register());
-afterAll(() => provider.shutdown());
+describe("reportContextFailure", () => {
+	beforeEach(() => vi.mocked(captureException).mockClear());
 
-describe("traceIdResponseMeta", () => {
-	it("echoes the active span's trace id as x-trace-id", () => {
-		const span = trace.getTracer("test").startSpan("root");
-		const { traceId } = span.spanContext();
+	it("captures a 500 with no ctx — the context build threw", () => {
+		const error = new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-		const meta = context.with(trace.setSpan(context.active(), span), () =>
-			traceIdResponseMeta(),
-		);
-		span.end();
+		reportContextFailure({ error, ctx: undefined, path: "receipt.list" });
 
-		expect(meta.headers["x-trace-id"]).toBe(traceId);
+		expect(captureException).toHaveBeenCalledWith(error, {
+			"trpc.path": "receipt.list",
+		});
 	});
 
-	it("sets no x-trace-id when there is no active span", () => {
-		expect(traceIdResponseMeta().headers).toEqual({});
+	it("captures any server-fault code, not just a 500", () => {
+		const error = new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+
+		reportContextFailure({ error, ctx: undefined, path: "receipt.list" });
+
+		expect(captureException).toHaveBeenCalledWith(error, {
+			"trpc.path": "receipt.list",
+		});
+	});
+
+	// With a ctx the procedure ran, so the middleware already reported it.
+	it("skips an error that has a ctx", () => {
+		reportContextFailure({
+			error: new TRPCError({ code: "INTERNAL_SERVER_ERROR" }),
+			ctx: {},
+			path: "receipt.list",
+		});
+
+		expect(captureException).not.toHaveBeenCalled();
+	});
+
+	it("skips a client fault with no ctx", () => {
+		reportContextFailure({
+			error: new TRPCError({ code: "BAD_REQUEST" }),
+			ctx: undefined,
+			path: undefined,
+		});
+
+		expect(captureException).not.toHaveBeenCalled();
 	});
 });

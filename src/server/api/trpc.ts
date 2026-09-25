@@ -7,8 +7,8 @@
  * need to use are documented accordingly near the end.
  */
 
-import { SpanStatusCode } from "@opentelemetry/api";
 import { initTRPC, TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
 
@@ -17,7 +17,7 @@ import { db } from "~/server/db";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { createRootLogger } from "~/server/observability/logger";
 import { captureException } from "~/server/observability/posthog";
-import { tracer } from "~/server/observability/tracer";
+import { failSpan, tracer } from "~/server/observability/tracer";
 
 // Composition root: builds its own logger + tracer. Middleware has no injection
 // point, so it takes the adr004 root exception route files also take.
@@ -136,10 +136,9 @@ const observabilityMiddleware = t.middleware(
 							span.setAttribute("trpc.error_code", result.error.code);
 
 							if (!EXPECTED_ERROR_CODES.has(result.error.code)) {
-								span.recordException(result.error);
-								span.setStatus({ code: SpanStatusCode.ERROR });
+								failSpan(span, result.error);
 
-								if (result.error.code === "INTERNAL_SERVER_ERROR") {
+								if (getHTTPStatusCodeFromError(result.error) >= 500) {
 									captureException(result.error, { "trpc.path": path });
 
 									logger.error("trpc internal error", {
@@ -156,7 +155,7 @@ const observabilityMiddleware = t.middleware(
 						} catch (error) {
 							console.error("observability_failed", {
 								"trpc.path": path,
-								result,
+								"trpc.error_code": result.error.code,
 								error,
 							});
 						}

@@ -1,13 +1,13 @@
-import { SpanStatusCode } from "@opentelemetry/api";
 import { type HandleUploadBody, handleUpload } from "@vercel/blob/client";
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
+import { RECEIPT_FILE_TYPES } from "~/domain/receipts";
 import { auth } from "~/server/auth";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { traceIdHeaders } from "~/server/observability/current-trace-id";
-import { flushTelemetry } from "~/server/observability/flush";
+import { flushAfterResponse } from "~/server/observability/flush";
 import { createRootLogger } from "~/server/observability/logger";
-import { tracer } from "~/server/observability/tracer";
+import { failSpan, tracer } from "~/server/observability/tracer";
 
 const logger = createRootLogger().with({
 	domain: "receipts",
@@ -17,7 +17,6 @@ const logger = createRootLogger().with({
 // Receipts are photos or single-page PDFs; cap the upload so a minted token can't
 // write an unbounded blob. Widen if real receipts exceed it.
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 
 // Blob POSTs two events here: the browser's token request and, in production, its
 // own upload-completed webhook. Name the span for the work done, not the route.
@@ -45,8 +44,7 @@ function badBody(): NextResponse {
 // two traces sit side by side under one `posthog.distinct_id`, and the x-trace-id
 // echo names this one in the Network tab.
 export async function POST(request: Request): Promise<NextResponse> {
-	// Drain telemetry after the response is sent, before the lambda freezes (adr015 §8).
-	after(flushTelemetry);
+	flushAfterResponse();
 
 	let body: HandleUploadBody;
 	try {
@@ -85,7 +83,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 						// `pathname` is the requested name; Blob appends the random suffix.
 						span.setAttribute("blob.pathname", pathname);
 						return {
-							allowedContentTypes: ALLOWED_CONTENT_TYPES,
+							allowedContentTypes: RECEIPT_FILE_TYPES,
 							maximumSizeInBytes: MAX_UPLOAD_BYTES,
 							addRandomSuffix: true,
 							tokenPayload: JSON.stringify({ userId: session.user.id }),
@@ -111,8 +109,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 						"blob.event_type": body.type,
 					});
 				} else {
-					span.recordException(error instanceof Error ? error : message);
-					span.setStatus({ code: SpanStatusCode.ERROR, message });
+					failSpan(span, error, message);
 					logger.error("blob event failed", {
 						error,
 						"blob.event_type": body.type,

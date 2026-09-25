@@ -209,6 +209,16 @@ describe("EmailController.handle", () => {
 		expect(spans[0]?.attributes["email.event_type"]).toBe("email.received");
 	});
 
+	it("tags the span with the minted receipt ids", async () => {
+		const h = harness();
+		h.ingest.mockResolvedValue({ status: "ingested", receiptIds: [1, 2] });
+
+		await h.post(RECEIVED_EVENT);
+
+		const [span] = exporter.getFinishedSpans();
+		expect(span?.attributes["receipt.ids"]).toEqual([1, 2]);
+	});
+
 	it("opens no span for a caller the signature rejected", async () => {
 		const h = harness();
 		h.verify.mockImplementation(() => {

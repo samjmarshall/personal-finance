@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "~/server/db";
-import { createRootLogger } from "~/server/observability/logger";
+import { createRootLogger, errorName } from "~/server/observability/logger";
 
 // A readiness probe the promote gate curls before flipping the production alias:
 // it must reach the db at request time, so opt out of any build-time evaluation
@@ -21,7 +21,7 @@ export async function GET(): Promise<Response> {
 		// Name only, never the error itself (adr007): a driver error's message/stack can
 		// carry the connection string, and logger.error still ships both to PostHog.
 		logger.error("readiness check failed", {
-			"error.name": error instanceof Error ? error.name : typeof error,
+			"error.name": errorName(error),
 			"event.name": "health.readiness.failed",
 		});
 		return Response.json({ status: "error" }, { status: 503 });

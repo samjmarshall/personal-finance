@@ -369,9 +369,8 @@ describe("EmailService.ingest", () => {
 		expect(ingested?.attrs["receipt.ids"]).toEqual([1]);
 	});
 
-	// The controller opens email.inbound; the service tags the minted ids onto the
-	// active span (adr015 §3). Open one here so the attribute is not a dead no-op.
-	it("tags the active span with the minted receipt ids", async () => {
+	// The worker continues this trace (adr016), so the row must store the live one.
+	it("stores the active span's trace id on the minted receipt", async () => {
 		const h = harness({ email: { html: "<p>Total $9</p>", text: null } });
 		const span = trace.getTracer("test").startSpan("email.inbound");
 
@@ -380,12 +379,6 @@ describe("EmailService.ingest", () => {
 		);
 		span.end();
 
-		const recorded = exporter
-			.getFinishedSpans()
-			.find((s) => s.name === "email.inbound");
-		expect(recorded?.attributes["receipt.ids"]).toEqual([1]);
-		// The mint runs under email.inbound, so the persisted trace id is that span's —
-		// the id the process-receipt worker continues (adr016).
 		expect(h.created[0]?.traceId).toBe(span.spanContext().traceId);
 	});
 

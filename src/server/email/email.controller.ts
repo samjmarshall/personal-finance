@@ -1,8 +1,7 @@
-import { SpanStatusCode } from "@opentelemetry/api";
 import type { Resend } from "resend";
 
 import type { Logger } from "~/server/observability/logger";
-import { tracer } from "~/server/observability/tracer";
+import { failSpan, tracer } from "~/server/observability/tracer";
 import { inboundEmailEventSchema } from "./email.dto";
 import type { EmailService } from "./email.service";
 
@@ -75,10 +74,12 @@ export class EmailController {
 				// and an expiring download URL is worth retrying. A drop is a verdict, not a
 				// failure — 200 so it is never redelivered.
 				try {
-					return json(await this.service.ingest(parsed.data));
+					const result = await this.service.ingest(parsed.data);
+					if (result.status === "ingested")
+						span.setAttribute("receipt.ids", result.receiptIds);
+					return json(result);
 				} catch (error) {
-					span.recordException(error as Error);
-					span.setStatus({ code: SpanStatusCode.ERROR });
+					failSpan(span, error);
 					this.logger.error("inbound email failed", {
 						error,
 						"email.id": emailId,

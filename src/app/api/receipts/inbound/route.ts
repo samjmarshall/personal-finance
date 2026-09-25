@@ -1,4 +1,3 @@
-import { after } from "next/server";
 import { Resend } from "resend";
 
 import { env } from "~/env";
@@ -8,7 +7,7 @@ import { EmailController } from "~/server/email/email.controller";
 import { ResendInboundMailbox } from "~/server/email/email.mailbox";
 import { DrizzleEmailRepository } from "~/server/email/email.repository";
 import { EmailService } from "~/server/email/email.service";
-import { flushTelemetry } from "~/server/observability/flush";
+import { flushAfterResponse } from "~/server/observability/flush";
 import { createRootLogger } from "~/server/observability/logger";
 import { outboxService } from "~/server/outbox/outbox.module";
 
@@ -45,8 +44,7 @@ function compose(apiKey: string, webhookSecret: string): EmailController {
 }
 
 export async function POST(request: Request): Promise<Response> {
-	// Drain telemetry after the response is sent, before the lambda freezes (adr015 §8).
-	after(flushTelemetry);
+	flushAfterResponse();
 	// Both are optional outside production, so an unconfigured deployment would
 	// otherwise verify against an empty secret. Refuse rather than define what
 	// that means.

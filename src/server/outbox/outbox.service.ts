@@ -3,8 +3,8 @@ import type { Inngest } from "inngest";
 
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
-import type { Logger } from "~/server/observability/logger";
-import { tracer } from "~/server/observability/tracer";
+import { errorMessage, type Logger } from "~/server/observability/logger";
+import { failSpan, tracer } from "~/server/observability/tracer";
 
 import type {
 	OutboxEvents,
@@ -102,15 +102,6 @@ export class OutboxService implements OutboxWriteDoor {
 				},
 				async (span) => {
 					try {
-						if (row.attempts >= STUCK_AFTER_ATTEMPTS) {
-							this.logger.warn("outbox row stuck", {
-								"event.name": "outbox.sweep.stuck",
-								[BaggageKey.OutboxEventId]: row.id,
-								"outbox.event_name": row.name,
-								"outbox.attempts": row.attempts,
-								"outbox.age_s": ageS,
-							});
-						}
 						// Project to the wire fields only — never ship internal columns
 						// (attempts/processedAt/lastError, incl. raw error text) to Inngest.
 						const event: OutboxEventDescriptor = {
@@ -118,7 +109,19 @@ export class OutboxService implements OutboxWriteDoor {
 							name: row.name,
 							data: row.data,
 						};
-						return await this.deliver(event, "sweep");
+						const ok = await this.deliver(event, "sweep");
+						// Judge stuck after this try, so a row that just went through never alerts.
+						const attempts = row.attempts + 1;
+						if (!ok && attempts >= STUCK_AFTER_ATTEMPTS) {
+							this.logger.warn("outbox row stuck", {
+								"event.name": "outbox.sweep.stuck",
+								[BaggageKey.OutboxEventId]: row.id,
+								"outbox.event_name": row.name,
+								"outbox.attempts": attempts,
+								"outbox.age_s": ageS,
+							});
+						}
+						return ok;
 					} finally {
 						span.end();
 					}
@@ -148,6 +151,11 @@ export class OutboxService implements OutboxWriteDoor {
 		deliveryContext: DeliveryContext,
 	): Promise<boolean> {
 		const baggageCtx = setBaggage({ [BaggageKey.OutboxEventId]: event.id });
+		const log = this.logger.with({
+			[BaggageKey.OutboxEventId]: event.id,
+			"outbox.event_name": event.name,
+			"outbox.delivery_context": deliveryContext,
+		});
 		return context.with(baggageCtx, () =>
 			tracer.startActiveSpan(
 				"outbox.deliver",
@@ -163,18 +171,13 @@ export class OutboxService implements OutboxWriteDoor {
 						try {
 							await this.inngest.send(event);
 						} catch (error) {
-							span.recordException(error as Error);
-							span.setStatus({ code: SpanStatusCode.ERROR });
-							await this.recordFailure(event.id, error, deliveryContext);
+							failSpan(span, error);
+							await this.recordFailure(event.id, error, log);
 							return false;
 						}
-						const acked = await this.ack(event.id, deliveryContext);
+						const acked = await this.ack(event.id, log);
 						if (acked) {
-							this.logger.info("outbox delivered", {
-								[BaggageKey.OutboxEventId]: event.id,
-								"outbox.event_name": event.name,
-								"outbox.delivery_context": deliveryContext,
-							});
+							log.info("outbox delivered");
 						} else {
 							// Sent but the ack write failed: the row stays unsent and the next
 							// sweep retries it. Fail the span and return false so the trace and
@@ -196,19 +199,21 @@ export class OutboxService implements OutboxWriteDoor {
 	// Both bookkeeping writes run *after* a successful commit, so a throw must never
 	// surface — a producer would retry an already-durable write and duplicate rows,
 	// and one stuck row would abort a sweep and starve every row behind it.
-	private async ack(
-		id: string,
-		deliveryContext: DeliveryContext,
-	): Promise<boolean> {
+	private async ack(id: string, log: Logger): Promise<boolean> {
 		try {
 			await this.repository.markProcessed(id);
 			return true;
 		} catch (error) {
-			this.logger.error("outbox ack failed", {
-				error,
-				[BaggageKey.OutboxEventId]: id,
-				"outbox.delivery_context": deliveryContext,
-			});
+			log.error("outbox ack failed", { error });
+			// Count it as a failed try too, or a row that never acks is never stuck.
+			try {
+				await this.repository.markFailed(
+					id,
+					`ack failed: ${errorMessage(error)}`,
+				);
+			} catch {
+				// Same db that just failed the ack; the error above already says so.
+			}
 			return false;
 		}
 	}
@@ -216,22 +221,13 @@ export class OutboxService implements OutboxWriteDoor {
 	private async recordFailure(
 		id: string,
 		error: unknown,
-		deliveryContext: DeliveryContext,
+		log: Logger,
 	): Promise<void> {
-		this.logger.error("outbox delivery failed", {
-			error,
-			[BaggageKey.OutboxEventId]: id,
-			"outbox.delivery_context": deliveryContext,
-		});
-		const message = error instanceof Error ? error.message : String(error);
+		log.error("outbox delivery failed", { error });
 		try {
-			await this.repository.markFailed(id, message);
+			await this.repository.markFailed(id, errorMessage(error));
 		} catch (recordError) {
-			this.logger.error("outbox failure-record failed", {
-				error: recordError,
-				[BaggageKey.OutboxEventId]: id,
-				"outbox.delivery_context": deliveryContext,
-			});
+			log.error("outbox failure-record failed", { error: recordError });
 		}
 	}
 }

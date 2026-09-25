@@ -58,8 +58,15 @@ export class ResendInboundMailbox implements InboundMailbox {
 	}
 
 	async download(url: string): Promise<Uint8Array> {
+		// The query string is the signature — anyone holding it can download the
+		// attachment — so the traced span gets the URL without it.
+		const unsigned = url.split("?")[0];
 		const response = await fetch(url, {
 			signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+			opentelemetry: {
+				spanName: `fetch GET ${unsigned}`,
+				attributes: { "http.url": unsigned },
+			},
 		});
 		if (!response.ok)
 			throw new Error(`attachment download failed: ${response.status}`);
