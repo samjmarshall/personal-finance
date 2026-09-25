@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
 import { traceIdHeaders } from "~/server/observability/current-trace-id";
-import { flushAfterResponse } from "~/server/observability/flush";
+import { withFlush } from "~/server/observability/flush";
 import { createRootLogger } from "~/server/observability/logger";
 import { reportError } from "~/server/observability/report-error";
 
@@ -45,9 +45,8 @@ const createContext = async (req: NextRequest) => {
 	});
 };
 
-const handler = (req: NextRequest) => {
-	flushAfterResponse();
-	return fetchRequestHandler({
+const handler = withFlush((req: NextRequest) =>
+	fetchRequestHandler({
 		endpoint: "/api/trpc",
 		req,
 		router: appRouter,
@@ -56,7 +55,7 @@ const handler = (req: NextRequest) => {
 		// The server span is the root, so it's the id the whole tree shares.
 		responseMeta: () => ({ headers: traceIdHeaders() }),
 		onError: reportPreProcedureError,
-	});
-};
+	}),
+);
 
 export { handler as GET, handler as POST };

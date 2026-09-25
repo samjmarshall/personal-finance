@@ -32,7 +32,15 @@ vi.mock("resend", () => ({
 const { flushAfterResponse } = vi.hoisted(() => ({
 	flushAfterResponse: vi.fn(),
 }));
-vi.mock("~/server/observability/flush", () => ({ flushAfterResponse }));
+// Passes through to the real handler, recording one flush per request.
+vi.mock("~/server/observability/flush", () => ({
+	withFlush:
+		<A extends unknown[], R>(handler: (...args: A) => R) =>
+		(...args: A) => {
+			flushAfterResponse();
+			return handler(...args);
+		},
+}));
 
 const { handle, constructed } = vi.hoisted(() => ({
 	handle: vi.fn<(request: Request) => Promise<Response>>(

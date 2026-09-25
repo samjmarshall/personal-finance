@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("~/server/api/root", () => ({ appRouter: {} }));
 vi.mock("~/server/api/trpc", () => ({ createTRPCContext: vi.fn() }));
 vi.mock("~/server/observability/flush", () => ({
-	flushAfterResponse: vi.fn(),
+	withFlush: <T>(handler: T) => handler,
 }));
 vi.mock("~/server/observability/posthog", () => ({
 	captureException: vi.fn(),

@@ -7,7 +7,7 @@ import { EmailController } from "~/server/email/email.controller";
 import { ResendInboundMailbox } from "~/server/email/email.mailbox";
 import { DrizzleEmailRepository } from "~/server/email/email.repository";
 import { EmailService } from "~/server/email/email.service";
-import { flushAfterResponse } from "~/server/observability/flush";
+import { withFlush } from "~/server/observability/flush";
 import { createRootLogger } from "~/server/observability/logger";
 import { outboxService } from "~/server/outbox/outbox.module";
 
@@ -43,8 +43,7 @@ function compose(apiKey: string, webhookSecret: string): EmailController {
 	return controller;
 }
 
-export async function POST(request: Request): Promise<Response> {
-	flushAfterResponse();
+export const POST = withFlush(async (request: Request): Promise<Response> => {
 	// Both are optional outside production, so an unconfigured deployment would
 	// otherwise verify against an empty secret. Refuse rather than define what
 	// that means.
@@ -59,4 +58,4 @@ export async function POST(request: Request): Promise<Response> {
 		return new Response("Not configured", { status: 500 });
 	}
 	return compose(apiKey, webhookSecret).handle(request);
-}
+});

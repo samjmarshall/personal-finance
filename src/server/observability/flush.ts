@@ -13,6 +13,16 @@ export function flushAfterResponse(): void {
 	after(flushTelemetry);
 }
 
+/** Route handler that drains telemetry after every response, early refusals included. */
+export function withFlush<Args extends unknown[], Result>(
+	handler: (...args: Args) => Result,
+): (...args: Args) => Result {
+	return (...args) => {
+		flushAfterResponse();
+		return handler(...args);
+	};
+}
+
 /**
  * Force-flushes every telemetry sink before a serverless freeze (adr015 §8).
  * Each sink is bounded by a 5 s timeout and settled independently, so this never

@@ -5,7 +5,7 @@ import { RECEIPT_FILE_TYPES } from "~/domain/receipts";
 import { auth } from "~/server/auth";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { traceIdHeaders } from "~/server/observability/current-trace-id";
-import { flushAfterResponse } from "~/server/observability/flush";
+import { withFlush } from "~/server/observability/flush";
 import { createRootLogger } from "~/server/observability/logger";
 import { failSpan, withSpan } from "~/server/observability/tracer";
 
@@ -51,9 +51,7 @@ function badBody(): NextResponse {
 // response from the browser, so the id can't be chained into receipt.create; the
 // two traces sit side by side under one `posthog.distinct_id`, and the x-trace-id
 // echo names this one in the Network tab.
-export async function POST(request: Request): Promise<NextResponse> {
-	flushAfterResponse();
-
+async function handle(request: Request): Promise<NextResponse> {
 	let body: HandleUploadBody;
 	try {
 		body = (await request.json()) as HandleUploadBody;
@@ -130,3 +128,5 @@ export async function POST(request: Request): Promise<NextResponse> {
 		},
 	);
 }
+
+export const POST = withFlush(handle);
