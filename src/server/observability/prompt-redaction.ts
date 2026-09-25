@@ -9,8 +9,12 @@ export const PROMPT_ATTRS = ["ai.prompt.messages", "ai.prompt"] as const;
 // Fields where AI SDK prompt parts carry raw bytes: files and images.
 const BINARY_PART_FIELDS = ["data", "image"] as const;
 
-// A forwarded e-receipt rides inline as text, up to the 10 MB upload cap. Our own
-// instructions stay well under this, so anything longer is the member's email.
+// Tag a prompt text part with this when it holds member content (an e-receipt
+// body): its text is stubbed in traces at any size. Providers ignore the key.
+export const REDACT_IN_TRACES = { observability: { redact: true } } as const;
+
+// Backstop for an untagged text part: our own instructions stay well under this,
+// so anything longer is member content.
 const MAX_TEXT_PART_BYTES = 8 * 1024;
 
 /**
@@ -48,12 +52,12 @@ function redactMessage(msg: unknown): unknown {
 	return { ...msg, content: parts.map(redactPart) };
 }
 
-/** Replaces any binary payload field, or an oversize text body, with a compact stub. */
+/** Replaces any binary payload field, or a tagged or oversize text body, with a compact stub. */
 function redactPart(part: unknown): unknown {
 	if (!isObject(part)) return part;
 	if (part.type === "text" && typeof part.text === "string") {
 		const bytes = Buffer.from(part.text, "utf8");
-		if (bytes.byteLength <= MAX_TEXT_PART_BYTES) return part;
+		if (!isTagged(part) && bytes.byteLength <= MAX_TEXT_PART_BYTES) return part;
 		return { ...part, text: stubBytes(bytes, "text/plain") };
 	}
 	let next = part;
@@ -63,6 +67,15 @@ function redactPart(part: unknown): unknown {
 		if (stub !== null) next = { ...next, [field]: stub };
 	}
 	return next;
+}
+
+function isTagged(part: Record<string, unknown>): boolean {
+	const options = part.providerOptions;
+	return (
+		isObject(options) &&
+		isObject(options.observability) &&
+		options.observability.redact === true
+	);
 }
 
 function isObject(val: unknown): val is Record<string, unknown> {

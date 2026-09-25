@@ -19,6 +19,7 @@ import { bareMediaType, isPdf, isText } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import type { LogAttributes, Logger } from "~/server/observability/logger";
+import { REDACT_IN_TRACES } from "~/server/observability/prompt-redaction";
 import { failSpan, tracer } from "~/server/observability/tracer";
 import type {
 	ReceiptItemInsert,
@@ -122,10 +123,7 @@ For each item, set expenseCategoryId to the id of the single best-matching categ
 ${list}`;
 }
 
-/**
- * AI-SDK user content for one receipt, routed by media type. A text body returns a
- * *single* part — prompt and markup merged; PDF/image return prompt + payload part.
- */
+/** AI-SDK user content for one receipt, routed by media type: prompt + payload part. */
 export function buildExtractionContent({
 	prompt,
 	bytes,
@@ -148,9 +146,11 @@ export function buildExtractionContent({
 		case "text/html":
 		case "text/plain":
 			return [
+				{ type: "text", text: prompt },
 				{
 					type: "text",
-					text: `${prompt}\n\n${new TextDecoder().decode(bytes)}`,
+					text: new TextDecoder().decode(bytes),
+					providerOptions: REDACT_IN_TRACES,
 				},
 			];
 		case "image/jpeg":

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { redactPromptJson } from "./prompt-redaction";
+import { REDACT_IN_TRACES, redactPromptJson } from "./prompt-redaction";
 
 function makeMessages(parts: unknown[]) {
 	return JSON.stringify([{ role: "user", content: parts }]);
@@ -45,6 +45,20 @@ describe("redactPromptJson", () => {
 		expect(out[0].content[0]).toEqual({
 			type: "text",
 			text: `<redacted text/plain ${bytes.byteLength} sha256:${sha}>`,
+		});
+	});
+
+	// A short e-receipt is still member data; the size cap alone would ship it raw.
+	it("stubs a tagged text part at any size", () => {
+		const body = "<p>Total $9.20</p>";
+		const sha = createHash("sha256").update(body).digest("hex");
+		const part = { ...textPart(body), providerOptions: REDACT_IN_TRACES };
+
+		const out = JSON.parse(redactPromptJson(makeMessages([part])));
+
+		expect(out[0].content[0]).toEqual({
+			...part,
+			text: `<redacted text/plain ${Buffer.byteLength(body)} sha256:${sha}>`,
 		});
 	});
 

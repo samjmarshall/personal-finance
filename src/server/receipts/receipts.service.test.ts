@@ -22,6 +22,7 @@ import type { ExtractionCategory, ReceiptExtraction } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import type { FetchedBlob } from "~/server/blob-store/blob-store";
 import type { LogAttributes, Logger } from "~/server/observability/logger";
+import { REDACT_IN_TRACES } from "~/server/observability/prompt-redaction";
 import type {
 	ExtractionValues,
 	ReceiptItemInsert,
@@ -626,20 +627,18 @@ describe("buildExtractionContent", () => {
 	// The charset form is what the worker actually sees: `mediaType` is the blob's raw
 	// HTTP content-type header, not the bare string the producer stored on the row.
 	it.each(["text/html", "text/plain", "text/html; charset=utf-8"])(
-		"folds %s into a single text part and sends no image part",
+		"sends %s as a second text part tagged for trace redaction",
 		(mediaType) => {
 			const content = buildExtractionContent({ prompt, bytes, mediaType });
-			expect(content).toHaveLength(1);
-			expect(content[0]?.type).toBe("text");
 			// Guard: HTML as an image part reaches the model as noise, not text.
-			expect(content).not.toContainEqual(
-				expect.objectContaining({ type: "image" }),
-			);
-			const [part] = content;
-			expect(part?.type === "text" && part.text).toContain(
-				"<html><body>Total $9.20</body></html>",
-			);
-			expect(part?.type === "text" && part.text).toContain(prompt);
+			expect(content).toEqual([
+				{ type: "text", text: prompt },
+				{
+					type: "text",
+					text: "<html><body>Total $9.20</body></html>",
+					providerOptions: REDACT_IN_TRACES,
+				},
+			]);
 		},
 	);
 
@@ -649,7 +648,7 @@ describe("buildExtractionContent", () => {
 			bytes: new TextEncoder().encode("<p>Café Ubé — €12,50</p>"),
 			mediaType: "text/html",
 		});
-		const [part] = content;
-		expect(part?.type === "text" && part.text).toContain("Café Ubé — €12,50");
+		const part = content[1];
+		expect(part?.type === "text" && part.text).toBe("<p>Café Ubé — €12,50</p>");
 	});
 });
