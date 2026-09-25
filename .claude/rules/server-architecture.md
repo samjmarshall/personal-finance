@@ -137,7 +137,8 @@ repository that is `this.db.transaction(...)` (`saveExtraction`); in a router it
 
 ## FROZEN external identifiers
 
-`EVENT_REGISTRY` keys, Inngest function ids (`outbox-sweep`, `outbox-prune`,
+`EVENT_REGISTRY` keys, the Inngest app id (the `package.json` `name`, via
+`env.PROJECT_NAME`), Inngest function ids (`outbox-sweep`, `outbox-prune`,
 `process-receipt`), their crons / event triggers, and concurrency keys are
 byte-stable wire strings: Inngest keys schedules and runs by them.
 `src/server/inngest/registry-golden.test.ts` pins them. Changing one requires

@@ -10,7 +10,7 @@ Stretch goal for this project:
 
 ## Environment variables
 
-Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them per-environment in the Vercel project.
+Validated in `src/env.ts`. Pull them locally with `vercel env pull`; set them per-environment in the Vercel project.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |

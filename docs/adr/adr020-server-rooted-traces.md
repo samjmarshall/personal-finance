@@ -39,6 +39,7 @@ Alternatives weighed, and why not:
 - One upload action is two traces (token mint, then `receipt.create` → Bedrock). Join them by `posthog.distinct_id` and time. Retry and email ingest are one trace each, as before.
 - `<img src="/api/receipts/[id]/image">` is a plain server root, now no different from any other request.
 - Next still extracts an inbound `traceparent`, so a foreign client could parent a server span onto its own trace. Negligible for a private household app; no mitigation — the same posture adr018 recorded.
+- Inbound `baggage` is extracted the same way. On a request with no session, a foreign `member.id` survives and names the telemetry (`posthog.distinct_id`, the outbox `_trace` pocket); an authenticated request overwrites it. Telemetry mislabel only, no data access; same posture, no mitigation.
 - Sampling stays parent-based always-on (`ParentBasedSampler({ root: AlwaysOnSampler })`, now behind `NameDropSampler`, which drops only Inngest's `inngest.execution`); roots record, outbox-continued Inngest runs still honour the producer's decision ([adr016](adr016-trace-context-in-outbox-payload.md)).
 - adr018's no-OTel-Web stance stands. Client telemetry remains `posthog-js` work under [adr015](adr015-posthog-over-opentelemetry-via-vercel-otel.md).
 
