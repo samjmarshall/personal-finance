@@ -16,8 +16,8 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { createRootLogger } from "~/server/observability/logger";
-import { captureException } from "~/server/observability/posthog";
-import { failSpan, tracer } from "~/server/observability/tracer";
+import { reportError } from "~/server/observability/report-error";
+import { failSpan, withSpan } from "~/server/observability/tracer";
 
 // Composition root: builds its own logger + tracer. Middleware has no injection
 // point, so it takes the adr004 root exception route files also take.
@@ -121,50 +121,45 @@ const observabilityMiddleware = t.middleware(
 			[BaggageKey.MemberId]: ctx.session?.user?.id,
 		});
 
-		return tracer.startActiveSpan(
+		return withSpan(
 			`trpc.${path}`,
-			{ attributes: { "trpc.type": type, "trpc.path": path } },
-			baggageCtx,
+			{
+				attributes: { "trpc.type": type, "trpc.path": path },
+				parent: baggageCtx,
+			},
 			async (span) => {
-				try {
-					const result = await next();
+				const result = await next();
 
-					if (!result.ok) {
-						try {
-							// Every failure keeps its code for counting; expected client
-							// faults stop there — see EXPECTED_ERROR_CODES above.
-							span.setAttribute("trpc.error_code", result.error.code);
+				if (!result.ok) {
+					try {
+						// Every failure keeps its code for counting; expected client
+						// faults stop there — see EXPECTED_ERROR_CODES above.
+						span.setAttribute("trpc.error_code", result.error.code);
 
-							if (!EXPECTED_ERROR_CODES.has(result.error.code)) {
-								failSpan(span, result.error);
+						if (!EXPECTED_ERROR_CODES.has(result.error.code)) {
+							failSpan(span, result.error);
 
-								if (getHTTPStatusCodeFromError(result.error) >= 500) {
-									captureException(result.error, { "trpc.path": path });
-
-									logger.error("trpc internal error", {
-										error: result.error,
-										"trpc.path": path,
-									});
-								} else {
-									logger.warn("trpc request failed", {
-										"trpc.path": path,
-										"trpc.error_code": result.error.code,
-									});
-								}
+							if (getHTTPStatusCodeFromError(result.error) >= 500) {
+								reportError(logger, "trpc internal error", result.error, {
+									"trpc.path": path,
+								});
+							} else {
+								logger.warn("trpc request failed", {
+									"trpc.path": path,
+									"trpc.error_code": result.error.code,
+								});
 							}
-						} catch (error) {
-							console.error("observability_failed", {
-								"trpc.path": path,
-								"trpc.error_code": result.error.code,
-								error,
-							});
 						}
+					} catch (error) {
+						console.error("observability_failed", {
+							"trpc.path": path,
+							"trpc.error_code": result.error.code,
+							error,
+						});
 					}
-
-					return result;
-				} finally {
-					span.end();
 				}
+
+				return result;
 			},
 		);
 	},

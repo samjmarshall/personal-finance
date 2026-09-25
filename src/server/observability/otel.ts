@@ -73,14 +73,12 @@ export function registerObservability(): void {
 		// Empty = no third party added, so Bedrock/Resend (third-party https) get no
 		// traceparent/baggage. Self-fetches to our deployment still carry it (adr015 §6).
 		// Inngest puts the event key in the send URL path, so a traced send would
-		// ship the key in the span name. Cloud, portless local, and the default dev port.
+		// ship the key in the span name. Match the path on any host: the Inngest host
+		// can be anything, and an untraced call costs less than a leaked key.
 		instrumentationConfig: {
 			fetch: {
 				propagateContextUrls: [],
-				ignoreUrls: [
-					/^https?:\/\/(?:inn\.gs|[^/]*inngest[^/]*)\/e\//,
-					/^https?:\/\/localhost:8288\/e\//,
-				],
+				ignoreUrls: [/^https?:\/\/[^/]+\/e\//],
 			},
 		},
 	});

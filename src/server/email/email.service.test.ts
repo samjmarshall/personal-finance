@@ -73,6 +73,8 @@ describe("isReceiptAttachment", () => {
 		["text/calendar", "attachment", undefined, false],
 		["text/html", "attachment", undefined, false],
 		[null, "attachment", undefined, false],
+		// Mail clients add params and mixed case; the header still names a receipt type.
+		["image/JPEG; name=a.jpg", "attachment", undefined, true],
 	])(
 		"%j disposition=%j cid=%j → %j",
 		(contentType, disposition, contentId, expected) => {
@@ -287,6 +289,28 @@ describe("EmailService.ingest", () => {
 			"application/pdf",
 			"image/png",
 		]);
+	});
+
+	// A raw header would mint a `.bin` key and the proxy would serve it as octet-stream.
+	it("stores the bare media type, not the raw header", async () => {
+		const h = harness({
+			attachments: [{ id: "a1", download_url: "https://dl.test/a1" }],
+		});
+
+		await h.service.ingest(
+			event({
+				attachments: [
+					{
+						id: "a1",
+						content_type: "image/JPEG; name=a.jpg",
+						content_disposition: "attachment",
+					},
+				],
+			}),
+		);
+
+		expect(h.created[0]?.blobs[0]).toMatchObject({ contentType: "image/jpeg" });
+		expect(h.created[0]?.blobs[0]?.blobPathname).toMatch(/\.jpg$/);
 	});
 
 	// Each stored attachment costs a blob write, a row and a Claude Vision call, all

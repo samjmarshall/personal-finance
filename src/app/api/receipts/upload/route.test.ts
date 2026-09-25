@@ -227,10 +227,8 @@ describe("POST /api/receipts/upload", () => {
 		expect(response.status).toBe(400);
 		await expect(response.json()).resolves.toEqual({ error: "boom" });
 		const [span] = exporter.getFinishedSpans();
-		expect(span?.status).toEqual({
-			code: SpanStatusCode.ERROR,
-			message: "boom",
-		});
+		// The raw message may carry the member's filename; it stays on the exception only.
+		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
 		expect(span?.attributes["http.response.status_code"]).toBe(400);
 		expect(span?.events.map((e) => e.name)).toEqual(["exception"]);
 		expect(logs).toHaveLength(1);

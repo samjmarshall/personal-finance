@@ -24,9 +24,9 @@ export const onRequestError: Instrumentation.onRequestError = async (
 ) => {
 	if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-	const [{ captureException }, { flushTelemetry }, { createRootLogger }] =
+	const [{ reportError }, { flushTelemetry }, { createRootLogger }] =
 		await Promise.all([
-			import("./server/observability/posthog"),
+			import("./server/observability/report-error"),
 			import("./server/observability/flush"),
 			import("./server/observability/logger"),
 		]);
@@ -37,8 +37,7 @@ export const onRequestError: Instrumentation.onRequestError = async (
 		routerKind: ctx.routerKind,
 		routeType: ctx.routeType,
 	};
-	captureException(error, attrs);
 	nextLogger ??= createRootLogger().with({ domain: "next" });
-	nextLogger.error("unhandled route error", { error, ...attrs });
+	reportError(nextLogger, "unhandled route error", error, attrs);
 	await flushTelemetry();
 };

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { context, type Span } from "@opentelemetry/api";
+import type { Span } from "@opentelemetry/api";
 import {
 	APICallError,
 	type FilePart,
@@ -13,14 +13,15 @@ import {
 	type ExtractionCategory,
 	type ReceiptExtraction,
 	receiptExtractionDto,
+	receiptMediaKind,
 } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
-import { bareMediaType, isPdf, isText } from "~/lib/utils";
+import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import type { LogAttributes, Logger } from "~/server/observability/logger";
 import { REDACT_IN_TRACES } from "~/server/observability/prompt-redaction";
-import { failSpan, tracer } from "~/server/observability/tracer";
+import { failSpan, withSpan } from "~/server/observability/tracer";
 import type {
 	ReceiptItemInsert,
 	ReceiptRow,
@@ -62,10 +63,10 @@ class ReceiptTooLargeError extends Error {
 }
 
 function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
-	if (isText(mediaType)) return;
-	const max = isPdf(mediaType)
-		? BEDROCK_MAX_DOCUMENT_BYTES
-		: BEDROCK_MAX_IMAGE_BYTES;
+	const kind = receiptMediaKind(mediaType);
+	if (kind === "text") return;
+	const max =
+		kind === "pdf" ? BEDROCK_MAX_DOCUMENT_BYTES : BEDROCK_MAX_IMAGE_BYTES;
 	if (bytes.byteLength > max) throw new ReceiptTooLargeError(max);
 }
 
@@ -116,7 +117,8 @@ export function buildExtractionPrompt(
 	mediaType?: string,
 ): string {
 	const list = categories.map((c) => `- ${c.id}: ${c.name}`).join("\n");
-	const hint = isText(mediaType) ? FORWARDED_EMAIL_HINT : "";
+	const hint =
+		receiptMediaKind(mediaType) === "text" ? FORWARDED_EMAIL_HINT : "";
 	return `Extract the receipt's vendor, date (YYYY-MM-DD), grand total, currency, and every line item (name, price, quantity).
 ${hint}
 For each item, set expenseCategoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
@@ -135,16 +137,15 @@ export function buildExtractionContent({
 }): Array<TextPart | ImagePart | FilePart> {
 	// Markup sent as an image part reaches the model as unreadable noise; inline it.
 	// Untrusted third-party HTML — never render it in the browser.
-	switch (bareMediaType(mediaType)) {
-		case "application/pdf":
+	switch (receiptMediaKind(mediaType)) {
+		case "pdf":
 			return [
 				{ type: "text", text: prompt },
 				// Bare type, not the blob's raw header: Anthropic rejects a file part whose
 				// media type carries parameters.
 				{ type: "file", data: bytes, mediaType: bareMediaType(mediaType) },
 			];
-		case "text/html":
-		case "text/plain":
+		case "text":
 			return [
 				{ type: "text", text: prompt },
 				{
@@ -153,13 +154,12 @@ export function buildExtractionContent({
 					providerOptions: REDACT_IN_TRACES,
 				},
 			];
-		case "image/jpeg":
-		case "image/png":
+		case "image":
 			return [
 				{ type: "text", text: prompt },
 				{ type: "image", image: bytes },
 			];
-		default:
+		case null:
 			throw new Error(`Unsupported media type: ${mediaType}`);
 	}
 }
@@ -228,53 +228,50 @@ export class ReceiptsService {
 			[BaggageKey.ReceiptId]: receiptIdStr,
 			[BaggageKey.MemberId]: receipt?.userId ?? undefined,
 		});
-		await context.with(baggageCtx, () =>
-			tracer.startActiveSpan(
-				"receipt.extract",
-				{
-					attributes: {
-						[BaggageKey.ReceiptId]: receiptIdStr,
-						"receipt.is_final_attempt": isFinalAttempt,
-					},
+		await withSpan(
+			"receipt.extract",
+			{
+				attributes: {
+					[BaggageKey.ReceiptId]: receiptIdStr,
+					"receipt.is_final_attempt": isFinalAttempt,
 				},
-				async (span) => {
-					try {
-						// A re-delivered event for a finished receipt, or one whose row is gone,
-						// does no work — tagged so the trace still shows why nothing happened.
-						if (!receipt || DONE_STATUSES.includes(receipt.status)) {
-							span.setAttribute("receipt.outcome", ReceiptOutcome.Skipped);
-							return;
-						}
-						span.setAttribute("receipt.channel", receipt.channel);
-
-						// Read by store-relative pathname, never the member-supplied blobUrl: the
-						// store resolves a pathname against our own token, so a foreign URL can't be
-						// fetched and fed to the model (the DTO already rejects a URL pathname).
-						const { bytes, mediaType } = await this.blobStore.read(
-							receipt.blobPathname,
-						);
-						const contentHash = sha256(bytes);
-						await this.repository.setContentHash(receiptId, contentHash);
-						if (await this.linkDuplicate(receiptId, contentHash)) {
-							span.setAttribute("receipt.outcome", ReceiptOutcome.Duplicate);
-							return;
-						}
-
-						assertWithinModelCap(bytes, mediaType);
-						await this.extractAndSave(receiptId, bytes, mediaType);
-						span.setAttribute("receipt.outcome", ReceiptOutcome.Processed);
-					} catch (error) {
-						failSpan(span, error);
-						await this.parkFailure(span, error, {
-							receipt,
-							receiptId,
-							isFinalAttempt,
-						});
-					} finally {
-						span.end();
+				parent: baggageCtx,
+			},
+			async (span) => {
+				try {
+					// A re-delivered event for a finished receipt, or one whose row is gone,
+					// does no work — tagged so the trace still shows why nothing happened.
+					if (!receipt || DONE_STATUSES.includes(receipt.status)) {
+						span.setAttribute("receipt.outcome", ReceiptOutcome.Skipped);
+						return;
 					}
-				},
-			),
+					span.setAttribute("receipt.channel", receipt.channel);
+
+					// Read by store-relative pathname, never the member-supplied blobUrl: the
+					// store resolves a pathname against our own token, so a foreign URL can't be
+					// fetched and fed to the model (the DTO already rejects a URL pathname).
+					const { bytes, mediaType } = await this.blobStore.read(
+						receipt.blobPathname,
+					);
+					const contentHash = sha256(bytes);
+					await this.repository.setContentHash(receiptId, contentHash);
+					if (await this.linkDuplicate(receiptId, contentHash)) {
+						span.setAttribute("receipt.outcome", ReceiptOutcome.Duplicate);
+						return;
+					}
+
+					assertWithinModelCap(bytes, mediaType);
+					await this.extractAndSave(receiptId, bytes, mediaType);
+					span.setAttribute("receipt.outcome", ReceiptOutcome.Processed);
+				} catch (error) {
+					failSpan(span, error);
+					await this.parkFailure(span, error, {
+						receipt,
+						receiptId,
+						isFinalAttempt,
+					});
+				}
+			},
 		);
 	}
 

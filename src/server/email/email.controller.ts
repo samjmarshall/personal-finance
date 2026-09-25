@@ -1,7 +1,7 @@
 import type { Resend } from "resend";
 
 import type { Logger } from "~/server/observability/logger";
-import { failSpan, tracer } from "~/server/observability/tracer";
+import { failSpan, withSpan } from "~/server/observability/tracer";
 import { inboundEmailEventSchema } from "./email.dto";
 import type { EmailService } from "./email.service";
 
@@ -55,39 +55,35 @@ export class EmailController {
 
 		// Trace root for the inbound event, opened only past verification: an
 		// unauthenticated caller leaves no span, and none of the rejection noise does.
-		return tracer.startActiveSpan("email.inbound", async (span) => {
+		return withSpan("email.inbound", {}, async (span) => {
+			const parsed = inboundEmailEventSchema.safeParse(verified);
+			// Signed but unreadable. Retrying will not change the shape, so it is a 200.
+			if (!parsed.success) return json({ status: "ignored" });
+
+			span.setAttribute("email.event_type", parsed.data.type);
+			// Resend delivers every subscribed event to one endpoint; the others are not
+			// this route's business, and a non-200 would make Svix retry them forever.
+			if (parsed.data.type !== "email.received")
+				return json({ status: "ignored" });
+
+			const emailId = parsed.data.data.email_id;
+			span.setAttribute("email.id", emailId);
+
+			// A genuine failure below is left to throw: a 5xx is what earns a Svix retry,
+			// and an expiring download URL is worth retrying. A drop is a verdict, not a
+			// failure — 200 so it is never redelivered.
 			try {
-				const parsed = inboundEmailEventSchema.safeParse(verified);
-				// Signed but unreadable. Retrying will not change the shape, so it is a 200.
-				if (!parsed.success) return json({ status: "ignored" });
-
-				span.setAttribute("email.event_type", parsed.data.type);
-				// Resend delivers every subscribed event to one endpoint; the others are not
-				// this route's business, and a non-200 would make Svix retry them forever.
-				if (parsed.data.type !== "email.received")
-					return json({ status: "ignored" });
-
-				const emailId = parsed.data.data.email_id;
-				span.setAttribute("email.id", emailId);
-
-				// A genuine failure below is left to throw: a 5xx is what earns a Svix retry,
-				// and an expiring download URL is worth retrying. A drop is a verdict, not a
-				// failure — 200 so it is never redelivered.
-				try {
-					const result = await this.service.ingest(parsed.data);
-					if (result.status === "ingested")
-						span.setAttribute("receipt.ids", result.receiptIds);
-					return json(result);
-				} catch (error) {
-					failSpan(span, error);
-					this.logger.error("inbound email failed", {
-						error,
-						"email.id": emailId,
-					});
-					throw error;
-				}
-			} finally {
-				span.end();
+				const result = await this.service.ingest(parsed.data);
+				if (result.status === "ingested")
+					span.setAttribute("receipt.ids", result.receiptIds);
+				return json(result);
+			} catch (error) {
+				failSpan(span, error);
+				this.logger.error("inbound email failed", {
+					error,
+					"email.id": emailId,
+				});
+				throw error;
 			}
 		});
 	}

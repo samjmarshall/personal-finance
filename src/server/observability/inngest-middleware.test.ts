@@ -26,7 +26,10 @@ import {
 } from "vitest";
 import { BaggageKey, setBaggage } from "./baggage";
 import { TracingMiddleware } from "./inngest-middleware";
+import { captureException } from "./posthog";
 import { captureTraceCarrier } from "./trace-carrier";
+
+vi.mock("./posthog", () => ({ captureException: vi.fn() }));
 
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
@@ -44,7 +47,10 @@ beforeAll(() =>
 	}),
 );
 afterAll(() => provider.shutdown());
-beforeEach(() => exporter.reset());
+beforeEach(() => {
+	exporter.reset();
+	vi.mocked(captureException).mockClear();
+});
 // Restore any global spy (e.g. process.stdout.write) even if a test throws
 // before its own mockRestore — a leaked stdout mock corrupts sibling tests.
 afterEach(() => vi.restoreAllMocks());
@@ -61,6 +67,7 @@ function buildCtx(opts?: {
 	name?: string;
 	runId?: string;
 	attempt?: number;
+	maxAttempts?: number;
 }) {
 	return {
 		event: {
@@ -71,11 +78,12 @@ function buildCtx(opts?: {
 		},
 		runId: opts?.runId ?? "run-1",
 		attempt: opts?.attempt ?? 0,
+		maxAttempts: opts?.maxAttempts,
 	};
 }
 
-function buildFn(id = "process-receipt") {
-	return { id: () => id };
+function buildFn(id = "process-receipt", retries?: number) {
+	return { id: () => id, opts: { retries } };
 }
 
 describe("TracingMiddleware.wrapFunctionHandler", () => {
@@ -417,6 +425,34 @@ describe("TracingMiddleware.onRunError", () => {
 				(p) => p.level === "warn" && p.msg === "inngest attempt failed",
 			),
 		).toBe(true);
+		expect(captureException).not.toHaveBeenCalled();
+	});
+
+	// A server that omits the attempt cap reports every attempt as non-final.
+	it("captures on the last retry when the server sent no attempt cap", async () => {
+		vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+		await buildMw().onRunError({
+			ctx: buildCtx({ attempt: 3 }),
+			error: new Error("boom"),
+			fn: buildFn("process-receipt", 3),
+			isFinalAttempt: false,
+		} as never);
+
+		expect(captureException).toHaveBeenCalledOnce();
+	});
+
+	it("trusts Inngest's verdict when the server sent the attempt cap", async () => {
+		vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+		await buildMw().onRunError({
+			ctx: buildCtx({ attempt: 3, maxAttempts: 10 }),
+			error: new Error("transient"),
+			fn: buildFn("process-receipt", 3),
+			isFinalAttempt: false,
+		} as never);
+
+		expect(captureException).not.toHaveBeenCalled();
 	});
 
 	it("re-attaches the carrier — error line carries the producer trace_id", async () => {

@@ -1,10 +1,10 @@
-import { context, SpanStatusCode } from "@opentelemetry/api";
+import { SpanStatusCode } from "@opentelemetry/api";
 import type { Inngest } from "inngest";
 
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { errorMessage, type Logger } from "~/server/observability/logger";
-import { failSpan, tracer } from "~/server/observability/tracer";
+import { failSpan, withSpan } from "~/server/observability/tracer";
 
 import type {
 	OutboxEvents,
@@ -91,7 +91,7 @@ export class OutboxService implements OutboxWriteDoor {
 		let failed = 0;
 		for (const row of rows) {
 			const ageS = Math.round((Date.now() - row.createdAt.getTime()) / 1000);
-			const acked = await tracer.startActiveSpan(
+			const acked = await withSpan(
 				"outbox.sweep.row",
 				{
 					attributes: {
@@ -100,31 +100,27 @@ export class OutboxService implements OutboxWriteDoor {
 						"outbox.age_s": ageS,
 					},
 				},
-				async (span) => {
-					try {
-						// Project to the wire fields only — never ship internal columns
-						// (attempts/processedAt/lastError, incl. raw error text) to Inngest.
-						const event: OutboxEventDescriptor = {
-							id: row.id,
-							name: row.name,
-							data: row.data,
-						};
-						const ok = await this.deliver(event, "sweep");
-						// Judge stuck after this try, so a row that just went through never alerts.
-						const attempts = row.attempts + 1;
-						if (!ok && attempts >= STUCK_AFTER_ATTEMPTS) {
-							this.logger.warn("outbox row stuck", {
-								"event.name": "outbox.sweep.stuck",
-								[BaggageKey.OutboxEventId]: row.id,
-								"outbox.event_name": row.name,
-								"outbox.attempts": attempts,
-								"outbox.age_s": ageS,
-							});
-						}
-						return ok;
-					} finally {
-						span.end();
+				async () => {
+					// Project to the wire fields only — never ship internal columns
+					// (attempts/processedAt/lastError, incl. raw error text) to Inngest.
+					const event: OutboxEventDescriptor = {
+						id: row.id,
+						name: row.name,
+						data: row.data,
+					};
+					const ok = await this.deliver(event, "sweep");
+					// Judge stuck after this try, so a row that just went through never alerts.
+					const attempts = row.attempts + 1;
+					if (!ok && attempts >= STUCK_AFTER_ATTEMPTS) {
+						this.logger.warn("outbox row stuck", {
+							"event.name": "outbox.sweep.stuck",
+							[BaggageKey.OutboxEventId]: row.id,
+							"outbox.event_name": row.name,
+							"outbox.attempts": attempts,
+							"outbox.age_s": ageS,
+						});
 					}
+					return ok;
 				},
 			);
 			if (acked) delivered++;
@@ -156,43 +152,38 @@ export class OutboxService implements OutboxWriteDoor {
 			"outbox.event_name": event.name,
 			"outbox.delivery_context": deliveryContext,
 		});
-		return context.with(baggageCtx, () =>
-			tracer.startActiveSpan(
-				"outbox.deliver",
-				{
-					attributes: {
-						[BaggageKey.OutboxEventId]: event.id,
-						"outbox.event_name": event.name,
-						"outbox.delivery_context": deliveryContext,
-					},
+		return withSpan(
+			"outbox.deliver",
+			{
+				attributes: {
+					[BaggageKey.OutboxEventId]: event.id,
+					"outbox.event_name": event.name,
+					"outbox.delivery_context": deliveryContext,
 				},
-				async (span) => {
-					try {
-						try {
-							await this.inngest.send(event);
-						} catch (error) {
-							failSpan(span, error);
-							await this.recordFailure(event.id, error, log);
-							return false;
-						}
-						const acked = await this.ack(event.id, log);
-						if (acked) {
-							log.info("outbox delivered");
-						} else {
-							// Sent but the ack write failed: the row stays unsent and the next
-							// sweep retries it. Fail the span and return false so the trace and
-							// the sweep's failed count both match reality.
-							span.setStatus({
-								code: SpanStatusCode.ERROR,
-								message: "ack failed",
-							});
-						}
-						return acked;
-					} finally {
-						span.end();
-					}
-				},
-			),
+				parent: baggageCtx,
+			},
+			async (span) => {
+				try {
+					await this.inngest.send(event);
+				} catch (error) {
+					failSpan(span, error);
+					await this.recordFailure(event.id, error, log);
+					return false;
+				}
+				const acked = await this.ack(event.id, log);
+				if (acked) {
+					log.info("outbox delivered");
+				} else {
+					// Sent but the ack write failed: the row stays unsent and the next
+					// sweep retries it. Fail the span and return false so the trace and
+					// the sweep's failed count both match reality.
+					span.setStatus({
+						code: SpanStatusCode.ERROR,
+						message: "ack failed",
+					});
+				}
+				return acked;
+			},
 		);
 	}
 

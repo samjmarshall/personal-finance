@@ -3,7 +3,7 @@ import { Middleware } from "inngest";
 import { BaggageKey, setBaggage } from "./baggage";
 import { createRootLogger } from "./logger";
 import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
-import { failSpan, tracer } from "./tracer";
+import { failSpan, withSpan } from "./tracer";
 
 // Module-level roots — the BaseMiddleware ctor is fixed `({ client })`; no DI
 // seam exists, same exception adr004 makes for route files and onRequestError.
@@ -11,6 +11,9 @@ const logger = createRootLogger().with({
 	domain: "inngest",
 	component: "tracing",
 });
+
+// Inngest's own default when a function sets no `retries`.
+const DEFAULT_RETRIES = 3;
 
 export class TracingMiddleware extends Middleware.BaseMiddleware {
 	readonly id = "tracing";
@@ -24,6 +27,17 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		return data?.receiptId !== undefined
 			? { [BaggageKey.ReceiptId]: String(data.receiptId) }
 			: {};
+	}
+
+	// A server that omits its attempt cap makes every attempt look retryable, so no
+	// issue would ever be raised. Fall back to the function's own retry setting.
+	private isFinal({
+		ctx,
+		fn,
+		isFinalAttempt,
+	}: Middleware.OnRunErrorArgs): boolean {
+		if (isFinalAttempt || ctx.maxAttempts !== undefined) return isFinalAttempt;
+		return ctx.attempt >= (fn.opts.retries ?? DEFAULT_RETRIES);
 	}
 
 	async wrapFunctionHandler({
@@ -53,7 +67,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 			parent,
 		);
 
-		const span = tracer.startSpan(
+		return withSpan(
 			`inngest.function.${fn.id()}`,
 			{
 				links: parentSpanCtx ? [{ context: parentSpanCtx }] : [],
@@ -63,39 +77,31 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 					"inngest.function_id": fn.id(),
 					"inngest.event_name": ctx.event.name,
 				},
+				parent: enriched,
 			},
-			enriched,
-		);
-
-		const runCtx = trace.setSpan(enriched, span);
-
-		try {
-			return await context.with(runCtx, () => {
-				// Warn under our own span. The ambient one out here is Inngest's dropped
-				// `inngest.execution`, so its trace id would point at nothing exported.
-				if (carrierMissing) {
-					logger.warn("trace carrier missing", {
-						"event.name": "trace.carrier.missing",
-						"inngest.function_id": fn.id(),
-						[BaggageKey.InngestRunId]: ctx.runId,
-					});
+			async (span) => {
+				try {
+					// Warn under our own span. The ambient one out here is Inngest's dropped
+					// `inngest.execution`, so its trace id would point at nothing exported.
+					if (carrierMissing) {
+						logger.warn("trace carrier missing", {
+							"event.name": "trace.carrier.missing",
+							"inngest.function_id": fn.id(),
+							[BaggageKey.InngestRunId]: ctx.runId,
+						});
+					}
+					return await next();
+				} catch (err) {
+					failSpan(span, err);
+					throw err;
 				}
-				return next();
-			});
-		} catch (err) {
-			failSpan(span, err);
-			throw err;
-		} finally {
-			span.end();
-		}
+			},
+		);
 	}
 
-	async onRunError({
-		ctx,
-		error,
-		fn,
-		isFinalAttempt,
-	}: Middleware.OnRunErrorArgs): Promise<void> {
+	async onRunError(args: Middleware.OnRunErrorArgs): Promise<void> {
+		const { ctx, error, fn } = args;
+		const isFinalAttempt = this.isFinal(args);
 		const data = ctx.event.data as Record<string, unknown> | undefined;
 		// Inngest fires error hooks after the run's trace window closes — no active
 		// trace here. Re-attach the stored carrier so this error links to its trace.
@@ -122,10 +128,9 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 
 		// Dynamic import keeps the heavy analytics library out of every module that
 		// just sends events — only needed on the worker execution path.
-		const { captureException } = await import("./posthog");
+		const { reportError } = await import("./report-error");
 		context.with(restored, () => {
-			captureException(error, attrs);
-			logger.error("inngest run failed", { error, ...attrs });
+			reportError(logger, "inngest run failed", error, attrs);
 		});
 	}
 }

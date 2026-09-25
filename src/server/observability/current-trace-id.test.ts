@@ -7,7 +7,11 @@ import {
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { currentTraceId, traceIdHeaders } from "./current-trace-id";
+import {
+	currentSpanContext,
+	currentTraceId,
+	traceIdHeaders,
+} from "./current-trace-id";
 
 // A registered provider installs the async-hooks context manager, so context.with
 // actually propagates the active span (a bare @opentelemetry/api uses a noop one).
@@ -52,6 +56,32 @@ describe("currentTraceId", () => {
 			() => currentTraceId(),
 		);
 		expect(id).toBeNull();
+	});
+});
+
+describe("currentSpanContext", () => {
+	// Logs and issues from one unsampled run still join on the shared id.
+	it("keeps an unsampled span context", () => {
+		const unsampled = {
+			traceId: "0af7651916cd43dd8448eb211c80319c",
+			spanId: "b7ad6b7169203331",
+			traceFlags: TraceFlags.NONE,
+		};
+
+		const ctx = context.with(
+			trace.setSpanContext(context.active(), unsampled),
+			() => currentSpanContext(),
+		);
+
+		expect(ctx).toEqual(unsampled);
+	});
+
+	it("returns null for an all-zero (invalid) span context", () => {
+		const ctx = context.with(
+			trace.setSpanContext(context.active(), INVALID_SPAN_CONTEXT),
+			() => currentSpanContext(),
+		);
+		expect(ctx).toBeNull();
 	});
 });
 

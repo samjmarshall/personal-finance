@@ -7,7 +7,7 @@ import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { traceIdHeaders } from "~/server/observability/current-trace-id";
 import { flushAfterResponse } from "~/server/observability/flush";
 import { createRootLogger } from "~/server/observability/logger";
-import { failSpan, tracer } from "~/server/observability/tracer";
+import { failSpan, withSpan } from "~/server/observability/tracer";
 
 const logger = createRootLogger().with({
 	domain: "receipts",
@@ -24,6 +24,14 @@ const SPAN_NAME_BY_EVENT: Record<HandleUploadBody["type"], string> = {
 	"blob.generate-client-token": "blob.token.mint",
 	"blob.upload-completed": "blob.upload.completed",
 };
+
+// Blob passes a throw from the token hook straight through, so a class survives
+// to the catch where a matched message string could silently stop matching.
+class UnauthorizedError extends Error {
+	constructor() {
+		super("Unauthorized");
+	}
+}
 
 // Even a rejected body runs under Next's HTTP span, so echo its id (adr020): the
 // 400 in the Network tab still names a findable trace.
@@ -67,10 +75,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 			: null;
 	const baggageCtx = setBaggage({ [BaggageKey.MemberId]: session?.user?.id });
 
-	return tracer.startActiveSpan(
+	return withSpan(
 		SPAN_NAME_BY_EVENT[body.type] ?? "blob.event",
-		{ attributes: { "blob.event_type": body.type } },
-		baggageCtx,
+		{ attributes: { "blob.event_type": body.type }, parent: baggageCtx },
 		async (span) => {
 			try {
 				const jsonResponse = await handleUpload({
@@ -79,11 +86,11 @@ export async function POST(request: Request): Promise<NextResponse> {
 					// Runs only for the token-generation request, not the (webhook) completion
 					// callback — so the session gate lives here, not around the whole route.
 					onBeforeGenerateToken: async (pathname) => {
-						if (!session?.user) throw new Error("Unauthorized");
+						if (!session?.user) throw new UnauthorizedError();
 						// `pathname` is the requested name; Blob appends the random suffix.
 						span.setAttribute("blob.pathname", pathname);
 						return {
-							allowedContentTypes: RECEIPT_FILE_TYPES,
+							allowedContentTypes: [...RECEIPT_FILE_TYPES],
 							maximumSizeInBytes: MAX_UPLOAD_BYTES,
 							addRandomSuffix: true,
 							tokenPayload: JSON.stringify({ userId: session.user.id }),
@@ -98,7 +105,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 			} catch (error) {
 				const message =
 					error instanceof Error ? error.message : "Upload failed";
-				const status = message === "Unauthorized" ? 401 : 400;
+				const status = error instanceof UnauthorizedError ? 401 : 400;
 				// Stamp every refusal, like trpc.error_code: a 401 leaves the span
 				// status clean, so without this it looks like a success in PostHog.
 				span.setAttribute("http.response.status_code", status);
@@ -109,7 +116,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 						"blob.event_type": body.type,
 					});
 				} else {
-					failSpan(span, error, message);
+					failSpan(span, error);
 					logger.error("blob event failed", {
 						error,
 						"blob.event_type": body.type,
@@ -119,8 +126,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 					{ error: message },
 					{ status, headers: traceIdHeaders() },
 				);
-			} finally {
-				span.end();
 			}
 		},
 	);

@@ -55,6 +55,8 @@ describe("registerObservability", () => {
 		"https://inn.gs/e/KEY",
 		"https://inngest.personal-finance.localhost/e/KEY",
 		"http://localhost:8288/e/KEY",
+		"http://127.0.0.1:8288/e/KEY",
+		"https://events.example.com/e/KEY",
 	])("keeps the Inngest send %s out of traces", (url) => {
 		expect(ignored(url, bootedFetchConfig().ignoreUrls ?? [])).toBe(true);
 	});

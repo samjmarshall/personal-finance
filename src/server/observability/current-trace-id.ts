@@ -5,19 +5,19 @@ import {
 	trace,
 } from "@opentelemetry/api";
 
-// The active span's context, or null when OTel is unregistered/unsampled or the
-// context is all-zero (invalid). The single home for the getActiveSpan→spanContext
-// walk + validity guard, so no caller re-walks it or persists a "000…0" id.
+// Active span's context, or null when OTel is off or the id is all-zero. Unsampled
+// still counts: logs and issues from one run can join on it even if no trace ships.
 export function currentSpanContext(): SpanContext | null {
 	const ctx = trace.getActiveSpan()?.spanContext();
-	const sampled = ctx && (ctx.traceFlags & TraceFlags.SAMPLED) !== 0;
-	return ctx && sampled && isSpanContextValid(ctx) ? ctx : null;
+	return ctx && isSpanContextValid(ctx) ? ctx : null;
 }
 
-// The ingest trace id to persist on a receipt (adr016/adr020). Null when OTel is
-// unregistered — e.g. POSTHOG_KEY unset locally — so callers store null, not "".
+// Trace id to store on a receipt or echo in a header (adr016/adr020). Null, not "",
+// when OTel is off or unsampled, so a saved id always opens a trace that exists.
 export function currentTraceId(): string | null {
-	return currentSpanContext()?.traceId ?? null;
+	const ctx = currentSpanContext();
+	const sampled = ctx && (ctx.traceFlags & TraceFlags.SAMPLED) !== 0;
+	return sampled ? ctx.traceId : null;
 }
 
 // Response header naming the active trace for the Network tab (adr020). Empty

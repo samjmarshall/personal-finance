@@ -1,6 +1,7 @@
 import { context } from "@opentelemetry/api";
 
 import { isReceiptFileType } from "~/domain/receipts";
+import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { currentTraceId } from "~/server/observability/current-trace-id";
@@ -36,7 +37,7 @@ export const MAX_EMAIL_ATTACHMENTS = 10;
 
 /** Whether an attachment is a receipt rather than part of the mail's furniture. */
 export function isReceiptAttachment(a: InboundAttachmentMeta): boolean {
-	if (!a.content_type || !isReceiptFileType(a.content_type)) return false;
+	if (!isReceiptFileType(bareMediaType(a.content_type))) return false;
 	// Inline parts are the sender's signature image and the vendor's logo. They
 	// pass the content-type check, so without this every branded e-receipt would
 	// mint a junk Receipt per decoration.
@@ -107,8 +108,8 @@ export class EmailService {
 			return { status: "dropped" };
 		}
 
-		// Member on baggage so the blob writes, the mint and the controller's
-		// `email.inbound` span all carry who the receipt is for.
+		// Member on baggage so the blob writes, the mint and their logs carry who the
+		// receipt is for. The inbound span opened earlier, so it never gets it.
 		return context.with(
 			setBaggage({ [BaggageKey.MemberId]: sender.userId }),
 			async (): Promise<IngestResult> => {
@@ -158,7 +159,7 @@ export class EmailService {
 			if (!download) continue;
 			const bytes = await this.mailbox.download(download.download_url);
 			stored.push(
-				await this.store(bytes, attachment.content_type ?? "application/pdf"),
+				await this.store(bytes, bareMediaType(attachment.content_type)),
 			);
 		}
 		return stored;
