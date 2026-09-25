@@ -154,6 +154,27 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		expect(capturedBag!["member.id"]).toBe("m1");
 	});
 
+	// A cron's event id is Inngest's own; labelling it an outbox row id misleads a join.
+	it("omits outbox.event_id for a cron run (inngest/* event)", async () => {
+		const ctx = buildCtx({ name: "inngest/scheduled.timer", id: "cron-evt" });
+
+		let eventId: string | undefined = "unset";
+		const next = vi.fn(async () => {
+			eventId = propagation
+				.getBaggage(context.active())
+				?.getEntry("outbox.event_id")?.value;
+		});
+
+		await buildMw().wrapFunctionHandler({
+			ctx,
+			fn: buildFn("outbox-sweep"),
+			next,
+		} as never);
+
+		expect(next).toHaveBeenCalled();
+		expect(eventId).toBeUndefined();
+	});
+
 	it("event data is unchanged — _trace pocket is not removed", async () => {
 		const producerSpan = tracer.startSpan("producer");
 		const carrier = context.with(
@@ -367,6 +388,35 @@ describe("TracingMiddleware.onRunError", () => {
 		expect(parsed["inngest.attempt"]).toBe("2");
 		expect(parsed.isFinalAttempt).toBe(true);
 		expect(parsed["receipt.id"]).toBe("5");
+	});
+
+	it("warns, not errors, on a non-final attempt — a retry may still succeed", async () => {
+		const lines: string[] = [];
+		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+			if (typeof chunk === "string") lines.push(chunk);
+			return true;
+		});
+
+		await buildMw().onRunError({
+			ctx: buildCtx({ attempt: 0 }),
+			error: new Error("transient"),
+			fn: buildFn(),
+			isFinalAttempt: false,
+		} as never);
+
+		const parsed = lines.flatMap((l) => {
+			try {
+				return [JSON.parse(l)];
+			} catch {
+				return [];
+			}
+		});
+		expect(parsed.some((p) => p.level === "error")).toBe(false);
+		expect(
+			parsed.some(
+				(p) => p.level === "warn" && p.msg === "inngest attempt failed",
+			),
+		).toBe(true);
 	});
 
 	it("re-attaches the carrier — error line carries the producer trace_id", async () => {

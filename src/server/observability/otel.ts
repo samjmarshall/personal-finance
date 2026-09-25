@@ -72,7 +72,17 @@ export function registerObservability(): void {
 		// @vercel/otel already propagates just to our own deployment/same-host URL.
 		// Empty = no third party added, so Bedrock/Resend (third-party https) get no
 		// traceparent/baggage. Self-fetches to our deployment still carry it (adr015 §6).
-		instrumentationConfig: { fetch: { propagateContextUrls: [] } },
+		// Inngest puts the event key in the send URL path, so a traced send would
+		// ship the key in the span name. Cloud, portless local, and the default dev port.
+		instrumentationConfig: {
+			fetch: {
+				propagateContextUrls: [],
+				ignoreUrls: [
+					/^https?:\/\/(?:inn\.gs|[^/]*inngest[^/]*)\/e\//,
+					/^https?:\/\/localhost:8288\/e\//,
+				],
+			},
+		},
 	});
 
 	// LegacyOpenTelemetry keeps the ai.* span names + ai.prompt/ai.prompt.messages

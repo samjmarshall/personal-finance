@@ -12,9 +12,19 @@ export { LogLevel };
 
 /**
  * Attrs callers pass to each log call. Accepts unknown values so `error: Error`
- * is ergonomic inline — the implementation filters to primitives before emitting.
+ * is ergonomic inline — only the error is broken into strings; pass the rest as
+ * primitives.
  */
 export type LogAttributes = Record<string, unknown>;
+
+/** The error's class name, or its `typeof` when something other than an Error was thrown. */
+export function errorName(error: unknown): string {
+	return error instanceof Error ? error.name : typeof error;
+}
+
+export function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
 
 export interface Logger {
 	debug(msg: string, attrs?: LogAttributes): void;
@@ -93,8 +103,8 @@ export class OtelLogger implements Logger {
 					errorAttrs["exception.message"] = exception.message;
 					errorAttrs["exception.stacktrace"] = exception.stack ?? "";
 				} else {
-					errorAttrs["exception.type"] = typeof exception;
-					errorAttrs["exception.message"] = String(exception);
+					errorAttrs["exception.type"] = errorName(exception);
+					errorAttrs["exception.message"] = errorMessage(exception);
 				}
 			}
 
@@ -115,13 +125,13 @@ export class OtelLogger implements Logger {
 
 			const { number: severityNumber, text: severityText } = SEVERITY[level];
 
-			// allAttrs contains only primitives we built (strings, numbers, booleans).
-			// Cast to AnyValueMap — the Error is decomposed to strings above before here.
+			// Caller values pass through as given, unchecked. Only the error was broken
+			// into strings above, so it can't ship as an empty object.
 			this.emitter.emit({
 				severityNumber,
 				severityText,
 				body: msg,
-				// biome-ignore lint/suspicious/noExplicitAny: AnyValueMap requires a cast here; allAttrs holds only primitives
+				// biome-ignore lint/suspicious/noExplicitAny: attrs are unknown; AnyValueMap needs a cast
 				attributes: allAttrs as any,
 				...(eventName !== undefined ? { eventName } : {}),
 			});

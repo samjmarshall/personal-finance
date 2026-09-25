@@ -1,8 +1,13 @@
-import { context, INVALID_SPAN_CONTEXT, trace } from "@opentelemetry/api";
+import {
+	context,
+	INVALID_SPAN_CONTEXT,
+	TraceFlags,
+	trace,
+} from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { currentTraceId } from "./current-trace-id";
+import { currentTraceId, traceIdHeaders } from "./current-trace-id";
 
 // A registered provider installs the async-hooks context manager, so context.with
 // actually propagates the active span (a bare @opentelemetry/api uses a noop one).
@@ -34,5 +39,36 @@ describe("currentTraceId", () => {
 			() => currentTraceId(),
 		);
 		expect(id).toBeNull();
+	});
+
+	// A dropped span is never exported, so its id would link to nothing.
+	it("returns null for an unsampled span context", () => {
+		const id = context.with(
+			trace.setSpanContext(context.active(), {
+				traceId: "0af7651916cd43dd8448eb211c80319c",
+				spanId: "b7ad6b7169203331",
+				traceFlags: TraceFlags.NONE,
+			}),
+			() => currentTraceId(),
+		);
+		expect(id).toBeNull();
+	});
+});
+
+describe("traceIdHeaders", () => {
+	it("echoes the active span's trace id as x-trace-id", () => {
+		const span = trace.getTracer("test").startSpan("root");
+		const { traceId } = span.spanContext();
+
+		const headers = context.with(trace.setSpan(context.active(), span), () =>
+			traceIdHeaders(),
+		);
+		span.end();
+
+		expect(headers).toEqual({ "x-trace-id": traceId });
+	});
+
+	it("sets no x-trace-id when there is no active span", () => {
+		expect(traceIdHeaders()).toEqual({});
 	});
 });

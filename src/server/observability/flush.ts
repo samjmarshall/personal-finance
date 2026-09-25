@@ -1,7 +1,17 @@
+import { after } from "next/server";
+
 import { getRegisteredProcessors } from "./otel-registry";
 import { flushPostHog } from "./posthog";
 
 const FLUSH_TIMEOUT_MS = 5000;
+
+/**
+ * Drains telemetry once the response is sent, before the lambda freezes (adr015 §8).
+ * Call at the top of a request, so even an early refusal drains.
+ */
+export function flushAfterResponse(): void {
+	after(flushTelemetry);
+}
 
 /**
  * Force-flushes every telemetry sink before a serverless freeze (adr015 §8).

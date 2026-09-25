@@ -6,8 +6,12 @@ import { createHash } from "node:crypto";
 // raw receipt image, so both must be redacted on the plain OTLP export path.
 export const PROMPT_ATTRS = ["ai.prompt.messages", "ai.prompt"] as const;
 
-// Content-part fields carrying binary in AI SDK v5: FilePart.data, ImagePart.image.
+// Fields where AI SDK prompt parts carry raw bytes: files and images.
 const BINARY_PART_FIELDS = ["data", "image"] as const;
+
+// A forwarded e-receipt rides inline as text, up to the 10 MB upload cap. Our own
+// instructions stay well under this, so anything longer is the member's email.
+const MAX_TEXT_PART_BYTES = 8 * 1024;
 
 /**
  * Redacts binary content in one serialized prompt attribute (adr015 §6). Returns
@@ -44,9 +48,14 @@ function redactMessage(msg: unknown): unknown {
 	return { ...msg, content: parts.map(redactPart) };
 }
 
-/** Replaces any binary payload field on a content part with a compact stub. */
+/** Replaces any binary payload field, or an oversize text body, with a compact stub. */
 function redactPart(part: unknown): unknown {
 	if (!isObject(part)) return part;
+	if (part.type === "text" && typeof part.text === "string") {
+		const bytes = Buffer.from(part.text, "utf8");
+		if (bytes.byteLength <= MAX_TEXT_PART_BYTES) return part;
+		return { ...part, text: stubBytes(bytes, "text/plain") };
+	}
 	let next = part;
 	for (const field of BINARY_PART_FIELDS) {
 		if (!(field in next)) continue;
@@ -68,10 +77,14 @@ function isObject(val: unknown): val is Record<string, unknown> {
 function stubBinary(value: unknown, mediaType: unknown): string | null {
 	const bytes = toBytes(value);
 	if (bytes === null) return null;
-	const sha = createHash("sha256").update(bytes).digest("hex");
 	const mt =
 		typeof mediaType === "string" ? mediaType : "application/octet-stream";
-	return `<redacted ${mt} ${bytes.byteLength} sha256:${sha}>`;
+	return stubBytes(bytes, mt);
+}
+
+function stubBytes(bytes: Buffer, mediaType: string): string {
+	const sha = createHash("sha256").update(bytes).digest("hex");
+	return `<redacted ${mediaType} ${bytes.byteLength} sha256:${sha}>`;
 }
 
 /**
@@ -115,15 +128,8 @@ function bytesFromNumbers(arr: unknown[]): Buffer | null {
 }
 
 function bytesFromIndexObject(obj: Record<string, unknown>): Buffer | null {
-	const keys = Object.keys(obj);
-	if (keys.length === 0) return null;
-	const out = new Uint8Array(keys.length);
-	for (let i = 0; i < keys.length; i++) {
-		const v = obj[String(i)];
-		if (typeof v !== "number" || v < 0 || v > 255) return null;
-		out[i] = v;
-	}
-	return Buffer.from(out);
+	const length = Object.keys(obj).length;
+	return bytesFromNumbers(Array.from({ length }, (_, i) => obj[String(i)]));
 }
 
 // base64: a multiple of 4 chars from the base64 alphabet with 0-2 `=` pads.

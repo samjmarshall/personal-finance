@@ -13,9 +13,8 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BaggageKey, setBaggage } from "./baggage";
 
-// Mirrors otel.ts's propagator + sampler choice: the "parentbased_always_on"
-// preset always records a root, and the composite carries both W3C tracecontext
-// and baggage. The outbox carrier (Phase 4) relies on inject writing both.
+// Same propagators as prod; roots always record. Outbox carrier needs both
+// trace context and baggage written.
 const provider = new NodeTracerProvider({
 	sampler: new AlwaysOnSampler(),
 	spanProcessors: [new SimpleSpanProcessor(new InMemorySpanExporter())],

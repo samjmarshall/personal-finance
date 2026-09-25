@@ -34,6 +34,28 @@ describe("redactPromptJson", () => {
 		expect(parts[1]?.text).toBe("describe this");
 	});
 
+	// Forwarded e-receipts ride inline as text: member data, and up to 10 MB.
+	it("stubs a text part over 8 KB (an inline e-receipt body)", () => {
+		const body = `Extract the receipt.\n\n<html>${"x".repeat(10 * 1024)}</html>`;
+		const bytes = Buffer.from(body, "utf8");
+		const sha = createHash("sha256").update(bytes).digest("hex");
+
+		const out = JSON.parse(redactPromptJson(makeMessages([textPart(body)])));
+
+		expect(out[0].content[0]).toEqual({
+			type: "text",
+			text: `<redacted text/plain ${bytes.byteLength} sha256:${sha}>`,
+		});
+	});
+
+	it("keeps a text part at exactly 8 KB", () => {
+		const text = "a".repeat(8 * 1024);
+
+		const out = JSON.parse(redactPromptJson(makeMessages([textPart(text)])));
+
+		expect(out[0].content[0].text).toBe(text);
+	});
+
 	it("reduces a 3 MB base64 file part to a stub under 200 bytes", () => {
 		const bigBytes = Buffer.alloc(3 * 1024 * 1024, 0xab);
 		const messages = makeMessages([filePart(bigBytes.toString("base64"))]);

@@ -1,14 +1,9 @@
-import {
-	context,
-	ROOT_CONTEXT,
-	SpanStatusCode,
-	trace,
-} from "@opentelemetry/api";
+import { context, ROOT_CONTEXT, trace } from "@opentelemetry/api";
 import { Middleware } from "inngest";
 import { BaggageKey, setBaggage } from "./baggage";
 import { createRootLogger } from "./logger";
 import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
-import { tracer } from "./tracer";
+import { failSpan, tracer } from "./tracer";
 
 // Module-level roots — the BaseMiddleware ctor is fixed `({ client })`; no DI
 // seam exists, same exception adr004 makes for route files and onRequestError.
@@ -38,10 +33,10 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 	}: Middleware.WrapFunctionHandlerArgs): Promise<unknown> {
 		const data = ctx.event.data as Record<string, unknown> | undefined;
 		const restored = restoreTraceCarrier(data?.[TRACE_CARRIER_KEY]);
-		// Cron/invoke runs (inngest/* events) never carry a _trace; a missing carrier
-		// is a real bug only for event-triggered runs.
-		const carrierMissing =
-			restored === null && !ctx.event.name.startsWith("inngest/");
+		// Cron/invoke runs (inngest/* events) come from Inngest, not the outbox: no
+		// _trace, and their event id is Inngest's own, not an outbox row id.
+		const fromOutbox = !ctx.event.name.startsWith("inngest/");
+		const carrierMissing = restored === null && fromOutbox;
 		const parent = restored ?? ROOT_CONTEXT;
 
 		const parentSpanCtx = trace.getSpanContext(parent);
@@ -52,7 +47,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 			{
 				[BaggageKey.InngestRunId]: ctx.runId,
 				[BaggageKey.InngestAttempt]: String(ctx.attempt),
-				[BaggageKey.OutboxEventId]: ctx.event.id,
+				[BaggageKey.OutboxEventId]: fromOutbox ? ctx.event.id : undefined,
 				...this.domainAttrs(data),
 			},
 			parent,
@@ -88,8 +83,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 				return next();
 			});
 		} catch (err) {
-			span.recordException(err as Error);
-			span.setStatus({ code: SpanStatusCode.ERROR });
+			failSpan(span, err);
 			throw err;
 		} finally {
 			span.end();
@@ -116,6 +110,15 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		};
 
 		Object.assign(attrs, this.domainAttrs(data));
+
+		// A retry may still succeed — log it, but raise an Error Tracking issue only
+		// once the run has truly failed.
+		if (!isFinalAttempt) {
+			context.with(restored, () => {
+				logger.warn("inngest attempt failed", { error, ...attrs });
+			});
+			return;
+		}
 
 		// Dynamic import keeps the heavy analytics library out of every module that
 		// just sends events — only needed on the worker execution path.

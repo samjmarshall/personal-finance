@@ -1,4 +1,4 @@
-import { context, trace } from "@opentelemetry/api";
+import { context, propagation, trace } from "@opentelemetry/api";
 import {
 	CompositePropagator,
 	W3CBaggagePropagator,
@@ -71,25 +71,23 @@ describe("buildOutboxEvent (active trace)", () => {
 		expect(carrier.traceparent).toContain(traceId);
 	});
 
-	it("persists no baggage key outside BaggageKey", () => {
+	// Inbound baggage can carry anything; only our own keys may be stored at rest.
+	it("persists our baggage keys and drops foreign ones", () => {
 		const span = provider.getTracer("test").startSpan("root");
-		const known = new Set<string>(Object.values(BaggageKey));
+		const withForeign = propagation.setBaggage(
+			trace.setSpan(context.active(), span),
+			propagation.createBaggage({ "vendor.session": { value: "secret" } }),
+		);
 
 		const event = context.with(
-			setBaggage(
-				{ [BaggageKey.MemberId]: "m1" },
-				trace.setSpan(context.active(), span),
-			),
+			setBaggage({ [BaggageKey.MemberId]: "m1" }, withForeign),
 			() => buildOutboxEvent("receipt/uploaded", { receiptId: 1 }),
 		);
 		span.end();
 
-		const baggage = (event.data as WithTrace)._trace.baggage ?? "";
-		expect(baggage).not.toBe("");
-		for (const entry of baggage.split(",")) {
-			const key = entry.split("=")[0]?.trim() ?? "";
-			expect(known.has(key)).toBe(true);
-		}
+		expect((event.data as WithTrace)._trace.baggage).toBe(
+			`${BaggageKey.MemberId}=m1`,
+		);
 	});
 });
 

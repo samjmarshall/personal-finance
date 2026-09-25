@@ -1,6 +1,7 @@
 import {
 	isSpanContextValid,
 	type SpanContext,
+	TraceFlags,
 	trace,
 } from "@opentelemetry/api";
 
@@ -9,7 +10,8 @@ import {
 // walk + validity guard, so no caller re-walks it or persists a "000…0" id.
 export function currentSpanContext(): SpanContext | null {
 	const ctx = trace.getActiveSpan()?.spanContext();
-	return ctx && isSpanContextValid(ctx) ? ctx : null;
+	const sampled = ctx && (ctx.traceFlags & TraceFlags.SAMPLED) !== 0;
+	return ctx && sampled && isSpanContextValid(ctx) ? ctx : null;
 }
 
 // The ingest trace id to persist on a receipt (adr016/adr020). Null when OTel is
