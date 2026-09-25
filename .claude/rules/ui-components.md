@@ -1,6 +1,6 @@
 ---
 paths:
-  - "src/app/**"
+  - "src/app/**/_components/*"
   - "src/components/**"
 ---
 
