@@ -38,6 +38,15 @@ describe("reportContextFailure", () => {
 		});
 	});
 
+	it("captures a batch's shared context error once", () => {
+		const error = new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+		reportContextFailure({ error, ctx: undefined, path: "receipt.list" });
+		reportContextFailure({ error, ctx: undefined, path: "expense.list" });
+
+		expect(captureException).toHaveBeenCalledOnce();
+	});
+
 	// With a ctx the procedure ran, so the middleware already reported it.
 	it("skips an error that has a ctx", () => {
 		reportContextFailure({
