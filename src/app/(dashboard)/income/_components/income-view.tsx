@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
 import { Money } from "~/components/money";
-import { OneTimeSection } from "~/components/one-time-section";
 import { PageHeader } from "~/components/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -13,6 +12,7 @@ import { CommitmentKind } from "~/lib/constants";
 import { formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { IncomeForm } from "./income-form";
+import { OneTimeSection } from "./one-time-section";
 
 type Income = RouterOutputs["income"]["list"][number];
 

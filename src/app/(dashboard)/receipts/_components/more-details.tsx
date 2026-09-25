@@ -24,24 +24,28 @@ import { diagnosticsJson, metaRows, rawJsonText } from "./more-details.display";
 // Pieces
 // ---------------------------------------------------------------------------
 
+// Which button last copied + the copy action: always handed down as one.
+type Clipboard = {
+	copiedKey: string | null;
+	copy: (text: string, key: string) => void;
+};
+
 function CopyButton({
 	value,
 	copyKey,
 	label,
-	copiedKey,
-	onCopy,
+	clipboard,
 }: {
 	value: string;
 	copyKey: string;
 	label: string;
-	copiedKey: string | null;
-	onCopy: (text: string, key: string) => void;
+	clipboard: Clipboard;
 }) {
-	const copied = copiedKey === copyKey;
+	const copied = clipboard.copiedKey === copyKey;
 	return (
 		<button
 			className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-medium text-muted-foreground text-xs outline-none transition-colors hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-			onClick={() => onCopy(value, copyKey)}
+			onClick={() => clipboard.copy(value, copyKey)}
 			type="button"
 		>
 			{copied ? (
@@ -61,13 +65,11 @@ function CopyButton({
 function TraceHeader({
 	traceId,
 	traceUrl,
-	copiedKey,
-	copy,
+	clipboard,
 }: {
 	traceId: string | null;
 	traceUrl: string | null;
-	copiedKey: string | null;
-	copy: (text: string, key: string) => void;
+	clipboard: Clipboard;
 }) {
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2">
@@ -80,10 +82,9 @@ function TraceHeader({
 			<div className="flex items-center gap-2">
 				{traceId && (
 					<CopyButton
-						copiedKey={copiedKey}
+						clipboard={clipboard}
 						copyKey="trace"
 						label="Copy"
-						onCopy={copy}
 						value={traceId}
 					/>
 				)}
@@ -176,12 +177,10 @@ function Timeline({ data }: { data: ReceiptDetail }) {
 // once per render, not once for the <pre> and again for the copy value.
 function RawPanel({
 	data,
-	copiedKey,
-	copy,
+	clipboard,
 }: {
 	data: ReceiptDetail;
-	copiedKey: string | null;
-	copy: (text: string, key: string) => void;
+	clipboard: Clipboard;
 }) {
 	const text = rawJsonText(data);
 	return (
@@ -191,10 +190,9 @@ function RawPanel({
 			</pre>
 			<div className="mt-auto flex justify-end">
 				<CopyButton
-					copiedKey={copiedKey}
+					clipboard={clipboard}
 					copyKey="raw"
 					label="Copy JSON"
-					onCopy={copy}
 					value={text}
 				/>
 			</div>
@@ -246,6 +244,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			},
 		);
 	}
+	const clipboard: Clipboard = { copiedKey, copy };
 	const [tab, setTab] = useState<Tab>("timeline");
 	const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 	const rows = metaRows(data);
@@ -293,8 +292,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			<div className="p-3">
 				<div className="flex flex-col gap-3">
 					<TraceHeader
-						copiedKey={copiedKey}
-						copy={copy}
+						clipboard={clipboard}
 						traceId={data.traceId}
 						traceUrl={data.traceUrl}
 					/>
@@ -340,9 +338,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 					>
 						{tab === "timeline" && <Timeline data={data} />}
 
-						{tab === "raw" && (
-							<RawPanel copiedKey={copiedKey} copy={copy} data={data} />
-						)}
+						{tab === "raw" && <RawPanel clipboard={clipboard} data={data} />}
 
 						{tab === "meta" && (
 							<div className="flex flex-1 flex-col gap-2">
@@ -363,10 +359,9 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 								</table>
 								<div className="mt-auto flex justify-end">
 									<CopyButton
-										copiedKey={copiedKey}
+										clipboard={clipboard}
 										copyKey="all"
 										label="Copy all as JSON"
-										onCopy={copy}
 										value={diagnosticsJson(data)}
 									/>
 								</div>
