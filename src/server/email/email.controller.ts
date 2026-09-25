@@ -1,8 +1,7 @@
 import type { Resend } from "resend";
-
+import { inboundEmailEventDto } from "~/domain/email";
 import type { Logger } from "~/server/observability/logger";
 import { failSpan, withSpan } from "~/server/observability/tracer";
-import { inboundEmailEventSchema } from "./email.dto";
 import type { EmailService } from "./email.service";
 
 interface EmailControllerDeps {
@@ -56,7 +55,7 @@ export class EmailController {
 		// Trace root for the inbound event, opened only past verification: an
 		// unauthenticated caller leaves no span, and none of the rejection noise does.
 		return withSpan("email.inbound", {}, async (span) => {
-			const parsed = inboundEmailEventSchema.safeParse(verified);
+			const parsed = inboundEmailEventDto.safeParse(verified);
 			// Signed but unreadable. Retrying will not change the shape, so it is a 200.
 			if (!parsed.success) return json({ status: "ignored" });
 

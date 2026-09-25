@@ -1,12 +1,11 @@
 import { context } from "@opentelemetry/api";
-
+import type { InboundAttachmentMeta, InboundEmailEvent } from "~/domain/email";
 import { isReceiptFileType } from "~/domain/receipts";
 import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import { BaggageKey, setBaggage } from "~/server/observability/baggage";
 import { currentTraceId } from "~/server/observability/current-trace-id";
 import type { Logger } from "~/server/observability/logger";
-import type { InboundAttachmentMeta, InboundEmailEvent } from "./email.dto";
 import type { InboundMailbox } from "./email.mailbox";
 import type { EmailRepository, StoredBlob } from "./email.repository";
 

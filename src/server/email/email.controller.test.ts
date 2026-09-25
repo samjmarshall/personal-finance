@@ -13,9 +13,9 @@ import {
 	it,
 	vi,
 } from "vitest";
+import type { InboundEmailEvent } from "~/domain/email";
 import type { LogAttributes, Logger } from "~/server/observability/logger";
 import { EmailController } from "./email.controller";
-import type { InboundEmailEvent } from "./email.dto";
 import type { EmailService, IngestResult } from "./email.service";
 
 const SIGNED_HEADERS = {
