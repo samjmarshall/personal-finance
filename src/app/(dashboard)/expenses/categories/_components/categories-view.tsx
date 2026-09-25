@@ -3,8 +3,8 @@
 import { GripVerticalIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
-import { PageHeader } from "~/app/_components/page-header";
+import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
+import { PageHeader } from "~/components/page-header";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";

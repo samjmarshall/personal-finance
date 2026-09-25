@@ -1,5 +1,5 @@
-import { UnplannedView } from "~/app/_components/expenses/unplanned-view";
 import { api, HydrateClient } from "~/trpc/server";
+import { UnplannedView } from "./_components/unplanned-view";
 
 export default async function UnplannedPage() {
 	void api.expense.list.prefetch();

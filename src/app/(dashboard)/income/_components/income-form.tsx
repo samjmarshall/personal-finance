@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import { SelectField } from "~/components/select-field";
 import { Button } from "~/components/ui/button";
 import {
 	Dialog,
@@ -20,7 +20,6 @@ import { Input } from "~/components/ui/input";
 import { CommitmentKind, toCommitmentKind } from "~/lib/constants";
 import { fromDateInput, toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
-import { SelectField } from "../select-field";
 
 type Income = RouterOutputs["income"]["list"][number];
 

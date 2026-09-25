@@ -5,17 +5,17 @@ import {
 	Scale,
 	Wallet,
 } from "lucide-react";
-import { BalanceSnapshotCard } from "~/app/_components/dashboard/balance-snapshot-card";
-import { CashFlowChart } from "~/app/_components/dashboard/cash-flow-chart";
-import { MonthlySpendChart } from "~/app/_components/dashboard/monthly-spend-chart";
-import { PriorityBreakdown } from "~/app/_components/dashboard/priority-breakdown";
-import { TopCategories } from "~/app/_components/dashboard/top-categories";
-import { Money } from "~/app/_components/money";
-import { PageHeader } from "~/app/_components/page-header";
+import { Money } from "~/components/money";
+import { PageHeader } from "~/components/page-header";
 import { Card, CardContent } from "~/components/ui/card";
 import { CommitmentKind } from "~/lib/constants";
 import { cn, formatCurrency } from "~/lib/utils";
 import { api, HydrateClient } from "~/trpc/server";
+import { BalanceSnapshotCard } from "./_components/balance-snapshot-card";
+import { CashFlowChart } from "./_components/cash-flow-chart";
+import { MonthlySpendChart } from "./_components/monthly-spend-chart";
+import { PriorityBreakdown } from "./_components/priority-breakdown";
+import { TopCategories } from "./_components/top-categories";
 
 export default async function DashboardPage() {
 	const [summary, expenses, income] = await Promise.all([

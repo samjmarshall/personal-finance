@@ -248,7 +248,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 	}
 	const [tab, setTab] = useState<Tab>("timeline");
 	const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
-	const rows = metaRows(data, data.traceId);
+	const rows = metaRows(data);
 
 	// Unique per instance so two open overlays never share ids (heading/panel/tab
 	// wiring must stay internally consistent). See settings-section.tsx.
@@ -367,7 +367,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 										copyKey="all"
 										label="Copy all as JSON"
 										onCopy={copy}
-										value={diagnosticsJson(data, data.traceId)}
+										value={diagnosticsJson(data)}
 									/>
 								</div>
 							</div>

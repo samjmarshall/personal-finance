@@ -1,5 +1,5 @@
-import { TransactionsView } from "~/app/_components/transactions/transactions-view";
 import { api, HydrateClient } from "~/trpc/server";
+import { TransactionsView } from "./_components/transactions-view";
 
 export default async function TransactionsPage() {
 	void api.category.list.prefetch();

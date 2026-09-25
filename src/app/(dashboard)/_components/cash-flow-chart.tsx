@@ -12,7 +12,7 @@ import {
 	YAxis,
 } from "recharts";
 
-import { SelectField } from "~/app/_components/select-field";
+import { SelectField } from "~/components/select-field";
 import {
 	type ChartConfig,
 	ChartContainer,

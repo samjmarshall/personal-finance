@@ -1,6 +1,6 @@
-import { SettingsView } from "~/app/_components/settings/settings-view";
 import { env } from "~/env";
 import { api, HydrateClient } from "~/trpc/server";
+import { SettingsView } from "./_components/settings-view";
 
 export default async function SettingsPage() {
 	void api.setting.fortnightAnchor.prefetch();

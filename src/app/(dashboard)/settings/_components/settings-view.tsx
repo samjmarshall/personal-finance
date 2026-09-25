@@ -2,7 +2,7 @@
 
 import { AtSign, CalendarClock, type LucideIcon, Palette } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { PageHeader } from "~/app/_components/page-header";
+import { PageHeader } from "~/components/page-header";
 import { cn } from "~/lib/utils";
 import { AllowedSendersSection } from "./allowed-senders-section";
 import { AppearanceSection } from "./appearance-section";

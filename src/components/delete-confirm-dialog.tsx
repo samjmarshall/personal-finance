@@ -1,6 +1,6 @@
 "use client";
 
-import { ConfirmDialog } from "~/app/_components/confirm-dialog";
+import { ConfirmDialog } from "~/components/confirm-dialog";
 
 // Delete-specific wrapper over ConfirmDialog: the fixed copy and destructive
 // styling live here once, so every list view shares one consistent delete

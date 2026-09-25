@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { AppNav, MobileNav } from "~/app/_components/app-nav";
+import { AppNav, MobileNav } from "~/components/app-nav";
 import { getSession } from "~/server/auth/server";
 
 export default async function DashboardLayout({

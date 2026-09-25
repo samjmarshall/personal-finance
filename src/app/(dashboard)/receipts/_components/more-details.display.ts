@@ -23,12 +23,9 @@ export function fmtMs(ms: number | null): string {
 	return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
-export function metaRows(
-	data: ReceiptDetail,
-	traceId: string | null,
-): Array<[string, string]> {
+export function metaRows(data: ReceiptDetail): Array<[string, string]> {
 	return [
-		["Ingest trace ID", traceId ?? "—"],
+		["Ingest trace ID", data.traceId ?? "—"],
 		["Receipt ID", `#${data.id}`],
 		["Status", data.status],
 		["Channel", data.channel],
@@ -50,13 +47,10 @@ export function metaRows(
 	];
 }
 
-export function diagnosticsJson(
-	data: ReceiptDetail,
-	traceId: string | null,
-): string {
+export function diagnosticsJson(data: ReceiptDetail): string {
 	return JSON.stringify(
 		{
-			traceId,
+			traceId: data.traceId,
 			receiptId: data.id,
 			status: data.status,
 			channel: data.channel,

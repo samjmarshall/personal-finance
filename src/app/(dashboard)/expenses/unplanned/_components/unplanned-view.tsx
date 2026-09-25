@@ -4,9 +4,9 @@ import { skipToken } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { Money } from "~/app/_components/money";
-import { PageHeader } from "~/app/_components/page-header";
-import { SelectField } from "~/app/_components/select-field";
+import { Money } from "~/components/money";
+import { PageHeader } from "~/components/page-header";
+import { SelectField } from "~/components/select-field";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import {

@@ -13,9 +13,14 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
-import { Money } from "~/app/_components/money";
-import { PageHeader } from "~/app/_components/page-header";
+import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
+import { Money } from "~/components/money";
+import { PageHeader } from "~/components/page-header";
+import {
+	SelectField,
+	type SelectFieldOption,
+	toOptions,
+} from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -23,11 +28,6 @@ import { Input } from "~/components/ui/input";
 import { Frequency, Priority, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
-import {
-	SelectField,
-	type SelectFieldOption,
-	toOptions,
-} from "../select-field";
 import { TransactionForm } from "./transaction-form";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];

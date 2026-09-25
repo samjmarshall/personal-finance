@@ -3,7 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-import { Money } from "~/app/_components/money";
+import { Money } from "~/components/money";
 import { Card } from "~/components/ui/card";
 import { cn, isPast } from "~/lib/utils";
 

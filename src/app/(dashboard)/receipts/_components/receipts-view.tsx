@@ -3,16 +3,16 @@
 import { FileText, Mail, RotateCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
-import { Money } from "~/app/_components/money";
-import { PageHeader } from "~/app/_components/page-header";
+import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
+import { Money } from "~/components/money";
+import { PageHeader } from "~/components/page-header";
+import { SelectField, type SelectFieldOption } from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
 import { receiptImageUrl } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
 import { cn, formatDate, isPdf, isText } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
-import { SelectField, type SelectFieldOption } from "../select-field";
 import { ReceiptDetail } from "./receipt-detail";
 import { ReceiptUpload } from "./receipt-upload";
 

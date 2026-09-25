@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
+import {
+	SelectField,
+	type SelectFieldOption,
+	toOptions,
+} from "~/components/select-field";
 import { Button } from "~/components/ui/button";
 import {
 	Combobox,
@@ -29,11 +33,6 @@ import { Textarea } from "~/components/ui/textarea";
 import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
 import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
-import {
-	SelectField,
-	type SelectFieldOption,
-	toOptions,
-} from "../select-field";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
 

@@ -11,11 +11,8 @@ import {
 import { useRef } from "react";
 import { toast } from "sonner";
 
-import { Money } from "~/app/_components/money";
-import {
-	SelectField,
-	type SelectFieldOption,
-} from "~/app/_components/select-field";
+import { Money } from "~/components/money";
+import { SelectField, type SelectFieldOption } from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
 import {
 	Dialog,

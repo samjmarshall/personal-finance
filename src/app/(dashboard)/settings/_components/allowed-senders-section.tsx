@@ -3,7 +3,7 @@
 import { Loader2Icon, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DeleteConfirmDialog } from "~/app/_components/delete-confirm-dialog";
+import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
 import { Button } from "~/components/ui/button";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";

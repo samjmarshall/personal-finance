@@ -87,7 +87,7 @@ describe("processingMs", () => {
 describe("metaRows", () => {
 	it("renders an em-dash for a null trace id and hides processing time once matched", () => {
 		const rows = Object.fromEntries(
-			metaRows(receipt({ transactionId: 99 }), null),
+			metaRows(receipt({ transactionId: 99, traceId: null })),
 		);
 		expect(rows["Ingest trace ID"]).toBe("—");
 		expect(rows["Processing time"]).toBe("—");
@@ -98,7 +98,9 @@ describe("metaRows", () => {
 describe("diagnosticsJson", () => {
 	it("emits valid JSON carrying the trace id and item count", () => {
 		const parsed = JSON.parse(
-			diagnosticsJson(receipt({ items: [{}, {}] as never }), "trace-1"),
+			diagnosticsJson(
+				receipt({ items: [{}, {}] as never, traceId: "trace-1" }),
+			),
 		);
 		expect(parsed.traceId).toBe("trace-1");
 		expect(parsed.receiptId).toBe(7);
