@@ -41,10 +41,15 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   `interface Foo` + `class DrizzleFoo` / `VercelFoo` / `ModelFoo`. The service types
   its deps as the interfaces; the controller types `service` as the class. A test
   fake is then a plain object literal with no cast.
-- **No functions that take functions.** Deps are objects with methods
+- **Deps are objects, not functions.** Deps are objects with methods
   (`blobStore.read`, `mailbox.download`), never bare `fn` fields. No `make*()`
-  factories that return closures. A provider SDK object (`languageModel:
-  LanguageModel`) counts as an object dep; bind it in the composition root only.
+  factories that build a tier from closures — use a class. A provider SDK object
+  (`languageModel: LanguageModel`) counts as an object dep; bind it in the
+  composition root only.
+- **`with*()` wrappers are allowed.** A stateless wrapper that takes a function and
+  runs or wraps it, unchanged in signature (`withSpan`, `withFlush`, `withRetry`), adds
+  cross-cutting behavior around a call; it is not a dep. Keep it generic and
+  domain-free, and put it in a shared module (`observability/`, `lib/`).
 - **Composition root is `src/server/inngest/functions.ts`** for workers. Real
   `db`, `inngest`, and provider SDKs (Bedrock via `~/env`) are touched only there —
   see `bedrock-invocation.md`. A controller exposes `get functions()`; the root
