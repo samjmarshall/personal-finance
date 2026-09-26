@@ -8,13 +8,15 @@ export enum BaggageKey {
 	InngestAttempt = "inngest.attempt",
 }
 
+export type BaggageEntries = Partial<Record<BaggageKey, string>>;
+
 /**
  * Merges `attrs` into the active (or supplied) baggage context and returns a
  * new Context for use with `context.with`. Prior keys are preserved; keys in
  * `attrs` win on conflict.
  */
 export function setBaggage(
-	attrs: Partial<Record<BaggageKey, string>>,
+	attrs: BaggageEntries,
 	ctx = context.active(),
 ): Context {
 	const existing = propagation.getBaggage(ctx);

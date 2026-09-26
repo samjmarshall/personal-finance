@@ -249,10 +249,7 @@ export class ReceiptsService {
 		await withSpan(
 			"receipt.extract",
 			{
-				attributes: {
-					[BaggageKey.ReceiptId]: receiptIdStr,
-					"receipt.is_final_attempt": isFinalAttempt,
-				},
+				attributes: { "receipt.is_final_attempt": isFinalAttempt },
 				baggage: {
 					[BaggageKey.ReceiptId]: receiptIdStr,
 					[BaggageKey.MemberId]: receipt?.userId ?? undefined,
