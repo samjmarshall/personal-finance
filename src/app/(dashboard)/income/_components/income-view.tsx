@@ -16,8 +16,6 @@ import { OneTimeSection } from "./one-time-section";
 
 type Income = RouterOutputs["income"]["list"][number];
 
-// Stable getters for the shared OneTimeSection (module scope so they don't churn
-// its partition memo each render).
 const getOneTimeDate = (item: Income) => item.expectedDate;
 const getOneTimeAmount = (item: Income) => item.amount;
 

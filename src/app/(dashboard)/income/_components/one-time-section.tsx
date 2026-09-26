@@ -7,19 +7,16 @@ import { Money } from "~/components/money";
 import { Card } from "~/components/ui/card";
 import { cn, isPast } from "~/lib/utils";
 
-// Shared "One-time" surface for the Planned expenses and income views: the card
-// chrome, the upcoming/past partition, and the collapsible past group. Callers own
-// the row columns (via renderRow + columnHeader) since expenses adds consumed/
-// remaining. State (past collapse) stays local to this component that owns it —
-// a presentational component, not a reusable hook or context (adr001).
+// Income's "One-time" card: upcoming/past split plus a collapsible past group.
+// The caller owns the row columns; collapse state stays local (adr001).
 type OneTimeSectionProps<T extends { id: number }> = {
 	// Already filtered to one-time rows; the section self-hides when empty.
 	items: T[];
 	getExpectedDate: (item: T) => Date | null;
 	getAmount: (item: T) => number | null;
-	// <Money> tone for the header total (income is always green; expenses default).
+	// Header total's colour; income shows green.
 	totalTone?: "income";
-	// Namespaces the past group's aria ids, e.g. "expense" | "income".
+	// Prefix for the past group's aria ids, e.g. "income".
 	idPrefix: string;
 	// The hidden sm:grid header labels — must match renderRow's column template.
 	columnHeader: React.ReactNode;
