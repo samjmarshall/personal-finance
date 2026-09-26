@@ -188,11 +188,11 @@ describe("EmailController.handle", () => {
 		expect(failed[0]?.level).toBe("error");
 		expect(failed[0]?.attrs["email.id"]).toBe("email-1");
 
-		// The failure must show red in the trace view, with the exception recorded.
+		// The failure must show red in the trace view, with the exception recorded once.
 		const spans = exporter.getFinishedSpans();
 		expect(spans).toHaveLength(1);
 		expect(spans[0]?.status.code).toBe(SpanStatusCode.ERROR);
-		expect(spans[0]?.events.map((e) => e.name)).toContain("exception");
+		expect(spans[0]?.events.map((e) => e.name)).toEqual(["exception"]);
 	});
 
 	// The span is the root of the inbound trace; it must exist for a verified event

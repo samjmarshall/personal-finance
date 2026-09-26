@@ -349,7 +349,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
 		expect(fnSpan!.status.code).toBe(SpanStatusCode.ERROR);
 		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
-		expect(fnSpan!.events.some((e) => e.name === "exception")).toBe(true);
+		expect(fnSpan!.events.map((e) => e.name)).toEqual(["exception"]);
 	});
 });
 

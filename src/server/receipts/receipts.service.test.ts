@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { LegacyOpenTelemetry } from "@ai-sdk/otel";
-import { context, propagation, trace } from "@opentelemetry/api";
+import {
+	context,
+	propagation,
+	SpanStatusCode,
+	trace,
+} from "@opentelemetry/api";
 import {
 	InMemorySpanExporter,
 	SimpleSpanProcessor,
@@ -386,6 +391,12 @@ describe("ReceiptsService.process", () => {
 			"receipt.id": "1",
 			"member.id": "u1",
 		});
+
+		const span = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "receipt.extract");
+		expect(span?.status.code).toBe(SpanStatusCode.ERROR);
+		expect(span?.events.map((e) => e.name)).toEqual(["exception"]);
 	});
 
 	// `error` is rendered to the member verbatim, and a drizzle/postgres error message
@@ -442,6 +453,12 @@ describe("ReceiptsService.process", () => {
 			false,
 		);
 		expect(h.captures).toEqual([]);
+
+		const span = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "receipt.extract");
+		expect(span?.status.code).toBe(SpanStatusCode.ERROR);
+		expect(span?.events.map((e) => e.name)).toEqual(["exception"]);
 	});
 
 	it("parks a retryable API error as failed on the final attempt", async () => {
