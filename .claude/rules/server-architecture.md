@@ -120,9 +120,12 @@ db calls too.
 
 ## Domain kernel (`src/domain/`)
 
-Isomorphic-by-need: only what client code shares. Each domain folder holds
-`<domain>.dto.ts` (Zod, client + server), `<domain>.interface.ts` (TS types), an
-`index.ts` barrel, and occasionally pure compute (`cashflow/cashflow.ts`).
+Isomorphic-by-need: what client code shares, plus each domain's DTO ↔ interface
+contracts even when only the server reads them (`receipt-extraction.dto.ts`, the
+inbound email webhook body in `email.dto.ts`) — one home per contract. Each domain
+folder holds `<domain>.dto.ts` (Zod), `<domain>.interface.ts` (TS types), an
+`index.ts` barrel, and occasionally pure compute (`cashflow/cashflow.ts`). Nothing
+here imports `src/server/**`.
 
 ## Writes
 
