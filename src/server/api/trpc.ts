@@ -14,7 +14,7 @@ import { flattenError, ZodError } from "zod";
 
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
-import { BaggageKey, setBaggage } from "~/server/observability/baggage";
+import { BaggageKey } from "~/server/observability/baggage";
 import { createRootLogger } from "~/server/observability/logger";
 import { reportError } from "~/server/observability/report-error";
 import { failSpan, withSpan } from "~/server/observability/tracer";
@@ -115,17 +115,11 @@ const EXPECTED_ERROR_CODES = new Set([
  */
 const observabilityMiddleware = t.middleware(
 	async ({ ctx, next, path, type }) => {
-		// Baggage before the span starts — the span copies member.id once at start, so
-		// setting it inside the callback would land too late to stamp the person on it.
-		const baggageCtx = setBaggage({
-			[BaggageKey.MemberId]: ctx.session?.user?.id,
-		});
-
 		return withSpan(
 			`trpc.${path}`,
 			{
 				attributes: { "trpc.type": type, "trpc.path": path },
-				parent: baggageCtx,
+				baggage: { [BaggageKey.MemberId]: ctx.session?.user?.id },
 			},
 			async (span) => {
 				const result = await next();

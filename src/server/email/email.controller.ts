@@ -1,7 +1,7 @@
 import type { Resend } from "resend";
 import { inboundEmailEventDto } from "~/domain/email";
 import type { Logger } from "~/server/observability/logger";
-import { failSpan, withSpan } from "~/server/observability/tracer";
+import { withSpan } from "~/server/observability/tracer";
 import type { EmailService } from "./email.service";
 
 interface EmailControllerDeps {
@@ -77,7 +77,6 @@ export class EmailController {
 					span.setAttribute("receipt.ids", result.receiptIds);
 				return json(result);
 			} catch (error) {
-				failSpan(span, error);
 				this.logger.error("inbound email failed", {
 					error,
 					"email.id": emailId,

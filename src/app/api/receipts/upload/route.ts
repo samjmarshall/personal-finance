@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { RECEIPT_FILE_TYPES } from "~/domain/receipts";
 import { auth } from "~/server/auth";
-import { BaggageKey, setBaggage } from "~/server/observability/baggage";
+import { BaggageKey } from "~/server/observability/baggage";
 import { traceIdHeaders } from "~/server/observability/current-trace-id";
 import { withFlush } from "~/server/observability/flush";
 import { createRootLogger } from "~/server/observability/logger";
@@ -71,11 +71,12 @@ async function handle(request: Request): Promise<NextResponse> {
 		body.type === "blob.generate-client-token"
 			? await auth.api.getSession({ headers: request.headers })
 			: null;
-	const baggageCtx = setBaggage({ [BaggageKey.MemberId]: session?.user?.id });
-
 	return withSpan(
 		SPAN_NAME_BY_EVENT[body.type] ?? "blob.event",
-		{ attributes: { "blob.event_type": body.type }, parent: baggageCtx },
+		{
+			attributes: { "blob.event_type": body.type },
+			baggage: { [BaggageKey.MemberId]: session?.user?.id },
+		},
 		async (span) => {
 			try {
 				const jsonResponse = await handleUpload({

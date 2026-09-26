@@ -2,7 +2,7 @@ import { SpanStatusCode } from "@opentelemetry/api";
 import type { Inngest } from "inngest";
 
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
-import { BaggageKey, setBaggage } from "~/server/observability/baggage";
+import { BaggageKey } from "~/server/observability/baggage";
 import { errorMessage, type Logger } from "~/server/observability/logger";
 import { failSpan, withSpan } from "~/server/observability/tracer";
 
@@ -146,21 +146,17 @@ export class OutboxService implements OutboxWriteDoor {
 		event: OutboxEventDescriptor,
 		deliveryContext: DeliveryContext,
 	): Promise<boolean> {
-		const baggageCtx = setBaggage({ [BaggageKey.OutboxEventId]: event.id });
-		const log = this.logger.with({
+		const attrs = {
 			[BaggageKey.OutboxEventId]: event.id,
 			"outbox.event_name": event.name,
 			"outbox.delivery_context": deliveryContext,
-		});
+		};
+		const log = this.logger.with(attrs);
 		return withSpan(
 			"outbox.deliver",
 			{
-				attributes: {
-					[BaggageKey.OutboxEventId]: event.id,
-					"outbox.event_name": event.name,
-					"outbox.delivery_context": deliveryContext,
-				},
-				parent: baggageCtx,
+				attributes: attrs,
+				baggage: { [BaggageKey.OutboxEventId]: event.id },
 			},
 			async (span) => {
 				try {

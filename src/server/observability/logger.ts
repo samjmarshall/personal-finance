@@ -26,6 +26,16 @@ export function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+// A thrown plain object turns into "[object Object]" as a string; JSON keeps its fields.
+export function stringifyError(error: unknown): string {
+	if (typeof error !== "object" || error === null) return String(error);
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
+}
+
 export interface Logger {
 	debug(msg: string, attrs?: LogAttributes): void;
 	info(msg: string, attrs?: LogAttributes): void;

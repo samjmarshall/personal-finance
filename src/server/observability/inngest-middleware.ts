@@ -1,9 +1,9 @@
 import { context, ROOT_CONTEXT, trace } from "@opentelemetry/api";
 import { Middleware } from "inngest";
-import { BaggageKey, setBaggage } from "./baggage";
+import { BaggageKey } from "./baggage";
 import { createRootLogger } from "./logger";
 import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
-import { failSpan, withSpan } from "./tracer";
+import { withSpan } from "./tracer";
 
 // Module-level roots — the BaseMiddleware ctor is fixed `({ client })`; no DI
 // seam exists, same exception adr004 makes for route files and onRequestError.
@@ -55,18 +55,6 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 
 		const parentSpanCtx = trace.getSpanContext(parent);
 
-		// Add baggage before the span starts — the span copies it once at start, so
-		// anything added later is lost. Skip member.id; the parent already carries it.
-		const enriched = setBaggage(
-			{
-				[BaggageKey.InngestRunId]: ctx.runId,
-				[BaggageKey.InngestAttempt]: String(ctx.attempt),
-				[BaggageKey.OutboxEventId]: fromOutbox ? ctx.event.id : undefined,
-				...this.domainAttrs(data),
-			},
-			parent,
-		);
-
 		return withSpan(
 			`inngest.function.${fn.id()}`,
 			{
@@ -77,24 +65,26 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 					"inngest.function_id": fn.id(),
 					"inngest.event_name": ctx.event.name,
 				},
-				parent: enriched,
+				parent,
+				// Skip member.id; the parent already carries it.
+				baggage: {
+					[BaggageKey.InngestRunId]: ctx.runId,
+					[BaggageKey.InngestAttempt]: String(ctx.attempt),
+					[BaggageKey.OutboxEventId]: fromOutbox ? ctx.event.id : undefined,
+					...this.domainAttrs(data),
+				},
 			},
-			async (span) => {
-				try {
-					// Warn under our own span. The ambient one out here is Inngest's dropped
-					// `inngest.execution`, so its trace id would point at nothing exported.
-					if (carrierMissing) {
-						logger.warn("trace carrier missing", {
-							"event.name": "trace.carrier.missing",
-							"inngest.function_id": fn.id(),
-							[BaggageKey.InngestRunId]: ctx.runId,
-						});
-					}
-					return await next();
-				} catch (err) {
-					failSpan(span, err);
-					throw err;
+			async () => {
+				// Warn under our own span. The ambient one out here is Inngest's dropped
+				// `inngest.execution`, so its trace id would point at nothing exported.
+				if (carrierMissing) {
+					logger.warn("trace carrier missing", {
+						"event.name": "trace.carrier.missing",
+						"inngest.function_id": fn.id(),
+						[BaggageKey.InngestRunId]: ctx.runId,
+					});
 				}
+				return await next();
 			},
 		);
 	}
