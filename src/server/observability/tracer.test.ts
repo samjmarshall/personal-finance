@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("~/env", () => ({ env: { PROJECT_NAME: "personal-finance" } }));
 
 const { failSpan, withSpan } = await import("./tracer");
+const { BaggageKey, readBaggage, setBaggage } = await import("./baggage");
 
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
@@ -43,6 +44,35 @@ describe("withSpan", () => {
 		).rejects.toThrow("boom");
 
 		expect(exporter.getFinishedSpans().map((s) => s.name)).toEqual(["boom"]);
+	});
+
+	it("fails the span when the body throws", async () => {
+		exporter.reset();
+
+		await expect(
+			withSpan("boom", {}, async () => {
+				throw new Error("boom");
+			}),
+		).rejects.toThrow("boom");
+
+		const [span] = exporter.getFinishedSpans();
+		expect(span?.status.code).toBe(SpanStatusCode.ERROR);
+		expect(span?.events.map((e) => e.name)).toEqual(["exception"]);
+	});
+
+	it("merges baggage onto the parent before the body runs", async () => {
+		const parent = setBaggage({ [BaggageKey.MemberId]: "m1" });
+
+		const seen = await withSpan(
+			"bag",
+			{ parent, baggage: { [BaggageKey.ReceiptId]: "7" } },
+			async () => readBaggage(),
+		);
+
+		expect(seen).toEqual({
+			[BaggageKey.MemberId]: "m1",
+			[BaggageKey.ReceiptId]: "7",
+		});
 	});
 });
 

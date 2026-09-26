@@ -5,9 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // so this stays a unit over the pre-procedure error report.
 vi.mock("~/server/api/root", () => ({ appRouter: {} }));
 vi.mock("~/server/api/trpc", () => ({ createTRPCContext: vi.fn() }));
-vi.mock("~/server/observability/flush", () => ({
-	withFlush: <T>(handler: T) => handler,
-}));
+vi.mock(
+	"~/server/observability/flush",
+	() => import("~/server/observability/flush.fake"),
+);
 vi.mock("~/server/observability/posthog", () => ({
 	captureException: vi.fn(),
 }));

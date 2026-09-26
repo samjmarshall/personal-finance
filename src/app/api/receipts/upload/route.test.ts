@@ -14,6 +14,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { flushAfterResponse } from "~/server/observability/flush.fake";
 import type { Logger } from "~/server/observability/logger";
 import { ContextSpanProcessor } from "~/server/observability/span-processor";
 
@@ -25,18 +26,10 @@ vi.mock("~/env", () => ({
 	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 
-const { flushAfterResponse } = vi.hoisted(() => ({
-	flushAfterResponse: vi.fn(),
-}));
-// Passes through to the real handler, recording one flush per request.
-vi.mock("~/server/observability/flush", () => ({
-	withFlush:
-		<A extends unknown[], R>(handler: (...args: A) => R) =>
-		(...args: A) => {
-			flushAfterResponse();
-			return handler(...args);
-		},
-}));
+vi.mock(
+	"~/server/observability/flush",
+	() => import("~/server/observability/flush.fake"),
+);
 
 const { getSession } = vi.hoisted(() => ({
 	getSession: vi.fn<() => Promise<{ user: { id: string } } | null>>(),
