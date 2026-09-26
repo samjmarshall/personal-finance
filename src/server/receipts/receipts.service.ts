@@ -12,13 +12,14 @@ import {
 import {
 	type ExtractionCategory,
 	type ReceiptExtraction,
+	type ReceiptMediaKind,
 	receiptExtractionDto,
 	receiptMediaKind,
 } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
 import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
-import { BaggageKey, setBaggage } from "~/server/observability/baggage";
+import { BaggageKey } from "~/server/observability/baggage";
 import type { LogAttributes, Logger } from "~/server/observability/logger";
 import { REDACT_IN_TRACES } from "~/server/observability/prompt-redaction";
 import { failSpan, withSpan } from "~/server/observability/tracer";
@@ -62,12 +63,61 @@ class ReceiptTooLargeError extends Error {
 	}
 }
 
-function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
+// Only the email Channel sends markup, so only it gets this. A photo upload has no
+// greeting or footer to read past, and the vendor warning would be nonsense there.
+const FORWARDED_EMAIL_HINT =
+	"The payload is a forwarded e-receipt email rather than a photo of a receipt. Read past the greeting, forwarding headers, promotions and footer to the order lines, and treat the merchant that issued the order as the vendor — never the mail provider or the person who forwarded it.";
+
+type PayloadPart = TextPart | ImagePart | FilePart;
+
+// Everything the model call varies by media kind, so a new kind is one entry here.
+const MODEL_MEDIA: Record<
+	ReceiptMediaKind,
+	{
+		maxBytes: number | null;
+		hint: string;
+		payload: (bytes: Uint8Array, mediaType: string) => PayloadPart;
+	}
+> = {
+	image: {
+		maxBytes: BEDROCK_MAX_IMAGE_BYTES,
+		hint: "",
+		payload: (bytes) => ({ type: "image", image: bytes }),
+	},
+	pdf: {
+		maxBytes: BEDROCK_MAX_DOCUMENT_BYTES,
+		hint: "",
+		// Bare type, not the blob's raw header: Anthropic rejects a file part whose
+		// media type carries parameters.
+		payload: (bytes, mediaType) => ({
+			type: "file",
+			data: bytes,
+			mediaType: bareMediaType(mediaType),
+		}),
+	},
+	// Markup sent as an image part reaches the model as unreadable noise; inline it.
+	// Untrusted third-party HTML — never render it in the browser.
+	text: {
+		maxBytes: null,
+		hint: FORWARDED_EMAIL_HINT,
+		payload: (bytes) => ({
+			type: "text",
+			text: new TextDecoder().decode(bytes),
+			providerOptions: REDACT_IN_TRACES,
+		}),
+	},
+};
+
+function modelMedia(mediaType: string) {
 	const kind = receiptMediaKind(mediaType);
-	if (kind === "text") return;
-	const max =
-		kind === "pdf" ? BEDROCK_MAX_DOCUMENT_BYTES : BEDROCK_MAX_IMAGE_BYTES;
-	if (bytes.byteLength > max) throw new ReceiptTooLargeError(max);
+	if (!kind) throw new Error(`Unsupported media type: ${mediaType}`);
+	return MODEL_MEDIA[kind];
+}
+
+function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
+	const { maxBytes } = modelMedia(mediaType);
+	if (maxBytes !== null && bytes.byteLength > maxBytes)
+		throw new ReceiptTooLargeError(maxBytes);
 }
 
 // `error` is rendered verbatim to the member in the detail overlay, and a driver error's
@@ -101,11 +151,6 @@ function failureAttrs(
 	};
 }
 
-// Only the email Channel sends markup, so only it gets this. A photo upload has no
-// greeting or footer to read past, and the vendor warning would be nonsense there.
-const FORWARDED_EMAIL_HINT =
-	"The payload is a forwarded e-receipt email rather than a photo of a receipt. Read past the greeting, forwarding headers, promotions and footer to the order lines, and treat the merchant that issued the order as the vendor — never the mail provider or the person who forwarded it.";
-
 /**
  * Prompt listing the household's categories by id so each item comes back with a
  * prefilled `expenseCategoryId`. The id/name list is the only allowed vocabulary —
@@ -117,8 +162,8 @@ export function buildExtractionPrompt(
 	mediaType?: string,
 ): string {
 	const list = categories.map((c) => `- ${c.id}: ${c.name}`).join("\n");
-	const hint =
-		receiptMediaKind(mediaType) === "text" ? FORWARDED_EMAIL_HINT : "";
+	const kind = receiptMediaKind(mediaType);
+	const hint = kind ? MODEL_MEDIA[kind].hint : "";
 	return `Extract the receipt's vendor, date (YYYY-MM-DD), grand total, currency, and every line item (name, price, quantity).
 ${hint}
 For each item, set expenseCategoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
@@ -134,34 +179,11 @@ export function buildExtractionContent({
 	prompt: string;
 	bytes: Uint8Array;
 	mediaType: string;
-}): Array<TextPart | ImagePart | FilePart> {
-	// Markup sent as an image part reaches the model as unreadable noise; inline it.
-	// Untrusted third-party HTML — never render it in the browser.
-	switch (receiptMediaKind(mediaType)) {
-		case "pdf":
-			return [
-				{ type: "text", text: prompt },
-				// Bare type, not the blob's raw header: Anthropic rejects a file part whose
-				// media type carries parameters.
-				{ type: "file", data: bytes, mediaType: bareMediaType(mediaType) },
-			];
-		case "text":
-			return [
-				{ type: "text", text: prompt },
-				{
-					type: "text",
-					text: new TextDecoder().decode(bytes),
-					providerOptions: REDACT_IN_TRACES,
-				},
-			];
-		case "image":
-			return [
-				{ type: "text", text: prompt },
-				{ type: "image", image: bytes },
-			];
-		case null:
-			throw new Error(`Unsupported media type: ${mediaType}`);
-	}
+}): PayloadPart[] {
+	return [
+		{ type: "text", text: prompt },
+		modelMedia(mediaType).payload(bytes, mediaType),
+	];
 }
 
 // Park path never throws, so Inngest's run-error hook misses terminal failures —
@@ -224,10 +246,6 @@ export class ReceiptsService {
 		// Baggage carries the receipt + member ids so every downstream span, log and
 		// captured error lands on this trace; member is left off when the sign-in row
 		// is gone.
-		const baggageCtx = setBaggage({
-			[BaggageKey.ReceiptId]: receiptIdStr,
-			[BaggageKey.MemberId]: receipt?.userId ?? undefined,
-		});
 		await withSpan(
 			"receipt.extract",
 			{
@@ -235,7 +253,10 @@ export class ReceiptsService {
 					[BaggageKey.ReceiptId]: receiptIdStr,
 					"receipt.is_final_attempt": isFinalAttempt,
 				},
-				parent: baggageCtx,
+				baggage: {
+					[BaggageKey.ReceiptId]: receiptIdStr,
+					[BaggageKey.MemberId]: receipt?.userId ?? undefined,
+				},
 			},
 			async (span) => {
 				try {
@@ -264,7 +285,6 @@ export class ReceiptsService {
 					await this.extractAndSave(receiptId, bytes, mediaType);
 					span.setAttribute("receipt.outcome", ReceiptOutcome.Processed);
 				} catch (error) {
-					failSpan(span, error);
 					await this.parkFailure(span, error, {
 						receipt,
 						receiptId,
@@ -306,6 +326,7 @@ export class ReceiptsService {
 			throw error;
 		}
 
+		failSpan(span, error);
 		span.setAttribute("receipt.outcome", ReceiptOutcome.Failed);
 		const reason = memberFacingError(error);
 		this.logger.error("receipt extraction failed", {

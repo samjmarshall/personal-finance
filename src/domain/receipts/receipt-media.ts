@@ -31,6 +31,9 @@ export const RECEIPT_FILE_TYPES: readonly string[] = Object.keys(
 	MEDIA_KINDS,
 ).filter((type) => MEDIA_KINDS[type] !== "text");
 
-export function isReceiptFileType(type: string): boolean {
-	return RECEIPT_FILE_TYPES.includes(type);
+/** Whether a member may send this type as a file. Ignores header params. */
+export function isReceiptFileType(
+	contentType: string | null | undefined,
+): boolean {
+	return RECEIPT_FILE_TYPES.includes(bareMediaType(contentType));
 }

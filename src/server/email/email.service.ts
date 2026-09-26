@@ -36,7 +36,7 @@ export const MAX_EMAIL_ATTACHMENTS = 10;
 
 /** Whether an attachment is a receipt rather than part of the mail's furniture. */
 export function isReceiptAttachment(a: InboundAttachmentMeta): boolean {
-	if (!isReceiptFileType(bareMediaType(a.content_type))) return false;
+	if (!isReceiptFileType(a.content_type)) return false;
 	// Inline parts are the sender's signature image and the vendor's logo. They
 	// pass the content-type check, so without this every branded e-receipt would
 	// mint a junk Receipt per decoration.

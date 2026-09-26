@@ -21,10 +21,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
-import { receiptImageUrl } from "~/domain/receipts";
+import { receiptImageUrl, receiptMediaKind } from "~/domain/receipts";
 import { itemsTotalMismatch } from "~/domain/receipts/receipt-total";
 import { ReceiptStatus } from "~/lib/constants";
-import { formatCurrency, formatDate, isPdf, isText } from "~/lib/utils";
+import { formatCurrency, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { MoreDetails } from "./more-details";
 
@@ -73,7 +73,8 @@ function SourcePane({
 	src: string;
 	vendor: string | null;
 }) {
-	if (isPdf(contentType))
+	const kind = receiptMediaKind(contentType);
+	if (kind === "pdf")
 		return (
 			<a
 				className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground text-xs hover:text-foreground"
@@ -88,7 +89,7 @@ function SourcePane({
 
 	// Never rendered as markup — it is untrusted third-party mail. The extraction
 	// beside this pane is the readable form.
-	if (isText(contentType))
+	if (kind === "text")
 		return (
 			<div className="flex h-48 flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground text-xs">
 				<Mail aria-hidden className="h-8 w-8" />

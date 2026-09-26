@@ -4,8 +4,6 @@ import {
 	formatMonthKey,
 	fromDateInput,
 	isPast,
-	isPdf,
-	isText,
 	startOfDayInZone,
 	toDateInput,
 } from "~/lib/utils";
@@ -147,39 +145,4 @@ describe("formatMonthKey", () => {
 	it("returns the key unchanged when the month is zero", () => {
 		expect(formatMonthKey("2026-00")).toBe("2026-00");
 	});
-});
-
-// The worker's media type is the blob's HTTP `content-type` header, which Vercel
-// Blob returns verbatim; the receipt row's is the bare string the producer wrote.
-// Both reach these predicates, so a parameterised header must match too — missing
-// it sends a forwarded e-receipt to the model as an image part.
-describe("isPdf / isText", () => {
-	it.each([
-		"application/pdf",
-		"application/pdf; charset=binary",
-		"APPLICATION/PDF",
-		"  application/pdf  ",
-	])("treats %s as a PDF", (contentType) => {
-		expect(isPdf(contentType)).toBe(true);
-		expect(isText(contentType)).toBe(false);
-	});
-
-	it.each([
-		"text/html",
-		"text/html; charset=utf-8",
-		"text/plain",
-		"text/plain;charset=UTF-8",
-		"Text/HTML",
-	])("treats %s as a text body", (contentType) => {
-		expect(isText(contentType)).toBe(true);
-		expect(isPdf(contentType)).toBe(false);
-	});
-
-	it.each(["image/jpeg", "image/png; charset=binary", "", null, undefined])(
-		"treats %s as neither",
-		(contentType) => {
-			expect(isPdf(contentType)).toBe(false);
-			expect(isText(contentType)).toBe(false);
-		},
-	);
 });

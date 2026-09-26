@@ -1,6 +1,6 @@
 import type { Options } from "browser-image-compression";
 
-import { isPdf } from "~/lib/utils";
+import { receiptMediaKind } from "~/domain/receipts";
 
 // Big phone photos → keep the upload small: a legible receipt well under the 10MB
 // token cap. Claude also downscales >1568px, so extra pixels only cost bandwidth.
@@ -32,7 +32,7 @@ export function isHeic(file: File): boolean {
 export async function prepReceipt(file: File): Promise<File> {
 	// Some browsers (Windows/Linux) report no MIME for local PDFs; sniff extension too,
 	// and stamp the type so the upload allowlist, worker and viewer all see a real PDF.
-	if (isPdf(file.type)) return file;
+	if (receiptMediaKind(file.type) === "pdf") return file;
 	if (/\.pdf$/i.test(file.name))
 		return new File([file], file.name, { type: "application/pdf" });
 

@@ -9,9 +9,9 @@ import { PageHeader } from "~/components/page-header";
 import { SelectField, type SelectFieldOption } from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
-import { receiptImageUrl } from "~/domain/receipts";
+import { receiptImageUrl, receiptMediaKind } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
-import { cn, formatDate, isPdf, isText } from "~/lib/utils";
+import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ReceiptDetail } from "./receipt-detail";
 import { ReceiptUpload } from "./receipt-upload";
@@ -69,8 +69,9 @@ const MATCH_FILTER_ITEMS: SelectFieldOption<"all" | "unmatched">[] = [
 // email body comes back as octet-stream under nosniff, so an <img> would render
 // broken. Null means "safe to show the real thing".
 function previewIcon(contentType: string | null) {
-	if (isPdf(contentType)) return FileText;
-	if (isText(contentType)) return Mail;
+	const kind = receiptMediaKind(contentType);
+	if (kind === "pdf") return FileText;
+	if (kind === "text") return Mail;
 	return null;
 }
 
