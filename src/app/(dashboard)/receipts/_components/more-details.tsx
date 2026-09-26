@@ -25,7 +25,7 @@ import { diagnosticsJson, metaRows, rawJsonText } from "./more-details.display";
 // ---------------------------------------------------------------------------
 
 // Which button last copied + the copy action: always handed down as one.
-type Clipboard = {
+type CopyState = {
 	copiedKey: string | null;
 	copy: (text: string, key: string) => void;
 };
@@ -39,7 +39,7 @@ function CopyButton({
 	value: string;
 	copyKey: string;
 	label: string;
-	clipboard: Clipboard;
+	clipboard: CopyState;
 }) {
 	const copied = clipboard.copiedKey === copyKey;
 	return (
@@ -69,7 +69,7 @@ function TraceHeader({
 }: {
 	traceId: string | null;
 	traceUrl: string | null;
-	clipboard: Clipboard;
+	clipboard: CopyState;
 }) {
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2">
@@ -180,7 +180,7 @@ function RawPanel({
 	clipboard,
 }: {
 	data: ReceiptDetail;
-	clipboard: Clipboard;
+	clipboard: CopyState;
 }) {
 	const text = rawJsonText(data);
 	return (
@@ -244,7 +244,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			},
 		);
 	}
-	const clipboard: Clipboard = { copiedKey, copy };
+	const clipboard: CopyState = { copiedKey, copy };
 	const [tab, setTab] = useState<Tab>("timeline");
 	const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 	const rows = metaRows(data);
