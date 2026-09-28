@@ -15,11 +15,11 @@ import { PostHogSpanProcessor } from "@posthog/ai/otel";
 import { registerOTel } from "@vercel/otel";
 import { registerTelemetry } from "ai";
 import { env } from "~/env";
-import { AiOutputProcessor } from "./ai-output-processor";
 import {
 	getRegisteredProcessors,
 	setRegisteredProcessors,
 } from "./otel-registry";
+import { PostHogAiOutputShim } from "./posthog-ai-output-shim";
 import { INNGEST_EXECUTION_SPAN, NameDropSampler } from "./sampler";
 import { SpanAttributeProcessor } from "./span-processor";
 
@@ -65,12 +65,13 @@ export function registerObservability(): void {
 				inputTokenPriceUsd: env.BEDROCK_INPUT_TOKEN_PRICE_USD,
 				outputTokenPriceUsd: env.BEDROCK_OUTPUT_TOKEN_PRICE_USD,
 			}),
-			new AiOutputProcessor({ inner: posthogSpanProcessor }),
+			new PostHogAiOutputShim({ inner: posthogSpanProcessor }),
 			traceBatch,
 		],
 		logRecordProcessors: [logBatch],
-		// Empty: trace headers reach only our own host, never Bedrock or Resend (adr015 §6).
-		// Inngest's send URL holds the event key, so skip tracing that path on any host.
+		// Adds no extra hosts: our own deployment gets trace headers by default, so
+		// Bedrock and Resend never do (adr015 §6). Inngest's send URL holds the event
+		// key, so skip tracing that path on any host.
 		instrumentationConfig: {
 			fetch: {
 				propagateContextUrls: [],

@@ -5,7 +5,7 @@ import type {
 	SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { describe, expect, it } from "vitest";
-import { AiOutputProcessor } from "./ai-output-processor";
+import { PostHogAiOutputShim } from "./posthog-ai-output-shim";
 
 function harness() {
 	const ended: ReadableSpan[] = [];
@@ -15,14 +15,14 @@ function harness() {
 		forceFlush: async () => {},
 		shutdown: async () => {},
 	};
-	return { ended, processor: new AiOutputProcessor({ inner }) };
+	return { ended, processor: new PostHogAiOutputShim({ inner }) };
 }
 
 function span(attributes: ReadableSpan["attributes"]): ReadableSpan {
 	return { name: "ai.generateObject.doGenerate", attributes } as ReadableSpan;
 }
 
-describe("AiOutputProcessor", () => {
+describe("PostHogAiOutputShim", () => {
 	it("copies the response object into the response text for the inner processor", () => {
 		const h = harness();
 		const original = span({ "ai.response.object": '{"total":12}' });
@@ -66,7 +66,7 @@ describe("AiOutputProcessor", () => {
 		};
 		const s = {} as Span;
 
-		new AiOutputProcessor({ inner }).onStart(s, {} as Context);
+		new PostHogAiOutputShim({ inner }).onStart(s, {} as Context);
 
 		expect(started).toEqual([s]);
 	});

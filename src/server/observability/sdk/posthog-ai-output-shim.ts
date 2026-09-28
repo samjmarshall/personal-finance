@@ -8,7 +8,7 @@ import type {
 const RESPONSE_OBJECT = "ai.response.object";
 const RESPONSE_TEXT = "ai.response.text";
 
-export interface AiOutputProcessorDeps {
+export interface PostHogAiOutputShimDeps {
 	inner: SpanProcessor;
 }
 
@@ -18,10 +18,10 @@ export interface AiOutputProcessorDeps {
  * structured calls record it as the response object. Other exporters see the
  * span untouched.
  */
-export class AiOutputProcessor implements SpanProcessor {
+export class PostHogAiOutputShim implements SpanProcessor {
 	private readonly inner: SpanProcessor;
 
-	constructor(deps: AiOutputProcessorDeps) {
+	constructor(deps: PostHogAiOutputShimDeps) {
 		this.inner = deps.inner;
 	}
 
