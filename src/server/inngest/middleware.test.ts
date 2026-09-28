@@ -24,12 +24,14 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { BaggageKey, setBaggage } from "./baggage";
-import { TracingMiddleware } from "./inngest-middleware";
-import { captureException } from "./posthog";
-import { captureTraceCarrier } from "./trace-carrier";
+import { BaggageKey, setBaggage } from "~/server/observability/baggage";
+import { captureException } from "~/server/observability/posthog";
+import { captureTraceCarrier } from "~/server/observability/trace-carrier";
+import { TracingMiddleware } from "./middleware";
 
-vi.mock("./posthog", () => ({ captureException: vi.fn() }));
+vi.mock("~/server/observability/posthog", () => ({
+	captureException: vi.fn(),
+}));
 
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({

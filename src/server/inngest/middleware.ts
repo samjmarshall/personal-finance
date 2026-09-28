@@ -1,9 +1,12 @@
 import { context, ROOT_CONTEXT, trace } from "@opentelemetry/api";
 import { Middleware } from "inngest";
-import { BaggageKey } from "./baggage";
-import { createRootLogger } from "./logger";
-import { restoreTraceCarrier, TRACE_CARRIER_KEY } from "./trace-carrier";
-import { withSpan } from "./tracer";
+import { BaggageKey } from "~/server/observability/baggage";
+import { createRootLogger } from "~/server/observability/logger";
+import {
+	restoreTraceCarrier,
+	TRACE_CARRIER_KEY,
+} from "~/server/observability/trace-carrier";
+import { withSpan } from "~/server/observability/tracer";
 
 // Module-level roots — the BaseMiddleware ctor is fixed `({ client })`; no DI
 // seam exists, same exception adr004 makes for route files and onRequestError.
@@ -118,7 +121,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 
 		// Dynamic import keeps the heavy analytics library out of every module that
 		// just sends events — only needed on the worker execution path.
-		const { reportError } = await import("./report-error");
+		const { reportError } = await import("~/server/observability/report-error");
 		context.with(restored, () => {
 			reportError(logger, "inngest run failed", error, attrs);
 		});

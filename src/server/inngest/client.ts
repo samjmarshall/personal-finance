@@ -1,8 +1,8 @@
 import { Inngest, wrapStringFirstLogger } from "inngest";
 
 import { env } from "~/env";
-import { TracingMiddleware } from "~/server/observability/inngest-middleware";
 import { createRootLogger } from "~/server/observability/logger";
+import { TracingMiddleware } from "./middleware";
 
 // `id` is the app name (matches the Portless host).
 // `eventKey` also auto-reads INNGEST_EVENT_KEY; passed explicitly so env-validation
