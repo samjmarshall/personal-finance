@@ -24,6 +24,7 @@ import type {
 	Logger,
 } from "~/server/observability/logging/logger";
 import { BaggageKey } from "~/server/observability/tracing/baggage";
+import { REDACT_IN_TELEMETRY } from "~/server/observability/tracing/redact-tag";
 import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
 import type {
 	ReceiptItemInsert,
@@ -105,11 +106,7 @@ const MODEL_MEDIA: Record<
 		payload: (bytes) => ({
 			type: "text",
 			text: new TextDecoder().decode(bytes),
-			providerOptions: {
-				observability: {
-					redact: true,
-				},
-			},
+			providerOptions: REDACT_IN_TELEMETRY,
 		}),
 	},
 };

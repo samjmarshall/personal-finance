@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isRedactTagged } from "~/server/observability/tracing/redact-tag";
 
 // The AI SDK stamps the prompt on two attributes: `ai.prompt.messages` on the
 // inner doGenerate span (a message array) and `ai.prompt` on the outer
@@ -53,7 +54,11 @@ function redactPart(part: unknown): unknown {
 	if (!isObject(part)) return part;
 	if (part.type === "text" && typeof part.text === "string") {
 		const bytes = Buffer.from(part.text, "utf8");
-		if (!isTagged(part) && bytes.byteLength <= MAX_TEXT_PART_BYTES) return part;
+		if (
+			!isRedactTagged(part.providerOptions) &&
+			bytes.byteLength <= MAX_TEXT_PART_BYTES
+		)
+			return part;
 		return { ...part, text: stubBytes(bytes, "text/plain") };
 	}
 	let next = part;
@@ -63,15 +68,6 @@ function redactPart(part: unknown): unknown {
 		if (stub !== null) next = { ...next, [field]: stub };
 	}
 	return next;
-}
-
-function isTagged(part: Record<string, unknown>): boolean {
-	const options = part.providerOptions;
-	return (
-		isObject(options) &&
-		isObject(options.observability) &&
-		options.observability.redact === true
-	);
 }
 
 function isObject(val: unknown): val is Record<string, unknown> {
