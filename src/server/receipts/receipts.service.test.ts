@@ -158,7 +158,7 @@ function harness(
 			throw new Error("unused");
 		}),
 	};
-	// `with` returns itself: the service never re-binds; the composition root does that once.
+	// Binding returns the same fake: only the composition root binds, once.
 	const logs: LogEntry[] = [];
 	const logger: Logger = {
 		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),

@@ -211,8 +211,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 	// Copy-to-clipboard state is modal-local, so it lives here and is passed down as
 	// explicit props — never a custom hook or context (adr001/frontend.md).
 	const [copiedKey, setCopiedKey] = useState<string | null>(null);
-	// Hold the reset timer so it can be cleared: copy-then-close the overlay before
-	// the 1.2s elapses would otherwise fire setCopiedKey on an unmounted component.
+	// Keep the timer to cancel on unmount — closing before 1.2s would update a dead component.
 	const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(
 		() => () => {
