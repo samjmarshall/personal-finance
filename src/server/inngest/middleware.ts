@@ -18,6 +18,17 @@ const logger = createRootLogger().with({
 // Inngest's own default when a function sets no `retries`.
 const DEFAULT_RETRIES = 3;
 
+// Run id + attempt ride on every span, log and issue, so one run's pieces join up.
+function runAttrs(ctx: {
+	runId: string;
+	attempt: number;
+}): Record<string, string> {
+	return {
+		[BaggageKey.InngestRunId]: ctx.runId,
+		[BaggageKey.InngestAttempt]: String(ctx.attempt),
+	};
+}
+
 export class TracingMiddleware extends Middleware.BaseMiddleware {
 	readonly id = "tracing";
 
@@ -63,16 +74,14 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 			{
 				links: parentSpanCtx ? [{ context: parentSpanCtx }] : [],
 				attributes: {
-					[BaggageKey.InngestRunId]: ctx.runId,
-					[BaggageKey.InngestAttempt]: String(ctx.attempt),
+					...runAttrs(ctx),
 					"inngest.function_id": fn.id(),
 					"inngest.event_name": ctx.event.name,
 				},
 				parent,
 				// Skip member.id; the parent already carries it.
 				baggage: {
-					[BaggageKey.InngestRunId]: ctx.runId,
-					[BaggageKey.InngestAttempt]: String(ctx.attempt),
+					...runAttrs(ctx),
 					[BaggageKey.OutboxEventId]: fromOutbox ? ctx.event.id : undefined,
 					...this.domainAttrs(data),
 				},
@@ -82,9 +91,9 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 				// `inngest.execution`, so its trace id would point at nothing exported.
 				if (carrierMissing) {
 					logger.warn("trace carrier missing", {
+						...runAttrs(ctx),
 						"event.name": "trace.carrier.missing",
 						"inngest.function_id": fn.id(),
-						[BaggageKey.InngestRunId]: ctx.runId,
 					});
 				}
 				return await next();
@@ -102,9 +111,8 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 			restoreTraceCarrier(data?.[TRACE_CARRIER_KEY]) ?? ROOT_CONTEXT;
 
 		const attrs: Record<string, unknown> = {
+			...runAttrs(ctx),
 			"inngest.function_id": fn.id(),
-			[BaggageKey.InngestRunId]: ctx.runId,
-			[BaggageKey.InngestAttempt]: String(ctx.attempt),
 			isFinalAttempt,
 		};
 
