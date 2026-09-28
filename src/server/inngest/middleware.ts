@@ -1,4 +1,9 @@
-import { context, ROOT_CONTEXT, trace } from "@opentelemetry/api";
+import {
+	context,
+	ROOT_CONTEXT,
+	type SpanContext,
+	trace,
+} from "@opentelemetry/api";
 import { Middleware } from "inngest";
 import { createRootLogger } from "~/server/observability/logging/logger";
 import { BaggageKey } from "~/server/observability/tracing/baggage";
@@ -31,6 +36,9 @@ function runAttrs(ctx: {
 
 export class TracingMiddleware extends Middleware.BaseMiddleware {
 	readonly id = "tracing";
+
+	// Inngest builds one instance per run, so the error hook can find this run's span.
+	private runSpan: SpanContext | undefined;
 
 	// Stopgap: promote known domain ids from event data onto telemetry. Generic
 	// infra shouldn't know "receiptId" — drop this once producers put domain ids
@@ -86,7 +94,8 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 					...this.domainAttrs(data),
 				},
 			},
-			async () => {
+			async (span) => {
+				this.runSpan = span.spanContext();
 				// Warn under our own span. The ambient one out here is Inngest's dropped
 				// `inngest.execution`, so its trace id would point at nothing exported.
 				if (carrierMissing) {
@@ -106,9 +115,13 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		const isFinalAttempt = this.isFinal(args);
 		const data = ctx.event.data as Record<string, unknown> | undefined;
 		// Inngest fires error hooks after the run's trace window closes — no active
-		// trace here. Re-attach the stored carrier so this error links to its trace.
-		const restored =
+		// trace here. Re-attach the stored carrier for its baggage, and point at this
+		// run's span so a cron error (no carrier) still links to a trace.
+		const carried =
 			restoreTraceCarrier(data?.[TRACE_CARRIER_KEY]) ?? ROOT_CONTEXT;
+		const restored = this.runSpan
+			? trace.setSpanContext(carried, this.runSpan)
+			: carried;
 
 		const attrs: Record<string, unknown> = {
 			...runAttrs(ctx),

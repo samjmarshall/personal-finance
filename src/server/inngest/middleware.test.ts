@@ -494,4 +494,37 @@ describe("TracingMiddleware.onRunError", () => {
 		// biome-ignore lint/style/noNonNullAssertion: asserted non-null above.
 		expect(JSON.parse(errorLine!).trace_id).toBe(producerTraceId);
 	});
+
+	// Crons carry no stored trace, so only the run's own span can name one.
+	it("links a cron failure to its own run span", async () => {
+		const lines: string[] = [];
+		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+			if (typeof chunk === "string") lines.push(chunk);
+			return true;
+		});
+
+		const mw = buildMw();
+		const ctx = buildCtx({ data: {}, name: "inngest/scheduled.timer" });
+		const fn = buildFn("outbox-sweep");
+		const error = new Error("sweep failed");
+		await expect(
+			mw.wrapFunctionHandler({
+				ctx,
+				fn,
+				next: async () => {
+					throw error;
+				},
+			} as never),
+		).rejects.toThrow("sweep failed");
+		await mw.onRunError({ ctx, error, fn, isFinalAttempt: true } as never);
+
+		const fnSpan = exporter
+			.getFinishedSpans()
+			.find((s) => s.name === "inngest.function.outbox-sweep");
+		const errorLine = lines
+			.map((l) => JSON.parse(l))
+			.find((p) => p.msg === "inngest run failed");
+		expect(errorLine?.trace_id).toBe(fnSpan?.spanContext().traceId);
+		expect(errorLine?.span_id).toBe(fnSpan?.spanContext().spanId);
+	});
 });
