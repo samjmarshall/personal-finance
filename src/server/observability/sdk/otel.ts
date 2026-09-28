@@ -15,6 +15,7 @@ import { PostHogSpanProcessor } from "@posthog/ai/otel";
 import { registerOTel } from "@vercel/otel";
 import { registerTelemetry } from "ai";
 import { env } from "~/env";
+import { AiOutputProcessor } from "./ai-output-processor";
 import {
 	getRegisteredProcessors,
 	setRegisteredProcessors,
@@ -64,7 +65,7 @@ export function registerObservability(): void {
 				inputTokenPriceUsd: env.BEDROCK_INPUT_TOKEN_PRICE_USD,
 				outputTokenPriceUsd: env.BEDROCK_OUTPUT_TOKEN_PRICE_USD,
 			}),
-			posthogSpanProcessor,
+			new AiOutputProcessor({ inner: posthogSpanProcessor }),
 			traceBatch,
 		],
 		logRecordProcessors: [logBatch],
