@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "~/server/db";
-import { createRootLogger, errorName } from "~/server/observability/logger";
+import { errorName } from "~/server/observability/errors/thrown";
+import { createRootLogger } from "~/server/observability/logging/logger";
 
 // A readiness probe the promote gate curls before flipping the production alias:
 // it must reach the db at request time, so opt out of any build-time evaluation

@@ -7,8 +7,8 @@ import {
 	trace,
 } from "@opentelemetry/api";
 import { env } from "~/env";
+import { stringifyThrown } from "~/server/observability/errors/thrown";
 import { type BaggageEntries, setBaggage } from "./baggage";
-import { stringifyThrown } from "./logger";
 
 // The one app tracer, keyed on the OTel service name. A no-op proxy until the SDK
 // registers (otel.ts), so importing it at module load is safe everywhere.

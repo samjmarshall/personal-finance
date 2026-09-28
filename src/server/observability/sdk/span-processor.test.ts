@@ -5,7 +5,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { BaggageKey, setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
 import { SpanAttributeProcessor } from "./span-processor";
 
 function makeMessages(parts: unknown[]) {

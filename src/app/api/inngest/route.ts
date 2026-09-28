@@ -2,7 +2,7 @@ import { serve } from "inngest/next";
 
 import { inngest } from "~/server/inngest/client";
 import { functions } from "~/server/inngest/functions";
-import { withFlush } from "~/server/observability/flush";
+import { withFlush } from "~/server/observability/sdk/flush";
 
 // Public webhook Inngest polls to discover + invoke the cron workers. `serve` verifies
 // every request against INNGEST_SIGNING_KEY in prod (the local Dev Server needs no

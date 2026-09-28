@@ -6,8 +6,8 @@ import {
 } from "@opentelemetry/core";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BaggageKey, setBaggage } from "~/server/observability/baggage";
-import type { TraceCarrier } from "~/server/observability/trace-carrier";
+import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
+import type { TraceCarrier } from "~/server/observability/tracing/trace-carrier";
 import type { Equal, Expect } from "~/test/type-contracts";
 
 import { buildOutboxEvent, type EventName, type EventPayload } from "./events";

@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
 	captureTraceCarrier,
 	TRACE_CARRIER_KEY,
-} from "~/server/observability/trace-carrier";
+} from "~/server/observability/tracing/trace-carrier";
 
 /**
  * Single naming + payload authority for outbox events (adr002 clause 7). Keys are

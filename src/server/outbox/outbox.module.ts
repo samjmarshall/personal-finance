@@ -1,6 +1,6 @@
 import { db } from "~/server/db";
 import { inngest } from "~/server/inngest/client";
-import { createRootLogger } from "~/server/observability/logger";
+import { createRootLogger } from "~/server/observability/logging/logger";
 
 import { DrizzleOutboxRepository } from "./outbox.repository";
 import { OutboxService } from "./outbox.service";

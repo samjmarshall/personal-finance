@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Logger } from "./logger";
+import type { Logger } from "~/server/observability/logging/logger";
 
 vi.mock("./posthog", () => ({ captureException: vi.fn() }));
 

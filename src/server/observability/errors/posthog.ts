@@ -1,7 +1,10 @@
 import { PostHog } from "posthog-node";
 import { env } from "~/env";
-import { BaggageKey, readBaggage } from "./baggage";
-import { currentSpanContext } from "./current-trace-id";
+import {
+	BaggageKey,
+	readBaggage,
+} from "~/server/observability/tracing/baggage";
+import { currentSpanContext } from "~/server/observability/tracing/current-trace-id";
 
 // undefined = not yet built; null = no key, a permanent no-op for this process.
 let client: PostHog | null | undefined;

@@ -19,10 +19,12 @@ import {
 import { ReceiptStatus } from "~/lib/constants";
 import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
-import { BaggageKey } from "~/server/observability/baggage";
-import type { LogAttributes, Logger } from "~/server/observability/logger";
-import { REDACT_IN_TRACES } from "~/server/observability/prompt-redaction";
-import { failSpan, withSpan } from "~/server/observability/tracer";
+import type {
+	LogAttributes,
+	Logger,
+} from "~/server/observability/logging/logger";
+import { BaggageKey } from "~/server/observability/tracing/baggage";
+import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
 import type {
 	ReceiptItemInsert,
 	ReceiptRow,
@@ -103,7 +105,11 @@ const MODEL_MEDIA: Record<
 		payload: (bytes) => ({
 			type: "text",
 			text: new TextDecoder().decode(bytes),
-			providerOptions: REDACT_IN_TRACES,
+			providerOptions: {
+				observability: {
+					redact: true,
+				},
+			},
 		}),
 	},
 };

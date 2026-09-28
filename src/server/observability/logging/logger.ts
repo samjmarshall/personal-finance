@@ -4,8 +4,9 @@ import {
 	SeverityNumber,
 } from "@opentelemetry/api-logs";
 import { env, LogLevel } from "~/env";
-import { readBaggage } from "./baggage";
-import { currentSpanContext } from "./current-trace-id";
+import { errorMessage, errorName } from "~/server/observability/errors/thrown";
+import { readBaggage } from "~/server/observability/tracing/baggage";
+import { currentSpanContext } from "~/server/observability/tracing/current-trace-id";
 
 // Re-exported so logging code depends on the logger, not env.ts, for the level name.
 export { LogLevel };
@@ -16,25 +17,6 @@ export { LogLevel };
  * primitives.
  */
 export type LogAttributes = Record<string, unknown>;
-
-/** The error's class name, or its `typeof` when something other than an Error was thrown. */
-export function errorName(error: unknown): string {
-	return error instanceof Error ? error.name : typeof error;
-}
-
-export function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
-// A thrown plain object turns into "[object Object]" as a string; JSON keeps its fields.
-export function stringifyThrown(error: unknown): string {
-	if (typeof error !== "object" || error === null) return String(error);
-	try {
-		return JSON.stringify(error);
-	} catch {
-		return String(error);
-	}
-}
 
 export interface Logger {
 	debug(msg: string, attrs?: LogAttributes): void;

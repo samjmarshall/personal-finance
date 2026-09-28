@@ -24,12 +24,12 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { BaggageKey, setBaggage } from "~/server/observability/baggage";
-import { captureException } from "~/server/observability/posthog";
-import { captureTraceCarrier } from "~/server/observability/trace-carrier";
+import { captureException } from "~/server/observability/errors/posthog";
+import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
+import { captureTraceCarrier } from "~/server/observability/tracing/trace-carrier";
 import { TracingMiddleware } from "./middleware";
 
-vi.mock("~/server/observability/posthog", () => ({
+vi.mock("~/server/observability/errors/posthog", () => ({
 	captureException: vi.fn(),
 }));
 

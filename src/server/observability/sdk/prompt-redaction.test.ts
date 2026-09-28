@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { REDACT_IN_TRACES, redactPromptJson } from "./prompt-redaction";
+import { redactPromptJson } from "./prompt-redaction";
 
 function makeMessages(parts: unknown[]) {
 	return JSON.stringify([{ role: "user", content: parts }]);
@@ -52,7 +52,14 @@ describe("redactPromptJson", () => {
 	it("stubs a tagged text part at any size", () => {
 		const body = "<p>Total $9.20</p>";
 		const sha = createHash("sha256").update(body).digest("hex");
-		const part = { ...textPart(body), providerOptions: REDACT_IN_TRACES };
+		const part = {
+			...textPart(body),
+			providerOptions: {
+				observability: {
+					redact: true,
+				},
+			},
+		};
 
 		const out = JSON.parse(redactPromptJson(makeMessages([part])));
 

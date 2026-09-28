@@ -15,7 +15,9 @@ vi.mock("~/server/outbox", () => ({ commitWithOutbox }));
 // currentTraceId reads the ambient OTel span; stub it so the test asserts the id is
 // threaded onto the insert, not whether a provider happens to be registered.
 const { currentTraceId } = vi.hoisted(() => ({ currentTraceId: vi.fn() }));
-vi.mock("~/server/observability/current-trace-id", () => ({ currentTraceId }));
+vi.mock("~/server/observability/tracing/current-trace-id", () => ({
+	currentTraceId,
+}));
 
 const { createCallerFactory } = await import("~/server/api/trpc");
 const { receiptRouter } = await import("./receipts");

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { flushAfterResponse } from "~/server/observability/flush.fake";
+import { flushAfterResponse } from "~/server/observability/sdk/flush.fake";
 
 // The route is a composition root: it reads the env, builds the tiers once, and
 // delegates. Everything it wires is stubbed so this stays a unit over that job;
@@ -31,8 +31,8 @@ vi.mock("resend", () => ({
 }));
 
 vi.mock(
-	"~/server/observability/flush",
-	() => import("~/server/observability/flush.fake"),
+	"~/server/observability/sdk/flush",
+	() => import("~/server/observability/sdk/flush.fake"),
 );
 
 const { handle, constructed } = vi.hoisted(() => ({

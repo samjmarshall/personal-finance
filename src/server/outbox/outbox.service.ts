@@ -2,9 +2,10 @@ import { SpanStatusCode } from "@opentelemetry/api";
 import type { Inngest } from "inngest";
 
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
-import { BaggageKey } from "~/server/observability/baggage";
-import { errorMessage, type Logger } from "~/server/observability/logger";
-import { failSpan, withSpan } from "~/server/observability/tracer";
+import { errorMessage } from "~/server/observability/errors/thrown";
+import type { Logger } from "~/server/observability/logging/logger";
+import { BaggageKey } from "~/server/observability/tracing/baggage";
+import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
 
 import type {
 	OutboxEvents,

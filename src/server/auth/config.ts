@@ -5,7 +5,8 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
-import { createRootLogger, errorName } from "~/server/observability/logger";
+import { errorName } from "~/server/observability/errors/thrown";
+import { createRootLogger } from "~/server/observability/logging/logger";
 import { createSecondaryStorage } from "./secondary-storage";
 
 const logger = createRootLogger().with({ domain: "auth" });

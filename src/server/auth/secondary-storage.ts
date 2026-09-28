@@ -1,10 +1,7 @@
 import { Redis } from "@upstash/redis";
 
-import {
-	createRootLogger,
-	errorMessage,
-	errorName,
-} from "~/server/observability/logger";
+import { errorMessage, errorName } from "~/server/observability/errors/thrown";
+import { createRootLogger } from "~/server/observability/logging/logger";
 
 const logger = createRootLogger().with({ domain: "auth", component: "redis" });
 

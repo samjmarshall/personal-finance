@@ -1,7 +1,7 @@
 import { Inngest, wrapStringFirstLogger } from "inngest";
 
 import { env } from "~/env";
-import { createRootLogger } from "~/server/observability/logger";
+import { createRootLogger } from "~/server/observability/logging/logger";
 import { TracingMiddleware } from "./middleware";
 
 // `id` is the app name (matches the Portless host).

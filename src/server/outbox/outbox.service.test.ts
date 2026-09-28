@@ -18,7 +18,10 @@ import {
 	buildOutboxEvent,
 	type OutboxEventDescriptor,
 } from "~/server/inngest/events";
-import type { LogAttributes, Logger } from "~/server/observability/logger";
+import type {
+	LogAttributes,
+	Logger,
+} from "~/server/observability/logging/logger";
 import type { OutboxRepository, OutboxRow } from "./outbox.repository";
 import { OutboxService } from "./outbox.service";
 

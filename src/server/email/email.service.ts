@@ -3,9 +3,9 @@ import type { InboundAttachmentMeta, InboundEmailEvent } from "~/domain/email";
 import { isReceiptFileType } from "~/domain/receipts";
 import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
-import { BaggageKey, setBaggage } from "~/server/observability/baggage";
-import { currentTraceId } from "~/server/observability/current-trace-id";
-import type { Logger } from "~/server/observability/logger";
+import type { Logger } from "~/server/observability/logging/logger";
+import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
+import { currentTraceId } from "~/server/observability/tracing/current-trace-id";
 import type { InboundMailbox } from "./email.mailbox";
 import type { EmailRepository, StoredBlob } from "./email.repository";
 

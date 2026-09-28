@@ -7,8 +7,8 @@ import { EmailController } from "~/server/email/email.controller";
 import { ResendInboundMailbox } from "~/server/email/email.mailbox";
 import { DrizzleEmailRepository } from "~/server/email/email.repository";
 import { EmailService } from "~/server/email/email.service";
-import { withFlush } from "~/server/observability/flush";
-import { createRootLogger } from "~/server/observability/logger";
+import { createRootLogger } from "~/server/observability/logging/logger";
+import { withFlush } from "~/server/observability/sdk/flush";
 import { outboxService } from "~/server/outbox/outbox.module";
 
 const rootLogger = createRootLogger().with({ domain: "email" });

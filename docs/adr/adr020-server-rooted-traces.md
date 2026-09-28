@@ -21,7 +21,7 @@ Where does the trace root live, and how does a developer obtain the id?
 
 ## Decision
 
-We will root every trace at the first server span. The browser sends no `traceparent`: the tRPC `headers` hook sends only `x-trpc-source`, better-auth uses its default fetch, and `src/lib/traceparent.ts` is deleted. Each route root echoes the active trace id as an `x-trace-id` response header through `traceIdHeaders()` (`src/server/observability/current-trace-id.ts`) — the tRPC route and `POST /api/receipts/upload` today. The developer reads the id from the response, not the request.
+We will root every trace at the first server span. The browser sends no `traceparent`: the tRPC `headers` hook sends only `x-trpc-source`, better-auth uses its default fetch, and `src/lib/traceparent.ts` is deleted. Each route root echoes the active trace id as an `x-trace-id` response header through `traceIdHeaders()` (`src/server/observability/tracing/current-trace-id.ts`) — the tRPC route and `POST /api/receipts/upload` today. The developer reads the id from the response, not the request.
 
 The Blob token mint becomes an observed trace of its own: Next's `POST /api/receipts/upload` HTTP span is the root, with a `blob.token.mint` child carrying `member.id` and `posthog.distinct_id` from baggage, flushed via `after`. It is not chained into the `receipt.create` trace. One upload action therefore yields two traces, adjacent in time under one `posthog.distinct_id`; the receipt row's `traceId` names the ingest trace, and the panel labels it "Ingest trace ID".
 

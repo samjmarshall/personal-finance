@@ -14,9 +14,9 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { flushAfterResponse } from "~/server/observability/flush.fake";
-import type { Logger } from "~/server/observability/logger";
-import { SpanAttributeProcessor } from "~/server/observability/span-processor";
+import type { Logger } from "~/server/observability/logging/logger";
+import { flushAfterResponse } from "~/server/observability/sdk/flush.fake";
+import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
 // The route opens a span over Blob's handleUpload: it gates on the session,
 // stamps the member on its span, logs the refusals and echoes the trace id. Blob,
@@ -27,8 +27,8 @@ vi.mock("~/env", () => ({
 }));
 
 vi.mock(
-	"~/server/observability/flush",
-	() => import("~/server/observability/flush.fake"),
+	"~/server/observability/sdk/flush",
+	() => import("~/server/observability/sdk/flush.fake"),
 );
 
 const { getSession } = vi.hoisted(() => ({
@@ -43,7 +43,7 @@ const { logs } = vi.hoisted(() => ({
 		attrs?: Record<string, unknown>;
 	}>,
 }));
-vi.mock("~/server/observability/logger", () => {
+vi.mock("~/server/observability/logging/logger", () => {
 	const fake: Logger = {
 		debug: (msg, attrs) => void logs.push({ level: "debug", msg, attrs }),
 		info: (msg, attrs) => void logs.push({ level: "info", msg, attrs }),

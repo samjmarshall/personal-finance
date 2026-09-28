@@ -5,9 +5,9 @@ import type { NextRequest } from "next/server";
 
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext, trpcLogger } from "~/server/api/trpc";
-import { traceIdHeaders } from "~/server/observability/current-trace-id";
-import { withFlush } from "~/server/observability/flush";
-import { reportError } from "~/server/observability/report-error";
+import { reportError } from "~/server/observability/errors/report-error";
+import { withFlush } from "~/server/observability/sdk/flush";
+import { traceIdHeaders } from "~/server/observability/tracing/current-trace-id";
 
 // A batch builds its context once, then every call in it rethrows that one
 // error. Report it once, not once per call.

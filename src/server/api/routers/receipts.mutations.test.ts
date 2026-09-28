@@ -20,7 +20,9 @@ vi.mock("@vercel/blob", () => ({ del }));
 // currentTraceId reads the ambient OTel span; stub it so retry's trace-id overwrite
 // is asserted directly rather than depending on a registered provider.
 const { currentTraceId } = vi.hoisted(() => ({ currentTraceId: vi.fn() }));
-vi.mock("~/server/observability/current-trace-id", () => ({ currentTraceId }));
+vi.mock("~/server/observability/tracing/current-trace-id", () => ({
+	currentTraceId,
+}));
 
 const { createCallerFactory } = await import("~/server/api/trpc");
 const { receiptRouter } = await import("./receipts");

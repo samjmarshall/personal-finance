@@ -9,10 +9,6 @@ export const PROMPT_ATTRS = ["ai.prompt.messages", "ai.prompt"] as const;
 // Fields where AI SDK prompt parts carry raw bytes: files and images.
 const BINARY_PART_FIELDS = ["data", "image"] as const;
 
-// Tag a prompt text part with this when it holds member content (an e-receipt
-// body): its text is stubbed in traces at any size. Providers ignore the key.
-export const REDACT_IN_TRACES = { observability: { redact: true } } as const;
-
 // Backstop for an untagged text part: our own instructions stay well under this,
 // so anything longer is member content.
 const MAX_TEXT_PART_BYTES = 8 * 1024;

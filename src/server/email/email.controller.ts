@@ -1,7 +1,7 @@
 import type { Resend } from "resend";
 import { inboundEmailEventDto } from "~/domain/email";
-import type { Logger } from "~/server/observability/logger";
-import { withSpan } from "~/server/observability/tracer";
+import type { Logger } from "~/server/observability/logging/logger";
+import { withSpan } from "~/server/observability/tracing/tracer";
 import type { EmailService } from "./email.service";
 
 interface EmailControllerDeps {

@@ -35,7 +35,7 @@ import { user } from "~/server/auth/auth.schema";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { buildOutboxEvent } from "~/server/inngest/events";
-import { currentTraceId } from "~/server/observability/current-trace-id";
+import { currentTraceId } from "~/server/observability/tracing/current-trace-id";
 import { commitWithOutbox } from "~/server/outbox";
 import { receiptItems, receipts } from "~/server/receipts/receipts.schema";
 import { transactions } from "~/server/transactions/transactions.schema";

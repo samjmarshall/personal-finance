@@ -15,7 +15,10 @@ import {
 	vi,
 } from "vitest";
 import type { InboundEmailEvent } from "~/domain/email";
-import type { LogAttributes, Logger } from "~/server/observability/logger";
+import type {
+	LogAttributes,
+	Logger,
+} from "~/server/observability/logging/logger";
 import type { AttachmentDownload, EmailBody } from "./email.mailbox";
 import type { EmailRepository, StoredBlob } from "./email.repository";
 import {

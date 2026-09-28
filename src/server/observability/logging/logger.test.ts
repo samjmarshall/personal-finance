@@ -15,7 +15,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { BaggageKey, setBaggage } from "./baggage";
+import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
 import { LogLevel, OtelLogger } from "./logger";
 
 type FakeRecord = LogRecord & { body?: string };

@@ -1,7 +1,6 @@
 import { after } from "next/server";
-
+import { flushPostHog } from "~/server/observability/errors/posthog";
 import { getRegisteredProcessors } from "./otel-registry";
-import { flushPostHog } from "./posthog";
 
 const FLUSH_TIMEOUT_MS = 5000;
 

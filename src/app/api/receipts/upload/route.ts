@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 
 import { RECEIPT_FILE_TYPES } from "~/domain/receipts";
 import { auth } from "~/server/auth";
-import { BaggageKey } from "~/server/observability/baggage";
-import { traceIdHeaders } from "~/server/observability/current-trace-id";
-import { withFlush } from "~/server/observability/flush";
-import { createRootLogger } from "~/server/observability/logger";
-import { failSpan, withSpan } from "~/server/observability/tracer";
+import { createRootLogger } from "~/server/observability/logging/logger";
+import { withFlush } from "~/server/observability/sdk/flush";
+import { BaggageKey } from "~/server/observability/tracing/baggage";
+import { traceIdHeaders } from "~/server/observability/tracing/current-trace-id";
+import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
 
 const logger = createRootLogger().with({
 	domain: "receipts",

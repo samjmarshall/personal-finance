@@ -1,5 +1,5 @@
 import type { Instrumentation } from "next";
-import type { Logger } from "./server/observability/logger";
+import type { Logger } from "./server/observability/logging/logger";
 
 // Cached across errors: an error storm shouldn't rebuild the logger (which
 // re-reads env) each time. Runtime env is fixed, so one build is enough.
@@ -8,7 +8,7 @@ let nextLogger: Logger | undefined;
 export async function register(): Promise<void> {
 	if (process.env.NEXT_RUNTIME === "nodejs") {
 		const { registerObservability } = await import(
-			"./server/observability/otel"
+			"./server/observability/sdk/otel"
 		);
 		registerObservability();
 	}
@@ -26,9 +26,9 @@ export const onRequestError: Instrumentation.onRequestError = async (
 
 	const [{ reportError }, { flushTelemetry }, { createRootLogger }] =
 		await Promise.all([
-			import("./server/observability/report-error"),
-			import("./server/observability/flush"),
-			import("./server/observability/logger"),
+			import("./server/observability/errors/report-error"),
+			import("./server/observability/sdk/flush"),
+			import("./server/observability/logging/logger"),
 		]);
 
 	const attrs = {

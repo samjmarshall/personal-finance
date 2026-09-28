@@ -9,15 +9,17 @@ vi.mock("~/server/api/trpc", () => ({
 	trpcLogger: { error: vi.fn() },
 }));
 vi.mock(
-	"~/server/observability/flush",
-	() => import("~/server/observability/flush.fake"),
+	"~/server/observability/sdk/flush",
+	() => import("~/server/observability/sdk/flush.fake"),
 );
-vi.mock("~/server/observability/posthog", () => ({
+vi.mock("~/server/observability/errors/posthog", () => ({
 	captureException: vi.fn(),
 }));
 
 const { reportPreProcedureError } = await import("./route");
-const { captureException } = await import("~/server/observability/posthog");
+const { captureException } = await import(
+	"~/server/observability/errors/posthog"
+);
 
 describe("reportPreProcedureError", () => {
 	beforeEach(() => vi.mocked(captureException).mockClear());

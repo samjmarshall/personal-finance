@@ -26,8 +26,10 @@ import {
 import type { ExtractionCategory, ReceiptExtraction } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import type { FetchedBlob } from "~/server/blob-store/blob-store";
-import type { LogAttributes, Logger } from "~/server/observability/logger";
-import { REDACT_IN_TRACES } from "~/server/observability/prompt-redaction";
+import type {
+	LogAttributes,
+	Logger,
+} from "~/server/observability/logging/logger";
 import type {
 	ExtractionValues,
 	ReceiptItemInsert,
@@ -653,7 +655,11 @@ describe("buildExtractionContent", () => {
 				{
 					type: "text",
 					text: "<html><body>Total $9.20</body></html>",
-					providerOptions: REDACT_IN_TRACES,
+					providerOptions: {
+						observability: {
+							redact: true,
+						},
+					},
 				},
 			]);
 		},

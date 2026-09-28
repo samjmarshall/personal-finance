@@ -6,7 +6,7 @@ import { cache } from "react";
 
 import { type AppRouter, createCaller } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
-import { flushAfterResponse } from "~/server/observability/flush";
+import { flushAfterResponse } from "~/server/observability/sdk/flush";
 import { createQueryClient } from "./query-client";
 
 /**

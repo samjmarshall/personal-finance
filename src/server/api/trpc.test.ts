@@ -16,7 +16,7 @@ import {
 	vi,
 } from "vitest";
 
-import { SpanAttributeProcessor } from "~/server/observability/span-processor";
+import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
 // Importing trpc pulls in the real db + auth (and through them ~/env). Stub them
 // so this stays a pure unit test.

@@ -4,7 +4,10 @@ import type {
 	Span,
 	SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { BaggageKey, readBaggage } from "./baggage";
+import {
+	BaggageKey,
+	readBaggage,
+} from "~/server/observability/tracing/baggage";
 import { PROMPT_ATTRS, redactPromptJson } from "./prompt-redaction";
 
 export interface SpanAttributeProcessorDeps {

@@ -22,7 +22,7 @@ related-prs: [#20]
 ## Design
 
 **Lives in**:
-- `src/server/observability/current-trace-id.ts` — `currentTraceId()` reads the active OTel span's trace id; null when no span records.
+- `src/server/observability/tracing/current-trace-id.ts` — `currentTraceId()` reads the active OTel span's trace id; null when no span records.
 - `src/lib/posthog-trace-url.ts` — pure `posthogTraceUrl()` builds the PostHog tracing deep-link; null without a project id or trace id.
 - `src/domain/receipts/receipt-pipeline.ts` — pure `receiptPipeline()` maps a receipt to Upload → AI extraction → Transaction match timeline stages.
 - `src/server/receipts/receipts.schema.ts` — nullable `traceId` text column (migration `0011`).

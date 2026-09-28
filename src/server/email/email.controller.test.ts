@@ -14,7 +14,10 @@ import {
 	vi,
 } from "vitest";
 import type { InboundEmailEvent } from "~/domain/email";
-import type { LogAttributes, Logger } from "~/server/observability/logger";
+import type {
+	LogAttributes,
+	Logger,
+} from "~/server/observability/logging/logger";
 import { EmailController } from "./email.controller";
 import type { EmailService, IngestResult } from "./email.service";
 

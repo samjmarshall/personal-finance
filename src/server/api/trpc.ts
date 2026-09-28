@@ -14,10 +14,10 @@ import { flattenError, ZodError } from "zod";
 
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
-import { BaggageKey } from "~/server/observability/baggage";
-import { createRootLogger } from "~/server/observability/logger";
-import { reportError } from "~/server/observability/report-error";
-import { failSpan, withSpan } from "~/server/observability/tracer";
+import { reportError } from "~/server/observability/errors/report-error";
+import { createRootLogger } from "~/server/observability/logging/logger";
+import { BaggageKey } from "~/server/observability/tracing/baggage";
+import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
 
 // Composition root: builds its own logger + tracer. Middleware has no injection
 // point, so it takes the adr004 root exception route files also take. Shared
