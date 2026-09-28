@@ -8,24 +8,22 @@ import {
 // Inngest's SDK starts its own `inngest.execution` root per execution request
 // (adr016 §6). Our `inngest.function.*` span parents onto the outbox pocket, not
 // onto it, so dropping the name loses nothing of ours.
-export const DROPPED_SPAN_NAMES: ReadonlySet<string> = new Set([
-	"inngest.execution",
-]);
+export const INNGEST_EXECUTION_SPAN = "inngest.execution";
 
 interface NameDropSamplerDeps {
 	inner: Sampler;
-	dropNames: ReadonlySet<string>;
+	dropName: string;
 }
 
 // NOT_RECORD for an exact-name match, otherwise the inner sampler's call. With a
 // parent-based inner, whatever the SDK parents onto a dropped span is dropped too.
 export class NameDropSampler implements Sampler {
 	private readonly inner: Sampler;
-	private readonly dropNames: ReadonlySet<string>;
+	private readonly dropName: string;
 
 	constructor(deps: NameDropSamplerDeps) {
 		this.inner = deps.inner;
-		this.dropNames = deps.dropNames;
+		this.dropName = deps.dropName;
 	}
 
 	shouldSample(
@@ -36,7 +34,7 @@ export class NameDropSampler implements Sampler {
 		attributes: Attributes,
 		links: Link[],
 	): SamplingResult {
-		if (this.dropNames.has(spanName)) {
+		if (spanName === this.dropName) {
 			return { decision: SamplingDecision.NOT_RECORD };
 		}
 		return this.inner.shouldSample(
@@ -50,6 +48,6 @@ export class NameDropSampler implements Sampler {
 	}
 
 	toString(): string {
-		return `NameDropSampler{${[...this.dropNames].join(",")}} → ${this.inner.toString()}`;
+		return `NameDropSampler{${this.dropName}} → ${this.inner.toString()}`;
 	}
 }

@@ -16,7 +16,7 @@ import {
 	vi,
 } from "vitest";
 
-import { ContextSpanProcessor } from "~/server/observability/span-processor";
+import { SpanAttributeProcessor } from "~/server/observability/span-processor";
 
 // Importing trpc pulls in the real db + auth (and through them ~/env). Stub them
 // so this stays a pure unit test.
@@ -27,7 +27,7 @@ const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
 	spanProcessors: [
 		// Registered so span-start baggage stamping is exercised, not just export.
-		new ContextSpanProcessor(),
+		new SpanAttributeProcessor(),
 		new SimpleSpanProcessor(exporter),
 	],
 });

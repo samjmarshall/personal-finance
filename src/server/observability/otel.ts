@@ -19,8 +19,8 @@ import {
 	getRegisteredProcessors,
 	setRegisteredProcessors,
 } from "./otel-registry";
-import { DROPPED_SPAN_NAMES, NameDropSampler } from "./sampler";
-import { ContextSpanProcessor } from "./span-processor";
+import { INNGEST_EXECUTION_SPAN, NameDropSampler } from "./sampler";
+import { SpanAttributeProcessor } from "./span-processor";
 
 /**
  * Boots OTel + PostHog once per server instance. A no-op without POSTHOG_KEY,
@@ -56,11 +56,11 @@ export function registerObservability(): void {
 		// in front keeps Inngest's own `inngest.execution` root out (adr016 §6).
 		traceSampler: new NameDropSampler({
 			inner: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
-			dropNames: DROPPED_SPAN_NAMES,
+			dropName: INNGEST_EXECUTION_SPAN,
 		}),
 		spanProcessors: [
 			"auto",
-			new ContextSpanProcessor({
+			new SpanAttributeProcessor({
 				inputTokenPriceUsd: env.BEDROCK_INPUT_TOKEN_PRICE_USD,
 				outputTokenPriceUsd: env.BEDROCK_OUTPUT_TOKEN_PRICE_USD,
 			}),
@@ -83,11 +83,8 @@ export function registerObservability(): void {
 		},
 	});
 
-	// LegacyOpenTelemetry keeps the ai.* span names + ai.prompt/ai.prompt.messages
-	// attributes that ContextSpanProcessor redaction and PostHogSpanProcessor key
-	// on. It must register after the redaction processor (above) and before any
-	// generateObject runs, or a raw receipt image would ship. The v7-native
-	// `OpenTelemetry` (gen_ai.* semconv) is a deliberate follow-up, not this phase.
+	// Legacy AI adapter keeps the ai.* shapes redaction + PostHog read. Register
+	// after redaction, before any model call — else raw receipt bytes ship.
 	registerTelemetry(new LegacyOpenTelemetry());
 
 	setRegisteredProcessors({ traceBatch, posthogSpanProcessor, logBatch });

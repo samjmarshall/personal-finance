@@ -6,7 +6,7 @@ import {
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { BaggageKey, setBaggage } from "./baggage";
-import { ContextSpanProcessor } from "./span-processor";
+import { SpanAttributeProcessor } from "./span-processor";
 
 function makeMessages(parts: unknown[]) {
 	return JSON.stringify([{ role: "user", content: parts }]);
@@ -17,7 +17,7 @@ function filePart(b64: string, mediaType = "image/jpeg") {
 }
 
 const exporter = new InMemorySpanExporter();
-const processor = new ContextSpanProcessor({
+const processor = new SpanAttributeProcessor({
 	inputTokenPriceUsd: 0.003,
 	outputTokenPriceUsd: 0.015,
 });
@@ -42,7 +42,7 @@ function runSpan(
 	return exporter.getFinishedSpans()[0];
 }
 
-describe("ContextSpanProcessor", () => {
+describe("SpanAttributeProcessor", () => {
 	describe("baggage → span attrs", () => {
 		it("copies known baggage keys onto the span", () => {
 			const ctx = setBaggage({
@@ -135,7 +135,7 @@ describe("ContextSpanProcessor", () => {
 		});
 
 		it("omits price attrs on ai.* spans when processor has no prices", () => {
-			const noPrice = new ContextSpanProcessor();
+			const noPrice = new SpanAttributeProcessor();
 			const exp = new InMemorySpanExporter();
 			const prov = new NodeTracerProvider({
 				spanProcessors: [noPrice, new SimpleSpanProcessor(exp)],

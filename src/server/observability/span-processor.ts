@@ -7,22 +7,22 @@ import type {
 import { BaggageKey, readBaggage } from "./baggage";
 import { PROMPT_ATTRS, redactPromptJson } from "./prompt-redaction";
 
-export interface ContextSpanProcessorDeps {
+export interface SpanAttributeProcessorDeps {
 	inputTokenPriceUsd?: number;
 	outputTokenPriceUsd?: number;
 }
 
 /**
- * Copies our baggage keys onto every span, stamps `posthog.distinct_id` from
- * `member.id`, and for `ai.*` spans: redacts binary in the prompt attributes
- * (adr015 §6, delegated to prompt-redaction) and stamps token price attrs
+ * Sets span attributes at start, before any exporter sees them: copies our
+ * baggage keys + `posthog.distinct_id` onto every span, and for `ai.*` spans
+ * redacts binary in the prompt attributes (adr015 §6) and stamps token prices
  * (Decision 11).
  */
-export class ContextSpanProcessor implements SpanProcessor {
+export class SpanAttributeProcessor implements SpanProcessor {
 	private readonly inputTokenPriceUsd?: number;
 	private readonly outputTokenPriceUsd?: number;
 
-	constructor(deps: ContextSpanProcessorDeps = {}) {
+	constructor(deps: SpanAttributeProcessorDeps = {}) {
 		this.inputTokenPriceUsd = deps.inputTokenPriceUsd;
 		this.outputTokenPriceUsd = deps.outputTokenPriceUsd;
 	}

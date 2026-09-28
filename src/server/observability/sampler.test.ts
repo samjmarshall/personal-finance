@@ -9,7 +9,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { describe, expect, it } from "vitest";
-import { DROPPED_SPAN_NAMES, NameDropSampler } from "./sampler";
+import { INNGEST_EXECUTION_SPAN, NameDropSampler } from "./sampler";
 
 function recordingInner() {
 	const calls: string[] = [];
@@ -28,7 +28,7 @@ describe("NameDropSampler", () => {
 		const { inner, calls } = recordingInner();
 		const sampler = new NameDropSampler({
 			inner,
-			dropNames: new Set(["inngest.execution"]),
+			dropName: "inngest.execution",
 		});
 
 		const result = sampler.shouldSample(
@@ -48,7 +48,7 @@ describe("NameDropSampler", () => {
 		const { inner, calls } = recordingInner();
 		const sampler = new NameDropSampler({
 			inner,
-			dropNames: new Set(["inngest.execution"]),
+			dropName: "inngest.execution",
 		});
 
 		const result = sampler.shouldSample(
@@ -75,7 +75,7 @@ describe("NameDropSampler", () => {
 		const provider = new NodeTracerProvider({
 			sampler: new NameDropSampler({
 				inner: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
-				dropNames: DROPPED_SPAN_NAMES,
+				dropName: INNGEST_EXECUTION_SPAN,
 			}),
 			spanProcessors: [new SimpleSpanProcessor(exporter)],
 		});

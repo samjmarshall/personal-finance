@@ -16,7 +16,7 @@ import {
 } from "vitest";
 import { flushAfterResponse } from "~/server/observability/flush.fake";
 import type { Logger } from "~/server/observability/logger";
-import { ContextSpanProcessor } from "~/server/observability/span-processor";
+import { SpanAttributeProcessor } from "~/server/observability/span-processor";
 
 // The route opens a span over Blob's handleUpload: it gates on the session,
 // stamps the member on its span, logs the refusals and echoes the trace id. Blob,
@@ -76,11 +76,11 @@ const { POST } = await import("./route");
 
 // A registered provider makes the ambient tracer record, so the span the route
 // opens lands in the exporter and currentTraceId() sees it. The real
-// ContextSpanProcessor rides along: the member reaches the span only via baggage.
+// SpanAttributeProcessor rides along: the member reaches the span only via baggage.
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
 	spanProcessors: [
-		new ContextSpanProcessor(),
+		new SpanAttributeProcessor(),
 		new SimpleSpanProcessor(exporter),
 	],
 });
