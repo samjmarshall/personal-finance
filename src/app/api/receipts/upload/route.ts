@@ -33,6 +33,16 @@ class UnauthorizedError extends Error {
 	}
 }
 
+// Once the body is checked, Blob's completion callback can only fail its signature
+// check (the caller's fault); anything else is ours — the store token, the mint.
+function failureStatus(
+	error: unknown,
+	type: HandleUploadBody["type"],
+): 401 | 400 | 500 {
+	if (error instanceof UnauthorizedError) return 401;
+	return type === "blob.upload-completed" ? 400 : 500;
+}
+
 // Even a rejected body runs under Next's HTTP span, so echo its id (adr020): the
 // 400 in the Network tab still names a findable trace.
 function badBody(): NextResponse {
@@ -58,9 +68,16 @@ async function handle(request: Request): Promise<NextResponse> {
 	} catch {
 		return badBody();
 	}
-	// JSON `null` / a non-object parses fine but has no `type`; reading it below
-	// would throw a 500. Reject it as a bad body, same as unparseable input.
-	if (typeof body !== "object" || body === null || !("type" in body)) {
+	// Reject every shape Blob would throw on (null, unknown event, no pathname) as a
+	// bad body up front, so a throw past here is ours to own as a 500.
+	if (
+		typeof body !== "object" ||
+		body === null ||
+		!Object.hasOwn(SPAN_NAME_BY_EVENT, body.type) ||
+		(body.type === "blob.generate-client-token" &&
+			typeof (body.payload as { pathname?: unknown } | undefined)?.pathname !==
+				"string")
+	) {
 		return badBody();
 	}
 
@@ -72,7 +89,7 @@ async function handle(request: Request): Promise<NextResponse> {
 			? await auth.api.getSession({ headers: request.headers })
 			: null;
 	return withSpan(
-		SPAN_NAME_BY_EVENT[body.type] ?? "blob.event",
+		SPAN_NAME_BY_EVENT[body.type],
 		{
 			attributes: { "blob.event_type": body.type },
 			baggage: { [BaggageKey.MemberId]: session?.user?.id },
@@ -102,16 +119,21 @@ async function handle(request: Request): Promise<NextResponse> {
 
 				return NextResponse.json(jsonResponse, { headers: traceIdHeaders() });
 			} catch (error) {
-				const message =
-					error instanceof Error ? error.message : "Upload failed";
-				const status = error instanceof UnauthorizedError ? 401 : 400;
+				const status = failureStatus(error, body.type);
 				// Stamp every refusal, like trpc.error_code: a 401 leaves the span
 				// status clean, so without this it looks like a success in PostHog.
 				span.setAttribute("http.response.status_code", status);
-				// A signed-out tab is routine (mirrors trpc's EXPECTED_ERROR_CODES): warn
-				// only, and keep the span clean so Error Tracking sees real mint failures.
+				// Same levels as the tRPC middleware: a signed-out tab is routine (warn,
+				// clean span), a rejected callback is the caller's fault (warn), the rest
+				// is ours (error).
 				if (status === 401) {
 					logger.warn("blob token mint refused", {
+						"blob.event_type": body.type,
+					});
+				} else if (status === 400) {
+					failSpan(span, error);
+					logger.warn("blob callback rejected", {
+						error,
 						"blob.event_type": body.type,
 					});
 				} else {
@@ -121,6 +143,11 @@ async function handle(request: Request): Promise<NextResponse> {
 						"blob.event_type": body.type,
 					});
 				}
+				// A 500's message is ours (e.g. a missing store token), not the caller's.
+				const message =
+					status !== 500 && error instanceof Error
+						? error.message
+						: "Upload failed";
 				return NextResponse.json(
 					{ error: message },
 					{ status, headers: traceIdHeaders() },

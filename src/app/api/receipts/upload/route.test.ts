@@ -220,17 +220,54 @@ describe("POST /api/receipts/upload", () => {
 		);
 	});
 
-	it("400s any other mint failure, recording it on the span and logging at error", async () => {
+	it.each([
+		["an unknown event type", { type: "blob.nope", payload: {} }],
+		[
+			"a token request with no pathname",
+			{ type: "blob.generate-client-token" },
+		],
+	])("400s %s before minting, without opening a span", async (_, body) => {
+		const response = await post(JSON.stringify(body));
+
+		expect(response.status).toBe(400);
+		expect(handleUpload).not.toHaveBeenCalled();
+		expect(exporter.getFinishedSpans()).toEqual([]);
+	});
+
+	// Past the body check, the completion callback only fails Blob's signature check.
+	it("400s a rejected completion callback with a warn log and an errored span", async () => {
+		handleUpload.mockRejectedValueOnce(new Error("Invalid callback signature"));
+
+		const response = await post(
+			JSON.stringify({ type: "blob.upload-completed", payload: {} }),
+		);
+
+		expect(response.status).toBe(400);
+		await expect(response.json()).resolves.toEqual({
+			error: "Invalid callback signature",
+		});
+		const [span] = exporter.getFinishedSpans();
+		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
+		expect(span?.attributes["http.response.status_code"]).toBe(400);
+		expect(logs).toHaveLength(1);
+		expect(logs[0]).toMatchObject({
+			level: "warn",
+			msg: "blob callback rejected",
+		});
+	});
+
+	it("500s any other mint failure, recording it on the span and logging at error", async () => {
 		handleUpload.mockRejectedValueOnce(new Error("boom"));
 
 		const response = await post();
 
-		expect(response.status).toBe(400);
-		await expect(response.json()).resolves.toEqual({ error: "boom" });
+		expect(response.status).toBe(500);
+		// Our own failure text (a missing store token, say) never reaches the caller.
+		await expect(response.json()).resolves.toEqual({ error: "Upload failed" });
 		const [span] = exporter.getFinishedSpans();
 		// The raw message may carry the member's filename; it stays on the exception only.
 		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
-		expect(span?.attributes["http.response.status_code"]).toBe(400);
+		expect(span?.attributes["http.response.status_code"]).toBe(500);
 		expect(span?.events.map((e) => e.name)).toEqual(["exception"]);
 		expect(logs).toHaveLength(1);
 		expect(logs[0]).toMatchObject({
