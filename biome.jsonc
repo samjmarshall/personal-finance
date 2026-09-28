@@ -19,7 +19,13 @@
 	},
 	"files": {
 		// Scaffolding templates: function bodies, not valid standalone modules.
-		"includes": ["**", "!.claude/skills/subagent-eval/*-template.js"]
+		// Worktrees each carry their own biome.jsonc — exclude them to avoid the
+		// "nested root configuration" error when the main repo runs biome check.
+		"includes": [
+			"**",
+			"!.claude/skills/subagent-eval/*-template.js",
+			"!.claude/worktrees"
+		]
 	},
 	"formatter": {
 		"enabled": true
