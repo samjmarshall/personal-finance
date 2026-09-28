@@ -4,7 +4,10 @@ import {
 	SeverityNumber,
 } from "@opentelemetry/api-logs";
 import { env, LogLevel } from "~/env";
-import { errorMessage, errorName } from "~/server/observability/errors/thrown";
+import {
+	errorName,
+	stringifyThrown,
+} from "~/server/observability/errors/thrown";
 import { readBaggage } from "~/server/observability/tracing/baggage";
 import { currentSpanContext } from "~/server/observability/tracing/current-trace-id";
 
@@ -96,7 +99,7 @@ export class OtelLogger implements Logger {
 					errorAttrs["exception.stacktrace"] = exception.stack ?? "";
 				} else {
 					errorAttrs["exception.type"] = errorName(exception);
-					errorAttrs["exception.message"] = errorMessage(exception);
+					errorAttrs["exception.message"] = stringifyThrown(exception);
 				}
 			}
 

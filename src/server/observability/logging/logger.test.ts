@@ -106,6 +106,16 @@ describe("OtelLogger", () => {
 		});
 	});
 
+	// A thrown plain object must not log as "[object Object]".
+	it("keeps a thrown plain object's fields in exception.message", () => {
+		const { logger, emitCalls } = makeHarness();
+		logger.error("failed", { error: { code: "E42" } });
+		expect(emitCalls[0]?.attributes).toMatchObject({
+			"exception.type": "object",
+			"exception.message": '{"code":"E42"}',
+		});
+	});
+
 	it("lifts event.name to eventName and keeps the attribute", () => {
 		const { logger, emitCalls } = makeHarness();
 		logger.info("happened", { "event.name": "thing.happened" });
