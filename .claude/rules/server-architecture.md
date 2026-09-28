@@ -27,7 +27,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptsService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
 | `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. `outbox.module.ts` exports `outboxService`. | —                                  |
-| `src/server/observability/`         | shared adapter | Shared observability provider: `Logger` port + `OtelLogger` impl, OTel boot (`otel.ts`), flush (`flush.ts`), PostHog capture (`posthog.ts`), trace carrier (`trace-carrier.ts`), baggage (`baggage.ts`), `ContextSpanProcessor`, `TracingMiddleware`. Like `blob-store/` — lives outside any domain. Tiers see only `Logger` + the ambient OTel API (`@opentelemetry/api`). | OTel SDK + PostHog SDKs            |
+| `src/server/observability/`         | shared adapter | Shared observability provider: `Logger` port + `OtelLogger` impl, OTel boot (`otel.ts`), flush (`flush.ts`), PostHog capture (`posthog.ts`), trace carrier (`trace-carrier.ts`), baggage (`baggage.ts`), `SpanAttributeProcessor`, `TracingMiddleware`. Like `blob-store/` — lives outside any domain. Tiers see only `Logger` + the ambient OTel API (`@opentelemetry/api`). | OTel SDK + PostHog SDKs            |
 
 Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts` (earned only).
 
@@ -139,9 +139,10 @@ repository that is `this.db.transaction(...)` (`saveExtraction`); in a router it
 - `src/server/inngest/events.ts` `EVENT_REGISTRY` is the single event-name +
   payload authority (`EventName`, `EventPayload<K>`, `OutboxEventDescriptor`);
   `buildOutboxEvent(name, payload)` mints a registry-validated descriptor — every
-  send goes through it. The client (`client.ts`) is a bare
-  `new Inngest({ id, eventKey })`: inngest v4 dropped the typed `schemas` option,
-  so safety lives at the mint boundary, not the client type.
+  send goes through it. The client (`client.ts`) is
+  `new Inngest({ id, eventKey, logger, middleware: [TracingMiddleware] })` with no
+  `schemas`: inngest v4 dropped the typed `schemas` option, so safety lives at the
+  mint boundary, not the client type.
 - `src/server/outbox/` is the write door. A migrated repository injects
   `outboxService` typed as `OutboxWriteDoor` and calls `commit(writes, events)`
   (or `publish` for emit-only): `OutboxRepository.commit` runs the canonical rows
