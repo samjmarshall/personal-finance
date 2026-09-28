@@ -31,6 +31,8 @@ export function captureException(
 		const spanCtx = currentSpanContext();
 
 		posthog.captureException(error, distinctId, {
+			// Same value spans carry, so one production filter works for alerts on both.
+			"deployment.environment.name": process.env.VERCEL_ENV,
 			...(spanCtx
 				? { $trace_id: spanCtx.traceId, $span_id: spanCtx.spanId }
 				: {}),
