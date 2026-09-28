@@ -68,13 +68,8 @@ export function registerObservability(): void {
 			traceBatch,
 		],
 		logRecordProcessors: [logBatch],
-		// propagateContextUrls only ADDS extra hosts to receive trace context;
-		// @vercel/otel already propagates just to our own deployment/same-host URL.
-		// Empty = no third party added, so Bedrock/Resend (third-party https) get no
-		// traceparent/baggage. Self-fetches to our deployment still carry it (adr015 §6).
-		// Inngest puts the event key in the send URL path, so a traced send would
-		// ship the key in the span name. Match the path on any host: the Inngest host
-		// can be anything, and an untraced call costs less than a leaked key.
+		// Empty: trace headers reach only our own host, never Bedrock or Resend (adr015 §6).
+		// Inngest's send URL holds the event key, so skip tracing that path on any host.
 		instrumentationConfig: {
 			fetch: {
 				propagateContextUrls: [],

@@ -20,10 +20,6 @@ import {
 import { cn } from "~/lib/utils";
 import { diagnosticsJson, metaRows, rawJsonText } from "./more-details.display";
 
-// ---------------------------------------------------------------------------
-// Pieces
-// ---------------------------------------------------------------------------
-
 // Which button last copied + the copy action: always handed down as one.
 type CopyState = {
 	copiedKey: string | null;
@@ -168,10 +164,6 @@ function Timeline({ data }: { data: ReceiptDetail }) {
 		</ol>
 	);
 }
-
-// ---------------------------------------------------------------------------
-// Extraction pipeline details section
-// ---------------------------------------------------------------------------
 
 // Raw extraction JSON + its copy button. Own component so the JSON is stringified
 // once per render, not once for the <pre> and again for the copy value.

@@ -24,7 +24,7 @@ export function redactPromptJson(raw: string): string {
 	try {
 		parsed = JSON.parse(raw);
 	} catch {
-		return raw; // Leave malformed JSON untouched.
+		return raw;
 	}
 
 	// `ai.prompt.messages` is the message array itself; `ai.prompt` wraps it as
