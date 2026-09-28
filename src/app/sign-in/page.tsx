@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { AuthForm } from "~/app/_components/auth-form";
-import { AuthShell } from "~/app/_components/auth-shell";
+import { AuthForm } from "~/components/auth-form";
+import { AuthShell } from "~/components/auth-shell";
 import { getSession } from "~/server/auth/server";
 
 export default async function SignInPage() {

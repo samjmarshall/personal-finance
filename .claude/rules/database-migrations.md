@@ -3,6 +3,7 @@ paths:
   - "drizzle/**"
   - "src/server/db/*.ts"
   - "src/server/**/*.schema.ts"
+  - "drizzle.config.ts"
 ---
 
 # Database Migrations

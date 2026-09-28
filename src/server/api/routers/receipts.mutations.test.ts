@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ReceiptStatus } from "~/lib/constants";
+
 // Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
 // (and through them ~/env). Stub those so this stays a pure unit test.
 vi.mock("~/server/db", () => ({ db: {} }));
@@ -15,6 +17,13 @@ vi.mock("~/server/outbox", () => ({ commitWithOutbox }));
 const { del } = vi.hoisted(() => ({ del: vi.fn() }));
 vi.mock("@vercel/blob", () => ({ del }));
 
+// currentTraceId reads the ambient OTel span; stub it so retry's trace-id overwrite
+// is asserted directly rather than depending on a registered provider.
+const { currentTraceId } = vi.hoisted(() => ({ currentTraceId: vi.fn() }));
+vi.mock("~/server/observability/tracing/current-trace-id", () => ({
+	currentTraceId,
+}));
+
 const { createCallerFactory } = await import("~/server/api/trpc");
 const { receiptRouter } = await import("./receipts");
 
@@ -27,12 +36,17 @@ function caller(db: unknown) {
 }
 
 // Fake tx whose update().set().where().returning() yields the given rows — [] when
-// the conditional (id AND status=failed) matches nothing.
+// the conditional (id AND status=failed) matches nothing. Captures the set() payload
+// so a test can assert what the update wrote.
 // biome-ignore lint/suspicious/noExplicitAny: hand-rolled tx stands in for drizzle.
-function updateTx(returning: any[]) {
+function updateTx(returning: any[], capture?: (values: any) => void) {
 	return {
 		update: () => ({
-			set: () => ({ where: () => ({ returning: async () => returning }) }),
+			// biome-ignore lint/suspicious/noExplicitAny: values are the row under test.
+			set: (values: any) => {
+				capture?.(values);
+				return { where: () => ({ returning: async () => returning }) };
+			},
 		}),
 	};
 }
@@ -41,24 +55,35 @@ beforeEach(() => {
 	vi.spyOn(console, "log").mockImplementation(() => {});
 	commitWithOutbox.mockReset();
 	del.mockReset();
+	currentTraceId.mockReset().mockReturnValue("trace-retry");
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe("receipt.retry", () => {
-	it("flips a failed receipt to pending and mints one receipt/retry event", async () => {
+	it("flips a failed receipt to pending, overwrites the trace id, clears the error, and mints one receipt/retry event", async () => {
 		// biome-ignore lint/suspicious/noExplicitAny: captured derived events.
 		let outboxEvents: any;
+		// biome-ignore lint/suspicious/noExplicitAny: captured set() payload.
+		let setValues: any;
 		commitWithOutbox.mockImplementation(async (writes, events) => {
-			const row = await writes(updateTx([{ id: 9 }]));
+			const row = await writes(updateTx([{ id: 9 }], (v) => (setValues = v)));
 			outboxEvents = events(row);
 			return row;
 		});
 
 		await caller({}).retry({ id: 9 });
 
+		expect(setValues).toEqual({
+			status: ReceiptStatus.Pending,
+			traceId: "trace-retry",
+			error: null,
+		});
 		expect(outboxEvents).toHaveLength(1);
 		expect(outboxEvents[0].name).toBe("receipt/retry");
-		expect(outboxEvents[0].data).toEqual({ receiptId: 9 });
+		expect(outboxEvents[0].data).toEqual({
+			receiptId: 9,
+			_trace: expect.any(Object),
+		});
 		expect(typeof outboxEvents[0].data.receiptId).toBe("number");
 	});
 

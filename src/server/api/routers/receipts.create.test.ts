@@ -12,6 +12,13 @@ vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 const { commitWithOutbox } = vi.hoisted(() => ({ commitWithOutbox: vi.fn() }));
 vi.mock("~/server/outbox", () => ({ commitWithOutbox }));
 
+// currentTraceId reads the ambient OTel span; stub it so the test asserts the id is
+// threaded onto the insert, not whether a provider happens to be registered.
+const { currentTraceId } = vi.hoisted(() => ({ currentTraceId: vi.fn() }));
+vi.mock("~/server/observability/tracing/current-trace-id", () => ({
+	currentTraceId,
+}));
+
 const { createCallerFactory } = await import("~/server/api/trpc");
 const { receiptRouter } = await import("./receipts");
 
@@ -46,6 +53,7 @@ function txReturning(id: number, capture: (values: any) => void) {
 beforeEach(() => {
 	vi.spyOn(console, "log").mockImplementation(() => {});
 	commitWithOutbox.mockReset();
+	currentTraceId.mockReset().mockReturnValue("trace-abc");
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -66,6 +74,7 @@ describe("receipt.create producer", () => {
 			blobUrl: input.blobUrl,
 			blobPathname: input.blobPathname,
 			contentType: input.contentType,
+			traceId: "trace-abc",
 		});
 		expect(receipt.id).toBe(42);
 	});
@@ -83,7 +92,10 @@ describe("receipt.create producer", () => {
 
 		expect(outboxEvents).toHaveLength(1);
 		expect(outboxEvents[0].name).toBe("receipt/uploaded");
-		expect(outboxEvents[0].data).toEqual({ receiptId: 7 });
+		expect(outboxEvents[0].data).toEqual({
+			receiptId: 7,
+			_trace: expect.any(Object),
+		});
 		// buildOutboxEvent parses against the registry (number); a string would throw.
 		expect(typeof outboxEvents[0].data.receiptId).toBe("number");
 	});

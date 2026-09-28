@@ -31,7 +31,7 @@ make force-unlock env=preview ID=<id> # only after a killed apply left the lock
 
 1. Confirm the new model has an `au.` inference profile and access is granted: `aws bedrock list-inference-profiles --region ap-southeast-2`.
 2. Edit **both** locals in `infrastructure/locals.tf`: `bedrock_receipt_model` (the `au.` profile id the app calls) and `bedrock_foundation_model` (the bare id the IAM wildcard covers).
-3. Push. `deploy.yml` applies the IAM policy and the `BEDROCK_RECEIPT_MODEL` env var, then redeploys. Nothing in `src/` changes; `src/env.js` only carries a default for local runs.
+3. Push. `deploy.yml` applies the IAM policy and the `BEDROCK_RECEIPT_MODEL` env var, then redeploys. Nothing in `src/` changes; `src/env.ts` only carries a default for local runs.
 
 ## Bootstrap (once, manual, in order)
 

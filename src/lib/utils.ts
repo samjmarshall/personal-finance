@@ -136,15 +136,3 @@ export function formatMonthKey(key: string) {
 export function bareMediaType(contentType: string | null | undefined): string {
 	return contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
 }
-
-export function isPdf(contentType: string | null | undefined): boolean {
-	return bareMediaType(contentType) === "application/pdf";
-}
-
-// The email Channel stores a forwarded body under one of these (email.service.ts).
-// Neither is on the image proxy's renderable allowlist, so callers must branch here
-// rather than hand the blob to an `<img>` that can only come back as octet-stream.
-export function isText(contentType: string | null | undefined): boolean {
-	const bare = bareMediaType(contentType);
-	return bare === "text/html" || bare === "text/plain";
-}

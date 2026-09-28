@@ -21,8 +21,13 @@ export interface EmailRepository {
 	/**
 	 * One pending email-channel row per blob plus one `receipt/email.received` per
 	 * row, committed together through the outbox. Returns ids in input order.
+	 * `traceId` is the ingest trace stamped on every minted row (null when unset).
 	 */
-	createPendingReceipts(userId: string, blobs: StoredBlob[]): Promise<number[]>;
+	createPendingReceipts(
+		userId: string,
+		blobs: StoredBlob[],
+		traceId: string | null,
+	): Promise<number[]>;
 }
 
 interface DrizzleEmailRepositoryDeps {
@@ -57,6 +62,7 @@ export class DrizzleEmailRepository implements EmailRepository {
 	async createPendingReceipts(
 		userId: string,
 		blobs: StoredBlob[],
+		traceId: string | null,
 	): Promise<number[]> {
 		const rows = await this.outbox.commit(
 			async (tx) =>
@@ -70,6 +76,7 @@ export class DrizzleEmailRepository implements EmailRepository {
 							blobUrl: blob.blobUrl,
 							blobPathname: blob.blobPathname,
 							contentType: blob.contentType,
+							traceId,
 						})),
 					)
 					.returning({ id: receipts.id }),

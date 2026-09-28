@@ -1,5 +1,5 @@
-import { ReceiptsView } from "~/app/_components/receipts/receipts-view";
 import { api, HydrateClient } from "~/trpc/server";
+import { ReceiptsView } from "./_components/receipts-view";
 
 export default async function ReceiptsPage() {
 	void api.receipt.list.prefetch();

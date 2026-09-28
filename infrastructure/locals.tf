@@ -1,5 +1,5 @@
 locals {
-  project              = "personal-finance"
+  project              = jsondecode(file("${path.module}/../package.json")).name
   github_repo          = "samjmarshall/${local.project}"
   is_prod              = var.environment == "production"
   vercel_team_slug     = "rekurve"

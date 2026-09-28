@@ -16,6 +16,8 @@ export interface Receipt {
 	currency: string | null;
 	rawJson: unknown;
 	error: string | null;
+	// The ingest trace id (adr016/adr020); null when OTel unregistered at creation.
+	traceId: string | null;
 	transactionId: number | null;
 	duplicateOfId: number | null;
 	createdAt: Date;
@@ -58,5 +60,7 @@ export interface ReceiptItemDetail extends ReceiptItem {
 // names the confirmed match, so the banner can say what it linked to after reload.
 export interface ReceiptDetail extends Receipt {
 	transactionDescription: string | null;
+	// Server-built PostHog trace-viewer link; null when no project id or trace id.
+	traceUrl: string | null;
 	items: ReceiptItemDetail[];
 }

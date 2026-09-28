@@ -1,6 +1,8 @@
-import { Inngest } from "inngest";
+import { Inngest, wrapStringFirstLogger } from "inngest";
 
 import { env } from "~/env";
+import { createRootLogger } from "~/server/observability/logging/logger";
+import { TracingMiddleware } from "./middleware";
 
 // `id` is the app name (matches the Portless host).
 // `eventKey` also auto-reads INNGEST_EVENT_KEY; passed explicitly so env-validation
@@ -10,7 +12,11 @@ import { env } from "~/env";
 // typing moved onto per-function triggers. EVENT_REGISTRY (events.ts) stays the
 // naming/payload authority; validation happens at the mint boundary (buildOutboxEvent),
 // which every send goes through, so an untyped `send` here is safe.
+//
+// Inngest logger is Pino-style object-first; OtelLogger is string-first.
 export const inngest = new Inngest({
-	id: "personal-finance",
+	id: env.PROJECT_NAME,
 	eventKey: env.INNGEST_EVENT_KEY,
+	logger: wrapStringFirstLogger(createRootLogger().with({ domain: "inngest" })),
+	middleware: [TracingMiddleware],
 });

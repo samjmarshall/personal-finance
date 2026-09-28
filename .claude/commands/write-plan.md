@@ -31,6 +31,12 @@ When planning from a `/brainstorm` design doc, reconcile its appendix **before**
 
 ## Template
 
+    ---
+    date: YYYY-MM-DD
+    design: thoughts/designs/YYYY-MM-DD-description.md
+    adrs: [adrNNN, adrNNN]
+    status: Ready to implement
+    ---
     # <Feature> Implementation Plan
 
     ## Context
@@ -68,10 +74,11 @@ When planning from a `/brainstorm` design doc, reconcile its appendix **before**
 
 ## Rules
 
+- Open with YAML frontmatter: `date` (today), `design` (path, or omit if none), `adrs` (list of Proposed ADR ids, `[]` if none), `status` (`Ready to implement`). Keep it in sync with the `## References` section.
 - Tests ship in the phase that changes behaviour, not a trailing appendix.
 - Success criteria are one flat checklist — don't group them by who verifies them. Runnable criteria use `make` targets (`make check`, `make test`, `make build`, `make test_e2e`); the rest state an observable behaviour.
 - UI phases add `/design-review` as a success checklist item.
-- Phases touching security-sensitive paths (`src/lib/**`, `src/env.js`, `next.config.ts`, `**/auth/**`, `**/*.env*`) add `/security-review` as a success checklist item.
+- Phases touching security-sensitive paths (`src/lib/**`, `src/env.ts`, `next.config.ts`, `**/auth/**`, `**/*.env*`) add `/security-review` as a success checklist item.
 - `/code-review` over the whole branch is a standing `/validate` step — do not add it as a per-phase success checklist item.
 - Refactors include characterization tests before the behaviour change.
 - Every reference to existing code includes `file:line`.

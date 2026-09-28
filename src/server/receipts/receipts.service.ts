@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Span } from "@opentelemetry/api";
 import {
 	APICallError,
 	type FilePart,
@@ -11,20 +12,39 @@ import {
 import {
 	type ExtractionCategory,
 	type ReceiptExtraction,
+	type ReceiptMediaKind,
 	receiptExtractionDto,
+	receiptMediaKind,
 } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
-import { bareMediaType, isPdf, isText } from "~/lib/utils";
-
+import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import type {
+	LogAttributes,
+	Logger,
+} from "~/server/observability/logging/logger";
+import { BaggageKey } from "~/server/observability/tracing/baggage";
+import { REDACT_IN_TELEMETRY } from "~/server/observability/tracing/redact-tag";
+import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
+import type {
 	ReceiptItemInsert,
+	ReceiptRow,
 	ReceiptsRepository,
 } from "./receipts.repository";
 
 // Terminal states: a re-delivered event (Inngest is at-least-once) for one of these
 // must return without a second AI call.
 const DONE_STATUSES = [ReceiptStatus.Processed, ReceiptStatus.Duplicate];
+
+// Telemetry-only labels for one run's result, not the saved DB status.
+// Two of these ("skipped", "retry") are never persisted.
+enum ReceiptOutcome {
+	Skipped = "skipped",
+	Duplicate = "duplicate",
+	Processed = "processed",
+	Retry = "retry",
+	Failed = "failed",
+}
 
 // The prompt asks for YYYY-MM-DD but the model can drift (regional formats, blank
 // when the receipt has none); anything else would fail the `date` column insert and
@@ -46,12 +66,61 @@ class ReceiptTooLargeError extends Error {
 	}
 }
 
+// Only the email Channel sends markup, so only it gets this. A photo upload has no
+// greeting or footer to read past, and the vendor warning would be nonsense there.
+const FORWARDED_EMAIL_HINT =
+	"The payload is a forwarded e-receipt email rather than a photo of a receipt. Read past the greeting, forwarding headers, promotions and footer to the order lines, and treat the merchant that issued the order as the vendor — never the mail provider or the person who forwarded it.";
+
+type PayloadPart = TextPart | ImagePart | FilePart;
+
+// Everything the model call varies by media kind, so a new kind is one entry here.
+const MODEL_MEDIA: Record<
+	ReceiptMediaKind,
+	{
+		maxBytes: number | null;
+		hint: string;
+		payload: (bytes: Uint8Array, mediaType: string) => PayloadPart;
+	}
+> = {
+	image: {
+		maxBytes: BEDROCK_MAX_IMAGE_BYTES,
+		hint: "",
+		payload: (bytes) => ({ type: "image", image: bytes }),
+	},
+	pdf: {
+		maxBytes: BEDROCK_MAX_DOCUMENT_BYTES,
+		hint: "",
+		// Bare type, not the blob's raw header: Anthropic rejects a file part whose
+		// media type carries parameters.
+		payload: (bytes, mediaType) => ({
+			type: "file",
+			data: bytes,
+			mediaType: bareMediaType(mediaType),
+		}),
+	},
+	// Markup sent as an image part reaches the model as unreadable noise; inline it.
+	// Untrusted third-party HTML — never render it in the browser.
+	text: {
+		maxBytes: null,
+		hint: FORWARDED_EMAIL_HINT,
+		payload: (bytes) => ({
+			type: "text",
+			text: new TextDecoder().decode(bytes),
+			providerOptions: REDACT_IN_TELEMETRY,
+		}),
+	},
+};
+
+function modelMedia(mediaType: string) {
+	const kind = receiptMediaKind(mediaType);
+	if (!kind) throw new Error(`Unsupported media type: ${mediaType}`);
+	return MODEL_MEDIA[kind];
+}
+
 function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
-	if (isText(mediaType)) return;
-	const max = isPdf(mediaType)
-		? BEDROCK_MAX_DOCUMENT_BYTES
-		: BEDROCK_MAX_IMAGE_BYTES;
-	if (bytes.byteLength > max) throw new ReceiptTooLargeError(max);
+	const { maxBytes } = modelMedia(mediaType);
+	if (maxBytes !== null && bytes.byteLength > maxBytes)
+		throw new ReceiptTooLargeError(maxBytes);
 }
 
 // `error` is rendered verbatim to the member in the detail overlay, and a driver error's
@@ -73,10 +142,17 @@ function sha256(bytes: Uint8Array): string {
 	return createHash("sha256").update(bytes).digest("hex");
 }
 
-// Only the email Channel sends markup, so only it gets this. A photo upload has no
-// greeting or footer to read past, and the vendor warning would be nonsense there.
-const FORWARDED_EMAIL_HINT =
-	"The payload is a forwarded e-receipt email rather than a photo of a receipt. Read past the greeting, forwarding headers, promotions and footer to the order lines, and treat the merchant that issued the order as the vendor — never the mail provider or the person who forwarded it.";
+// Attrs that bind a failure log/capture to this receipt + its channel, so the retry
+// warn, the terminal error and the captured exception all land on one trace.
+function failureAttrs(
+	receiptId: number,
+	receipt: ReceiptRow | undefined,
+): LogAttributes {
+	return {
+		[BaggageKey.ReceiptId]: String(receiptId),
+		"receipt.channel": receipt?.channel,
+	};
+}
 
 /**
  * Prompt listing the household's categories by id so each item comes back with a
@@ -89,17 +165,15 @@ export function buildExtractionPrompt(
 	mediaType?: string,
 ): string {
 	const list = categories.map((c) => `- ${c.id}: ${c.name}`).join("\n");
-	const hint = isText(mediaType) ? FORWARDED_EMAIL_HINT : "";
+	const kind = receiptMediaKind(mediaType);
+	const hint = kind ? MODEL_MEDIA[kind].hint : "";
 	return `Extract the receipt's vendor, date (YYYY-MM-DD), grand total, currency, and every line item (name, price, quantity).
 ${hint}
 For each item, set expenseCategoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
 ${list}`;
 }
 
-/**
- * AI-SDK user content for one receipt, routed by media type. A text body returns a
- * *single* part — prompt and markup merged; PDF/image return prompt + payload part.
- */
+/** AI-SDK user content for one receipt, routed by media type: prompt + payload part. */
 export function buildExtractionContent({
 	prompt,
 	bytes,
@@ -108,25 +182,17 @@ export function buildExtractionContent({
 	prompt: string;
 	bytes: Uint8Array;
 	mediaType: string;
-}): Array<TextPart | ImagePart | FilePart> {
-	// Markup sent as an image part reaches the model as unreadable noise; inline it.
-	// Untrusted third-party HTML — never render it in the browser.
-	if (isText(mediaType)) {
-		return [
-			{
-				type: "text",
-				text: `${prompt}\n\n${new TextDecoder().decode(bytes)}`,
-			},
-		];
-	}
+}): PayloadPart[] {
 	return [
 		{ type: "text", text: prompt },
-		isPdf(mediaType)
-			? // Bare type, not the blob's raw header: Anthropic rejects a file part whose
-				// media type carries parameters.
-				{ type: "file", data: bytes, mediaType: bareMediaType(mediaType) }
-			: { type: "image", image: bytes },
+		modelMedia(mediaType).payload(bytes, mediaType),
 	];
+}
+
+// Park path never throws, so Inngest's run-error hook misses terminal failures —
+// this port lets the service own the Error Tracking signal (adr015 §7).
+export interface ErrorReporter {
+	captureException(error: unknown, props?: Record<string, unknown>): void;
 }
 
 interface ReceiptsServiceDeps {
@@ -135,6 +201,8 @@ interface ReceiptsServiceDeps {
 	// The provider is bound once in the composition root (functions.ts), so this tier
 	// never touches `~/env` or `~/server/aws/bedrock` — see bedrock-invocation.md.
 	languageModel: LanguageModel;
+	logger: Logger;
+	errorReporter: ErrorReporter;
 }
 
 /**
@@ -145,11 +213,21 @@ export class ReceiptsService {
 	private readonly repository: ReceiptsRepository;
 	private readonly blobStore: BlobStore;
 	private readonly languageModel: LanguageModel;
+	private readonly logger: Logger;
+	private readonly errorReporter: ErrorReporter;
 
-	constructor({ repository, blobStore, languageModel }: ReceiptsServiceDeps) {
+	constructor({
+		repository,
+		blobStore,
+		languageModel,
+		logger,
+		errorReporter,
+	}: ReceiptsServiceDeps) {
 		this.repository = repository;
 		this.blobStore = blobStore;
 		this.languageModel = languageModel;
+		this.logger = logger;
+		this.errorReporter = errorReporter;
 	}
 
 	/**
@@ -166,31 +244,106 @@ export class ReceiptsService {
 		{ isFinalAttempt = false }: { isFinalAttempt?: boolean } = {},
 	): Promise<void> {
 		const receipt = await this.repository.findById(receiptId);
-		if (!receipt || DONE_STATUSES.includes(receipt.status)) return;
+		const receiptIdStr = String(receiptId);
 
-		try {
-			// Read by store-relative pathname, never the member-supplied blobUrl: the
-			// store resolves a pathname against our own token, so a foreign URL can't be
-			// fetched and fed to the model (the DTO already rejects a URL pathname).
-			const { bytes, mediaType } = await this.blobStore.read(
-				receipt.blobPathname,
-			);
-			const contentHash = sha256(bytes);
-			await this.repository.setContentHash(receiptId, contentHash);
-			if (await this.linkDuplicate(receiptId, contentHash)) return;
+		// Baggage carries the receipt + member ids so every downstream span, log and
+		// captured error lands on this trace; member is left off when the sign-in row
+		// is gone.
+		await withSpan(
+			"receipt.extract",
+			{
+				attributes: { "receipt.is_final_attempt": isFinalAttempt },
+				baggage: {
+					[BaggageKey.ReceiptId]: receiptIdStr,
+					[BaggageKey.MemberId]: receipt?.userId ?? undefined,
+				},
+			},
+			async (span) => {
+				try {
+					// A re-delivered event for a finished receipt, or one whose row is gone,
+					// does no work — tagged so the trace still shows why nothing happened.
+					if (!receipt || DONE_STATUSES.includes(receipt.status)) {
+						span.setAttribute("receipt.outcome", ReceiptOutcome.Skipped);
+						return;
+					}
+					span.setAttribute("receipt.channel", receipt.channel);
 
-			assertWithinModelCap(bytes, mediaType);
-			await this.extractAndSave(receiptId, bytes, mediaType);
-		} catch (error) {
-			// A retryable provider error (429/5xx/network) is worth another go with
-			// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
-			const retryable =
-				APICallError.isInstance(error) && error.isRetryable === true;
-			if (retryable && !isFinalAttempt) throw error;
+					// Read by store-relative pathname, never the member-supplied blobUrl: the
+					// store resolves a pathname against our own token, so a foreign URL can't be
+					// fetched and fed to the model (the DTO already rejects a URL pathname).
+					const { bytes, mediaType } = await this.blobStore.read(
+						receipt.blobPathname,
+					);
+					const contentHash = sha256(bytes);
+					await this.repository.setContentHash(receiptId, contentHash);
+					if (await this.linkDuplicate(receiptId, contentHash)) {
+						span.setAttribute("receipt.outcome", ReceiptOutcome.Duplicate);
+						return;
+					}
 
-			console.error(`process-receipt failed for ${receiptId}`, error);
-			await this.repository.markFailed(receiptId, memberFacingError(error));
+					assertWithinModelCap(bytes, mediaType);
+					await this.extractAndSave(receiptId, bytes, mediaType);
+					span.setAttribute("receipt.outcome", ReceiptOutcome.Processed);
+				} catch (error) {
+					await this.parkFailure(span, error, {
+						receipt,
+						receiptId,
+						isFinalAttempt,
+					});
+				}
+			},
+		);
+	}
+
+	// Rethrows the original error for a retryable failure with attempts left (Inngest
+	// then retries); otherwise parks the row and reports the terminal failure.
+	private async parkFailure(
+		span: Span,
+		error: unknown,
+		{
+			receipt,
+			receiptId,
+			isFinalAttempt,
+		}: {
+			receipt: ReceiptRow | undefined;
+			receiptId: number;
+			isFinalAttempt: boolean;
+		},
+	): Promise<void> {
+		const attrs = failureAttrs(receiptId, receipt);
+
+		// A retryable provider error (429/5xx/network) is worth another go with
+		// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
+		const retryable =
+			APICallError.isInstance(error) && error.isRetryable === true;
+		if (retryable && !isFinalAttempt) {
+			span.setAttribute("receipt.outcome", ReceiptOutcome.Retry);
+			this.logger.warn("receipt extraction retrying", {
+				error,
+				...attrs,
+				"receipt.is_final_attempt": isFinalAttempt,
+			});
+			throw error;
 		}
+
+		failSpan(span, error);
+		span.setAttribute("receipt.outcome", ReceiptOutcome.Failed);
+		const reason = memberFacingError(error);
+		this.logger.error("receipt extraction failed", {
+			error,
+			"event.name": "receipt.failed",
+			...attrs,
+			"receipt.is_final_attempt": isFinalAttempt,
+			"receipt.reason": reason,
+		});
+		// Parked runs don't throw, so Inngest's run-error hook never sees them (adr015 §7).
+		// Capture before the park write, so a failed write can't swallow the real error.
+		this.errorReporter.captureException(error, {
+			...attrs,
+			[BaggageKey.MemberId]: receipt?.userId,
+			"receipt.reason": reason,
+		});
+		await this.repository.markFailed(receiptId, reason);
 	}
 
 	// Dedup on the exact bytes: a re-upload of a photo we already extracted links back
@@ -265,6 +418,15 @@ export class ReceiptsService {
 			model: this.languageModel,
 			schema: receiptExtractionDto,
 			messages: [{ role: "user", content }],
+			// Inputs record by default — the redaction step must be registered first or
+			// the base64 receipt image ships raw to the trace backend. functionId groups
+			// the runs.
+			telemetry: {
+				isEnabled: true,
+				recordInputs: true,
+				recordOutputs: true,
+				functionId: "receipt.extract",
+			},
 		});
 
 		return object;

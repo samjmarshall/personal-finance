@@ -6,6 +6,7 @@ import { cache } from "react";
 
 import { type AppRouter, createCaller } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
+import { flushAfterResponse } from "~/server/observability/sdk/flush";
 import { createQueryClient } from "./query-client";
 
 /**
@@ -13,6 +14,10 @@ import { createQueryClient } from "./query-client";
  * handling a tRPC call from a React Server Component.
  */
 const createContext = cache(async () => {
+	// Server-component tRPC calls are traced too, so drain after the render.
+	// Cached once per request, so this schedules one drain.
+	flushAfterResponse();
+
 	const heads = new Headers(await headers());
 	heads.set("x-trpc-source", "rsc");
 

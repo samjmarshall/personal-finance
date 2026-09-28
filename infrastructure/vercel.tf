@@ -52,7 +52,7 @@ resource "vercel_project_domain" "prod" {
   domain     = local.prod_domain
 }
 
-# Only the Bedrock wiring lives here. Integration-injected vars (Neon, Blob,
+# Bedrock + PostHog wiring. Integration-injected vars (Neon, Blob,
 # Upstash) and dashboard secrets (Better Auth, Inngest, Resend) stay where they are.
 locals {
   vercel_env = {
@@ -66,6 +66,14 @@ locals {
     }
     BEDROCK_RECEIPT_MODEL = {
       value     = local.bedrock_receipt_model
+      sensitive = false
+    }
+    POSTHOG_KEY = {
+      value     = var.posthog_key
+      sensitive = true
+    }
+    POSTHOG_PROJECT_ID = {
+      value     = var.posthog_project_id
       sensitive = false
     }
   }

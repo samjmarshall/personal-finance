@@ -10,7 +10,7 @@ Stretch goal for this project:
 
 ## Environment variables
 
-Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them per-environment in the Vercel project.
+Validated in `src/env.ts`. Pull them locally with `vercel env pull`; set them per-environment in the Vercel project.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -28,6 +28,13 @@ Validated in `src/env.js`. Pull them locally with `vercel env pull`; set them pe
 | `RESEND_API_KEY` | production | Resend key the inbound webhook uses to fetch the email body and attachment bytes, which the `email.received` payload omits. |
 | `RESEND_WEBHOOK_SECRET` | production | Svix signing secret verifying the raw body at `/api/receipts/inbound`. Without it the route refuses every request. |
 | `RESEND_INBOUND_ADDRESS` | optional | The address members forward receipts to. Display-only, shown on `/settings`; nothing routes on it. |
+| `POSTHOG_KEY` | optional | PostHog project token (`phc_…`) for the Rekurve project. Unset: OTel registration is skipped, the logger writes stdout only and exception capture is a no-op. A personal `phx_` key fails validation on purpose. |
+| `POSTHOG_HOST` | optional | PostHog ingestion endpoint, default `https://us.i.posthog.com`. |
+| `POSTHOG_UI_HOST` | optional | PostHog **UI** host (distinct from the ingest endpoint above), default `https://us.posthog.com`. Sole source of the receipt "Open trace" deep-link; with `POSTHOG_PROJECT_ID` it builds `…/project/<id>/tracing?trace=<traceId>`. |
+| `POSTHOG_PROJECT_ID` | optional | PostHog project id for the "Open trace" deep-link. Unset: no link is built and the button never renders (the trace id is still shown). |
+| `LOG_LEVEL` | optional | Minimum severity the logger emits (`debug`/`info`/`warn`/`error`), default `info`. |
+| `BEDROCK_INPUT_TOKEN_PRICE_USD` | optional | Per-token input price stamped onto `ai.*` spans so PostHog can compute AI cost. Leave unset while PostHog reports cost natively. |
+| `BEDROCK_OUTPUT_TOKEN_PRICE_USD` | optional | Per-token output price, as above. |
 
 `next build` runs with `NODE_ENV=production`, so `make build` and `pnpm run preview` fail locally unless the production-required variables are in `.env`.
 
@@ -40,6 +47,14 @@ Receipt extraction calls Claude through Amazon Bedrock (`src/server/aws/bedrock.
 Better Auth secondary storage — sessions and verification records dual-write to Redis and Postgres and read Redis-first, with Postgres as the durable copy. Rate-limit counters live here so they are shared across lambdas. See [adr006](adr/adr006-redis-session-cache-with-postgres-durable-copy.md) and [adr007](adr/adr007-asymmetric-failure-posture-in-the-redis-adapter.md).
 
 The `KV_` names are fixed by Vercel's Upstash integration. Keys are namespaced `ba:<VERCEL_ENV>:<db-fingerprint>:`, so environments and Neon branches sharing one Upstash database cannot authenticate each other's sessions.
+
+### PostHog (traces, logs, LLM analytics, error tracking)
+
+`src/instrumentation.ts` `register()` boots OpenTelemetry once per Node server instance via `@vercel/otel`, exporting spans and log records over OTLP to the PostHog project; `onRequestError` is the one place an unhandled route error is captured, logged and flushed before the serverless freeze. Tiers never touch the SDK — they take an injected `Logger` and the ambient `@opentelemetry/api` tracer.
+
+Everything is gated on `POSTHOG_KEY`: unset, nothing registers, the logger writes stdout only and exception capture is a no-op, so tests and keyless local runs need no key. Outbound `fetch` carries no `traceparent`/`baggage`, so no correlation id reaches Bedrock or Resend. See [adr015](adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md) and [adr016](adr/adr016-trace-context-in-outbox-payload.md).
+
+The first server span is the trace root; the browser sends no `traceparent` (a browser-minted parent is never exported, which left every trace rootless and hidden from PostHog's trace lists). When telemetry is on (i.e. `POSTHOG_KEY` set, so a span is recording), the tRPC route and `POST /api/receipts/upload` echo the trace id back as an `x-trace-id` response header — read it from the Network tab to search PostHog; keyless local runs record no span, so no header is sent. One receipt upload is two traces: the Blob token mint (`blob.token.mint`) and the `receipt.create` ingest run; the receipt row stores the second. Inngest's own `inngest.execution` root is dropped by `NameDropSampler` so the function span sits under the producer. See [adr020](adr/adr020-server-rooted-traces.md) and [adr016](adr/adr016-trace-context-in-outbox-payload.md).
 
 ## Async platform (outbox + Inngest)
 

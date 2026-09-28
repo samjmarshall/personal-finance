@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-
 import { OutboxController } from "~/server/outbox/outbox.controller";
 import { ReceiptsController } from "~/server/receipts/receipts.controller";
+import pkg from "../../../package.json" with { type: "json" };
 
 import { EVENT_REGISTRY } from "./events";
 
@@ -49,5 +49,13 @@ describe("worker golden", () => {
 				],
 			},
 		]);
+	});
+});
+
+// The Inngest app id is the package name. Inngest keys the app and its schedules
+// by it, so a package rename would orphan every cron.
+describe("app id golden", () => {
+	it("pins the package name the Inngest client uses as its app id", () => {
+		expect(pkg.name).toBe("personal-finance");
 	});
 });

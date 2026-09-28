@@ -191,6 +191,15 @@ describe("DrizzleOutboxRepository", () => {
 			expect(h.updates[0]?.set).not.toHaveProperty("processedAt");
 			expect(render(h.updates[0]?.where)).toContain('"id" =');
 		});
+
+		// A racing send may ack the row first; its failure must not land on it.
+		it("never touches an acked row", async () => {
+			const h = harness();
+
+			await h.repository.markFailed("r1", "boom");
+
+			expect(render(h.updates[0]?.where)).toContain('"processedAt" is null');
+		});
 	});
 
 	describe("deleteProcessed", () => {

@@ -37,7 +37,7 @@ export interface OutboxRepository {
 	findUnsent(): Promise<OutboxRow[]>;
 	/** Stamp `processedAt = now`. */
 	markProcessed(id: string): Promise<void>;
-	/** `attempts + 1`, `lastError = message`. Row stays unacked. */
+	/** `attempts + 1`, `lastError = message`. Row stays unacked; an acked row is left alone. */
 	markFailed(id: string, message: string): Promise<void>;
 	/** Delete acked rows past 7-day retention; returns the count. Never matches unacked rows. */
 	deleteProcessed(): Promise<number>;
@@ -90,11 +90,13 @@ export class DrizzleOutboxRepository implements OutboxRepository {
 			.where(eq(outbox.id, id));
 	}
 
+	// Only unacked rows: a racing send may have acked it, and a delivered row must
+	// not pick up a failure.
 	async markFailed(id: string, message: string): Promise<void> {
 		await this.db
 			.update(outbox)
 			.set({ attempts: sql`${outbox.attempts} + 1`, lastError: message })
-			.where(eq(outbox.id, id));
+			.where(and(eq(outbox.id, id), isNull(outbox.processedAt)));
 	}
 
 	// `processed_at < …` is NULL-false, so unacked and stuck rows (`processed_at is null`)

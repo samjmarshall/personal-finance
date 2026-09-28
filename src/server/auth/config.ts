@@ -5,7 +5,11 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
+import { errorName } from "~/server/observability/errors/thrown";
+import { createRootLogger } from "~/server/observability/logging/logger";
 import { createSecondaryStorage } from "./secondary-storage";
+
+const logger = createRootLogger().with({ domain: "auth" });
 
 /**
  * Binds cached sessions to the database that issued them. Every environment and
@@ -33,9 +37,10 @@ const secondaryStorage =
 if (!secondaryStorage) {
 	// Loudest in production, where it is a defect rather than the normal local state:
 	// rate limiting falls back to per-lambda memory and every session read hits Neon.
-	const say =
-		process.env.NODE_ENV === "production" ? console.error : console.warn;
-	say("[auth:redis] KV not configured — sessions falling back to Postgres");
+	const level = process.env.NODE_ENV === "production" ? "error" : "warn";
+	logger[level]("KV not configured — sessions falling back to Postgres", {
+		"event.name": "auth.kv.missing",
+	});
 }
 
 export const auth = betterAuth({
@@ -83,14 +88,12 @@ export const auth = betterAuth({
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
 			} catch (error) {
-				// Name only. The adapter already logged its own redacted reason, and a
-				// Postgres failure here carries the session token in the query params —
-				// the thing adr007 keeps out of runtime logs. The name is still enough
-				// to tell a Redis outage from a database one.
-				console.error(
-					"[auth] sign-out revocation failed",
-					error instanceof Error ? error.name : typeof error,
-				);
+				// Name only — the failure can carry the session token, and a full error
+				// ships its message/stack to PostHog (adr007). Name still tells a Redis
+				// outage from a database one.
+				logger.error("sign-out revocation failed", {
+					"error.name": errorName(error),
+				});
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: "Could not sign out. Please try again.",
 				});

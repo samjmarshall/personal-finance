@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { PageHeader } from "~/app/_components/page-header";
+import { PageHeader } from "~/components/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 

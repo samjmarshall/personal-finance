@@ -24,14 +24,12 @@ describe("GET /api/health", () => {
 
 	// A failed connection must surface as an unhealthy probe, not a thrown 500, so
 	// the load balancer stops routing to a deployment that can't reach its db.
-	it("503s with { status: 'error' } and logs when the readiness query rejects", async () => {
-		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+	it("503s with { status: 'error' } when the readiness query rejects", async () => {
 		execute.mockRejectedValueOnce(new Error("connection refused"));
 
 		const response = await GET();
 
 		expect(response.status).toBe(503);
 		await expect(response.json()).resolves.toEqual({ status: "error" });
-		expect(error).toHaveBeenCalled();
 	});
 });

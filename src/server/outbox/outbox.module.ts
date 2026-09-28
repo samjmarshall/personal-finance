@@ -1,5 +1,6 @@
 import { db } from "~/server/db";
 import { inngest } from "~/server/inngest/client";
+import { createRootLogger } from "~/server/observability/logging/logger";
 
 import { DrizzleOutboxRepository } from "./outbox.repository";
 import { OutboxService } from "./outbox.service";
@@ -10,4 +11,5 @@ import { OutboxService } from "./outbox.service";
 export const outboxService = new OutboxService({
 	repository: new DrizzleOutboxRepository({ db }),
 	inngest,
+	logger: createRootLogger().with({ domain: "outbox", component: "service" }),
 });

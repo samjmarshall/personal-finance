@@ -53,9 +53,10 @@ const COVERED = [
 	"transaction",
 ];
 
-// Table-less computed read-models: no *.schema.ts to contract against, so they sit
-// outside the schema↔interface gate. The cash flow projection is derived, not stored.
-const TABLELESS = ["cashflow"];
+// Table-less shapes: no *.schema.ts to contract against, so they sit outside the
+// schema↔interface gate. Cash flow is derived; the inbound email is a webhook body,
+// never stored, and is pinned to its DTO instead.
+const TABLELESS = ["cashflow", "email"];
 
 describe("schema ↔ interface contract", () => {
 	it("keeps each *.schema.ts read model equal to its *.interface.ts", () => {

@@ -11,7 +11,7 @@ Date: '2026-08-10'
 
 React Context Providers widen the read/write surface of a piece of state to their entire subtree. State that is actually local to one page or modal becomes accessible — and mutable — by anything underneath that subtree, coupling the owning component to consumers it cannot see. Context also forces a `"use client"` boundary, which pulls otherwise-static Server Component subtrees into the client bundle. The React docs explicitly order the alternatives: pass props → extract components and pass `children` → only then consider Context.
 
-This codebase is unusually exposed to the temptation. The dashboard is a set of filter-and-table screens — `src/app/_components/transactions/transactions-view.tsx` alone is 339 lines carrying search, category filter, sort and pagination state, with a modal form beside it. "Lift the filters into a `TransactionFilterProvider` so the table and the toolbar can both reach them" is the exact move this rule exists to pre-empt.
+This codebase is unusually exposed to the temptation. The dashboard is a set of filter-and-table screens — `src/app/(dashboard)/transactions/_components/transactions-view.tsx` alone is 339 lines carrying search, category filter, sort and pagination state, with a modal form beside it. "Lift the filters into a `TransactionFilterProvider` so the table and the toolbar can both reach them" is the exact move this rule exists to pre-empt.
 
 When does React Context appropriately model state in this codebase?
 
@@ -95,7 +95,7 @@ Permit Context as a private implementation detail of a single composable compone
 
 - Bad, because "private implementation detail" tends to be invoked to justify the next page-local Context. The label is too easy to claim and too hard to falsify in review.
 - Bad, because a categorical carve-out replaces a one-line rule with a judgement call on every change — exactly the drift the rule is trying to prevent.
-- Good, because when a genuine compound-component case appears, the pattern is well-understood and the per-case follow-up ADR is straightforward to write. Deferring to that path costs little. The hand-rolled primitives in `src/app/_components/ui/` are the likely first candidates.
+- Good, because when a genuine compound-component case appears, the pattern is well-understood and the per-case follow-up ADR is straightforward to write. Deferring to that path costs little. The hand-rolled primitives in `src/components/ui/` are the likely first candidates.
 
 ### 3. Lint rule banning `createContext` outside an allowlist
 

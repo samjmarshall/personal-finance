@@ -2,7 +2,7 @@
 name: roadmap-review
 description: Collaborative review, grooming, and scheduling of GitHub Project issues for pre-PMF startups. Use to reassess priorities, restructure milestones, close stale or superseded issues, judge whether an issue is ready to plan, or (re)build the roadmap timeline — Start/Target dates, implementation order, and developer capacity — on the board. Especially useful when capacity changes, strategy shifts, or after completing major work.
 model: opus
-effort: max
+effort: xhigh
 ---
 
 # Roadmap Review, Grooming & Scheduling

@@ -10,6 +10,14 @@ import SuperJSON from "superjson";
 import type { AppRouter } from "~/server/api/root";
 import { createQueryClient } from "./query-client";
 
+// No traceparent: the server span is the trace root and the response's
+// x-trace-id names it (adr020). A browser-minted parent left every trace rootless.
+export function trpcHeaders(): Headers {
+	const headers = new Headers();
+	headers.set("x-trpc-source", "nextjs-react");
+	return headers;
+}
+
 let clientQueryClientSingleton: QueryClient | undefined;
 const getQueryClient = () => {
 	if (typeof window === "undefined") {
@@ -52,11 +60,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 				httpBatchStreamLink({
 					transformer: SuperJSON,
 					url: `${getBaseUrl()}/api/trpc`,
-					headers: () => {
-						const headers = new Headers();
-						headers.set("x-trpc-source", "nextjs-react");
-						return headers;
-					},
+					headers: trpcHeaders,
 				}),
 			],
 		}),

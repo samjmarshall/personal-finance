@@ -1,6 +1,8 @@
 ---
 name: code-comment
 description: Writes and updates terse, why-only code comments to house standard, and judges the comments in a diff via an isolated sub-agent (PASS/REWRITE/REMOVE/FIX_CODE). Use when writing or editing a code comment, or reviewing the comments in a change — loaded inline by /implement_plan (writer) and run as a review pass by /validate_plan (judge). Complements /code-review (bugs, documented standards) and /quality-control (Fowler design smells) with the comment-quality lens neither covers.
+model: sonnet
+effort: high
 ---
 
 Single source of truth for the comment standard, in two modes. Free-prose comments
@@ -22,9 +24,12 @@ Apply in order:
    Comment only what remains.
 3. **Genuine why, or a contract a signature can't encode** (bound inclusivity,
    units, error/edge behaviour, an invariant)? Keep it — write it ELI5 and
-   extremely concise, sacrifice grammar for concision. Prefer rot-resistant
-   *why* (a business rule, an external-bug workaround) over volatile
-   implementation narration; a comment you won't keep true is a future lie.
+   extremely concise, sacrifice grammar for concision. Two hard ELI5 rules:
+   **no internal names** — not method names (`setBaggage`), not the literal keys;
+   say what happens in plain words; and **1–2 lines** — if you reach for a third,
+   cut. Prefer rot-resistant *why* (a business rule, an external-bug workaround)
+   over volatile implementation narration; a comment you won't keep true is a
+   future lie.
 4. **Tests** (`*.test.ts`): structure self-documents (descriptive name +
    Arrange-Act-Assert). Hold "what" comments to a higher bar than production,
    but *why-this-case* — an edge-case rationale, a regression/ticket link, a
@@ -83,10 +88,11 @@ pragmas (`biome-ignore`, `eslint-disable*`, `@ts-expect-error`, `@ts-ignore`,
 One isolated `general-purpose` Agent at `sonnet` / high effort (worker-role
 reviewer grading evidence against a rubric — an in-repo head-to-head tied
 `sonnet@high` with `opus@high`, so the cheaper tier wins). Paste into
-its prompt: the diff command + commit list; this rubric, scope, and exempt list
-in full (it has no other access); the brief — "per in-scope changed comment emit
-one verdict and quote the hunk; essential complexity is protected; confidence-gate
-FIX_CODE; never edit; under ~400 words."
+its prompt: the diff command + commit list; this rubric, scope, exempt list, and
+the writer-mode ELI5 house style (no internal names, 1–2 lines) in full (it has no
+other access); the brief — "per in-scope changed comment emit one verdict and quote
+the hunk; a REWRITE replacement must follow the ELI5 house style; essential
+complexity is protected; confidence-gate FIX_CODE; never edit; under ~400 words."
 
 ### 4. Report
 

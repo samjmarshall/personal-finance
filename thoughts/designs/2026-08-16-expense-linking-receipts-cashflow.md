@@ -144,7 +144,7 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 4. Outbox + Inngest rails
 5. Receipts: upload → worker → page → matching
 6. Email ingestion
-7. **Future (designed-for, not built):** CDR (Redbark) + PayPal = new `provenance` values + sync workers on stage-4 rails; income-reconciliation FK only if the itch ever appears
+7. **Future (designed-for, not built):** CDR (Redbark) + PayPal = new `provenance` values + sync workers. CDR (RedBark v2) is now fully designed in [adr017](../../docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md) — app store-of-record, provenance-keyed dedup, poll-first cron, balance auto-anchor, built 3-tier per adr004 (the "stage-4 rails / `makeRun*`" note here is superseded). PayPal + income-reconciliation FK remain undesigned; income FK only if the itch ever appears.
 
 ## Related ADRs
 
@@ -152,3 +152,4 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 - [adr011](../../docs/adr/adr011-one-time-budgets-as-expense-kind.md) — one-time budgets as `expense` rows behind a `kind` discriminator
 - [adr012](../../docs/adr/archived/adr012-defer-adr004-plain-routers-for-feature-work.md) — feature work stays plain-router; executing adr004 deferred
 - [adr002](../../docs/adr/adr002-canonical-postgres-store-transactional-outbox.md) — already covers outbox + Inngest; reaffirmed against Vercel Workflow here, no new ADR
+- [adr017](../../docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md) — stage 7 CDR (RedBark v2) sync: app store-of-record, provenance-keyed dedup, poll-first worker, balance auto-anchor (In Progress — sign spike + beta API pending)

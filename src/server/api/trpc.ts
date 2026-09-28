@@ -8,11 +8,21 @@
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
 
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import { reportError } from "~/server/observability/errors/report-error";
+import { createRootLogger } from "~/server/observability/logging/logger";
+import { BaggageKey } from "~/server/observability/tracing/baggage";
+import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
+
+// Composition root: builds its own logger + tracer. Middleware has no injection
+// point, so it takes the adr004 root exception route files also take. Shared
+// with the tRPC route so both halves of tRPC log under one binding.
+export const trpcLogger = createRootLogger().with({ domain: "trpc" });
 
 /**
  * 1. CONTEXT
@@ -80,27 +90,75 @@ export const createCallerFactory = t.createCallerFactory;
 export const createTRPCRouter = t.router;
 
 /**
- * Middleware for timing procedure execution and adding an artificial delay in development.
- *
- * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
- * network latency that would occur in production but not in local development.
+ * Simulates production network latency in dev only, so local work surfaces the
+ * waterfalls a fast localhost hides.
  */
-const timingMiddleware = t.middleware(async ({ next, path }) => {
-	const start = Date.now();
-
+const devLatencyMiddleware = t.middleware(async ({ next }) => {
 	if (t._config.isDev) {
-		// artificial delay in dev
 		const waitMs = Math.floor(Math.random() * 400) + 100;
 		await new Promise((resolve) => setTimeout(resolve, waitMs));
 	}
-
-	const result = await next();
-
-	const end = Date.now();
-	console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
-
-	return result;
+	return next();
 });
+
+// Routine client faults — a signed-out tab polling a protected query, a probe on
+// a missing route. Tag the code but don't fail the span or log, or normal traffic
+// spams Error Tracking and drowns real failures. Zod BAD_REQUEST stays a warn.
+const EXPECTED_ERROR_CODES = new Set([
+	"UNAUTHORIZED",
+	"FORBIDDEN",
+	"NOT_FOUND",
+]);
+
+/**
+ * Member stamped on baggage before auth so every downstream span/log carries it.
+ * Duration lives on the span, not a log — 500s are also sent to Error Tracking.
+ */
+const observabilityMiddleware = t.middleware(
+	async ({ ctx, next, path, type }) => {
+		return withSpan(
+			`trpc.${path}`,
+			{
+				attributes: { "trpc.type": type, "trpc.path": path },
+				baggage: { [BaggageKey.MemberId]: ctx.session?.user?.id },
+			},
+			async (span) => {
+				const result = await next();
+
+				if (!result.ok) {
+					try {
+						// Every failure keeps its code for counting; expected client
+						// faults stop there — see EXPECTED_ERROR_CODES above.
+						span.setAttribute("trpc.error_code", result.error.code);
+
+						if (!EXPECTED_ERROR_CODES.has(result.error.code)) {
+							failSpan(span, result.error);
+
+							if (getHTTPStatusCodeFromError(result.error) >= 500) {
+								reportError(trpcLogger, "trpc internal error", result.error, {
+									"trpc.path": path,
+								});
+							} else {
+								trpcLogger.warn("trpc request failed", {
+									"trpc.path": path,
+									"trpc.error_code": result.error.code,
+								});
+							}
+						}
+					} catch (error) {
+						console.error("observability_failed", {
+							"trpc.path": path,
+							"trpc.error_code": result.error.code,
+							error,
+						});
+					}
+				}
+
+				return result;
+			},
+		);
+	},
+);
 
 /**
  * Public (unauthenticated) procedure
@@ -109,7 +167,9 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  * guarantee that a user querying is authorized, but you can still access user session data if they
  * are logged in.
  */
-export const publicProcedure = t.procedure.use(timingMiddleware);
+export const publicProcedure = t.procedure
+	.use(devLatencyMiddleware)
+	.use(observabilityMiddleware);
 
 /**
  * Protected (authenticated) procedure
@@ -120,11 +180,13 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  * @see https://trpc.io/docs/procedures
  */
 export const protectedProcedure = t.procedure
-	.use(timingMiddleware)
+	.use(devLatencyMiddleware)
+	.use(observabilityMiddleware)
 	.use(({ ctx, next }) => {
 		if (!ctx.session?.user) {
 			throw new TRPCError({ code: "UNAUTHORIZED" });
 		}
+
 		return next({
 			ctx: {
 				// infers the `session` as non-nullable

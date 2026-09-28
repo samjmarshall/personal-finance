@@ -1,3 +1,12 @@
+---
+paths:
+  - "src/server/**"
+  - "src/app/api/**"
+  - "src/domain/**"
+  - "src/instrumentation.ts"
+  - "drizzle.config.ts"
+---
+
 # Server architecture (adr004 / adr005 / adr002)
 
 [adr004](../../docs/adr/adr004-domain-oriented-3-tier-server-architecture.md)
@@ -13,11 +22,12 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 
 | File                                | Tier         | Owns                                                                                                                                                                | Depends on                         |
 | ----------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `<domain>.controller.ts`            | presentation | Inngest `createFunction` declarations (id, triggers, retries, concurrency) or an HTTP `handle(request: Request): Promise<Response>`. Filters, auth checks, then calls **one** service method. No rules. | the service class                  |
-| `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces  |
+| `<domain>.controller.ts`            | presentation | Inngest `createFunction` declarations (id, triggers, retries, concurrency) or an HTTP `handle(request: Request): Promise<Response>`. Filters, auth checks, then calls **one** service method. No rules. | the service class; `logger: Logger` |
+| `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptsService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
 | `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. `outbox.module.ts` exports `outboxService`. | —                                  |
+| `src/server/observability/`         | shared adapter | Shared observability provider, split OTel API vs SDK. API side (tiers may import): `logging/` (`Logger` port + `OtelLogger`), `tracing/` (`withSpan`, baggage, trace id, trace carrier), `errors/` (`captureException`, `reportError`, thrown-value helpers). SDK side: `sdk/` (boot `otel.ts`, sampler, `SpanAttributeProcessor`, prompt redaction, flush) — imported only by `instrumentation.ts`, route roots (`withFlush`) and test harnesses, never a tier. Framework adapters live with their consumer (`TracingMiddleware` in `src/server/inngest/middleware.ts`). Like `blob-store/` — lives outside any domain. | OTel SDK + PostHog SDKs            |
 
 Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts` (earned only).
 
@@ -31,10 +41,15 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   `interface Foo` + `class DrizzleFoo` / `VercelFoo` / `ModelFoo`. The service types
   its deps as the interfaces; the controller types `service` as the class. A test
   fake is then a plain object literal with no cast.
-- **No functions that take functions.** Deps are objects with methods
+- **Deps are objects, not functions.** Deps are objects with methods
   (`blobStore.read`, `mailbox.download`), never bare `fn` fields. No `make*()`
-  factories that return closures. A provider SDK object (`languageModel:
-  LanguageModel`) counts as an object dep; bind it in the composition root only.
+  factories that build a tier from closures — use a class. A provider SDK object
+  (`languageModel: LanguageModel`) counts as an object dep; bind it in the
+  composition root only.
+- **`with*()` wrappers are allowed.** A stateless wrapper that takes a function and
+  runs or wraps it, unchanged in signature (`withSpan`, `withFlush`, `withRetry`), adds
+  cross-cutting behavior around a call; it is not a dep. Keep it generic and
+  domain-free, and put it in a shared module (`observability/`, `lib/`).
 - **Composition root is `src/server/inngest/functions.ts`** for workers. Real
   `db`, `inngest`, and provider SDKs (Bedrock via `~/env`) are touched only there —
   see `bedrock-invocation.md`. A controller exposes `get functions()`; the root
@@ -49,6 +64,17 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   `isFinalAttempt: attempt >= RETRIES`. The service rethrows a retryable error
   while attempts remain and parks the row (`markFailed`) on the final or a
   deterministic one. `RETRIES` lives in the controller.
+- **Error capture choke points only.** Services and repositories never call
+  `captureException`. Exceptions are captured only at the four choke points:
+  `onRequestError` (`src/instrumentation.ts`), the tRPC `observabilityMiddleware`,
+  the tRPC route's `onError` (pre-procedure 5xx failures only — context build,
+  request read — which never reach the middleware), and the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptsService` calls
+  `captureException` on the park path because `onRunError` only fires on throws —
+  parked terminal failures never throw, so the domain tier owns that capture.
+  Tiers log through their injected `logger.error`; spans `recordException`.
+- **Inngest handlers read named fields, never spread `event.data`.** Pick
+  `event.data.receiptId` etc. by name — `event.data` carries the adr016 `_trace`
+  pocket and must not be spread or hashed into a new object.
 
 ## Tests (colocated, see unit-testing rule)
 
@@ -56,8 +82,9 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   with `new PgDialect().sqlToQuery(cond).sql` and assert on the text; assert `set()`
   payloads. Never hit Postgres.
 - `*.service.test.ts` — fake repository + adapters as object literals typed
-  against the interfaces, recording calls in arrays. No module mocking. Spy
-  `console.error` on paths that log.
+  against the interfaces, recording calls in arrays. No module mocking. Fake
+  `logger: Logger` (object literal recording `{ level, msg, attrs }`) asserts
+  log calls — never spy `console.error`.
 - `*.controller.test.ts` — spy `createFunction` captures `{ opts, handler }`;
   assert the frozen opts and that each handler routes to the right service method
   with the right args. For an HTTP controller: fake verifier + fake service, call
@@ -93,9 +120,12 @@ db calls too.
 
 ## Domain kernel (`src/domain/`)
 
-Isomorphic-by-need: only what client code shares. Each domain folder holds
-`<domain>.dto.ts` (Zod, client + server), `<domain>.interface.ts` (TS types), an
-`index.ts` barrel, and occasionally pure compute (`cashflow/cashflow.ts`).
+Isomorphic-by-need: what client code shares, plus each domain's DTO ↔ interface
+contracts even when only the server reads them (`receipt-extraction.dto.ts`, the
+inbound email webhook body in `email.dto.ts`) — one home per contract. Each domain
+folder holds `<domain>.dto.ts` (Zod), `<domain>.interface.ts` (TS types), an
+`index.ts` barrel, and occasionally pure compute (`cashflow/cashflow.ts`). Nothing
+here imports `src/server/**`.
 
 ## Writes
 
@@ -109,9 +139,10 @@ repository that is `this.db.transaction(...)` (`saveExtraction`); in a router it
 - `src/server/inngest/events.ts` `EVENT_REGISTRY` is the single event-name +
   payload authority (`EventName`, `EventPayload<K>`, `OutboxEventDescriptor`);
   `buildOutboxEvent(name, payload)` mints a registry-validated descriptor — every
-  send goes through it. The client (`client.ts`) is a bare
-  `new Inngest({ id, eventKey })`: inngest v4 dropped the typed `schemas` option,
-  so safety lives at the mint boundary, not the client type.
+  send goes through it. The client (`client.ts`) is
+  `new Inngest({ id, eventKey, logger, middleware: [TracingMiddleware] })` with no
+  `schemas`: inngest v4 dropped the typed `schemas` option, so safety lives at the
+  mint boundary, not the client type.
 - `src/server/outbox/` is the write door. A migrated repository injects
   `outboxService` typed as `OutboxWriteDoor` and calls `commit(writes, events)`
   (or `publish` for emit-only): `OutboxRepository.commit` runs the canonical rows
@@ -124,7 +155,8 @@ repository that is `this.db.transaction(...)` (`saveExtraction`); in a router it
 
 ## FROZEN external identifiers
 
-`EVENT_REGISTRY` keys, Inngest function ids (`outbox-sweep`, `outbox-prune`,
+`EVENT_REGISTRY` keys, the Inngest app id (the `package.json` `name`, via
+`env.PROJECT_NAME`), Inngest function ids (`outbox-sweep`, `outbox-prune`,
 `process-receipt`), their crons / event triggers, and concurrency keys are
 byte-stable wire strings: Inngest keys schedules and runs by them.
 `src/server/inngest/registry-golden.test.ts` pins them. Changing one requires

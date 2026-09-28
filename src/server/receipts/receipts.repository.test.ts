@@ -94,6 +94,7 @@ const receipt: ReceiptRow = {
 	currency: null,
 	rawJson: null,
 	error: null,
+	traceId: null,
 	transactionId: null,
 	duplicateOfId: null,
 	createdAt: new Date(),

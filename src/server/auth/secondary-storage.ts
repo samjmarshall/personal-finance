@@ -1,5 +1,10 @@
 import { Redis } from "@upstash/redis";
 
+import { errorMessage, errorName } from "~/server/observability/errors/thrown";
+import { createRootLogger } from "~/server/observability/logging/logger";
+
+const logger = createRootLogger().with({ domain: "auth", component: "redis" });
+
 type Options = {
 	url: string;
 	token: string;
@@ -27,17 +32,16 @@ const isRevocationManifest = (key: string) =>
  * session itself, so nothing in it is safe and only the name survives.
  */
 function redactReason(error: unknown) {
-	const name = error instanceof Error ? error.name : typeof error;
+	const name = errorName(error);
 	if (name === "UpstashJSONParseError") return name;
-	const message = error instanceof Error ? error.message : String(error);
-	return message.split(", command was:")[0];
+	return errorMessage(error).split(", command was:")[0];
 }
 
 /**
  * Redacted stand-in, safe to throw out of this module.
  *
  * Better Auth logs whatever we throw as a whole error object (`api/index.mjs:210`,
- * `routes/sign-out.mjs:24`), and its logger hands that to `console.error` — so
+ * `routes/sign-out.mjs:24`), and its logger prints that straight to the console — so
  * rethrowing Upstash's own error would put the session token and user record into
  * Vercel's runtime logs and defeat the redaction above. Carries no `cause`: Node's
  * inspector prints that too.
@@ -52,7 +56,9 @@ class RedisUnavailableError extends Error {
 /** Logs the redacted reason; returns the error to rethrow on fail-closed paths. */
 function fail(operation: string, error: unknown) {
 	const reason = redactReason(error);
-	console.error(`[auth:redis] ${operation} failed`, reason);
+	// Static body + operation as an attribute so every Redis failure lands in one
+	// filterable group, not one per operation name.
+	logger.error("redis operation failed", { operation, reason });
 	return new RedisUnavailableError(
 		`[auth:redis] ${operation} failed: ${reason}`,
 	);
