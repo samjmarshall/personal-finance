@@ -43,6 +43,20 @@ function failureStatus(
 	return type === "blob.upload-completed" ? 400 : 500;
 }
 
+// Reject every shape Blob would throw on (null, unknown event, no pathname) as a
+// bad body up front, so a throw past here is ours to own as a 500.
+function isUploadBody(body: unknown): body is HandleUploadBody {
+	if (typeof body !== "object" || body === null) return false;
+	const { type, payload } = body as { type?: unknown; payload?: unknown };
+	if (typeof type !== "string" || !Object.hasOwn(SPAN_NAME_BY_EVENT, type))
+		return false;
+	return (
+		type !== "blob.generate-client-token" ||
+		typeof (payload as { pathname?: unknown } | undefined)?.pathname ===
+			"string"
+	);
+}
+
 // Even a rejected body runs under Next's HTTP span, so echo its id (adr020): the
 // 400 in the Network tab still names a findable trace.
 function badBody(): NextResponse {
@@ -62,24 +76,13 @@ function badBody(): NextResponse {
 // two traces sit side by side under one `posthog.distinct_id`, and the x-trace-id
 // echo names this one in the Network tab.
 async function handle(request: Request): Promise<NextResponse> {
-	let body: HandleUploadBody;
+	let body: unknown;
 	try {
-		body = (await request.json()) as HandleUploadBody;
+		body = await request.json();
 	} catch {
 		return badBody();
 	}
-	// Reject every shape Blob would throw on (null, unknown event, no pathname) as a
-	// bad body up front, so a throw past here is ours to own as a 500.
-	if (
-		typeof body !== "object" ||
-		body === null ||
-		!Object.hasOwn(SPAN_NAME_BY_EVENT, body.type) ||
-		(body.type === "blob.generate-client-token" &&
-			typeof (body.payload as { pathname?: unknown } | undefined)?.pathname !==
-				"string")
-	) {
-		return badBody();
-	}
+	if (!isUploadBody(body)) return badBody();
 
 	// Only the browser's token request has a member; Blob's completion webhook has
 	// none. Resolve it before the span opens and put it on baggage, so the span,
