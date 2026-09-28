@@ -41,9 +41,14 @@ and matched to at most one Transaction.
 _Avoid_: invoice, attachment, upload
 
 **Member**:
-A person in the Household with a login; Receipts and allowed sender addresses belong to a
+A person in the Household with a login; Receipts and Allowed Senders belong to a
 Member. (An Income's "person" is a name, not a login — not the same thing.)
 _Avoid_: user, account
+
+**Allowed Sender**:
+An email address a Member has approved to send in Receipts by email; the allowlist is the
+whole set of them.
+_Avoid_: whitelist
 
 **Planned**:
 A Spend Transaction linked to an Expense — the opposite of Unplanned; the Expenses page
@@ -80,6 +85,19 @@ _Avoid_: importance, severity
 **Frequency**:
 Whether a Transaction is "Recurring" or "One-off".
 
+**Consumed**:
+The net Spend of the Transactions linked to a one-time Expense, refunds netted.
+_Avoid_: used, spent-to-date
+
+**Remaining**:
+A one-time Expense's amount minus its Consumed; below zero means over.
+_Avoid_: left, balance
+
+**Group**:
+A household's own rough label on a Transaction, carried over from the spreadsheet import;
+not an Expense Category, and whether it stays is undecided.
+_Avoid_: category (for this field)
+
 **Provenance**:
 Which system a Transaction lives in — hand-entered, statement import, bank sync or PayPal.
 One purchase can surface in several systems (a PayPal purchase also lands as a bank
@@ -96,13 +114,16 @@ _Avoid_: source
 - A **Household** owns every **Expense**, **Income**, **Transaction**, **Expense Category**
   and **Receipt**
 - An **Expense** is filed under exactly one **Expense Category**
-- A **Transaction** is filed under exactly one **Expense Category**
+- A **Transaction** is filed under at most one **Expense Category**, by link, and may carry one
+  **Group**
 - An **Income** belongs to exactly one person
 - A **Transaction** carries one **Priority** and one **Frequency**
 - A recurring **Expense** or **Income** carries three figures derived from a single **Basis**;
   a one-time one carries a single amount and an expected date
 - A **Transaction** may link to at most one **Expense**; a Spend **Transaction** with no link
   is **Unplanned**
+- A one-time **Expense** has one **Consumed** and one **Remaining**, both derived from its
+  linked **Transactions**, never stored
 - A **Receipt** is attributed to at most one **Member** and matches at most one
   **Transaction**; a **Transaction** has at most one **Receipt**. The **Household**
   owns the Receipt; Member attribution is optional and detaches (to none) if that
@@ -143,8 +164,14 @@ _Avoid_: source
   under an **Expense Category**, chosen from the maintained list — new categories are created
   on the Categories page, never invented mid-entry. The name "Expense Category" is a
   historical narrowing; it governs Transactions too.
-  The list governs what can be *chosen*, not what is *held* — categories are stored as text
-  labels, so "filed under" is a rule the household keeps, not one the database enforces.
+  The list governs what can be *chosen*, not what is *held* — an Expense holds its category
+  as a text label, so "filed under" is a rule the household keeps, not one the database
+  enforces. A Transaction links to its Expense Category by id instead, so a rename never
+  touches it.
+- **"category" on a Transaction** named two fields: the linked **Expense Category** and a
+  free text label from the spreadsheet import, both shown as "Category" at some point.
+  Resolved: the link is the filing; the text label is the **Group**, not an Expense Category.
+  Renaming an Expense Category leaves every Group alone.
 - **"amount"** on an **Expense** or **Income** is three figures, not one. Resolved: they are
   derived from a single entered figure and its **Basis**, so they never disagree; there is no
   independent "fortnightly amount" to set.
