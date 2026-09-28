@@ -68,7 +68,7 @@ adr016 (trace context across the outbox).
 
 ## Desired End State
 
-- One preview deploy + one Receipt (upload or email) produces, in PostHog: an APM trace containing `trpc.<path>` or `email.inbound` → `outbox.deliver` → `inngest.function.process-receipt` → `receipt.extract` → `ai.generateObject.doGenerate`, all on one `trace_id`; Logs filtered by that `trace_id` read the whole story; one `$ai_generation` with `posthog.distinct_id` = the Member, `$ai_trace_id` = the same trace id, prompt text with the image redacted, extracted JSON, tokens.
+- One preview deploy + one Receipt (upload or email) produces, in PostHog: an APM trace rooted at `trpc.<path>` or `email.inbound`, with `outbox.deliver` and `inngest.function.process-receipt` as siblings under it (the `_trace` carrier is captured at the write, before `outbox.deliver` opens), then `receipt.extract` → `ai.generateObject.doGenerate`, all on one `trace_id`; Logs filtered by that `trace_id` show every log line the run wrote (a clean run writes only `outbox delivered`, plus `inbound email ingested` on the email path; trpc/inngest/receipts log only on failure); one `$ai_generation` with `posthog.distinct_id` = the Member, `$ai_trace_id` = the same trace id, prompt text with the image redacted, extracted JSON, tokens.
 - A sweep re-delivery lands in the producer's trace, visibly late.
 - Every failed Inngest attempt and every unhandled route error appears in Error Tracking with `distinctId` and `$trace_id`.
 - Zero `console.*` calls under `src/server/**` and the three route files.
@@ -147,7 +147,7 @@ Read first: `node_modules/next/dist/docs/01-app/03-api-reference/03-file-convent
 - [x] `make build` passes (OTel bundles under Next 16 Turbopack; no `serverExternalPackages` needed; the env-gate failure on `DEPLOYMENT_URL`/`INNGEST_*` is pre-existing prod-env validation, unrelated to Phase 3 — verified bundling with `SKIP_ENV_VALIDATION=1`)
 - [x] `make start` with no `POSTHOG_KEY`: `registerObservability()` no-op, nothing registered, no OTel warnings (verified directly)
 - [x] `make start` with `POSTHOG_KEY` set: SDK registered once, idempotent on a second call, all three processor handles present (verified directly)
-- [ ] `/security-review` (touches `src/instrumentation.ts`; `next.config.ts` unchanged — no bundling fix needed) — **NOT clean.** New HIGH finding on re-validation: `@vercel/otel` "auto" fetch instrumentation records `http.url`/`http.target` on outbound fetch spans, unscrubbed, and ships them to PostHog. `inngest.send` posts to `https://inn.gs/e/<INNGEST_EVENT_KEY>` (Inngest.js:611) via the OTel-patched `globalThis.fetch` (Inngest.js:178), so the production Inngest event key leaks into PostHog on every outbox delivery. Fix in `otel.ts`: `fetch.ignoreUrls: [/^https?:\/\/inn\.gs\//]`. Rotate `INNGEST_EVENT_KEY` if any env deployed with `POSTHOG_KEY` set. (error→PostHog PII is the separate pre-existing tracked TODO(security).)
+- [x] `/security-review` (touches `src/instrumentation.ts`; `next.config.ts` unchanged — no bundling fix needed) — clean on 2026-09-26 re-validation. The earlier HIGH (auto fetch spans shipped `https://inn.gs/e/<INNGEST_EVENT_KEY>` in `http.url` to PostHog) is fixed at `otel.ts:81` `ignoreUrls: [/^https?:\/\/[^/]+\/e\//]` (tests `otel.test.ts:54-68`). **Still open:** one 2026-09-23 preview trace already carries the key in PostHog — rotate the preview `INNGEST_EVENT_KEY`. (error→PostHog PII is the separate pre-existing tracked TODO(security).)
 
 ---
 
@@ -279,7 +279,7 @@ Implements adr015 clause 3 (`email.inbound` span, `member.id` on resolve, `recei
 - [x] `make check` passes
 - [x] `make test` passes (record the verdict, not the count — it drifts commit to commit)
 - [x] `grep -rn "console\." src/server/email src/app/api/receipts` returns nothing
-- [x] Every enumerated `console.*` site migrated — the 11 domain sites + the trpc/inngest/inbound route roots + the `/api/health` probe root. `grep -rn "console\." src/server src/app/api` is **not** literally empty and cannot be: the only remaining calls are the observability spine's crash-proof last-resort sinks (`logger.ts:152`, `posthog.ts:43`, `trpc.ts:156` `observability_failed`), which fire when the logger/telemetry itself failed and so cannot route through the logger. Plus comment/test-description mentions of the token in `logger.ts`/`logger.test.ts`.
+- [x] Every enumerated `console.*` site migrated — the 11 domain sites + the trpc/inngest/inbound route roots + the `/api/health` probe root. `grep -rn "console\." src/server src/app/api` is **not** literally empty and cannot be: the only remaining calls are the observability spine's crash-proof last-resort sinks (`logger.ts:162`, `posthog.ts:43`, `trpc.ts:148` `observability_failed`), which fire when the logger/telemetry itself failed and so cannot route through the logger. Plus comment/test-description mentions of the token in `logger.ts`/`logger.test.ts`.
 - [ ] Local Resend webhook replay (or the existing e2e path): stdout shows `email.inbound`-scoped lines with one `trace_id`, and a subsequent `outbox delivered` + `receipt.extract` line share it — _deferred; needs a live server + Inngest + real webhook, and no `POSTHOG_KEY` locally means no SDK/real trace id (Phase 11 preview spike)_
 
 ---
@@ -310,7 +310,7 @@ Resolves the design's runtime unknowns (Risks 1, 2, 3, 4, 5, 8) against the fall
 
 ### Changes
 - Deploy the branch to preview (deploy.yml runs `terraform-apply` for preview; the two env vars land). Trigger **one** Receipt via upload and **one** via email. Then check, in order:
-  1. **Flush under `waitUntil`** (Risk 1): PostHog Traces shows the full chain `trpc.receipt.create` → `outbox.deliver` → `inngest.function.process-receipt` → `receipt.extract` → `ai.generateObject.doGenerate` on one `trace_id`; PostHog Logs filtered by that `trace_id` shows lines from `trpc`, `outbox`, `inngest`, `receipts`. If the tail is missing, `after(flushTelemetry)` is not firing on that route — fix the route, redeploy.
+  1. **Flush under `waitUntil`** (Risk 1): PostHog Traces shows `trpc.receipt.create` with `outbox.deliver` and `inngest.function.process-receipt` as siblings under it, then `receipt.extract` → `ai.generateObject.doGenerate`, on one `trace_id`; PostHog Logs filtered by that `trace_id` shows the `outbox delivered` line (the only log a clean run writes — trpc/inngest/receipts log only on failure; the forced receipt failure below exercises those). If the tail is missing, `after(flushTelemetry)` is not firing on that route — fix the route, redeploy.
   2. **AI SDK v5 spans convert** (Risk 2): one `$ai_generation` exists with `$ai_trace_id` = the OTel trace id, `posthog.distinct_id` = the Member, `$ai_input` showing prompt text + the `<redacted image/jpeg N sha256:…>` stub, `$ai_output_choices` = the extracted JSON, non-null tokens. If absent → fallback per design: wrap the `LanguageModel` with `withTracing` in `src/server/inngest/functions.ts` **only** (the composition root), stamp `posthogTraceId` from the active span, delete at the v7 upgrade; record in adr015 consequences.
   3. **Cost** (Risk 3): `$ai_total_cost_usd` non-null → done. Null → set `BEDROCK_INPUT_TOKEN_PRICE_USD` / `BEDROCK_OUTPUT_TOKEN_PRICE_USD` in `local.vercel_env` (`infrastructure/vercel.tf:57-72`, values from the Bedrock pricing page for `au.anthropic.claude-sonnet-4-6`, non-sensitive) — the processor from Phase 2 already stamps them; add the two lines to the `.env.example` list for the owner.
   4. **`"auto"` semantics** (Risk 4): Vercel drains/`deployment.id`, `deployment.environment.name = preview`, git sha appear as resource attributes on the spans. If not, `"auto"` is not being honoured on 2.1.3 — re-read `node_modules/@vercel/otel` and fix `otel.ts`.
@@ -332,13 +332,13 @@ Resolves the design's runtime unknowns (Risks 1, 2, 3, 4, 5, 8) against the fall
 - `docs/adr/adr002-canonical-postgres-store-transactional-outbox.md` — in Links, replace "Runbook (TBD) … no observability backend yet" with a pointer to adr015 and the "Outbox stuck" alert.
 
 ### Success
-- [ ] One trace id spans the upload path end to end in PostHog Traces, and Logs filtered by it show all four domains
-- [ ] One trace id spans the email path end to end (`email.inbound` root)
-- [ ] `$ai_generation` present with Member `distinct_id`, redacted image stub, extracted JSON, tokens; cost non-null (natively or via price attrs)
-- [ ] Error Tracking shows the forced receipt failure (park-path capture) with `distinctId` + `$trace_id`, exactly one issue
-- [ ] Six alerts exist and are filtered to production
+- [ ] One trace id spans the upload path end to end in PostHog Traces, and Logs filtered by it show the `outbox delivered` line (a clean run logs nothing else) — _partial 2026-09-26: trace `469082a5…` (preview, sha 2dfdce0) holds tRPC, outbox.deliver, process-receipt, receipt.extract, ai.* and Bedrock on one trace id. Logs part not checked. HEAD never deployed._
+- [ ] One trace id spans the email path end to end (`email.inbound` root) — _no `email.inbound` span in PostHog in 30 days; needs a real inbound email on preview_
+- [ ] `$ai_generation` present with Member `distinct_id`, redacted image stub, extracted JSON, tokens; cost non-null (natively or via price attrs) — _2026-09-26: distinct_id ✓, stub ✓ (no base64), tokens 2985/233 ✓, native cost ≈$0.0137 ✓; **extracted JSON missing** (no `$ai_output_choices`)_
+- [ ] Error Tracking shows the forced receipt failure (park-path capture) with `distinctId` + `$trace_id`, exactly one issue — _not run; existing `$exception` events have `$trace_id` but distinct_id "server" (old code)_
+- [ ] Six alerts exist and are filtered to production — _0 exist. Blocker: `captureException` sends no env property, so Error Tracking alerts can't filter to production; the two Error Tracking alerts also need a filter to tell them apart_
 - [ ] Each of Risks 1–8 has a one-line recorded outcome in adr015/adr016 Open Questions; both ADRs read `Accepted`
-- [ ] `make check` and `make test` pass on the final branch
+- [x] `make check` and `make test` pass on the final branch (2026-09-26)
 
 ---
 
@@ -353,7 +353,7 @@ Do these **after** the plan is fully implemented (Phase 11 done). Not blockers f
 - **`@inngest/test` can't** — it runs functions in-process with mocks, no real server, no `send()` round trip; you supply the event, so reading `ctx.event.id` back is the same circular test (confirmed against README, v4 docs, RFC #1680, JSR; also 0.x + not installed).
 - Inngest's own docs are ambiguous: a sent `id` is documented as a **dedup key**, and `send()` returns **server-assigned ULIDs** — so `ctx.event.id` might be a ULID, not our PK. Only a real round trip settles it.
 
-Our-side links are already unit-tested (`outbox.repository.test.ts:117` PK→row, `outbox.service.test.ts:146-161,313-331` PK→sent id, `inngest-middleware.test.ts:150` received id→`outbox.event_id`). The harness closes the one remaining hop and guards it against future Inngest releases.
+Our-side links are already unit-tested (`outbox.repository.test.ts:117` PK→row, `outbox.service.test.ts:151-165,318-335` PK→sent id, `inngest-middleware.test.ts:158` received id→`outbox.event_id`). The harness closes the one remaining hop and guards it against future Inngest releases.
 
 **What to build.** An integration harness that boots the **Inngest Dev Server** (`inngest-cli`, already a devDep) + the app's `serve` endpoint, sends a real event with a known UUID `id`, polls for the run, and asserts the handler observed `ctx.event.id === <that UUID>` (and, more broadly, that a full send→receive→telemetry chain lands). Portless caveat: no ports locally, so the harness needs a reachable URL (the `portless proxy --port 1355` fallback, or a CI-only port). Keep it out of the fast `make test` unit path — its own target (e.g. `make test_integration`), opt-in / CI-gated, since it spawns processes.
 
@@ -373,7 +373,7 @@ Our-side links are already unit-tested (`outbox.repository.test.ts:117` PK→row
 
 **Built.** `src/server/observability/sampler.ts` — `NameDropSampler` (`{ inner: Sampler; dropNames }` deps, `NOT_RECORD` on exact name match, else delegate) + `DROPPED_SPAN_NAMES = {"inngest.execution"}`; `otel.ts` composes `new NameDropSampler({ inner: new ParentBasedSampler({ root: new AlwaysOnSampler() }), dropNames })`. Sampler chosen over a span processor because `NOT_RECORD` also stops whatever the Inngest SDK parents onto that span; our `inngest.function.*` span parents onto the pocket (`ROOT_CONTEXT` extract), so it is untouched. Tests in `sampler.test.ts`. adr016 → Accepted; consequence recorded there that `POST /api/inngest` (Next's HTTP span) stays a rootless orphan under Inngest's header trace.
 
-- [ ] Live-verify after deploy: no `inngest.execution` span in PostHog for a new receipt; `inngest.function.process-receipt` sits under `outbox.deliver`.
+- [ ] Live-verify after deploy: no `inngest.execution` span in PostHog for a new receipt; `inngest.function.process-receipt` sits beside `outbox.deliver`, both children of the producer span (`trpc.receipt.create` / `email.inbound`) — the carrier is captured at the write, before `outbox.deliver` opens.
 
 ### D4: Rootless traces hidden from PostHog lists (validation 2026-09-24) — superseded adr018 with adr020
 
@@ -399,6 +399,6 @@ Our-side links are already unit-tested (`outbox.repository.test.ts:117` PK→row
   - Composes with (Accepted): `docs/adr/adr002-canonical-postgres-store-transactional-outbox.md` (outbox + sweep; "stuck"), `docs/adr/adr004-domain-oriented-3-tier-server-architecture.md` (class DI, fakes as object literals), `docs/adr/adr014-bedrock-via-vercel-oidc.md` (aws4fetch, no AWS SDK instrumentation)
 - Terminology: `CONTEXT.md` — Member (never "user"), Receipt, Channel, Household
 - Rules: `.claude/rules/server-architecture.md`, `.claude/rules/bedrock-invocation.md:14`, `.claude/rules/jsdoc-concise.md`
-- Code anchors: `src/server/inngest/events.ts:13-35`, `src/server/outbox/outbox.service.ts:87-135,146-197`, `src/server/inngest/client.ts:17-22`, `src/server/inngest/functions.ts:38-41`, `src/server/api/trpc.ts:95-205`, `src/server/receipts/receipts.service.ts:217-333,401-414`, `src/server/email/email.controller.ts:33-93`, `src/server/email/email.service.ts:96-145`, `src/app/api/trpc/[trpc]/route.ts:17-53`, `src/app/api/receipts/inbound/route.ts:26-62`, `src/app/api/inngest/route.ts:12-29`, `src/env.ts:28-178`, `infrastructure/vercel.tf:57-90`, `infrastructure/variables.tf:1-20`, `.github/workflows/deploy.yml:42-86`
+- Code anchors: `src/server/inngest/events.ts:13-43`, `src/server/outbox/outbox.service.ts:87-131,145-219`, `src/server/inngest/client.ts:17-22`, `src/server/inngest/functions.ts:24-32`, `src/server/api/trpc.ts:95-195`, `src/server/receipts/receipts.service.ts:195-345,415-428`, `src/server/email/email.controller.ts:32-87`, `src/server/email/email.service.ts:96-145`, `src/app/api/trpc/[trpc]/route.ts:13-61`, `src/app/api/receipts/inbound/route.ts:26-61`, `src/app/api/inngest/route.ts:13-17`, `src/env.ts:28-178`, `infrastructure/vercel.tf:57-90`, `infrastructure/variables.tf:1-21`, `.github/workflows/deploy.yml:42-86`
 - Next 16 guides to read before Phases 3/6/7/9: `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/instrumentation.md`, `node_modules/next/dist/docs/01-app/02-guides/open-telemetry.md`, `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/after.md`
 - SDK sources to confirm during implementation: `node_modules/inngest/components/middleware/middleware.d.ts` (hook signatures), `node_modules/@vercel/otel` (`Configuration`, `"auto"`), `node_modules/@posthog/ai/dist/otel` (`PostHogSpanProcessor` ctor), `node_modules/@ai-sdk/otel` (`registerTelemetry`, `LegacyOpenTelemetry`; the `ai.prompt.messages`/`ai.generateObject` names redaction keys on — v7 moved this out of `node_modules/ai`)
