@@ -339,15 +339,14 @@ export class ReceiptsService {
 			"receipt.is_final_attempt": isFinalAttempt,
 			"receipt.reason": reason,
 		});
-		// Parked runs don't throw, so Inngest's run-error hook never sees them —
-		// park the row first, then capture (adr015 §7). Span + baggage bind the
-		// issue to this trace and member.
-		await this.repository.markFailed(receiptId, reason);
+		// Parked runs don't throw, so Inngest's run-error hook never sees them (adr015 §7).
+		// Capture before the park write, so a failed write can't swallow the real error.
 		this.errorReporter.captureException(error, {
 			...attrs,
 			[BaggageKey.MemberId]: receipt?.userId,
 			"receipt.reason": reason,
 		});
+		await this.repository.markFailed(receiptId, reason);
 	}
 
 	// Dedup on the exact bytes: a re-upload of a photo we already extracted links back

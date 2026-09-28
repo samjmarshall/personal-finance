@@ -171,7 +171,10 @@ function harness(
 	};
 	const captures: Capture[] = [];
 	const errorReporter: ErrorReporter = {
-		captureException: (error, props) => captures.push({ error, props }),
+		captureException: (error, props) => {
+			log.push("capture");
+			captures.push({ error, props });
+		},
 	};
 	const service = new ReceiptsService({
 		repository,
@@ -393,6 +396,8 @@ describe("ReceiptsService.process", () => {
 			"receipt.id": "1",
 			"member.id": "u1",
 		});
+		// A throwing park write must not swallow the real error.
+		expect(h.log.indexOf("capture")).toBeLessThan(h.log.indexOf("markFailed"));
 
 		const span = exporter
 			.getFinishedSpans()
