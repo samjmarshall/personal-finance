@@ -4,13 +4,10 @@ import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import type { NextRequest } from "next/server";
 
 import { appRouter } from "~/server/api/root";
-import { createTRPCContext } from "~/server/api/trpc";
+import { createTRPCContext, trpcLogger } from "~/server/api/trpc";
 import { traceIdHeaders } from "~/server/observability/current-trace-id";
 import { withFlush } from "~/server/observability/flush";
-import { createRootLogger } from "~/server/observability/logger";
 import { reportError } from "~/server/observability/report-error";
-
-const logger = createRootLogger().with({ domain: "trpc" });
 
 // A batch builds its context once, then every call in it rethrows that one
 // error. Report it once, not once per call.
@@ -30,7 +27,7 @@ export function reportPreProcedureError({
 	if (ctx !== undefined || getHTTPStatusCodeFromError(error) < 500) return;
 	if (reportedErrors.has(error)) return;
 	reportedErrors.add(error);
-	reportError(logger, "trpc request failed before procedure", error, {
+	reportError(trpcLogger, "trpc request failed before procedure", error, {
 		"trpc.path": path,
 	});
 }

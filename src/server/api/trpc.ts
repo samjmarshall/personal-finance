@@ -20,8 +20,9 @@ import { reportError } from "~/server/observability/report-error";
 import { failSpan, withSpan } from "~/server/observability/tracer";
 
 // Composition root: builds its own logger + tracer. Middleware has no injection
-// point, so it takes the adr004 root exception route files also take.
-const logger = createRootLogger().with({ domain: "trpc" });
+// point, so it takes the adr004 root exception route files also take. Shared
+// with the tRPC route so both halves of tRPC log under one binding.
+export const trpcLogger = createRootLogger().with({ domain: "trpc" });
 
 /**
  * 1. CONTEXT
@@ -134,11 +135,11 @@ const observabilityMiddleware = t.middleware(
 							failSpan(span, result.error);
 
 							if (getHTTPStatusCodeFromError(result.error) >= 500) {
-								reportError(logger, "trpc internal error", result.error, {
+								reportError(trpcLogger, "trpc internal error", result.error, {
 									"trpc.path": path,
 								});
 							} else {
-								logger.warn("trpc request failed", {
+								trpcLogger.warn("trpc request failed", {
 									"trpc.path": path,
 									"trpc.error_code": result.error.code,
 								});
