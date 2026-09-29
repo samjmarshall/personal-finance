@@ -3,6 +3,7 @@
 import {
 	Braces,
 	Check,
+	ChevronDown,
 	Circle,
 	CircleDashed,
 	CircleX,
@@ -11,7 +12,11 @@ import {
 	Loader2,
 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
-
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import {
 	type ReceiptDetail,
 	receiptPipeline,
@@ -205,12 +210,15 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 	const [copiedKey, setCopiedKey] = useState<string | null>(null);
 	// Keep the timer to cancel on unmount — closing before 1.2s would update a dead component.
 	const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const [open, setOpen] = useState(false);
+
 	useEffect(
 		() => () => {
 			if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
 		},
 		[],
 	);
+
 	function copy(text: string, key: string) {
 		// No clipboard API (insecure context / webview) or a denied write must not
 		// flash "Copied" — only claim success once the write actually resolves.
@@ -274,93 +282,118 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			aria-labelledby={headingId}
 			className="mt-1 rounded-lg border border-border bg-muted/10"
 		>
-			<header className="flex items-center gap-2 border-border border-b px-3 py-2">
-				<Braces aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
-				<span className="font-medium text-foreground text-xs" id={headingId}>
-					Extraction pipeline details
-				</span>
-			</header>
-			<div className="p-3">
-				<div className="flex flex-col gap-3">
-					<TraceHeader
-						clipboard={clipboard}
-						traceId={data.traceId}
-						traceUrl={data.traceUrl}
-					/>
-
-					<div
-						aria-label="Extraction pipeline details views"
-						className="flex gap-1 border-border border-b"
-						onKeyDown={onTabKeyDown}
-						role="tablist"
-					>
-						{TABS.map(([key, label]) => (
-							<button
-								aria-controls={panelId}
-								aria-selected={tab === key}
-								className={cn(
-									"-mb-px border-b-2 px-2.5 py-1.5 font-medium text-xs outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
-									tab === key
-										? "border-foreground text-foreground"
-										: "border-transparent text-muted-foreground hover:text-foreground",
-								)}
-								id={tabId(key)}
-								key={key}
-								onClick={() => setTab(key)}
-								ref={(el) => {
-									tabRefs.current[key] = el;
-								}}
-								role="tab"
-								tabIndex={tab === key ? 0 : -1}
-								type="button"
-							>
-								{label}
-							</button>
-						))}
-					</div>
-
-					<div
-						aria-labelledby={tabId(tab)}
-						className="flex min-h-96 flex-col rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-						id={panelId}
-						role="tabpanel"
-						// biome-ignore lint/a11y/noNoninteractiveTabindex: WAI-ARIA APG — a tabpanel is made focusable so the Timeline panel (which has no focusable content) stays keyboard-reachable
-						tabIndex={0}
-					>
-						{tab === "timeline" && <Timeline data={data} />}
-
-						{tab === "raw" && <RawPanel clipboard={clipboard} data={data} />}
-
-						{tab === "meta" && (
-							<div className="flex flex-1 flex-col gap-2">
-								<table className="w-full border-collapse font-mono text-xs">
-									<tbody className="divide-y divide-border">
-										{rows.map(([k, v]) => (
-											<tr key={k}>
-												<th
-													className="whitespace-nowrap py-1 pr-3 text-left align-top font-normal text-muted-foreground"
-													scope="row"
-												>
-													{k}
-												</th>
-												<td className="break-all py-1 text-foreground">{v}</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-								<div className="mt-auto flex justify-end">
-									<CopyButton
-										clipboard={clipboard}
-										copyKey="all"
-										label="Copy all as JSON"
-										value={diagnosticsJson(data)}
-									/>
-								</div>
-							</div>
+			<Collapsible onOpenChange={setOpen} open={open}>
+				<CollapsibleTrigger className="flex w-full">
+					<header
+						className={cn(
+							"flex flex-1 items-center gap-2 px-3 py-2",
+							open && "border-border border-b",
 						)}
+					>
+						<Braces aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
+						<span
+							className="font-medium text-foreground text-xs"
+							id={headingId}
+						>
+							Extraction pipeline details
+						</span>
+						<ChevronDown
+							aria-hidden
+							className={cn(
+								"ml-auto h-3.5 w-3.5 text-muted-foreground",
+								open && "rotate-180",
+							)}
+						/>
+					</header>
+				</CollapsibleTrigger>
+				<CollapsibleContent>
+					<div className="p-3">
+						<div className="flex flex-col gap-3">
+							<TraceHeader
+								clipboard={clipboard}
+								traceId={data.traceId}
+								traceUrl={data.traceUrl}
+							/>
+
+							<div
+								aria-label="Extraction pipeline details views"
+								className="flex gap-1 border-border border-b"
+								onKeyDown={onTabKeyDown}
+								role="tablist"
+							>
+								{TABS.map(([key, label]) => (
+									<button
+										aria-controls={panelId}
+										aria-selected={tab === key}
+										className={cn(
+											"-mb-px border-b-2 px-2.5 py-1.5 font-medium text-xs outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
+											tab === key
+												? "border-foreground text-foreground"
+												: "border-transparent text-muted-foreground hover:text-foreground",
+										)}
+										id={tabId(key)}
+										key={key}
+										onClick={() => setTab(key)}
+										ref={(el) => {
+											tabRefs.current[key] = el;
+										}}
+										role="tab"
+										tabIndex={tab === key ? 0 : -1}
+										type="button"
+									>
+										{label}
+									</button>
+								))}
+							</div>
+
+							<div
+								aria-labelledby={tabId(tab)}
+								className="flex min-h-96 flex-col rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+								id={panelId}
+								role="tabpanel"
+								// biome-ignore lint/a11y/noNoninteractiveTabindex: WAI-ARIA APG — a tabpanel is made focusable so the Timeline panel (which has no focusable content) stays keyboard-reachable
+								tabIndex={0}
+							>
+								{tab === "timeline" && <Timeline data={data} />}
+
+								{tab === "raw" && (
+									<RawPanel clipboard={clipboard} data={data} />
+								)}
+
+								{tab === "meta" && (
+									<div className="flex flex-1 flex-col gap-2">
+										<table className="w-full border-collapse font-mono text-xs">
+											<tbody className="divide-y divide-border">
+												{rows.map(([k, v]) => (
+													<tr key={k}>
+														<th
+															className="whitespace-nowrap py-1 pr-3 text-left align-top font-normal text-muted-foreground"
+															scope="row"
+														>
+															{k}
+														</th>
+														<td className="break-all py-1 text-foreground">
+															{v}
+														</td>
+													</tr>
+												))}
+											</tbody>
+										</table>
+										<div className="mt-auto flex justify-end">
+											<CopyButton
+												clipboard={clipboard}
+												copyKey="all"
+												label="Copy all as JSON"
+												value={diagnosticsJson(data)}
+											/>
+										</div>
+									</div>
+								)}
+							</div>
+						</div>
 					</div>
-				</div>
-			</div>
+				</CollapsibleContent>
+			</Collapsible>
 		</section>
 	);
 }
