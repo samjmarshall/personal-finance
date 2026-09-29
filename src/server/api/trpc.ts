@@ -14,6 +14,7 @@ import { flattenError, ZodError } from "zod";
 
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
+import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { reportError } from "~/server/observability/errors/report-error";
 import { createRootLogger } from "~/server/observability/logging/logger";
 import { BaggageKey } from "~/server/observability/tracing/baggage";
@@ -161,6 +162,22 @@ const observabilityMiddleware = t.middleware(
 );
 
 /**
+ * Services throw transport-free domain errors; this is the one place they become
+ * codes. Sits inside observability so spans and logs see the mapped code.
+ * Deliberate TRPCErrors (auth, Zod) carry no domain cause and pass through.
+ */
+const errorMappingMiddleware = t.middleware(async ({ next }) => {
+	const result = await next();
+	if (result.ok) return result;
+	const { cause } = result.error;
+	if (cause instanceof NotFoundError)
+		throw new TRPCError({ code: "NOT_FOUND", message: cause.message, cause });
+	if (cause instanceof ConflictError)
+		throw new TRPCError({ code: "CONFLICT", message: cause.message, cause });
+	return result;
+});
+
+/**
  * Public (unauthenticated) procedure
  *
  * This is the base piece you use to build new queries and mutations on your tRPC API. It does not
@@ -169,7 +186,8 @@ const observabilityMiddleware = t.middleware(
  */
 export const publicProcedure = t.procedure
 	.use(devLatencyMiddleware)
-	.use(observabilityMiddleware);
+	.use(observabilityMiddleware)
+	.use(errorMappingMiddleware);
 
 /**
  * Protected (authenticated) procedure
@@ -182,6 +200,7 @@ export const publicProcedure = t.procedure
 export const protectedProcedure = t.procedure
 	.use(devLatencyMiddleware)
 	.use(observabilityMiddleware)
+	.use(errorMappingMiddleware)
 	.use(({ ctx, next }) => {
 		if (!ctx.session?.user) {
 			throw new TRPCError({ code: "UNAUTHORIZED" });

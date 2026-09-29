@@ -16,6 +16,7 @@ import {
 	vi,
 } from "vitest";
 
+import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
 // Importing trpc pulls in the real db + auth (and through them ~/env). Stub them
@@ -38,9 +39,15 @@ beforeEach(() => exporter.reset());
 // stdout is spied in the failure tests; restore it even if an assertion throws.
 afterEach(() => vi.restoreAllMocks());
 
-const { createTRPCRouter, publicProcedure, createCallerFactory } = await import(
-	"~/server/api/trpc"
-);
+const {
+	createTRPCRouter,
+	publicProcedure,
+	protectedProcedure,
+	createCallerFactory,
+} = await import("~/server/api/trpc");
+
+const notFound = new NotFoundError("gone");
+const conflict = new ConflictError("taken");
 
 function caller(session: unknown = { user: { id: "member-1" } }) {
 	const router = createTRPCRouter({
@@ -51,8 +58,23 @@ function caller(session: unknown = { user: { id: "member-1" } }) {
 		bad: publicProcedure.query(() => {
 			throw new TRPCError({ code: "BAD_REQUEST" });
 		}),
+		badWithMessage: publicProcedure.query(() => {
+			throw new TRPCError({ code: "BAD_REQUEST", message: "nope" });
+		}),
 		unauth: publicProcedure.query(() => {
 			throw new TRPCError({ code: "UNAUTHORIZED" });
+		}),
+		notFound: publicProcedure.query(() => {
+			throw notFound;
+		}),
+		conflict: publicProcedure.query(() => {
+			throw conflict;
+		}),
+		plain: publicProcedure.query(() => {
+			throw new Error("plain");
+		}),
+		protectedNotFound: protectedProcedure.query(() => {
+			throw notFound;
 		}),
 	});
 	return createCallerFactory(router)({
@@ -175,5 +197,90 @@ describe("tracing span", () => {
 		expect(consoleError).toHaveBeenCalledWith(
 			expect.stringContaining("logging_failed"),
 		);
+	});
+});
+
+function captureStdout(): string[] {
+	const lines: string[] = [];
+	vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+		if (typeof chunk === "string") lines.push(chunk);
+		return true;
+	});
+	return lines;
+}
+
+function spanNamed(name: string) {
+	const span = exporter.getFinishedSpans().find((s) => s.name === name);
+	expect(span).toBeDefined();
+	// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
+	return span!;
+}
+
+describe("error mapping", () => {
+	it("maps a NotFoundError to NOT_FOUND, keeping its message and cause", async () => {
+		await expect(caller().notFound()).rejects.toMatchObject({
+			code: "NOT_FOUND",
+			message: "gone",
+			cause: notFound,
+		});
+	});
+
+	it("maps a ConflictError to CONFLICT, keeping its message and cause", async () => {
+		captureStdout();
+		await expect(caller().conflict()).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "taken",
+			cause: conflict,
+		});
+	});
+
+	it("leaves an unknown Error as INTERNAL_SERVER_ERROR", async () => {
+		captureStdout();
+		await expect(caller().plain()).rejects.toMatchObject({
+			code: "INTERNAL_SERVER_ERROR",
+		});
+	});
+
+	it("passes a deliberate TRPCError through unchanged", async () => {
+		captureStdout();
+		await expect(caller().badWithMessage()).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+			message: "nope",
+		});
+	});
+
+	it("observability sees NOT_FOUND as expected: span UNSET, no stdout", async () => {
+		const lines = captureStdout();
+		await expect(caller().notFound()).rejects.toThrow();
+
+		const span = spanNamed("trpc.notFound");
+		expect(span.status.code).toBe(SpanStatusCode.UNSET);
+		expect(span.attributes["trpc.error_code"]).toBe("NOT_FOUND");
+		expect(lines).toHaveLength(0);
+	});
+
+	it("observability fails the span on CONFLICT and warns, but doesn't report a crash", async () => {
+		const lines = captureStdout();
+		await expect(caller().conflict()).rejects.toThrow();
+
+		const span = spanNamed("trpc.conflict");
+		expect(span.status.code).toBe(SpanStatusCode.ERROR);
+		expect(span.attributes["trpc.error_code"]).toBe("CONFLICT");
+		const output = lines.join("");
+		expect(output).toContain("trpc request failed");
+		expect(output).not.toContain("trpc internal error");
+	});
+
+	it("protectedProcedure maps a NotFoundError too", async () => {
+		await expect(caller().protectedNotFound()).rejects.toMatchObject({
+			code: "NOT_FOUND",
+			message: "gone",
+		});
+	});
+
+	it("protectedProcedure still rejects a signed-out call with UNAUTHORIZED", async () => {
+		await expect(caller(null).protectedNotFound()).rejects.toMatchObject({
+			code: "UNAUTHORIZED",
+		});
 	});
 });

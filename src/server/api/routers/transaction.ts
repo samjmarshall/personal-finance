@@ -29,8 +29,8 @@ import {
 	unplannedDto,
 } from "~/domain/transactions";
 import { assertRow } from "~/server/api/lib/assert-row";
-import { isPgViolation, PgViolation } from "~/server/api/lib/parse-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { expenseCategories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
@@ -41,15 +41,6 @@ const FK_CONFLICT_MESSAGE =
 // linkExpense writes only expenseId, so a 23503 here can only be the expense FK —
 // the message names just the expense, not the category.
 const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
-
-// Rethrow a Postgres FK violation (23503) as a CONFLICT with the given message;
-// pass anything else through untouched.
-function rethrowFkConflict(error: unknown, message: string): never {
-	if (isPgViolation(error, PgViolation.ForeignKeyViolation)) {
-		throw new TRPCError({ code: "CONFLICT", message, cause: error });
-	}
-	throw error;
-}
 
 export const transactionRouter = createTRPCRouter({
 	list: protectedProcedure

@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
@@ -75,12 +74,10 @@ describe("setting.setFortnightAnchor", () => {
 
 		await expect(
 			caller(db).setFortnightAnchor({ anchor: "2026-08-26" }),
-		).rejects.toMatchObject(
-			new TRPCError({
-				code: "INTERNAL_SERVER_ERROR",
-				message: "Failed to set fortnight anchor.",
-			}),
-		);
+		).rejects.toMatchObject({
+			code: "INTERNAL_SERVER_ERROR",
+			message: "Failed to set fortnight anchor.",
+		});
 	});
 
 	it("rejects a malformed date before it reaches the db", async () => {

@@ -210,12 +210,12 @@ Tests only. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] The CONFLICT cases in `receipts.match.test.ts:84-89,127-132,155-160` and `allowed-sender.test.ts:89-94` pass unchanged
-- [ ] `setting.test.ts:73-84` passes unchanged: `assertRow`'s plain `Error` still reaches the caller as `INTERNAL_SERVER_ERROR` "Failed to set fortnight anchor."
-- [ ] The Phase 2 characterization tests pass with no snapshot change
-- [ ] `git grep -n "@trpc" src/server/errors` returns nothing
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] The CONFLICT cases in `receipts.match.test.ts:84-89,127-132,155-160` and `allowed-sender.test.ts:89-94` pass unchanged
+- [x] `setting.test.ts:73-84` passes: `assertRow`'s plain `Error` still reaches the caller as `INTERNAL_SERVER_ERROR` "Failed to set fortnight anchor." (Deviation: the matcher went from a whole `new TRPCError({…})` to `{ code, message }`, because the wrapped plain `Error` now sits on `.cause`. The member sees the same thing, since `errorFormatter` never sends `cause`.)
+- [x] The Phase 2 characterization tests pass with no snapshot change
+- [x] `git grep -n "@trpc" src/server/errors` returns nothing
 
 ## Phase 4: `context.ts`, `ctx.services`, test caller
 
