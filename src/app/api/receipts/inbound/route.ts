@@ -3,7 +3,7 @@ import { Resend } from "resend";
 import { env } from "~/env";
 import { VercelBlobStore } from "~/server/blob-store/blob-store";
 import { db } from "~/server/db";
-import { EmailController } from "~/server/email/email.controller";
+import { EmailHttpController } from "~/server/email/email.http.controller";
 import { ResendInboundMailbox } from "~/server/email/email.mailbox";
 import { DrizzleEmailRepository } from "~/server/email/email.repository";
 import { EmailService } from "~/server/email/email.service";
@@ -21,12 +21,12 @@ export const maxDuration = 60;
 // Composition root for the inbound-email tiers. Built on first request, not at
 // module scope: `new Resend(undefined)` throws, and the build's page-data
 // collection imports this file with no key in the env.
-let controller: EmailController | null = null;
+let controller: EmailHttpController | null = null;
 
-function compose(apiKey: string, webhookSecret: string): EmailController {
+function compose(apiKey: string, webhookSecret: string): EmailHttpController {
 	if (controller) return controller;
 	const resend = new Resend(apiKey);
-	controller = new EmailController({
+	controller = new EmailHttpController({
 		resend,
 		webhookSecret,
 		service: new EmailService({

@@ -4,7 +4,7 @@ import type { Logger } from "~/server/observability/logging/logger";
 import { withSpan } from "~/server/observability/tracing/tracer";
 import type { EmailService } from "./email.service";
 
-interface EmailControllerDeps {
+interface EmailHttpControllerDeps {
 	resend: Pick<Resend, "webhooks">;
 	webhookSecret: string;
 	service: EmailService;
@@ -16,13 +16,18 @@ interface EmailControllerDeps {
  * signature over the raw body is the only thing separating a real delivery from
  * anyone who knows the URL, so nothing reads the payload before it verifies.
  */
-export class EmailController {
+export class EmailHttpController {
 	private readonly resend: Pick<Resend, "webhooks">;
 	private readonly webhookSecret: string;
 	private readonly service: EmailService;
 	private readonly logger: Logger;
 
-	constructor({ resend, webhookSecret, service, logger }: EmailControllerDeps) {
+	constructor({
+		resend,
+		webhookSecret,
+		service,
+		logger,
+	}: EmailHttpControllerDeps) {
 		this.resend = resend;
 		this.webhookSecret = webhookSecret;
 		this.service = service;

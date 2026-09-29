@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { OutboxController } from "./outbox.controller";
+import { OutboxInngestController } from "./outbox.inngest.controller";
 import type { OutboxService } from "./outbox.service";
 
 type Declared = {
@@ -22,7 +22,7 @@ function harness() {
 		prune: vi.fn(async () => ({ deleted: 3 })),
 	};
 
-	const controller = new OutboxController({
+	const controller = new OutboxInngestController({
 		// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
 		inngest: inngest as any,
 		service: service as unknown as OutboxService,
@@ -31,7 +31,7 @@ function harness() {
 	return { controller, declared, service };
 }
 
-describe("OutboxController", () => {
+describe("OutboxInngestController", () => {
 	it("declares the two cron functions in order and exposes them for serve", () => {
 		const h = harness();
 

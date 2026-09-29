@@ -2,7 +2,7 @@ import type { Inngest, InngestFunction } from "inngest";
 
 import type { OutboxService } from "./outbox.service";
 
-interface OutboxControllerDeps {
+interface OutboxInngestControllerDeps {
 	inngest: Pick<Inngest, "createFunction">;
 	service: OutboxService;
 }
@@ -12,7 +12,7 @@ interface OutboxControllerDeps {
  * service. Function ids + crons are FROZEN (`registry-golden.test.ts`) — Inngest keys
  * schedules by id, so a rename silently drops the old schedule.
  */
-export class OutboxController {
+export class OutboxInngestController {
 	private readonly service: OutboxService;
 
 	/** Hourly re-delivery of unacked rows (adr002 clause 4). */
@@ -20,7 +20,7 @@ export class OutboxController {
 	/** Daily retention prune of acked rows. */
 	readonly prune: InngestFunction.Any;
 
-	constructor({ inngest, service }: OutboxControllerDeps) {
+	constructor({ inngest, service }: OutboxInngestControllerDeps) {
 		this.service = service;
 		this.sweep = inngest.createFunction(
 			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },

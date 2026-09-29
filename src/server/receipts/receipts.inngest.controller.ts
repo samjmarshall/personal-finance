@@ -7,7 +7,7 @@ import type { ReceiptsService } from "./receipts.service";
 // a real outage. Explicit so the final-attempt check below can't drift from it.
 const RETRIES = 3;
 
-interface ReceiptsControllerDeps {
+interface ReceiptsInngestControllerDeps {
 	inngest: Pick<Inngest, "createFunction">;
 	service: ReceiptsService;
 }
@@ -16,13 +16,13 @@ interface ReceiptsControllerDeps {
  * Presentation tier: declares the receipt event functions and routes each run to the
  * service. Function id + triggers are FROZEN (`registry-golden.test.ts`).
  */
-export class ReceiptsController {
+export class ReceiptsInngestController {
 	private readonly service: ReceiptsService;
 
 	/** Extraction on upload, explicit retry, and inbound email. */
 	readonly process: InngestFunction.Any;
 
-	constructor({ inngest, service }: ReceiptsControllerDeps) {
+	constructor({ inngest, service }: ReceiptsInngestControllerDeps) {
 		this.service = service;
 		this.process = inngest.createFunction(
 			{

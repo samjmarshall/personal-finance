@@ -18,7 +18,7 @@ import type {
 	LogAttributes,
 	Logger,
 } from "~/server/observability/logging/logger";
-import { EmailController } from "./email.controller";
+import { EmailHttpController } from "./email.http.controller";
 import type { EmailService, IngestResult } from "./email.service";
 
 const SIGNED_HEADERS = {
@@ -59,7 +59,7 @@ function harness() {
 		error: (msg, attrs = {}) => logs.push({ level: "error", msg, attrs }),
 		with: () => logger,
 	};
-	const controller = new EmailController({
+	const controller = new EmailHttpController({
 		// biome-ignore lint/suspicious/noExplicitAny: narrow stand-in for the Resend client.
 		resend: { webhooks: { verify } } as any,
 		webhookSecret: "whsec_test",
@@ -82,7 +82,7 @@ function harness() {
 	return { post, verify, ingest, logs };
 }
 
-describe("EmailController.handle", () => {
+describe("EmailHttpController.handle", () => {
 	// The signature is the only thing standing between this route and the open
 	// internet, so nothing downstream may run before it passes.
 	it.each(["svix-id", "svix-timestamp", "svix-signature"])(

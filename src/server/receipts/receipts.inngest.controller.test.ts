@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ReceiptsController } from "./receipts.controller";
+import { ReceiptsInngestController } from "./receipts.inngest.controller";
 import type { ReceiptsService } from "./receipts.service";
 
 type Declared = {
@@ -27,7 +27,7 @@ function harness() {
 	};
 	const service = { process: vi.fn(async () => {}) };
 
-	const controller = new ReceiptsController({
+	const controller = new ReceiptsInngestController({
 		// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
 		inngest: inngest as any,
 		service: service as unknown as ReceiptsService,
@@ -36,7 +36,7 @@ function harness() {
 	return { controller, declared, service };
 }
 
-describe("ReceiptsController", () => {
+describe("ReceiptsInngestController", () => {
 	it("declares process-receipt with its retry budget, per-receipt serialisation and three triggers", () => {
 		const h = harness();
 

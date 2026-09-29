@@ -22,7 +22,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 
 | File                                | Tier         | Owns                                                                                                                                                                | Depends on                         |
 | ----------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `<domain>.controller.ts`            | presentation | Inngest `createFunction` declarations (id, triggers, retries, concurrency) or an HTTP `handle(request: Request): Promise<Response>`. Filters, auth checks, then calls **one** service method. No rules. | the service class; `logger: Logger` |
+| `<domain>.<transport>.controller.ts` | presentation | Transport is `inngest`, `http` or `trpc` (`outbox.inngest.controller.ts`, `email.http.controller.ts`). Inngest `createFunction` declarations (id, triggers, retries, concurrency) or an HTTP `handle(request: Request): Promise<Response>`. Filters, auth checks, then calls **one** service method. No rules. | the service class; `logger: Logger` |
 | `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptsService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
@@ -148,7 +148,7 @@ repository that is `this.db.transaction(...)` (`saveExtraction`); in a router it
   (or `publish` for emit-only): `OutboxRepository.commit` runs the canonical rows
   + outbox rows in one `db.transaction()`, `OutboxService.commit` then does the
   best-effort post-commit send. Unmigrated routers use the bound `commitWithOutbox`
-  export from `~/server/outbox`. `OutboxController` declares `outbox-sweep`
+  export from `~/server/outbox`. `OutboxInngestController` declares `outbox-sweep`
   (re-delivers unacked rows, the durable backstop) and `outbox-prune` (drops acked
   rows past retention) over the same service. Never a bare `inngest.send` from a
   handler.

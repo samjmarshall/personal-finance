@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { OutboxController } from "~/server/outbox/outbox.controller";
-import { ReceiptsController } from "~/server/receipts/receipts.controller";
+import { OutboxInngestController } from "~/server/outbox/outbox.inngest.controller";
+import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
 import pkg from "../../../package.json" with { type: "json" };
 
 import { EVENT_REGISTRY } from "./events";
@@ -34,8 +34,8 @@ describe("worker golden", () => {
 			// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
 		} as any;
 
-		new OutboxController({ inngest: spy, service: {} as never });
-		new ReceiptsController({ inngest: spy, service: {} as never });
+		new OutboxInngestController({ inngest: spy, service: {} as never });
+		new ReceiptsInngestController({ inngest: spy, service: {} as never });
 
 		expect(declared).toEqual([
 			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },

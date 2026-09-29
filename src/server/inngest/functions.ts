@@ -4,9 +4,9 @@ import { VercelBlobStore } from "~/server/blob-store/blob-store";
 import { db } from "~/server/db";
 import { captureException } from "~/server/observability/errors/posthog";
 import { createRootLogger } from "~/server/observability/logging/logger";
-import { OutboxController } from "~/server/outbox/outbox.controller";
+import { OutboxInngestController } from "~/server/outbox/outbox.inngest.controller";
 import { outboxService } from "~/server/outbox/outbox.module";
-import { ReceiptsController } from "~/server/receipts/receipts.controller";
+import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
 import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
 import { ReceiptsService } from "~/server/receipts/receipts.service";
 
@@ -16,7 +16,7 @@ import { inngest } from "./client";
 // handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
 // function's cron/event triggers from it. The outbox service is shared with the
 // write-door callers, so it comes from outbox.module.ts rather than being built here.
-const outboxController = new OutboxController({
+const outboxController = new OutboxInngestController({
 	inngest,
 	service: outboxService,
 });
@@ -30,7 +30,7 @@ const receiptsService = new ReceiptsService({
 	logger: createRootLogger().with({ domain: "receipts", component: "service" }),
 	errorReporter: { captureException },
 });
-const receiptsController = new ReceiptsController({
+const receiptsController = new ReceiptsInngestController({
 	inngest,
 	service: receiptsService,
 });
