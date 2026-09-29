@@ -61,6 +61,13 @@ function caller(session: unknown = { user: { id: "member-1" } }) {
 		badWithMessage: publicProcedure.query(() => {
 			throw new TRPCError({ code: "BAD_REQUEST", message: "nope" });
 		}),
+		badWithDomainCause: publicProcedure.query(() => {
+			throw new TRPCError({
+				code: "BAD_REQUEST",
+				message: "nope",
+				cause: notFound,
+			});
+		}),
 		unauth: publicProcedure.query(() => {
 			throw new TRPCError({ code: "UNAUTHORIZED" });
 		}),
@@ -234,6 +241,14 @@ describe("error mapping", () => {
 		});
 	});
 
+	it("keeps the domain error's stack so traces show where it was thrown", async () => {
+		captureStdout();
+		const error = await caller()
+			.conflict()
+			.catch((e: unknown) => e);
+		expect((error as Error).stack).toBe(conflict.stack);
+	});
+
 	it("leaves an unknown Error as INTERNAL_SERVER_ERROR", async () => {
 		captureStdout();
 		await expect(caller().plain()).rejects.toMatchObject({
@@ -244,6 +259,14 @@ describe("error mapping", () => {
 	it("passes a deliberate TRPCError through unchanged", async () => {
 		captureStdout();
 		await expect(caller().badWithMessage()).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+			message: "nope",
+		});
+	});
+
+	it("keeps a deliberate TRPCError's code even when its cause is a domain error", async () => {
+		captureStdout();
+		await expect(caller().badWithDomainCause()).rejects.toMatchObject({
 			code: "BAD_REQUEST",
 			message: "nope",
 		});

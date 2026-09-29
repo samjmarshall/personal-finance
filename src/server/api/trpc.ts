@@ -164,18 +164,24 @@ const observabilityMiddleware = t.middleware(
 /**
  * Services throw transport-free domain errors; this is the one place they become
  * codes. Sits inside observability so spans and logs see the mapped code.
- * Deliberate TRPCErrors (auth, Zod) carry no domain cause and pass through.
+ * Only a raw throw (tRPC wraps it as a 500) is mapped; a deliberate TRPCError
+ * keeps its code even if its cause is a domain error.
  */
 const errorMappingMiddleware = t.middleware(async ({ next }) => {
 	const result = await next();
-	if (result.ok) return result;
+	if (result.ok || result.error.code !== "INTERNAL_SERVER_ERROR") return result;
 	const { cause } = result.error;
-	if (cause instanceof NotFoundError)
-		throw new TRPCError({ code: "NOT_FOUND", message: cause.message, cause });
-	if (cause instanceof ConflictError)
-		throw new TRPCError({ code: "CONFLICT", message: cause.message, cause });
+	if (cause instanceof NotFoundError) throw mappedError("NOT_FOUND", cause);
+	if (cause instanceof ConflictError) throw mappedError("CONFLICT", cause);
 	return result;
 });
+
+function mappedError(code: TRPCError["code"], cause: Error): TRPCError {
+	const error = new TRPCError({ code, message: cause.message, cause });
+	// Keep the real throw site, as tRPC's own wrap does, or traces point here.
+	if (cause.stack) error.stack = cause.stack;
+	return error;
+}
 
 /**
  * Public (unauthenticated) procedure
