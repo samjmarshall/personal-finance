@@ -51,6 +51,7 @@ DEFAULT_OUT = Path(__file__).resolve().parent / "mined" / "corpus.jsonl"
 PRICES = {
     "claude-opus-5-5": {"in": 4.00, "out": 20.00, "cache_read": 0.20, "cache_create": 5.00},
     "claude-opus-4-8": {"in": 5.00, "out": 25.00, "cache_read": 0.50, "cache_create": 6.25},
+    "claude-sonnet-5-5": {"in": 2.00, "out": 10.00, "cache_read": 0.20, "cache_create": 2.50},
     "claude-sonnet-5": {"in": 2.00, "out": 10.00, "cache_read": 0.20, "cache_create": 2.50},
     "claude-sonnet-4-6": {"in": 3.00, "out": 15.00, "cache_read": 0.30, "cache_create": 3.75},
     "claude-haiku-4-5": {"in": 1.00, "out": 5.00, "cache_read": 0.10, "cache_create": 1.25},
