@@ -6,6 +6,7 @@ import {
 	generateObject,
 	type ImagePart,
 	type LanguageModel,
+	NoObjectGeneratedError,
 	type TextPart,
 } from "ai";
 
@@ -55,14 +56,30 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // `Message` API reference), while uploads and inbound attachments accept 10 MB. Read
 // as decimal MB — the conservative side of AWS's figure. Over the cap the call would
 // 400 deterministically, so the service refuses first and says so. A text body is
-// inlined into the prompt, not sent as a media block, so it carries no byte cap here.
+// inlined into the prompt, so Bedrock never caps it; ours bounds its input tokens
+// (~100k at 300 KB of markup, where a real e-receipt runs 30–150 KB).
+const KB = 1_000;
 const MB = 1_000_000;
 const BEDROCK_MAX_IMAGE_BYTES = 3.75 * MB;
 const BEDROCK_MAX_DOCUMENT_BYTES = 4.5 * MB;
+const MAX_TEXT_BYTES = 300 * KB;
+
+// Unset, Bedrock lets the model write to its full output max, so a model stuck
+// repeating line items bills all of it. At ~45 tokens an item this still fits ~170;
+// a normal receipt uses 300–2k. A cut-off reply fails to parse and parks, never retried.
+const MAX_OUTPUT_TOKENS = 8192;
+// A full 8k reply takes ~140s; this stops a hung call inside the Inngest route's 300s.
+const MODEL_TIMEOUT_MS = 150_000;
+// The AI SDK default, pinned: it retries only 429/5xx/network, which bill no output.
+const MODEL_MAX_RETRIES = 2;
+
+function formatBytes(bytes: number): string {
+	return bytes >= MB ? `${bytes / MB} MB` : `${bytes / KB} KB`;
+}
 
 class ReceiptTooLargeError extends Error {
 	constructor(readonly maxBytes: number) {
-		super(`receipt exceeds the model's ${maxBytes / MB} MB cap`);
+		super(`receipt exceeds the model's ${formatBytes(maxBytes)} cap`);
 	}
 }
 
@@ -77,7 +94,7 @@ type PayloadPart = TextPart | ImagePart | FilePart;
 const MODEL_MEDIA: Record<
 	ReceiptMediaKind,
 	{
-		maxBytes: number | null;
+		maxBytes: number;
 		hint: string;
 		payload: (bytes: Uint8Array, mediaType: string) => PayloadPart;
 	}
@@ -101,7 +118,7 @@ const MODEL_MEDIA: Record<
 	// Markup sent as an image part reaches the model as unreadable noise; inline it.
 	// Untrusted third-party HTML — never render it in the browser.
 	text: {
-		maxBytes: null,
+		maxBytes: MAX_TEXT_BYTES,
 		hint: FORWARDED_EMAIL_HINT,
 		payload: (bytes) => ({
 			type: "text",
@@ -119,18 +136,23 @@ function modelMedia(mediaType: string) {
 
 function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
 	const { maxBytes } = modelMedia(mediaType);
-	if (maxBytes !== null && bytes.byteLength > maxBytes)
-		throw new ReceiptTooLargeError(maxBytes);
+	if (bytes.byteLength > maxBytes) throw new ReceiptTooLargeError(maxBytes);
 }
 
 // `error` is rendered verbatim to the member in the detail overlay, and a driver error's
 // message carries the failing SQL with its bound parameters. Log the real thing, store a
 // line that says what to do about it — the same split the outbox makes for lastError.
 // Only a retryable provider error earns the "retry" copy: a 400/403 fails the same way
-// on every attempt, so telling the member to retry would just waste their time.
+// on every attempt, so telling the member to retry would just waste their time. Nor
+// does a reply cut off at MAX_OUTPUT_TOKENS: the same receipt cuts off the same way.
 function memberFacingError(error: unknown): string {
 	if (error instanceof ReceiptTooLargeError)
-		return `Receipt is too large to read (max ${error.maxBytes / MB} MB). Delete it and upload a smaller file.`;
+		return `Receipt is too large to read (max ${formatBytes(error.maxBytes)}). Delete it and upload a smaller file.`;
+	if (
+		NoObjectGeneratedError.isInstance(error) &&
+		error.finishReason === "length"
+	)
+		return "Receipt has too many lines to read in one go. Delete it and upload it in smaller parts.";
 	if (APICallError.isInstance(error))
 		return error.isRetryable
 			? "The extraction service couldn't read this receipt. Retry in a moment."
@@ -418,6 +440,9 @@ export class ReceiptsService {
 			model: this.languageModel,
 			schema: receiptExtractionDto,
 			messages: [{ role: "user", content }],
+			maxOutputTokens: MAX_OUTPUT_TOKENS,
+			maxRetries: MODEL_MAX_RETRIES,
+			abortSignal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
 			// Inputs record by default — the redaction step must be registered first or
 			// the base64 receipt image ships raw to the trace backend. functionId groups
 			// the runs.

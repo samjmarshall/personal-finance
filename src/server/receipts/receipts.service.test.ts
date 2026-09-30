@@ -546,6 +546,68 @@ describe("ReceiptsService.process", () => {
 		expect(h.calls.saveExtraction).toHaveLength(1);
 	});
 
+	// A text body is inlined as prompt text, so its size is input tokens one for one.
+	it("parks an oversize html body as failed with a too-large message and no model call", async () => {
+		const h = harness({
+			receipt: baseReceipt({ channel: ReceiptChannel.Email }),
+			blob: { bytes: new Uint8Array(300_001), mediaType: "text/html" },
+		});
+
+		await h.service.process(1);
+
+		expect(h.analyze).not.toHaveBeenCalled();
+		const error = h.calls.markFailed[0]?.error;
+		expect(error).toContain("too large");
+		expect(error).toContain("300 KB");
+	});
+
+	const modelReturning = (
+		text: string,
+		finishReason: "stop" | "length" = "stop",
+	) =>
+		new MockLanguageModelV4({
+			doGenerate: async () => ({
+				finishReason: { unified: finishReason, raw: finishReason },
+				usage: {
+					inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+					outputTokens: { total: 20, text: 20, reasoning: 0 },
+				},
+				content: [{ type: "text", text }],
+				warnings: [],
+			}),
+		});
+
+	// Without a cap Bedrock lets the model write to its full output max, so a model
+	// stuck repeating line items would bill every token of it.
+	it("caps output tokens and wall time on the model call", async () => {
+		const model = modelReturning(JSON.stringify(extraction));
+		const h = harness({ receipt: baseReceipt(), languageModel: model });
+
+		await h.service.process(1);
+
+		expect(model.doGenerateCalls).toHaveLength(1);
+		expect(model.doGenerateCalls[0]?.maxOutputTokens).toBe(8192);
+		expect(model.doGenerateCalls[0]?.abortSignal).toBeInstanceOf(AbortSignal);
+	});
+
+	// Hitting the cap cuts the JSON off mid-item. The same receipt would cut off the
+	// same way again, so it parks on the first attempt instead of re-spending the cap.
+	it("parks output cut off at the token cap as failed, without a retry", async () => {
+		const model = modelReturning(
+			'{"vendor":"Corner Grocer","items":[',
+			"length",
+		);
+		const h = harness({ receipt: baseReceipt(), languageModel: model });
+
+		await h.service.process(1, { isFinalAttempt: false });
+
+		expect(model.doGenerateCalls).toHaveLength(1);
+		expect(h.calls.saveExtraction).toEqual([]);
+		const error = h.calls.markFailed[0]?.error;
+		expect(error).toContain("too many lines");
+		expect(error).not.toContain("Retry");
+	});
+
 	// Downstream redaction + PostHog processors key on the ai.generateObject span
 	// sitting under receipt.extract on one trace — this pins that contract.
 	it("emits an ai.generateObject span under receipt.extract when telemetry runs", async () => {
