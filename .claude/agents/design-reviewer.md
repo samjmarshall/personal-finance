@@ -3,7 +3,7 @@ name: design-reviewer
 description: Runs a live design review of front-end/UI changes in a browser — drives the running app with Playwright across viewports to check visual consistency, accessibility (WCAG), responsiveness, and UX. Use when UI changes need reviewing against a preview. Not for building UI (use the frontend-design skill) or non-visual code-correctness review (use /code-review).
 tools: Read, Edit, MultiEdit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, Bash, BashOutput, KillBash, ListMcpResourcesTool, ReadMcpResourceTool, mcp__context7__resolve-library-id, mcp__context7__get-library-docs, mcp__playwright, mcp__playwright-2, mcp__playwright-3, mcp__playwright-4
 skills: frontend-design, brand-guidelines, web-design-guidelines, wcag-audit-patterns, ux-writing
-model: claude-sonnet-4-6
+model: claude-sonnet-5-5
 effort: high
 color: pink
 ---
