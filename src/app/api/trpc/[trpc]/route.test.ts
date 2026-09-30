@@ -4,10 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // route.ts is a composition root over the whole app router; stub what it wires
 // so this stays a unit over the pre-procedure error report.
 vi.mock("~/server/api/root", () => ({ appRouter: {} }));
-vi.mock("~/server/api/trpc", () => ({
-	createTRPCContext: vi.fn(),
-	trpcLogger: { error: vi.fn() },
-}));
+vi.mock("~/server/api/context", () => ({ createTRPCContext: vi.fn() }));
+vi.mock("~/server/api/trpc", () => ({ trpcLogger: { error: vi.fn() } }));
 vi.mock(
 	"~/server/observability/sdk/flush",
 	() => import("~/server/observability/sdk/flush.fake"),

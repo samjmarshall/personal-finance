@@ -250,14 +250,14 @@ Tests only. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes, and the characterization tests show no snapshot change
-- [ ] `make build` passes: the RSC caller and route compile against `context.ts`, and `services.ts` loads at build without throwing
-- [ ] `git grep -n "server/db\|server/auth" src/server/api/trpc.ts` returns nothing
+- [x] `make check` passes
+- [x] `make test` passes, and the characterization tests show no snapshot change
+- [x] `make build` passes: the RSC caller and route compile against `context.ts`, and `services.ts` loads at build without throwing (Ran as `pnpm run build`, skipping `make build`'s `rm -rf .next`, because a live `next dev` was using `.next/dev`.)
+- [x] `git grep -n "server/db\|server/auth" src/server/api/trpc.ts` returns nothing
 - [ ] At https://personal-finance.localhost:
   - signed in, the dashboard and the Transactions page load
-  - signed out, a tRPC call to `transaction.list` returns 401
-- [ ] `/security-review`. The session now comes from a new `context.ts`, and the auth guard sits after the new mapper (Phase 3).
+  - [x] signed out, a tRPC call to `transaction.list` returns 401
+- [x] `/security-review`. The session now comes from a new `context.ts`, and the auth guard sits after the new mapper (Phase 3). (No findings.)
 
 ## Phase 5: Architecture test + rules-file drift fix
 

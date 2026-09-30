@@ -2,22 +2,14 @@ import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Transaction } from "~/domain/transactions";
 import { Frequency, Priority } from "~/lib/constants";
+import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { pgError, recordingDb } from "~/server/db/recording-db.fake";
 import { transactions } from "~/server/transactions/transactions.schema";
+import { expenseRouter } from "./expense";
+import { transactionRouter } from "./transaction";
 
 // Characterization: pins today's SQL, codes and messages so the 3-tier move
 // can prove it changed nothing the member sees.
-
-// Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
-// (and through them ~/env). Stub those so this stays a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-
-const { createCallerFactory, createTRPCRouter } = await import(
-	"~/server/api/trpc"
-);
-const { transactionRouter } = await import("./transaction");
-const { expenseRouter } = await import("./expense");
 
 const router = createTRPCRouter({
 	transaction: transactionRouter,

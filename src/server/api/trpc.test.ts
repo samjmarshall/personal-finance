@@ -16,13 +16,17 @@ import {
 	vi,
 } from "vitest";
 
+import {
+	createTestCaller,
+	type TestCallerOptions,
+} from "~/server/api/test-caller";
+import {
+	createTRPCRouter,
+	protectedProcedure,
+	publicProcedure,
+} from "~/server/api/trpc";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
-
-// Importing trpc pulls in the real db + auth (and through them ~/env). Stub them
-// so this stays a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
@@ -39,56 +43,46 @@ beforeEach(() => exporter.reset());
 // stdout is spied in the failure tests; restore it even if an assertion throws.
 afterEach(() => vi.restoreAllMocks());
 
-const {
-	createTRPCRouter,
-	publicProcedure,
-	protectedProcedure,
-	createCallerFactory,
-} = await import("~/server/api/trpc");
-
 const notFound = new NotFoundError("gone");
 const conflict = new ConflictError("taken");
 
-function caller(session: unknown = { user: { id: "member-1" } }) {
-	const router = createTRPCRouter({
-		ok: publicProcedure.query(() => "result"),
-		boom: publicProcedure.query(() => {
-			throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-		}),
-		bad: publicProcedure.query(() => {
-			throw new TRPCError({ code: "BAD_REQUEST" });
-		}),
-		badWithMessage: publicProcedure.query(() => {
-			throw new TRPCError({ code: "BAD_REQUEST", message: "nope" });
-		}),
-		badWithDomainCause: publicProcedure.query(() => {
-			throw new TRPCError({
-				code: "BAD_REQUEST",
-				message: "nope",
-				cause: notFound,
-			});
-		}),
-		unauth: publicProcedure.query(() => {
-			throw new TRPCError({ code: "UNAUTHORIZED" });
-		}),
-		notFound: publicProcedure.query(() => {
-			throw notFound;
-		}),
-		conflict: publicProcedure.query(() => {
-			throw conflict;
-		}),
-		plain: publicProcedure.query(() => {
-			throw new Error("plain");
-		}),
-		protectedNotFound: protectedProcedure.query(() => {
-			throw notFound;
-		}),
-	});
-	return createCallerFactory(router)({
-		db: {},
-		session,
-		headers: new Headers(),
-	} as never);
+const router = createTRPCRouter({
+	ok: publicProcedure.query(() => "result"),
+	boom: publicProcedure.query(() => {
+		throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+	}),
+	bad: publicProcedure.query(() => {
+		throw new TRPCError({ code: "BAD_REQUEST" });
+	}),
+	badWithMessage: publicProcedure.query(() => {
+		throw new TRPCError({ code: "BAD_REQUEST", message: "nope" });
+	}),
+	badWithDomainCause: publicProcedure.query(() => {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "nope",
+			cause: notFound,
+		});
+	}),
+	unauth: publicProcedure.query(() => {
+		throw new TRPCError({ code: "UNAUTHORIZED" });
+	}),
+	notFound: publicProcedure.query(() => {
+		throw notFound;
+	}),
+	conflict: publicProcedure.query(() => {
+		throw conflict;
+	}),
+	plain: publicProcedure.query(() => {
+		throw new Error("plain");
+	}),
+	protectedNotFound: protectedProcedure.query(() => {
+		throw notFound;
+	}),
+});
+
+function caller(options?: TestCallerOptions) {
+	return createTestCaller(router, options);
 }
 
 describe("dev latency (default test env is dev)", () => {
@@ -105,14 +99,13 @@ describe("production has no artificial delay", () => {
 		vi.resetModules();
 		vi.stubEnv("NODE_ENV", "production");
 		const trpc = await import("~/server/api/trpc");
-		const router = trpc.createTRPCRouter({
+		const testCaller = await import("~/server/api/test-caller");
+		const prodRouter = trpc.createTRPCRouter({
 			ok: trpc.publicProcedure.query(() => "result"),
 		});
-		const prodCaller = trpc.createCallerFactory(router)({
-			db: {},
+		const prodCaller = testCaller.createTestCaller(prodRouter, {
 			session: null,
-			headers: new Headers(),
-		} as never);
+		});
 
 		const start = Date.now();
 		await expect(prodCaller.ok()).resolves.toBe("result");
@@ -158,7 +151,7 @@ describe("tracing span", () => {
 	});
 
 	it("stamps member.id + posthog.distinct_id from baggage set before the span", async () => {
-		await caller({ user: { id: "member-1" } }).ok();
+		await caller({ session: { user: { id: "member-1" } } }).ok();
 
 		const span = exporter.getFinishedSpans().find((s) => s.name === "trpc.ok");
 		expect(span).toBeDefined();
@@ -302,7 +295,9 @@ describe("error mapping", () => {
 	});
 
 	it("protectedProcedure still rejects a signed-out call with UNAUTHORIZED", async () => {
-		await expect(caller(null).protectedNotFound()).rejects.toMatchObject({
+		await expect(
+			caller({ session: null }).protectedNotFound(),
+		).rejects.toMatchObject({
 			code: "UNAUTHORIZED",
 		});
 	});

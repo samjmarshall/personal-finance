@@ -2,9 +2,9 @@ import type { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import type { NextRequest } from "next/server";
-
+import { createTRPCContext } from "~/server/api/context";
 import { appRouter } from "~/server/api/root";
-import { createTRPCContext, trpcLogger } from "~/server/api/trpc";
+import { trpcLogger } from "~/server/api/trpc";
 import { reportError } from "~/server/observability/errors/report-error";
 import { withFlush } from "~/server/observability/sdk/flush";
 import { traceIdHeaders } from "~/server/observability/tracing/current-trace-id";
