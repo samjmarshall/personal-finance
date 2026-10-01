@@ -3,8 +3,7 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 
 /**
- * Per-request tRPC context; the API handler and the RSC caller each wrap it.
- * `db` stays until every router reads through `services` (migration step 7).
+ * Raw DB handle is temporary: drop it once every router goes through a service.
  *
  * @see https://trpc.io/docs/server/context
  */

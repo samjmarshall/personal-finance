@@ -14,8 +14,8 @@ export interface TestCallerOptions {
 }
 
 /**
- * Calls a router with fake services and no `vi.mock`. Passes no `db`, so a
- * procedure still reading `ctx.db` fails loudly.
+ * Runs a router on fake services, no module mocks. Gives no DB handle, so a
+ * procedure still using raw DB access fails loudly.
  */
 export function createTestCaller<TRecord extends TRPCRouterRecord>(
 	router: TRPCBuiltRouter<Root, TRecord>,
