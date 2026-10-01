@@ -9,7 +9,6 @@ import { transactionRouter } from "./transactions.trpc.controller";
 
 const router = createTRPCRouter({ transaction: transactionRouter });
 
-// One fake service per case; `calls` records what each method was handed.
 function callerWith(
 	transactions: Partial<TransactionsService>,
 	session?: null,
@@ -105,6 +104,18 @@ describe("transaction router", () => {
 			callerWith({ unplanned: method }).transaction.unplanned(window),
 		).resolves.toEqual([TRANSACTION]);
 		expect(calls).toEqual([[window]]);
+	});
+
+	it("unplanned rejects an inverted window before reaching the service", async () => {
+		const { method, calls } = recorder([TRANSACTION]);
+
+		await expect(
+			callerWith({ unplanned: method }).transaction.unplanned({
+				from: new Date("2026-09-15T00:00:00.000Z"),
+				to: new Date("2026-09-01T00:00:00.000Z"),
+			}),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		expect(calls).toEqual([]);
 	});
 
 	it("linkExpense hands the service the id and expense", async () => {
