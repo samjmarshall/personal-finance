@@ -1,5 +1,5 @@
-// A driver error normalized into a tagged union the services narrow on, so a
-// `catch` branches on a named violation instead of a bare SQLSTATE string.
+// A driver error normalized into a tagged union, so a `catch` branches on a
+// named violation instead of a bare SQLSTATE string.
 
 // PostgreSQL SQLSTATE classes we act on today. Values are the codes' canonical
 // names; extend by seeding PG_VIOLATION_BY_CODE, not by reading raw codes.

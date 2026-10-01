@@ -138,8 +138,9 @@ Split on real pain, not in advance.
   procedures talk to Drizzle directly via `ctx.db`.
 - Compose the pre-built router objects in `src/server/api/root.ts`
   (`allowedSender, balance, cashflow, category, expense, income, receipt, setting`; `transaction` comes from `src/server/transactions/`).
-- Errors are thrown inline as `TRPCError`. Shared helpers live in
-  `src/server/errors/`: `parseError(error)` (normalises a driver error into a
+- Errors are thrown inline as `TRPCError`, or through the shared helpers in
+  `src/server/errors/`, which throw the non-tRPC errors described under
+  [Errors](#errors): `parseError(error)` (normalises a driver error into a
   tagged union — branch on `kind === "pg"` + a named `PgViolation`, never a bare
   SQLSTATE; `parse-error.ts`), `assertRow(row, "op")` (`.returning()` presence,
   `assert-row.ts`) and `rethrowFkConflict(error, message)` (`fk-conflict.ts`).

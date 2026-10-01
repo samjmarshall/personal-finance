@@ -1,8 +1,5 @@
-// Guards an insert/update that must return a row. Names the operation, never the
-// input (can carry user data). A plain Error: the tRPC error-mapping middleware
-// leaves it as INTERNAL_SERVER_ERROR, and TRPCError falls back to `cause.message`,
-// so the member still sees "Failed to x.". No logging here — the tRPC request
-// wrapper already logs every failed call once, so it'd only double it.
+// Names the action, never the input (may hold user data). A plain error stays a
+// 500 that still reads "Failed to x."; no log, the request wrapper logs it once.
 export function assertRow<T>(row: T | undefined, operation: string): T {
 	if (!row) throw new Error(`Failed to ${operation}.`);
 	return row;

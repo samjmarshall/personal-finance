@@ -144,7 +144,7 @@ Tests only. No `src` behaviour changes.
     - SQL text and params go in `toMatchInlineSnapshot`.
     - Codes and messages use `toMatchObject`.
   - **`list`:**
-    - The default query: two left joins, `order by date desc, id desc`, `limit 50 offset 0`, plus the count query. `total` comes from the count row.
+    - The default query: two left joins, `order by date desc, id desc`, `limit 50` (Drizzle omits a zero offset; a separate case pins `offset`), plus the count query. `total` comes from the count row.
     - Every filter: `search` → `ilike` on description, Group (`category`) and notes; `priority`; `frequency`; Group; `from`; `to`.
     - Each `sortBy` key with `sortDir: "asc"`.
   - **`summary`:** the five queries' SQL, and zero totals when the totals row is missing.
@@ -195,7 +195,7 @@ Tests only. No `src` behaviour changes.
   - A 23505 and a plain `Error` are rethrown as the same reference.
 - **`src/server/api/lib/` becomes re-exports.** `parse-error.ts` and `assert-row.ts` there only re-export from `~/server/errors/*`, one line each, so the unmigrated routers' imports keep working until step 6.
 - **`src/server/api/trpc.ts` gets the middleware.**
-  - Add `errorMappingMiddleware` (design § The mapping middleware). It checks `result.error.cause instanceof NotFoundError` / `ConflictError` and throws `new TRPCError({ code, message: cause.message, cause })`. Any other result goes back unchanged.
+  - Add `errorMappingMiddleware` (design § The mapping middleware). It checks `result.error.cause instanceof NotFoundError` / `ConflictError` and throws `new TRPCError({ code, message: cause.message, cause })`. Any other result goes back unchanged. (Refined in 96c1249: it maps only a raw throw, i.e. `result.error.code === "INTERNAL_SERVER_ERROR"`, so a deliberate `TRPCError` keeps its code even with a domain-error cause; and it copies `cause.stack` so traces point at the throw site.)
   - Chain it after observability on `publicProcedure` (`:170-172`) and `protectedProcedure` (`:182-196`). The order becomes dev latency → observability → error mapping → auth.
 - **Switch the routers to the shared helper.**
   - `src/server/api/routers/receipts.ts` — delete the local helper (`:50-57`) and import `rethrowFkConflict` from `~/server/errors/fk-conflict`. The unique-violation `TRPCError` at `:305-309` stays until step 6.
@@ -461,8 +461,8 @@ Tests only. No `src` behaviour changes.
 - Rules: `.claude/rules/server-architecture.md`, `.claude/rules/unit-testing.md`
 - Glossary: `CONTEXT.md` — **Member** (`:43`), **Consumed** (`:88`), **Group** (`:96`)
 - Related:
-  - `src/server/api/context.ts:11-21`, `src/server/api/trpc.ts:86-199`
-  - `src/server/api/routers/transaction.ts`
-  - `src/server/api/routers/expense.ts:28-47`
+  - `src/server/api/context.ts:10-20`, `src/server/api/trpc.ts:86-199`
+  - `src/server/transactions/transactions.trpc.controller.ts` (replaces `src/server/api/routers/transaction.ts`, deleted in Phase 6)
+  - `src/server/api/routers/expense.ts:24-27`
   - `src/server/outbox/outbox.repository.test.ts:7-86`
   - `thoughts/plans/2026-09-12-trpc-error-parser.md` (origin of `parse-error.ts`)
