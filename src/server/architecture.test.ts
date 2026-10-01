@@ -81,9 +81,11 @@ const lineAt = (source: string, offset: number) =>
 const domainOf = (path: string) => path.match(/^src\/server\/([^/]+)\//)?.[1];
 
 const resolve = (file: string, specifier: string) => {
-	if (specifier.startsWith("~/")) return `src/${specifier.slice(2)}`;
-	if (specifier.startsWith(".")) return join(dirname(file), specifier);
-	return specifier;
+	let path = specifier;
+	if (specifier.startsWith("~/")) path = `src/${specifier.slice(2)}`;
+	if (specifier.startsWith(".")) path = join(dirname(file), specifier);
+	// `…/db/index` is the same module as `…/db`.
+	return path.replace(/\/index$/, "");
 };
 
 const isCompositionRoot = (file: string) =>
@@ -118,10 +120,12 @@ function ruleBroken(file: string, specifier: string): Rule | undefined {
 	) {
 		return 3;
 	}
-	// A route may import `db`: it is its own composition root.
-	const isAppRoute =
-		file.startsWith("src/app/") && basename(file) === "route.ts";
-	if (isAppRoute && (isSchema || isDrizzle(specifier))) return 3;
+	// Pages, layouts and server actions are entry points too. A route may import
+	// `db`: it is its own composition root.
+	if (file.startsWith("src/app/")) {
+		const isDb = target === "src/server/db" && basename(file) !== "route.ts";
+		if (isSchema || isDb || isDrizzle(specifier)) return 3;
+	}
 	return undefined;
 }
 
@@ -234,6 +238,24 @@ describe("architecture (adr022)", () => {
 					"list: procedure.query(() => [])",
 				),
 			).toEqual([]);
+		});
+
+		it("flags db in a controller, by folder or index path", () => {
+			const file = "src/server/x/x.trpc.controller.ts";
+			expect(rulesIn(file, 'import { db } from "~/server/db";')).toEqual([3]);
+			expect(rulesIn(file, 'import { db } from "~/server/db/index";')).toEqual([
+				3,
+			]);
+		});
+
+		it("flags data access in any app file, letting only a route import db", () => {
+			const db = 'import { db } from "~/server/db";';
+			expect(rulesIn("src/app/(dashboard)/x/page.tsx", db)).toEqual([3]);
+			expect(rulesIn("src/app/(dashboard)/x/actions.ts", db)).toEqual([3]);
+			expect(rulesIn("src/app/api/x/route.ts", db)).toEqual([]);
+			expect(
+				rulesIn("src/app/api/x/route.ts", 'import { eq } from "drizzle-orm";'),
+			).toEqual([3]);
 		});
 
 		it("reads a multi-line dynamic import at the specifier's line", () => {
