@@ -447,9 +447,9 @@ Tests only. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] Every path named in the edited rules-file sections exists (`git ls-files` check)
-- [ ] The rules file mentions no `routers/transaction.ts` and no `api/lib/` as a helper home without the re-export note
+- [x] `make check` passes
+- [x] Every path named in the edited rules-file sections exists (`git ls-files` check)
+- [x] The rules file mentions no `routers/transaction.ts` and no `api/lib/` as a helper home without the re-export note
 
 ## References
 

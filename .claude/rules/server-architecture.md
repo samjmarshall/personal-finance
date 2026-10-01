@@ -14,7 +14,8 @@ is executed as a **class-based** controller / service / repository 3-tier, one
 domain per change (strangler). Reference implementations: `src/server/outbox/`
 (cron workers + the write door), `src/server/receipts/receipts.*` (event worker +
 external adapters) and `src/server/email/email.*` (HTTP webhook
-controller behind `src/app/api/receipts/inbound/route.ts`).
+controller behind `src/app/api/receipts/inbound/route.ts`) and
+`src/server/transactions/` (the reference tRPC domain).
 Existing plain tRPC routers stay as they are until their domain is migrated in
 its own change — never refactor a router toward 3-tier inside a feature diff.
 
@@ -22,7 +23,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 
 | File                                | Tier         | Owns                                                                                                                                                                | Depends on                         |
 | ----------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `<domain>.<transport>.controller.ts` | presentation | Transport is `inngest`, `http` or `trpc` (`outbox.inngest.controller.ts`, `email.http.controller.ts`). Inngest `createFunction` declarations (id, triggers, retries, concurrency) or an HTTP `handle(request: Request): Promise<Response>`. Filters, auth checks, then calls **one** service method. No rules. | the service class; `logger: Logger` |
+| `<domain>.<transport>.controller.ts` | presentation | Transport is `inngest`, `http` or `trpc` (`outbox.inngest.controller.ts`, `email.http.controller.ts`, `transactions.trpc.controller.ts`). Inngest `createFunction` declarations (id, triggers, retries, concurrency), an HTTP `handle(request: Request): Promise<Response>`, or a tRPC router object whose procedures do `.input()` + procedure auth + one `ctx.services.<svc>.<method>()` call, with no Drizzle and no try/catch. A procedure may call any domain's service. Filters, auth checks, then calls **one** service method. No rules. | the service class (tRPC: `ctx.services`); `logger: Logger` |
 | `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptsService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
@@ -50,7 +51,13 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   runs or wraps it, unchanged in signature (`withSpan`, `withFlush`, `withRetry`), adds
   cross-cutting behavior around a call; it is not a dep. Keep it generic and
   domain-free, and put it in a shared module (`observability/`, `lib/`).
-- **Composition root is `src/server/inngest/functions.ts`** for workers. Real
+- **Composition roots.** `src/server/api/services.ts` is the tRPC root: it builds
+  each service once at module load, and `createTRPCContext` (`src/server/api/context.ts`)
+  attaches them as `ctx.services`. No service may throw on a missing env var, because
+  the build loads that file. Services hold no per-request state: session values go in
+  as `memberId` arguments, and only to methods that read them. A `*.module.ts` exists
+  only when two or more composition roots need the same instance.
+- **Worker root is `src/server/inngest/functions.ts`.** Real
   `db`, `inngest`, and provider SDKs (Bedrock via `~/env`) are touched only there —
   see `bedrock-invocation.md`. A controller exposes `get functions()`; the root
   spreads them into the array served by `src/app/api/inngest/route.ts`.
@@ -76,11 +83,36 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   `event.data.receiptId` etc. by name — `event.data` carries the adr016 `_trace`
   pocket and must not be spread or hashed into a new object.
 
+## Errors
+
+- Services throw `NotFoundError` / `ConflictError` (`src/server/errors/`), never
+  `TRPCError`. Nothing under `src/server/errors/` imports tRPC.
+- A service turns a pg violation into `ConflictError` with `isPgViolation` /
+  `rethrowFkConflict`. A missing row is `NotFoundError`; `assertRow` throws a plain
+  `Error`, which stays `INTERNAL_SERVER_ERROR`.
+- Repositories let driver errors bubble.
+- The tRPC error-mapping middleware (`src/server/api/trpc.ts`) owns the code:
+  `NotFoundError` → `NOT_FOUND`, `ConflictError` → `CONFLICT`, message and cause kept.
+  Anything else passes through unchanged.
+
+## Service split rule
+
+One service per domain. Add a second only when:
+
+- its methods use **disjoint dependency sets**, or
+- a different caller or actor needs dependencies the others never use.
+
+Split on real pain, not in advance.
+
 ## Tests (colocated, see unit-testing rule)
 
 - `*.repository.test.ts` — hand-rolled chain-capturing fake `db`; render a WHERE
   with `new PgDialect().sqlToQuery(cond).sql` and assert on the text; assert `set()`
-  payloads. Never hit Postgres.
+  payloads. Never hit Postgres. For a query-heavy repository (joins, many
+  aggregates) use `recordingDb()` (`src/server/db/recording-db.fake.ts`) instead:
+  it renders every query through the real `PgDialect` and records
+  `{ sql, params, method }`. `src/server/transactions/transactions.repository.test.ts`
+  is the example.
 - `*.service.test.ts` — fake repository + adapters as object literals typed
   against the interfaces, recording calls in arrays. No module mocking. Fake
   `logger: Logger` (object literal recording `{ level, msg, attrs }`) asserts
@@ -89,6 +121,12 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
   assert the frozen opts and that each handler routes to the right service method
   with the right args. For an HTTP controller: fake verifier + fake service, call
   `handle(new Request(…))`, assert status + body per gate.
+- `*.trpc.controller.test.ts` — `createTestCaller` (`src/server/api/test-caller.ts`)
+  with `Partial<XService>` fakes. No `vi.mock`, no `ctx.db`. Assert each procedure
+  calls its method with the parsed input, and that a thrown domain error maps to its
+  tRPC code through the real middleware.
+- `src/server/architecture.test.ts` — enforces the adr022 import rules. Its `TODO`
+  list of known violations only shrinks: delete an entry when its migration lands.
 - `route.test.ts` — mock the tier modules; assert only the root's job (env gate,
   built once, delegates to `handle`).
 - `src/server/inngest/registry-golden.test.ts` builds every controller with the spy
@@ -99,12 +137,14 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
 - One plain `createTRPCRouter({ … })` per file in `src/server/api/routers/<name>.ts`;
   procedures talk to Drizzle directly via `ctx.db`.
 - Compose the pre-built router objects in `src/server/api/root.ts`
-  (`balance, cashflow, category, expense, income, setting, transaction`).
-- Errors are thrown inline as `TRPCError`. Two shared helpers, not an error tier:
-  `parseError(error)` (normalises a driver error into a tagged union — branch on
-  `kind === "pg"` + a named `PgViolation`, never a bare SQLSTATE;
-  `src/server/api/lib/parse-error.ts`) and `assertRow(row, "op")` (`.returning()`
-  presence, `src/server/api/lib/assert-row.ts`).
+  (`allowedSender, balance, cashflow, category, expense, income, receipt, setting`; `transaction` comes from `src/server/transactions/`).
+- Errors are thrown inline as `TRPCError`. Shared helpers live in
+  `src/server/errors/`: `parseError(error)` (normalises a driver error into a
+  tagged union — branch on `kind === "pg"` + a named `PgViolation`, never a bare
+  SQLSTATE; `parse-error.ts`), `assertRow(row, "op")` (`.returning()` presence,
+  `assert-row.ts`) and `rethrowFkConflict(error, message)` (`fk-conflict.ts`).
+  `src/server/api/lib/` only re-exports `parse-error` and `assert-row` until
+  step 6 of the migration deletes it. Step 7 rewrites this section.
 - When a router domain migrates, the router becomes the controller tier over a
   `<domain>.service.ts`; same construction rules apply.
 
