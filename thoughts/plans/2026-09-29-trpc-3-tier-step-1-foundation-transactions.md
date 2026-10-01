@@ -254,8 +254,8 @@ Tests only. No `src` behaviour changes.
 - [x] `make test` passes, and the characterization tests show no snapshot change
 - [x] `make build` passes: the RSC caller and route compile against `context.ts`, and `services.ts` loads at build without throwing (Ran as `pnpm run build`, skipping `make build`'s `rm -rf .next`, because a live `next dev` was using `.next/dev`.)
 - [x] `git grep -n "server/db\|server/auth" src/server/api/trpc.ts` returns nothing
-- [ ] At https://personal-finance.localhost:
-  - signed in, the dashboard and the Transactions page load (Not verified yet: the portless proxy needs sudo, and there is no test login.)
+- [x] At https://personal-finance.localhost:
+  - signed in, the dashboard and the Transactions page load (Checked by hand, 2026-10-01.)
   - [x] signed out, a tRPC call to `transaction.list` returns 401
 - [x] `/security-review`. The session now comes from a new `context.ts`, and the auth guard sits after the new mapper (Phase 3). (No findings.)
 
@@ -414,7 +414,7 @@ Tests only. No `src` behaviour changes.
 - [x] `make build` passes
 - [x] `git grep -n "ctx.db\|drizzle-orm\|TRPCError" src/server/transactions` returns nothing (Deviation: the check was run on `transactions.service.ts` and `transactions.trpc.controller.ts` only, and returns nothing there. As written it can't pass, because the schema, the repository and their tests have to import `drizzle-orm`.)
 - [x] `src/server/api/routers/transaction.ts` no longer exists, and the to-do list has 32 entries
-- [ ] At https://personal-finance.localhost, these behave as before (Not verified: the portless proxy needs sudo, and there is no test login. Commit A ran the characterization suite unchanged through the full new stack instead.):
+- [x] At https://personal-finance.localhost, these behave as before (Checked by hand, 2026-10-01.):
   - the Transactions list (search, filters, sort, paging, expense and Expense Category names)
   - create, edit, link to an Expense, and delete
   - the dashboard summary
