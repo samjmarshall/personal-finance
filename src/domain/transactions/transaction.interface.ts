@@ -16,6 +16,12 @@ export interface Transaction {
 	updatedAt: Date | null;
 }
 
+// One Expense's Consumed: linked Spend net of refunds
+export interface ExpenseConsumption {
+	expenseId: number;
+	consumed: number;
+}
+
 // list rows leftJoin the linked expense and managed category; null when unlinked
 // or the referenced row is gone
 export interface TransactionListItem extends Transaction {

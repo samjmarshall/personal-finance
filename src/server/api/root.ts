@@ -6,8 +6,8 @@ import { expenseRouter } from "~/server/api/routers/expense";
 import { incomeRouter } from "~/server/api/routers/income";
 import { receiptRouter } from "~/server/api/routers/receipts";
 import { settingRouter } from "~/server/api/routers/setting";
-import { transactionRouter } from "~/server/api/routers/transaction";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { transactionRouter } from "~/server/transactions/transactions.trpc.controller";
 
 /**
  * This is the primary router for your server.

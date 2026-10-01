@@ -26,6 +26,8 @@ export const transactionListQueryDto = z.object({
 	offset: z.number().min(0).default(0),
 });
 
+export type TransactionListQuery = z.infer<typeof transactionListQueryDto>;
+
 const transactionFields = {
 	date: z.date(),
 	description: z.string().min(1, "Description is required"),
@@ -42,10 +44,14 @@ export const transactionCreateDto = z.object({
 	...transactionFields,
 });
 
+export type TransactionCreateInput = z.infer<typeof transactionCreateDto>;
+
 export const transactionUpdateDto = z.object({
 	...transactionFields,
 	id: z.number(),
 });
+
+export type TransactionUpdateInput = z.infer<typeof transactionUpdateDto>;
 
 // Unplanned = unlinked Spend in a half-open [from, to) window (adr010). Reject an
 // inverted window up front so a bad range surfaces instead of silently matching
@@ -59,6 +65,8 @@ export const unplannedDto = z
 		message: "`from` must be on or before `to`.",
 	});
 
+export type UnplannedWindow = z.infer<typeof unplannedDto>;
+
 // expenseId required, not optional: linking sets an int, clearing passes null
 // explicitly — an omitted value would be an ambiguous no-op. Positive ints only,
 // matching every other transaction FK.
@@ -66,3 +74,5 @@ export const linkExpenseDto = z.object({
 	id: z.number().int().positive(),
 	expenseId: z.number().int().positive().nullable(),
 });
+
+export type LinkExpenseInput = z.infer<typeof linkExpenseDto>;

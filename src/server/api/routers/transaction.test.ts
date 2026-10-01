@@ -2,11 +2,17 @@ import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Transaction } from "~/domain/transactions";
 import { Frequency, Priority } from "~/lib/constants";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import {
+	createTestCaller,
+	type TestCallerOptions,
+} from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
 import { pgError, recordingDb } from "~/server/db/recording-db.fake";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
 import { transactions } from "~/server/transactions/transactions.schema";
+import { TransactionsService } from "~/server/transactions/transactions.service";
+import { transactionRouter } from "~/server/transactions/transactions.trpc.controller";
 import { expenseRouter } from "./expense";
-import { transactionRouter } from "./transaction";
 
 // Characterization: pins today's SQL, codes and messages so the 3-tier move
 // can prove it changed nothing the member sees.
@@ -16,12 +22,12 @@ const router = createTRPCRouter({
 	expense: expenseRouter,
 });
 
-function caller(db: unknown, session: unknown = { user: { id: "member-1" } }) {
-	return createCallerFactory(router)({
-		db,
+function caller(db: unknown, session?: TestCallerOptions["session"]) {
+	const repository = new DrizzleTransactionsRepository({ db: db as never });
+	return createTestCaller(router, {
+		services: { transactions: new TransactionsService({ repository }) },
 		session,
-		headers: new Headers(),
-	} as never);
+	});
 }
 
 // Pins the $defaultFn / $onUpdate timestamps drizzle adds to writes.

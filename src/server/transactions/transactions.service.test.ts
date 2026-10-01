@@ -1,0 +1,274 @@
+import { describe, expect, it } from "vitest";
+import type {
+	ExpenseConsumption,
+	Transaction,
+	TransactionSummary,
+} from "~/domain/transactions";
+import { Frequency, Priority } from "~/lib/constants";
+import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import type { TransactionsRepository } from "./transactions.repository";
+import { TransactionsService } from "./transactions.service";
+
+// Production shape: drizzle wraps the postgres.js error in a DrizzleQueryError
+// with the driver error on `.cause`.
+function pgError(code: string) {
+	const driver = Object.assign(new Error("postgres"), { code });
+	return Object.assign(new Error("Failed query"), { cause: driver });
+}
+
+const unstaged = async (): Promise<never> => {
+	throw new Error("not staged");
+};
+
+function serviceWith(staged: Partial<TransactionsRepository>) {
+	const repository: TransactionsRepository = {
+		list: unstaged,
+		summary: unstaged,
+		insert: unstaged,
+		update: unstaged,
+		findUnplanned: unstaged,
+		setExpense: unstaged,
+		delete: unstaged,
+		consumedByExpense: unstaged,
+		...staged,
+	};
+	return new TransactionsService({ repository });
+}
+
+const throwing = (error: Error) => async (): Promise<never> => {
+	throw error;
+};
+
+const TRANSACTION: Transaction = {
+	id: 1,
+	expenseId: 7,
+	expenseCategoryId: 3,
+	date: new Date("2026-09-01T00:00:00.000Z"),
+	description: "Groceries",
+	receiptDescription: null,
+	amount: 42.5,
+	category: "Food",
+	frequency: Frequency.OneOff,
+	priority: Priority.MustHave,
+	notes: null,
+	createdAt: new Date("2026-09-01T01:00:00.000Z"),
+	updatedAt: null,
+};
+
+const FIELDS = {
+	date: TRANSACTION.date,
+	description: TRANSACTION.description,
+	amount: TRANSACTION.amount,
+};
+
+const FK_CONFLICT_MESSAGE =
+	"The selected expense or category no longer exists.";
+
+describe("create", () => {
+	it("inserts the input and returns the stored row", async () => {
+		const inserted: unknown[] = [];
+		const service = serviceWith({
+			insert: async (values) => {
+				inserted.push(values);
+				return TRANSACTION;
+			},
+		});
+
+		await expect(service.create(FIELDS)).resolves.toBe(TRANSACTION);
+		expect(inserted).toEqual([FIELDS]);
+	});
+
+	it("turns a foreign-key violation into a ConflictError", async () => {
+		const error = pgError("23503");
+		const service = serviceWith({ insert: throwing(error) });
+
+		const thrown = await service.create(FIELDS).catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(ConflictError);
+		expect(thrown).toMatchObject({
+			message: FK_CONFLICT_MESSAGE,
+			cause: error,
+		});
+	});
+
+	it("rethrows any other violation unchanged", async () => {
+		const error = pgError("23505");
+		const service = serviceWith({ insert: throwing(error) });
+
+		await expect(service.create(FIELDS)).rejects.toBe(error);
+	});
+
+	it("throws a plain Error when the insert returns no row", async () => {
+		const service = serviceWith({ insert: async () => undefined });
+
+		const thrown = await service.create(FIELDS).catch((e: unknown) => e);
+
+		expect(Object.getPrototypeOf(thrown)).toBe(Error.prototype);
+		expect(thrown).toMatchObject({ message: "Failed to create transaction." });
+	});
+});
+
+describe("update", () => {
+	it("updates the row by id with the other fields", async () => {
+		const updated: unknown[][] = [];
+		const service = serviceWith({
+			update: async (id, values) => {
+				updated.push([id, values]);
+				return TRANSACTION;
+			},
+		});
+
+		await expect(service.update({ id: 1, ...FIELDS })).resolves.toBe(
+			TRANSACTION,
+		);
+		expect(updated).toEqual([[1, FIELDS]]);
+	});
+
+	it("throws NotFoundError when no row matches the id", async () => {
+		const service = serviceWith({ update: async () => undefined });
+
+		const thrown = await service
+			.update({ id: 1, ...FIELDS })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Transaction not found." });
+	});
+
+	it("turns a foreign-key violation into a ConflictError", async () => {
+		const error = pgError("23503");
+		const service = serviceWith({ update: throwing(error) });
+
+		const thrown = await service
+			.update({ id: 1, ...FIELDS })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(ConflictError);
+		expect(thrown).toMatchObject({
+			message: FK_CONFLICT_MESSAGE,
+			cause: error,
+		});
+	});
+});
+
+describe("linkExpense", () => {
+	it("sets the expense on the row", async () => {
+		const linked: unknown[][] = [];
+		const service = serviceWith({
+			setExpense: async (id, expenseId) => {
+				linked.push([id, expenseId]);
+				return TRANSACTION;
+			},
+		});
+
+		await expect(service.linkExpense({ id: 1, expenseId: 7 })).resolves.toBe(
+			TRANSACTION,
+		);
+		expect(linked).toEqual([[1, 7]]);
+	});
+
+	it("names only the expense in a foreign-key ConflictError", async () => {
+		const error = pgError("23503");
+		const service = serviceWith({ setExpense: throwing(error) });
+
+		const thrown = await service
+			.linkExpense({ id: 1, expenseId: 7 })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(ConflictError);
+		expect(thrown).toMatchObject({
+			message: "The selected expense no longer exists.",
+			cause: error,
+		});
+	});
+
+	it("throws NotFoundError when no row matches the id", async () => {
+		const service = serviceWith({ setExpense: async () => undefined });
+
+		const thrown = await service
+			.linkExpense({ id: 1, expenseId: 7 })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Transaction not found." });
+	});
+});
+
+describe("delete", () => {
+	it("deletes by id", async () => {
+		const deleted: number[] = [];
+		const service = serviceWith({
+			delete: async (id) => {
+				deleted.push(id);
+			},
+		});
+
+		await service.delete(1);
+
+		expect(deleted).toEqual([1]);
+	});
+});
+
+describe("reads", () => {
+	it("returns the repository's list for the query", async () => {
+		const page = { items: [], total: 0 };
+		const queries: unknown[] = [];
+		const service = serviceWith({
+			list: async (query) => {
+				queries.push(query);
+				return page;
+			},
+		});
+		const query = {
+			sortBy: "date",
+			sortDir: "desc",
+			limit: 50,
+			offset: 0,
+		} as const;
+
+		await expect(service.list(query)).resolves.toBe(page);
+		expect(queries).toEqual([query]);
+	});
+
+	it("returns the repository's summary", async () => {
+		const summary: TransactionSummary = {
+			totals: { spend: 0, refunds: 0, net: 0, count: 0 },
+			byPriority: [],
+			byFrequency: [],
+			byMonth: [],
+			topCategories: [],
+		};
+		const service = serviceWith({ summary: async () => summary });
+
+		await expect(service.summary()).resolves.toBe(summary);
+	});
+
+	it("returns the repository's unplanned rows for the window", async () => {
+		const rows = [TRANSACTION];
+		const windows: unknown[] = [];
+		const service = serviceWith({
+			findUnplanned: async (window) => {
+				windows.push(window);
+				return rows;
+			},
+		});
+		const window = {
+			from: new Date("2026-09-01T00:00:00.000Z"),
+			to: new Date("2026-09-15T00:00:00.000Z"),
+		};
+
+		await expect(service.unplanned(window)).resolves.toBe(rows);
+		expect(windows).toEqual([window]);
+	});
+
+	it("returns the repository's Consumed per Expense", async () => {
+		const consumption: ExpenseConsumption[] = [
+			{ expenseId: 7, consumed: 12.5 },
+		];
+		const service = serviceWith({
+			consumedByExpense: async () => consumption,
+		});
+
+		await expect(service.consumedByExpense()).resolves.toBe(consumption);
+	});
+});
