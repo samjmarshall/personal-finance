@@ -21,8 +21,8 @@ import type {
 	ExpenseConsumption,
 	Transaction,
 	TransactionCreateInput,
-	TransactionListItem,
 	TransactionListQuery,
+	TransactionListResult,
 	TransactionSummary,
 	TransactionUpdateInput,
 	transactionSortBy,
@@ -34,9 +34,7 @@ import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "./transactions.schema";
 
 export interface TransactionsRepository {
-	list(
-		query: TransactionListQuery,
-	): Promise<{ items: TransactionListItem[]; total: number }>;
+	list(query: TransactionListQuery): Promise<TransactionListResult>;
 	summary(): Promise<TransactionSummary>;
 	insert(values: TransactionCreateInput): Promise<Transaction | undefined>;
 	/** `undefined` when no row has the id. */
@@ -55,6 +53,9 @@ export interface TransactionsRepository {
 	consumedByExpense(): Promise<ExpenseConsumption[]>;
 }
 
+// Spend is a positive amount; a refund (negative) counts as 0 toward it.
+const spendAmount = sql`case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end`;
+
 interface DrizzleTransactionsRepositoryDeps {
 	db: typeof realDb;
 }
@@ -66,9 +67,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		this.db = db;
 	}
 
-	async list(
-		query: TransactionListQuery,
-	): Promise<{ items: TransactionListItem[]; total: number }> {
+	async list(query: TransactionListQuery): Promise<TransactionListResult> {
 		const filters: SQL[] = [];
 
 		if (query.search) {
@@ -136,7 +135,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			await Promise.all([
 				this.db
 					.select({
-						spend: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
+						spend: sql<number>`coalesce(sum(${spendAmount}), 0)`,
 						refunds: sql<number>`coalesce(sum(case when ${transactions.amount} < 0 then ${transactions.amount} else 0 end), 0)`,
 						net: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
 						count: sql<number>`cast(count(*) as int)`,
@@ -161,7 +160,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				this.db
 					.select({
 						month: sql<string>`to_char(date_trunc('month', ${transactions.date}), 'YYYY-MM')`,
-						total: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
+						total: sql<number>`coalesce(sum(${spendAmount}), 0)`,
 					})
 					.from(transactions)
 					.groupBy(sql`date_trunc('month', ${transactions.date})`)
@@ -169,16 +168,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				this.db
 					.select({
 						category: transactions.category,
-						total: sql<number>`coalesce(sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end), 0)`,
+						total: sql<number>`coalesce(sum(${spendAmount}), 0)`,
 						count: sql<number>`cast(count(*) as int)`,
 					})
 					.from(transactions)
 					.groupBy(transactions.category)
-					.orderBy(
-						desc(
-							sql`sum(case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end)`,
-						),
-					)
+					.orderBy(desc(sql`sum(${spendAmount})`))
 					.limit(8),
 			]);
 		const totals = totalsRows[0];
@@ -266,7 +261,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.from(transactions)
 			.where(isNotNull(transactions.expenseId))
 			.groupBy(transactions.expenseId);
-		// expenseId is non-null by the isNotNull filter; drop the join-nullable type.
+		// The filter drops unlinked rows, but the column type stays nullable.
 		return rows.map((r) => ({
 			expenseId: r.expenseId as number,
 			consumed: r.consumed,

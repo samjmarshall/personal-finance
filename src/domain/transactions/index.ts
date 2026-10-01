@@ -15,6 +15,7 @@ import type {
 	ExpenseConsumption,
 	Transaction,
 	TransactionListItem,
+	TransactionListResult,
 	TransactionSummary,
 } from "./transaction.interface";
 
@@ -25,6 +26,7 @@ export type {
 	TransactionCreateInput,
 	TransactionListItem,
 	TransactionListQuery,
+	TransactionListResult,
 	TransactionSummary,
 	TransactionUpdateInput,
 	transactionSortBy,

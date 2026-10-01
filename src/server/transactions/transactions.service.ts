@@ -3,8 +3,8 @@ import type {
 	LinkExpenseInput,
 	Transaction,
 	TransactionCreateInput,
-	TransactionListItem,
 	TransactionListQuery,
+	TransactionListResult,
 	TransactionSummary,
 	TransactionUpdateInput,
 	UnplannedWindow,
@@ -33,9 +33,7 @@ export class TransactionsService {
 		this.repository = repository;
 	}
 
-	list(
-		query: TransactionListQuery,
-	): Promise<{ items: TransactionListItem[]; total: number }> {
+	list(query: TransactionListQuery): Promise<TransactionListResult> {
 		return this.repository.list(query);
 	}
 

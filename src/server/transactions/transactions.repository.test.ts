@@ -320,7 +320,7 @@ describe("summary", () => {
 			[
 			  {
 			    "params": [],
-			    "sql": "select coalesce(sum(case when "amount" > 0 then "amount" else 0 end), 0), coalesce(sum(case when "amount" < 0 then "amount" else 0 end), 0), coalesce(sum("amount"), 0), cast(count(*) as int) from "transaction"",
+			    "sql": "select coalesce(sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end), 0), coalesce(sum(case when "amount" < 0 then "amount" else 0 end), 0), coalesce(sum("amount"), 0), cast(count(*) as int) from "transaction"",
 			  },
 			  {
 			    "params": [],
@@ -332,13 +332,13 @@ describe("summary", () => {
 			  },
 			  {
 			    "params": [],
-			    "sql": "select to_char(date_trunc('month', "date"), 'YYYY-MM'), coalesce(sum(case when "amount" > 0 then "amount" else 0 end), 0) from "transaction" group by date_trunc('month', "transaction"."date") order by date_trunc('month', "transaction"."date")",
+			    "sql": "select to_char(date_trunc('month', "date"), 'YYYY-MM'), coalesce(sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end), 0) from "transaction" group by date_trunc('month', "transaction"."date") order by date_trunc('month', "transaction"."date")",
 			  },
 			  {
 			    "params": [
 			      8,
 			    ],
-			    "sql": "select "category", coalesce(sum(case when "amount" > 0 then "amount" else 0 end), 0), cast(count(*) as int) from "transaction" group by "transaction"."category" order by sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end) desc limit $1",
+			    "sql": "select "category", coalesce(sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end), 0), cast(count(*) as int) from "transaction" group by "transaction"."category" order by sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end) desc limit $1",
 			  },
 			]
 		`);

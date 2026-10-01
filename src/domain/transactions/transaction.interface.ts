@@ -29,6 +29,12 @@ export interface TransactionListItem extends Transaction {
 	expenseCategoryName: string | null;
 }
 
+// One page of list rows; total counts every match, not just this page
+export interface TransactionListResult {
+	items: TransactionListItem[];
+	total: number;
+}
+
 export interface TransactionSummary {
 	totals: {
 		spend: number;
