@@ -409,18 +409,18 @@ Tests only. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes, and Commit A is green with no snapshot change
-- [ ] `make build` passes
-- [ ] `git grep -n "ctx.db\|drizzle-orm\|TRPCError" src/server/transactions` returns nothing
-- [ ] `src/server/api/routers/transaction.ts` no longer exists, and the to-do list has 32 entries
-- [ ] At https://personal-finance.localhost, these behave as before:
+- [x] `make check` passes
+- [x] `make test` passes, and Commit A is green with no snapshot change
+- [x] `make build` passes
+- [x] `git grep -n "ctx.db\|drizzle-orm\|TRPCError" src/server/transactions` returns nothing (Deviation: the check was run on `transactions.service.ts` and `transactions.trpc.controller.ts` only, and returns nothing there. As written it can't pass, because the schema, the repository and their tests have to import `drizzle-orm`.)
+- [x] `src/server/api/routers/transaction.ts` no longer exists, and the to-do list has 32 entries
+- [ ] At https://personal-finance.localhost, these behave as before (Not verified: the portless proxy needs sudo, and there is no test login. Commit A ran the characterization suite unchanged through the full new stack instead.):
   - the Transactions list (search, filters, sort, paging, expense and Expense Category names)
   - create, edit, link to an Expense, and delete
   - the dashboard summary
   - the Unplanned page
   - the Planned page's Consumed and Remaining
-- [ ] Linking a Transaction to an Expense deleted in another tab shows "The selected expense no longer exists."
+- [ ] Linking a Transaction to an Expense deleted in another tab shows "The selected expense no longer exists." (Not checked in the UI. Covered by tests: in Commit A a 23503 on `linkExpense` came back as `CONFLICT` with this message through the real middleware, and `transactions.service.test.ts` pins it.)
 
 ## Phase 7: Docs
 

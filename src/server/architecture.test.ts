@@ -66,11 +66,6 @@ const TODO = [
 	"3 src/server/api/routers/receipts.ts → ~/server/transactions/transactions.schema",
 	"3 src/server/api/routers/setting.ts → drizzle-orm",
 	"3 src/server/api/routers/setting.ts → ~/server/settings/settings.schema",
-	"3 src/server/api/routers/transaction.ts → drizzle-orm",
-	"3 src/server/api/routers/transaction.ts → drizzle-orm/pg-core",
-	"3 src/server/api/routers/transaction.ts → ~/server/expenses/categories.schema",
-	"3 src/server/api/routers/transaction.ts → ~/server/expenses/expenses.schema",
-	"3 src/server/api/routers/transaction.ts → ~/server/transactions/transactions.schema",
 	"3 src/app/api/receipts/[id]/image/route.ts → drizzle-orm",
 	"3 src/app/api/receipts/[id]/image/route.ts → ~/server/receipts/receipts.schema",
 ];
