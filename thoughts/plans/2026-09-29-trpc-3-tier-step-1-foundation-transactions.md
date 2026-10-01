@@ -255,7 +255,7 @@ Tests only. No `src` behaviour changes.
 - [x] `make build` passes: the RSC caller and route compile against `context.ts`, and `services.ts` loads at build without throwing (Ran as `pnpm run build`, skipping `make build`'s `rm -rf .next`, because a live `next dev` was using `.next/dev`.)
 - [x] `git grep -n "server/db\|server/auth" src/server/api/trpc.ts` returns nothing
 - [ ] At https://personal-finance.localhost:
-  - signed in, the dashboard and the Transactions page load
+  - signed in, the dashboard and the Transactions page load (Not verified yet: the portless proxy needs sudo, and there is no test login.)
   - [x] signed out, a tRPC call to `transaction.list` returns 401
 - [x] `/security-review`. The session now comes from a new `context.ts`, and the auth guard sits after the new mapper (Phase 3). (No findings.)
 
@@ -321,11 +321,11 @@ Tests only. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes, with exactly 36 to-do entries
-- [ ] Adding `import { receipts } from "~/server/receipts/receipts.schema"` to `email.http.controller.ts` fails the test, naming the file and rule 3 (scratch edit, reverted)
-- [ ] Deleting any one to-do entry fails the test, and so does adding an entry for a clean import
-- [ ] The rules file no longer says cross-domain reads or writes are direct db calls
+- [x] `make check` passes
+- [x] `make test` passes, with exactly 36 to-do entries
+- [x] Adding `import { receipts } from "~/server/receipts/receipts.schema"` to `email.http.controller.ts` fails the test, naming the file and rule 3 (scratch edit, reverted)
+- [x] Deleting any one to-do entry fails the test, and so does adding an entry for a clean import
+- [x] The rules file no longer says cross-domain reads or writes are direct db calls
 
 ## Phase 6: Migrate transactions (two commits)
 
@@ -461,7 +461,7 @@ Tests only. No `src` behaviour changes.
 - Rules: `.claude/rules/server-architecture.md`, `.claude/rules/unit-testing.md`
 - Glossary: `CONTEXT.md` — **Member** (`:43`), **Consumed** (`:88`), **Group** (`:96`)
 - Related:
-  - `src/server/api/trpc.ts:39-48,107-196`
+  - `src/server/api/context.ts:11-21`, `src/server/api/trpc.ts:86-199`
   - `src/server/api/routers/transaction.ts`
   - `src/server/api/routers/expense.ts:28-47`
   - `src/server/outbox/outbox.repository.test.ts:7-86`

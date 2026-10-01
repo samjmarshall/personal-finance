@@ -108,15 +108,21 @@ Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts
 - When a router domain migrates, the router becomes the controller tier over a
   `<domain>.service.ts`; same construction rules apply.
 
-## Schema homes (adr005)
+## Schema homes (adr005 / adr022)
 
 Drizzle tables live per-domain in `src/server/<domain>/<domain>.schema.ts` — e.g.
 `expenses/expenses.schema.ts`, `expenses/categories.schema.ts`,
 `balances/balances.schema.ts`, `auth/auth.schema.ts`. drizzle-kit globs
-`src/server/**/*.schema.ts`. Importing a sibling domain's tables for **read**
-joins is fine (`category.ts` joining `expenses`; the receipts repository reading
-`expenseCategories`); there is no cross-domain write ceremony — writes are direct
-db calls too.
+`src/server/**/*.schema.ts`.
+
+Each domain owns its tables ([adr022](../../docs/adr/adr022-cross-domain-data-through-the-owning-service.md)):
+
+- A repository touches only its own domain's tables.
+- Cross-domain reads **and** writes go through the owning service, typed as a
+  narrow `Pick` or port (`OutboxWriteDoor`), so a test fake is an object literal.
+- Schema files may import each other for foreign keys only.
+- `src/server/architecture.test.ts` enforces this. Its `TODO` list of known
+  violations only shrinks: each migration step deletes its entries.
 
 ## Domain kernel (`src/domain/`)
 

@@ -16,5 +16,4 @@ export const publish = (event: OutboxEventDescriptor): Promise<void> =>
 
 export { outboxService } from "./outbox.module";
 export type { OutboxEvents, OutboxWrites } from "./outbox.repository";
-export { outbox } from "./outbox.schema";
 export type { OutboxWriteDoor } from "./outbox.service";
