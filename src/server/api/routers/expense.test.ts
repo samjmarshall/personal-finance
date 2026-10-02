@@ -2,10 +2,13 @@ import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Expense } from "~/domain/expenses";
 import { CommitmentKind } from "~/lib/constants";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { createTestCaller } from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
 import { type Respond, recordingDb } from "~/server/db/recording-db.fake";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
 import { expenses } from "~/server/expenses/expenses.schema";
-import { expenseRouter } from "./expense";
+import { ExpensesService } from "~/server/expenses/expenses.service";
+import { expenseRouter } from "~/server/expenses/expenses.trpc.controller";
 
 // Characterizes the router before it moves to src/server/expenses/: the SQL it
 // sends and the codes and messages it returns must survive the move unchanged.
@@ -17,12 +20,13 @@ function harness(
 	session: { user: { id: string } } | null = { user: { id: "member-1" } },
 ) {
 	const { db, queries } = recordingDb(respond);
-	const caller = createCallerFactory(router)({
-		db,
+	const service = new ExpensesService({
+		repository: new DrizzleExpensesRepository({ db: db as never }),
+	});
+	const caller = createTestCaller(router, {
+		services: { expenses: service },
 		session,
-		services: {},
-		headers: new Headers(),
-	} as never);
+	});
 	return { expense: caller.expense, queries };
 }
 

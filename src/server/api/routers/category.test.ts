@@ -1,14 +1,17 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Category } from "~/domain/categories";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { createTestCaller } from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
 import {
 	pgError,
 	type Respond,
 	recordingDb,
 } from "~/server/db/recording-db.fake";
 import { expenseCategories } from "~/server/expenses/categories.schema";
-import { categoryRouter } from "./category";
+import { categoryRouter } from "~/server/expenses/categories.trpc.controller";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
+import { ExpensesService } from "~/server/expenses/expenses.service";
 
 // Characterizes the router before it moves to src/server/expenses/: the SQL it
 // sends and the codes and messages it returns must survive the move unchanged.
@@ -20,12 +23,13 @@ function harness(
 	session: { user: { id: string } } | null = { user: { id: "member-1" } },
 ) {
 	const { db, queries } = recordingDb(respond);
-	const caller = createCallerFactory(router)({
-		db,
+	const service = new ExpensesService({
+		repository: new DrizzleExpensesRepository({ db: db as never }),
+	});
+	const caller = createTestCaller(router, {
+		services: { expenses: service },
 		session,
-		services: {},
-		headers: new Headers(),
-	} as never);
+	});
 	return { category: caller.category, queries };
 }
 
