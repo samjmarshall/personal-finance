@@ -6,6 +6,10 @@ import type {
 } from "~/domain/transactions";
 import { Frequency, Priority } from "~/lib/constants";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import type {
+	ExpensesService,
+	NamesById,
+} from "~/server/expenses/expenses.service";
 import type { TransactionsRepository } from "./transactions.repository";
 import { TransactionsService } from "./transactions.service";
 
@@ -20,7 +24,12 @@ const unstaged = async (): Promise<never> => {
 	throw new Error("not staged");
 };
 
-function serviceWith(staged: Partial<TransactionsRepository>) {
+type ExpenseNames = Pick<ExpensesService, "namesByIds">;
+
+function serviceWith(
+	staged: Partial<TransactionsRepository>,
+	stagedExpenses: Partial<ExpenseNames> = {},
+) {
 	const repository: TransactionsRepository = {
 		list: unstaged,
 		summary: unstaged,
@@ -32,7 +41,8 @@ function serviceWith(staged: Partial<TransactionsRepository>) {
 		consumedByExpense: unstaged,
 		...staged,
 	};
-	return new TransactionsService({ repository });
+	const expenses: ExpenseNames = { namesByIds: unstaged, ...stagedExpenses };
+	return new TransactionsService({ repository, expenses });
 }
 
 const throwing = (error: Error) => async (): Promise<never> => {
@@ -209,27 +219,111 @@ describe("delete", () => {
 	});
 });
 
-describe("reads", () => {
-	it("returns the repository's list for the query", async () => {
-		const page = { items: [], total: 0 };
-		const queries: unknown[] = [];
-		const service = serviceWith({
-			list: async (query) => {
-				queries.push(query);
-				return page;
-			},
-		});
-		const query = {
-			sortBy: "date",
-			sortDir: "desc",
-			limit: 50,
-			offset: 0,
-		} as const;
+describe("list", () => {
+	const QUERY = {
+		sortBy: "date",
+		sortDir: "desc",
+		limit: 50,
+		offset: 0,
+	} as const;
 
-		await expect(service.list(query)).resolves.toBe(page);
-		expect(queries).toEqual([query]);
+	const NAMES: NamesById = {
+		expenses: new Map([[7, "Weekly shop"]]),
+		categories: new Map([[3, "Groceries"]]),
+	};
+
+	const UNLINKED: Transaction = {
+		...TRANSACTION,
+		id: 2,
+		expenseId: null,
+		expenseCategoryId: null,
+	};
+
+	function listing(items: Transaction[], names: NamesById = NAMES) {
+		const queries: unknown[] = [];
+		const asked: unknown[] = [];
+		const service = serviceWith(
+			{
+				list: async (query) => {
+					queries.push(query);
+					return { items, total: 9 };
+				},
+			},
+			{
+				namesByIds: async (ids) => {
+					asked.push(ids);
+					return names;
+				},
+			},
+		);
+		return { service, queries, asked };
+	}
+
+	it("merges the names onto each row and passes the total through", async () => {
+		const { service, queries } = listing([TRANSACTION]);
+
+		await expect(service.list(QUERY)).resolves.toEqual({
+			items: [
+				{
+					...TRANSACTION,
+					expenseName: "Weekly shop",
+					expenseCategoryName: "Groceries",
+				},
+			],
+			total: 9,
+		});
+		expect(queries).toEqual([QUERY]);
 	});
 
+	it("asks for the names once, with distinct ids", async () => {
+		const { service, asked } = listing([
+			TRANSACTION,
+			{ ...TRANSACTION, id: 2 },
+		]);
+
+		await service.list(QUERY);
+
+		expect(asked).toEqual([{ expenseIds: [7], categoryIds: [3] }]);
+	});
+
+	it("gives a null link a null name and never asks for it", async () => {
+		const { service, asked } = listing([TRANSACTION, UNLINKED]);
+
+		const { items } = await service.list(QUERY);
+
+		expect(items[1]).toMatchObject({
+			expenseName: null,
+			expenseCategoryName: null,
+		});
+		expect(asked).toEqual([{ expenseIds: [7], categoryIds: [3] }]);
+	});
+
+	it("gives a null name for an id whose row is gone", async () => {
+		const { service } = listing([TRANSACTION], {
+			expenses: new Map(),
+			categories: new Map(),
+		});
+
+		const { items } = await service.list(QUERY);
+
+		expect(items[0]).toMatchObject({
+			expenseName: null,
+			expenseCategoryName: null,
+		});
+	});
+
+	it("lets a namesByIds error propagate", async () => {
+		const error = new Error("connection lost");
+		const service = serviceWith(
+			{ list: async () => ({ items: [TRANSACTION], total: 1 }) },
+			{ namesByIds: throwing(error) },
+		);
+
+		await expect(service.list(QUERY)).rejects.toBe(error);
+	});
+});
+
+describe("reads", () => {
 	it("returns the repository's summary", async () => {
 		const summary: TransactionSummary = {
 			totals: { spend: 0, refunds: 0, net: 0, count: 0 },

@@ -22,8 +22,8 @@ export interface ExpenseConsumption {
 	consumed: number;
 }
 
-// list rows leftJoin the linked expense and managed category; null when unlinked
-// or the referenced row is gone
+// list rows carry the linked expense and managed category names, looked up by id
+// through the expenses service; null when unlinked or the referenced row is gone
 export interface TransactionListItem extends Transaction {
 	expenseName: string | null;
 	expenseCategoryName: string | null;

@@ -486,3 +486,45 @@ describe("categories", () => {
 		`);
 	});
 });
+
+describe("names", () => {
+	it("findExpenseNames selects the id and name of each expense id", async () => {
+		const { repository, queries } = harness(() => [[7, "Weekly shop"]]);
+
+		await expect(repository.findExpenseNames([7, 8])).resolves.toEqual([
+			{ id: 7, name: "Weekly shop" },
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      7,
+			      8,
+			    ],
+			    "sql": "select "id", "name" from "expense" where "expense"."id" in ($1, $2)",
+			  },
+			]
+		`);
+	});
+
+	it("findCategoryNames selects the id and name of each category id", async () => {
+		const { repository, queries } = harness(() => [[3, "Food"]]);
+
+		await expect(repository.findCategoryNames([3, 4])).resolves.toEqual([
+			{ id: 3, name: "Food" },
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      3,
+			      4,
+			    ],
+			    "sql": "select "id", "name" from "expense_category" where "expense_category"."id" in ($1, $2)",
+			  },
+			]
+		`);
+	});
+});

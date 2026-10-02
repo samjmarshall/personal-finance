@@ -12,6 +12,7 @@ import type {
 import { assertRow } from "~/server/errors/assert-row";
 import { NotFoundError } from "~/server/errors/domain-errors";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
+import type { ExpensesService } from "~/server/expenses/expenses.service";
 import type { TransactionsRepository } from "./transactions.repository";
 
 // Either FK on the create/update DTO (expenseId, expenseCategoryId) can raise 23503.
@@ -22,19 +23,42 @@ const FK_CONFLICT_MESSAGE =
 const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
 const NOT_FOUND_MESSAGE = "Transaction not found.";
 
+const distinctLinks = (ids: (number | null)[]) => [
+	...new Set(ids.filter((id) => id !== null)),
+];
+
+// Null when unlinked or when the row is gone, as the old left join gave.
+const nameOf = (names: ReadonlyMap<number, string>, id: number | null) =>
+	id === null ? null : (names.get(id) ?? null);
+
 interface TransactionsServiceDeps {
 	repository: TransactionsRepository;
+	expenses: Pick<ExpensesService, "namesByIds">;
 }
 
 export class TransactionsService {
 	private readonly repository: TransactionsRepository;
+	private readonly expenses: Pick<ExpensesService, "namesByIds">;
 
-	constructor({ repository }: TransactionsServiceDeps) {
+	constructor({ repository, expenses }: TransactionsServiceDeps) {
 		this.repository = repository;
+		this.expenses = expenses;
 	}
 
-	list(query: TransactionListQuery): Promise<TransactionListResult> {
-		return this.repository.list(query);
+	async list(query: TransactionListQuery): Promise<TransactionListResult> {
+		const { items, total } = await this.repository.list(query);
+		const names = await this.expenses.namesByIds({
+			expenseIds: distinctLinks(items.map((row) => row.expenseId)),
+			categoryIds: distinctLinks(items.map((row) => row.expenseCategoryId)),
+		});
+		return {
+			items: items.map((row) => ({
+				...row,
+				expenseName: nameOf(names.expenses, row.expenseId),
+				expenseCategoryName: nameOf(names.categories, row.expenseCategoryId),
+			})),
+			total,
+		};
 	}
 
 	summary(): Promise<TransactionSummary> {

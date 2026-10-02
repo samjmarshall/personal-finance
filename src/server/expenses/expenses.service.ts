@@ -11,7 +11,11 @@ import type {
 import { assertRow } from "~/server/errors/assert-row";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
-import type { CategoryValues, ExpensesRepository } from "./expenses.repository";
+import type {
+	CategoryValues,
+	ExpensesRepository,
+	NameRow,
+} from "./expenses.repository";
 
 const CATEGORY_NAME_TAKEN_MESSAGE = "A category with that name already exists.";
 const CATEGORY_NOT_FOUND_MESSAGE = "Category not found.";
@@ -33,6 +37,15 @@ function categoryValues({
 }: CategoryCreateInput): CategoryValues {
 	return { name: name.trim(), description: description?.trim() || null };
 }
+
+/** An id with no row has no entry. */
+export interface NamesById {
+	expenses: ReadonlyMap<number, string>;
+	categories: ReadonlyMap<number, string>;
+}
+
+const nameById = (rows: NameRow[]) =>
+	new Map(rows.map(({ id, name }) => [id, name]));
 
 interface ExpensesServiceDeps {
 	repository: ExpensesRepository;
@@ -100,6 +113,25 @@ export class ExpensesService {
 			throw new ConflictError(categoryInUseMessage(existing.name, count));
 		}
 		await this.repository.deleteCategory(id);
+	}
+
+	// The batched lookup that replaces a cross-domain join (adr022): one call per
+	// page, never per row.
+	async namesByIds({
+		expenseIds,
+		categoryIds,
+	}: {
+		expenseIds: number[];
+		categoryIds: number[];
+	}): Promise<NamesById> {
+		const [expenseRows, categoryRows] = await Promise.all([
+			expenseIds.length ? this.repository.findExpenseNames(expenseIds) : [],
+			categoryIds.length ? this.repository.findCategoryNames(categoryIds) : [],
+		]);
+		return {
+			expenses: nameById(expenseRows),
+			categories: nameById(categoryRows),
+		};
 	}
 
 	private async findCategoryOrThrow(id: number): Promise<Category> {

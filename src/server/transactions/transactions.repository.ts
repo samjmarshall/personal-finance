@@ -3,7 +3,6 @@ import {
 	asc,
 	desc,
 	eq,
-	getTableColumns,
 	gt,
 	gte,
 	ilike,
@@ -22,19 +21,22 @@ import type {
 	Transaction,
 	TransactionCreateInput,
 	TransactionListQuery,
-	TransactionListResult,
 	TransactionSummary,
 	TransactionUpdateInput,
 	transactionSortBy,
 	UnplannedWindow,
 } from "~/domain/transactions";
 import type { db as realDb } from "~/server/db";
-import { expenseCategories } from "~/server/expenses/categories.schema";
-import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "./transactions.schema";
 
+// One page of rows; total counts every match, not just this page
+export interface TransactionPage {
+	items: Transaction[];
+	total: number;
+}
+
 export interface TransactionsRepository {
-	list(query: TransactionListQuery): Promise<TransactionListResult>;
+	list(query: TransactionListQuery): Promise<TransactionPage>;
 	summary(): Promise<TransactionSummary>;
 	insert(values: TransactionCreateInput): Promise<Transaction | undefined>;
 	/** `undefined` when no row has the id. */
@@ -67,7 +69,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		this.db = db;
 	}
 
-	async list(query: TransactionListQuery): Promise<TransactionListResult> {
+	async list(query: TransactionListQuery): Promise<TransactionPage> {
 		const filters: SQL[] = [];
 
 		if (query.search) {
@@ -103,17 +105,8 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 
 		const [items, countResult] = await Promise.all([
 			this.db
-				.select({
-					...getTableColumns(transactions),
-					expenseName: expenses.name,
-					expenseCategoryName: expenseCategories.name,
-				})
+				.select()
 				.from(transactions)
-				.leftJoin(expenses, eq(transactions.expenseId, expenses.id))
-				.leftJoin(
-					expenseCategories,
-					eq(transactions.expenseCategoryId, expenseCategories.id),
-				)
 				.where(where)
 				.orderBy(orderBy, desc(transactions.id))
 				.limit(query.limit)

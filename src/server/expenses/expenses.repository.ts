@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { Category } from "~/domain/categories";
 import type {
 	Expense,
@@ -10,6 +10,11 @@ import { expenseCategories } from "./categories.schema";
 import { expenses } from "./expenses.schema";
 
 export type CategoryValues = Pick<Category, "name" | "description">;
+
+export interface NameRow {
+	id: number;
+	name: string;
+}
 
 export interface ExpensesRepository {
 	list(): Promise<Expense[]>;
@@ -38,6 +43,10 @@ export interface ExpensesRepository {
 	reorderCategories(ids: number[]): Promise<void>;
 	countExpensesInCategory(name: string): Promise<number>;
 	deleteCategory(id: number): Promise<void>;
+	/** Ids with no row are absent from the result. */
+	findExpenseNames(ids: number[]): Promise<NameRow[]>;
+	/** Ids with no row are absent from the result. */
+	findCategoryNames(ids: number[]): Promise<NameRow[]>;
 }
 
 interface DrizzleExpensesRepositoryDeps {
@@ -175,5 +184,19 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 
 	async deleteCategory(id: number): Promise<void> {
 		await this.db.delete(expenseCategories).where(eq(expenseCategories.id, id));
+	}
+
+	findExpenseNames(ids: number[]): Promise<NameRow[]> {
+		return this.db
+			.select({ id: expenses.id, name: expenses.name })
+			.from(expenses)
+			.where(inArray(expenses.id, ids));
+	}
+
+	findCategoryNames(ids: number[]): Promise<NameRow[]> {
+		return this.db
+			.select({ id: expenseCategories.id, name: expenseCategories.name })
+			.from(expenseCategories)
+			.where(inArray(expenseCategories.id, ids));
 	}
 }

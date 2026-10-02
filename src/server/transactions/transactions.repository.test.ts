@@ -22,7 +22,6 @@ function harness(respond?: Respond) {
 const NOW = new Date("2026-09-29T00:00:00.000Z");
 
 const COLUMNS = Object.keys(getTableColumns(transactions));
-const LIST_FIELDS = [...COLUMNS, "expenseName", "expenseCategoryName"];
 
 // Driver sends timestamps as text; drizzle parses them back into Dates.
 function rowOf(fields: string[], fixture: Record<string, unknown>) {
@@ -69,8 +68,8 @@ const DEFAULT_QUERY: TransactionListQuery = {
 };
 
 const isCount = (sql: string) => sql.startsWith("select cast(count(*)");
-// The select list and joins are pinned once by the default case; filter and
-// sort cases pin only the tail they change.
+// The select list is pinned once by the default case; filter and sort cases
+// pin only the tail they change.
 const fromWhere = (sql: string) => sql.slice(sql.indexOf(" where "));
 const fromOrderBy = (sql: string) => sql.slice(sql.indexOf(" order by "));
 
@@ -81,19 +80,14 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("list", () => {
-	it("pages newest first over two left joins and totals from the count row", async () => {
-		const item = {
-			...TRANSACTION,
-			expenseName: "Weekly shop",
-			expenseCategoryName: "Groceries",
-		};
+	it("pages newest first and totals from the count row", async () => {
 		const { repository, queries } = harness(({ sql }) =>
-			isCount(sql) ? [[3]] : [rowOf(LIST_FIELDS, item)],
+			isCount(sql) ? [[3]] : [rowOf(COLUMNS, TRANSACTION)],
 		);
 
 		const result = await repository.list(DEFAULT_QUERY);
 
-		expect(result).toEqual({ items: [item], total: 3 });
+		expect(result).toEqual({ items: [TRANSACTION], total: 3 });
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
@@ -101,7 +95,7 @@ describe("list", () => {
 			    "params": [
 			      50,
 			    ],
-			    "sql": "select "transaction"."id", "transaction"."expenseId", "transaction"."expenseCategoryId", "transaction"."date", "transaction"."description", "transaction"."receiptDescription", "transaction"."amount", "transaction"."category", "transaction"."frequency", "transaction"."priority", "transaction"."notes", "transaction"."createdAt", "transaction"."updatedAt", "expense"."name", "expense_category"."name" from "transaction" left join "expense" on "transaction"."expenseId" = "expense"."id" left join "expense_category" on "transaction"."expenseCategoryId" = "expense_category"."id" order by "transaction"."date" desc, "transaction"."id" desc limit $1",
+			    "sql": "select "id", "expenseId", "expenseCategoryId", "date", "description", "receiptDescription", "amount", "category", "frequency", "priority", "notes", "createdAt", "updatedAt" from "transaction" order by "transaction"."date" desc, "transaction"."id" desc limit $1",
 			  },
 			  {
 			    "method": "all",

@@ -31,6 +31,8 @@ function serviceWith(staged: Partial<ExpensesRepository>) {
 		reorderCategories: unstaged,
 		countExpensesInCategory: unstaged,
 		deleteCategory: unstaged,
+		findExpenseNames: unstaged,
+		findCategoryNames: unstaged,
 		...staged,
 	};
 	return new ExpensesService({ repository });
@@ -365,5 +367,61 @@ describe("deleteCategory", () => {
 		await service.deleteCategory(3);
 
 		expect(deleted).toEqual([3]);
+	});
+});
+
+describe("namesByIds", () => {
+	it("asks each lookup for its ids and maps the rows by id", async () => {
+		const asked: unknown[][] = [];
+		const service = serviceWith({
+			findExpenseNames: async (ids) => {
+				asked.push(["expenses", ids]);
+				return [{ id: 7, name: "Weekly shop" }];
+			},
+			findCategoryNames: async (ids) => {
+				asked.push(["categories", ids]);
+				return [{ id: 3, name: "Food" }];
+			},
+		});
+
+		await expect(
+			service.namesByIds({ expenseIds: [7, 8], categoryIds: [3] }),
+		).resolves.toEqual({
+			expenses: new Map([[7, "Weekly shop"]]),
+			categories: new Map([[3, "Food"]]),
+		});
+		expect(asked).toEqual([
+			["expenses", [7, 8]],
+			["categories", [3]],
+		]);
+	});
+
+	// The unstaged defaults throw, so a lookup run for no ids would fail here.
+	it("skips the lookup for an empty id list", async () => {
+		const service = serviceWith({
+			findExpenseNames: async () => [{ id: 7, name: "Weekly shop" }],
+		});
+
+		await expect(
+			service.namesByIds({ expenseIds: [7], categoryIds: [] }),
+		).resolves.toEqual({
+			expenses: new Map([[7, "Weekly shop"]]),
+			categories: new Map(),
+		});
+		await expect(
+			serviceWith({}).namesByIds({ expenseIds: [], categoryIds: [] }),
+		).resolves.toEqual({ expenses: new Map(), categories: new Map() });
+	});
+
+	it("lets a lookup error propagate", async () => {
+		const error = new Error("connection lost");
+		const service = serviceWith({
+			findExpenseNames: async () => [],
+			findCategoryNames: throwing(error),
+		});
+
+		await expect(
+			service.namesByIds({ expenseIds: [7], categoryIds: [3] }),
+		).rejects.toBe(error);
 	});
 });
