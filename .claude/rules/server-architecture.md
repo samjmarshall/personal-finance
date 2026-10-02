@@ -14,8 +14,9 @@ is executed as a **class-based** controller / service / repository 3-tier, one
 domain per change (strangler). Reference implementations: `src/server/outbox/`
 (cron workers + the write door), `src/server/receipts/receipts.*` (event worker +
 external adapters) and `src/server/email/email.*` (HTTP webhook
-controller behind `src/app/api/receipts/inbound/route.ts`) and
-`src/server/transactions/` (the reference tRPC domain).
+controller behind `src/app/api/receipts/inbound/route.ts`),
+`src/server/transactions/` (the reference tRPC domain) and `src/server/expenses/`
+(two tRPC controllers, `expenses` and `categories`, over one service).
 Existing plain tRPC routers stay as they are until their domain is migrated in
 its own change — never refactor a router toward 3-tier inside a feature diff.
 
@@ -111,7 +112,8 @@ Split on real pain, not in advance.
   payloads. Never hit Postgres. For a query-heavy repository (joins, many
   aggregates) use `recordingDb()` (`src/server/db/recording-db.fake.ts`) instead:
   it renders every query through the real `PgDialect` and records
-  `{ sql, params, method }`. `src/server/transactions/transactions.repository.test.ts`
+  `{ sql, params, method }`. It supports `db.transaction(cb)` and records
+  `begin` / `commit` / `rollback`. `src/server/transactions/transactions.repository.test.ts`
   is the example.
 - `*.service.test.ts` — fake repository + adapters as object literals typed
   against the interfaces, recording calls in arrays. No module mocking. Fake
@@ -137,7 +139,9 @@ Split on real pain, not in advance.
 - One plain `createTRPCRouter({ … })` per file in `src/server/api/routers/<name>.ts`;
   procedures talk to Drizzle directly via `ctx.db`.
 - Compose the pre-built router objects in `src/server/api/root.ts`
-  (`allowedSender, balance, cashflow, category, expense, income, receipt, setting`; `transaction` comes from `src/server/transactions/`).
+  (`allowedSender, balance, cashflow, income, receipt, setting`; `category` and
+  `expense` come from `src/server/expenses/`, and `transaction` from
+  `src/server/transactions/`).
 - Errors are thrown inline as `TRPCError`, or through the shared helpers in
   `src/server/errors/`, which throw the non-tRPC errors described under
   [Errors](#errors): `parseError(error)` (normalises a driver error into a
@@ -161,6 +165,9 @@ Each domain owns its tables ([adr022](../../docs/adr/adr022-cross-domain-data-th
 - A repository touches only its own domain's tables.
 - Cross-domain reads **and** writes go through the owning service, typed as a
   narrow `Pick` or port (`OutboxWriteDoor`), so a test fake is an object literal.
+- A join becomes a batched lookup: `TransactionsService.list` makes one
+  `ExpensesService.namesByIds` call per page, merges in memory, and gives a null
+  name for a missing id.
 - Schema files may import each other for foreign keys only.
 - `src/server/architecture.test.ts` enforces this. Its `TODO` list of known
   violations only shrinks: each migration step deletes its entries.
@@ -178,8 +185,8 @@ here imports `src/server/**`.
 
 Multi-statement writes that must be atomic use the postgres-js interactive
 transaction — `db.transaction(async (tx) => { … })` (adr002/adr003). In a
-repository that is `this.db.transaction(...)` (`saveExtraction`); in a router it is
-`ctx.db.transaction(...)` (`category.ts` `update`, `reorder`).
+repository that is `this.db.transaction(...)` (`saveExtraction`, `updateCategory`,
+`reorderCategories`).
 
 ## Outbox + Inngest (adr002)
 

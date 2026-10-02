@@ -290,7 +290,7 @@ Tests plus one test fake. No `src` behaviour changes.
 - [x] `make test` passes, and the only changed snapshot is the default list case's dropped joins and name columns
 - [x] `make build` passes
 - [x] `git grep -n "server/expenses" src/server/transactions/transactions.repository.ts` returns nothing, and the to-do list has 25 entries
-- [ ] At https://personal-finance.localhost, the Transactions list behaves as before:
+- [x] At https://personal-finance.localhost, the Transactions list behaves as before:
   - linked rows show their Expense and Expense Category names
   - unlinked rows show none
   - search, filters, sort and paging are unchanged
@@ -310,9 +310,9 @@ Tests plus one test fake. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] Every path named in the edited rules-file sections exists (`git ls-files` check)
-- [ ] The rules file names no `routers/expense.ts` or `routers/category.ts`
+- [x] `make check` passes
+- [x] Every path named in the edited rules-file sections exists (`git ls-files` check)
+- [x] The rules file names no `routers/expense.ts` or `routers/category.ts`
 
 ## References
 
