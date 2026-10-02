@@ -229,11 +229,11 @@ Tests plus one test fake. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes, and Commit A is green with no snapshot change
-- [ ] `make build` passes
-- [ ] `git grep -n "ctx.db\|drizzle-orm\|TRPCError" src/server/expenses/expenses.service.ts src/server/expenses/*.trpc.controller.ts` returns nothing
-- [ ] `src/server/api/routers/expense.ts` and `category.ts` no longer exist, and the to-do list has 27 entries
+- [x] `make check` passes
+- [x] `make test` passes, and Commit A is green with no snapshot change
+- [x] `make build` passes
+- [x] `git grep -n "ctx.db\|drizzle-orm\|TRPCError" src/server/expenses/expenses.service.ts src/server/expenses/*.trpc.controller.ts` returns nothing
+- [x] `src/server/api/routers/expense.ts` and `category.ts` no longer exist, and the to-do list has 27 entries
 - [ ] At https://personal-finance.localhost, these behave as before:
   - the Planned page: the Expense list, create, edit, delete, and Consumed / Remaining
   - the Categories page: the list with its expense counts, create, and drag-to-reorder (the order survives a reload)
@@ -286,10 +286,10 @@ Tests plus one test fake. No `src` behaviour changes.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes, and the only changed snapshot is the default list case's dropped joins and name columns
-- [ ] `make build` passes
-- [ ] `git grep -n "server/expenses" src/server/transactions/transactions.repository.ts` returns nothing, and the to-do list has 25 entries
+- [x] `make check` passes
+- [x] `make test` passes, and the only changed snapshot is the default list case's dropped joins and name columns
+- [x] `make build` passes
+- [x] `git grep -n "server/expenses" src/server/transactions/transactions.repository.ts` returns nothing, and the to-do list has 25 entries
 - [ ] At https://personal-finance.localhost, the Transactions list behaves as before:
   - linked rows show their Expense and Expense Category names
   - unlinked rows show none
