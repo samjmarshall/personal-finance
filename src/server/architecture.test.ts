@@ -41,8 +41,6 @@ const TODO = [
 	"3 src/server/api/routers/allowed-sender.ts → drizzle-orm",
 	"3 src/server/api/routers/allowed-sender.ts → ~/server/auth/auth.schema",
 	"3 src/server/api/routers/allowed-sender.ts → ~/server/email/allowed-sender.schema",
-	"3 src/server/api/routers/balance.ts → drizzle-orm",
-	"3 src/server/api/routers/balance.ts → ~/server/balances/balances.schema",
 	"3 src/server/api/routers/cashflow.ts → drizzle-orm",
 	"3 src/server/api/routers/cashflow.ts → ~/server/balances/balances.schema",
 	"3 src/server/api/routers/cashflow.ts → ~/server/expenses/expenses.schema",
