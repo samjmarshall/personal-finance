@@ -139,10 +139,10 @@ Split on real pain, not in advance.
 - One plain `createTRPCRouter({ … })` per file in `src/server/api/routers/<name>.ts`;
   procedures talk to Drizzle directly via `ctx.db`.
 - Compose the pre-built router objects in `src/server/api/root.ts`
-  (`allowedSender, cashflow, receipt, setting`; `balance` comes from
+  (`allowedSender, cashflow, receipt`; `balance` comes from
   `src/server/balances/`, `category` and `expense` from `src/server/expenses/`,
-  `income` from `src/server/income/`, and `transaction` from
-  `src/server/transactions/`).
+  `income` from `src/server/income/`, `setting` from `src/server/settings/`, and
+  `transaction` from `src/server/transactions/`).
 - Errors are thrown inline as `TRPCError`, or through the shared helpers in
   `src/server/errors/`, which throw the non-tRPC errors described under
   [Errors](#errors): `parseError(error)` (normalises a driver error into a
