@@ -240,6 +240,7 @@ Tests plus one test fake. No `src` behaviour changes.
   - renaming an Expense Category moves its Expenses to the new name
   - a duplicate name shows "A category with that name already exists."
   - deleting a category in use shows the "still use it" message, and deleting an empty one works
+  - _Validation 2026-10-02: server side verified against real Postgres (postgres-js, one rolled-back tx): create/trim/sort-last, expense CRUD, rename moves Expenses, duplicate create/rename → CONFLICT message (rename rolls back), delete-in-use message, reorder, delete empty, transaction list names equal the old left join over 150 rows. Browser run still open: needs a signed-in session._
 
 ## Phase 3: Transaction list names through the expenses service
 
