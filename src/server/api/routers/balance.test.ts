@@ -1,10 +1,13 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BalanceSnapshot } from "~/domain/balances";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { createTestCaller } from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
+import { DrizzleBalancesRepository } from "~/server/balances/balances.repository";
 import { balanceSnapshots } from "~/server/balances/balances.schema";
+import { BalancesService } from "~/server/balances/balances.service";
+import { balanceRouter } from "~/server/balances/balances.trpc.controller";
 import { type Respond, recordingDb } from "~/server/db/recording-db.fake";
-import { balanceRouter } from "./balance";
 
 // Characterizes the router before it moves to src/server/balances/: the SQL it
 // sends and the codes and messages it returns must survive the move unchanged.
@@ -16,12 +19,13 @@ function harness(
 	session: { user: { id: string } } | null = { user: { id: "member-1" } },
 ) {
 	const { db, queries } = recordingDb(respond);
-	const caller = createCallerFactory(router)({
-		db,
+	const service = new BalancesService({
+		repository: new DrizzleBalancesRepository({ db: db as never }),
+	});
+	const caller = createTestCaller(router, {
+		services: { balances: service },
 		session,
-		services: {},
-		headers: new Headers(),
-	} as never);
+	});
 	return { balance: caller.balance, queries };
 }
 

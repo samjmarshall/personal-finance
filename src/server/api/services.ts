@@ -1,3 +1,5 @@
+import { DrizzleBalancesRepository } from "~/server/balances/balances.repository";
+import { BalancesService } from "~/server/balances/balances.service";
 import { db } from "~/server/db";
 import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
 import { ExpensesService } from "~/server/expenses/expenses.service";
@@ -13,6 +15,9 @@ const expenses = new ExpensesService({
 // One instance per service, shared by every request. The build loads this
 // file, so no service may throw on a missing env var.
 export const services = {
+	balances: new BalancesService({
+		repository: new DrizzleBalancesRepository({ db }),
+	}),
 	expenses,
 	income: new IncomeService({
 		repository: new DrizzleIncomeRepository({ db }),
