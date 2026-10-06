@@ -1,7 +1,9 @@
 # tRPC routers to 3-tier: the router is the controller
 
 Date: 2026-09-29
-Status: Design (validated in brainstorm; ready for `/write-tickets` or `/write-plan`)
+Revised: 2026-10-06. Adds the domain hierarchy rule and makes Category its own
+domain in a new step 6. Receipts moves to step 7 and cleanup to step 8.
+Status: Design (validated in brainstorm). Steps 1 and 2 shipped.
 Governed by: adr004 (refines it), adr002/adr003 (outbox), adr005 (schema homes)
 Refines: adr004's cross-domain read allowance, its `*.router.ts` naming, and its
 migration order (adr021, adr022)
@@ -25,6 +27,13 @@ The session answered three questions:
 - **How does a procedure reach its service?**
 - **May a domain read another domain's tables?** adr004 allows reads. That
   allowance has already drifted into a write allowance.
+
+The 2026-10-06 revision answered two more:
+
+- **Where does a child of a domain live?** Step 2 put categories inside
+  `expenses/`, but expenses, transactions and receipt items all file under a
+  Category.
+- **Can a procedure load child data on request, like a GraphQL resolver?**
 
 ## Verified facts
 
@@ -73,6 +82,43 @@ Repo:
 - **Route files are composition roots.** `src/app/api/receipts/inbound/route.ts`
   imports `db` and `DrizzleEmailRepository` to build its tiers.
 
+Added 2026-10-06, after step 2 shipped:
+
+- **Three tables link to a Category.** `expense.category` holds its name as text.
+  `transaction.expenseCategoryId` and `receipt_item.expenseCategoryId` hold its
+  id, with `on delete set null`. The receipts worker reads the whole list.
+- **The name text is the only tie to expenses.** It creates three couplings:
+  a rename rewrites `expense.category` in the same commit, a delete counts
+  Expenses by name, and `category.list` counts Expenses per Category
+  (`expenseCount`).
+- **The kernel already treats Category as its own domain.** It lives in
+  `src/domain/categories/`, while the server code sits in `src/server/expenses/`.
+- **The glossary agrees.** CONTEXT.md calls Expense Category "the single category
+  vocabulary, not an Expense-only one" and its name "a historical narrowing".
+- **The architecture test keys on the first folder.** `domainOf` reads
+  `src/server/<domain>/`, so a nested folder counts as its parent.
+- **Of the steps left, only receipts touches categories.** Steps 3 to 5 never
+  read them, so moving categories cannot block them.
+- **tRPC cannot type an output by its input.** The FAQ says this needs
+  "higher kinded types". Issue #3311 closed as not planned; PR #5888 closed as
+  a draft. oRPC has the same limit.
+
+### Child-data research (2026-10-06)
+
+- **No RPC framework resolves children.** tRPC and oRPC have no include feature.
+  tRPC recommends plain shared functions and `httpBatchStreamLink`, which already
+  sends several calls in one HTTP request.
+- **REST standards opt in by parameter.** Stripe `expand[]`, JSON:API `include`,
+  OData `$expand` and Zalando `embed` all take an allowlist and cap depth: Stripe
+  at four, OData at two by default. Stripe types an expandable field as
+  `string | Customer` and tells callers to cast.
+- **Google AIP-157 offers views instead.** A `BASIC` or `FULL` enum gives a few
+  fixed shapes, for when "an API only wants to expose a small number of permutations".
+- **Batching is solved.** A per-request DataLoader or Effect `RequestResolver`
+  avoids a call per row, and `namesByIds` already does the same job.
+- **Wait for the third use.** Metz: "duplication is far cheaper than the wrong
+  abstraction."
+
 ## Decisions
 
 | #   | Question                                                       | Decision                                                                                                   |
@@ -84,16 +130,28 @@ Repo:
 | 5   | What ships first?                                              | The foundation plus transactions. Receipts goes last.                                                      |
 | 6   | How many services per domain?                                  | One by default, split only when earned. Receipts and email qualify today.                                  |
 | 7   | Are the Next.js route handlers in scope?                       | The receipts image and upload routes move in the receipts step. Health stays plain on purpose.             |
-| 8   | How do composition roots share a service?                      | A module file for each service two or more roots need. Five after the migration.                           |
-| 9   | Which folder does each router move into?                       | See the router map. Categories join expenses. Cashflow gets its own folder.                                |
+| 8   | How do composition roots share a service?                      | A module file for each service two or more roots need. Six after the migration.                            |
+| 9   | Which folder does each router move into?                       | See the router map. Categories get their own folder in step 6. Cashflow gets its own folder.               |
 | 10  | May a domain read another domain's tables?                     | No. It calls the owning service. An architecture test enforces this. Views are the recorded future option. |
 | 11  | How do we break the transactions and expenses loop?            | Consumption moves to the transactions service.                                                             |
 | 12  | Who owns member names?                                         | A members service in `src/server/auth/`.                                                                   |
 | 13  | Where does the email ingest's receipt write go?                | The member-facing receipts service owns every pending receipt.                                             |
 | 14  | When does the architecture test land?                          | In step 1, with a to-do list of known violations that can only shrink.                                     |
-| 15  | What order do domains migrate in?                              | Transactions first. The to-do list covers the gap. Seven steps.                                            |
+| 15  | What order do domains migrate in?                              | Transactions first. The to-do list covers the gap. Eight steps.                                            |
 | 16  | What are controller files called?                              | `<domain>.<transport>.controller.ts`. Existing controllers are renamed to match.                           |
 | 17  | How are tRPC controllers tested?                               | A thin test per controller, with fake services on the context.                                             |
+| 18  | Where does a child of a domain live?                           | Three kinds: part of the parent, sub-resource, own domain. Flat folders only. See Domain hierarchy.       |
+| 19  | Is Category a child of Expense?                                | No. It is the household's shared list, and it becomes its own domain at the bottom of the graph.          |
+| 20  | How do the ties to expenses break?                             | Expenses link by `categoryId`, `on delete restrict`. A rename then writes one table.                       |
+| 21  | What are the link fields called?                               | `categoryId` on expense, transaction and receipt item. The table becomes `category`.                       |
+| 22  | What happens to the Group field?                               | It stays as the legacy label for imported data, renamed `group`.                                           |
+| 23  | Who counts Expenses per Category?                              | `ExpensesService.countsByCategory()`. The Categories page asks both domains.                               |
+| 24  | What does the in-use delete message say?                       | `Cannot delete "X" — expenses still use it.` The count is gone.                                            |
+| 25  | How does an Expense get its Category name?                     | The client looks it up in `category.list`, which it already loads for sort order.                          |
+| 26  | Where do orphan category names go?                             | One "Needs refiling" Category, created only if orphans exist.                                                 |
+| 27  | When does the move happen?                                     | Its own step 6, before receipts. Receipts is then wired once.                                              |
+| 28  | Can a procedure load child data on request?                    | Not now. Opt-in includes are a recorded future option, triggered by a third use.                           |
+| 29  | Does a linked Expense set a Transaction's Category?             | Yes, for Transactions and Receipt line items. The Category is read through the Expense. `categoryId` holds a value only when no Expense is linked. |
 
 Rejected alternatives worth remembering:
 
@@ -112,6 +170,20 @@ Rejected alternatives worth remembering:
 - **One server-wide service file (#8).** tRPC would load Bedrock to list transactions.
 - **Keep direct reads and trust review (#10).** The rules file already drifted
   under review.
+- **Nested domain folders (#18).** `expenses/categories/` hides the boundary from
+  the architecture test, and Packwerk's experience shows nesting blurs rules.
+- **Every table its own domain (#18).** It would split `allowed-sender` out of
+  email for no gain.
+- **Keep categories in expenses (#19).** The folder would contradict the glossary
+  and the kernel, and three domains would ask expenses for Category data.
+- **A rename event, or categories calling expenses (#20).** An event needs an
+  Inngest function for a rename and leaves data stale until it runs. A call from
+  categories to expenses goes up the graph and makes a loop.
+- **A stored count on `category` (#23).** Every Expense write would update another
+  domain's table.
+- **Generic includes now (#28).** tRPC types the output the same whatever the
+  input, so callers would still check optional fields. `httpBatchStreamLink`
+  already gives one request, and react-query caches `category.list` once for every page.
 
 ## Architecture
 
@@ -171,7 +243,7 @@ Split on real pain, not in advance (Bogard). Two domains qualify today:
 
 - **Receipts.** The worker service keeps extraction, with the language model,
   blob reads and the error reporter. It is renamed `ReceiptExtractionService`
-  (`receipt-extraction.service.ts`) in step 6, matching `receipt-extraction.dto.ts`.
+  (`receipt-extraction.service.ts`) in step 7, matching `receipt-extraction.dto.ts`.
   A new member-facing service takes the domain name, `ReceiptsService`
   (`receipts.service.ts`), because it owns every Receipt row. It serves tRPC,
   the image route and the upload route, with the outbox, blob get and delete,
@@ -183,13 +255,36 @@ Split on real pain, not in advance (Bogard). Two domains qualify today:
 
 The rule goes into the rules file, so a split is a check rather than a matter of taste.
 
+### Domain hierarchy
+
+A child of a domain is one of three kinds:
+
+| Kind              | Test                                                                                              | Home                                                                                                   | Example                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| Part of parent    | Lives and dies with the parent row. No page or router of its own.                                 | The parent's files.                                                                                    | `receipt_item` in `receipts.schema.ts`        |
+| Sub-resource      | Has its own table or controller, but only the parent domain uses it.                             | Prefixed files in the parent folder: `<parent>/<child>.schema.ts`, `<child>.trpc.controller.ts`. Its own service only if the split rule says so. | `email/allowed-sender.*`                      |
+| Own domain        | Two or more other domains link to it by id, or it has its own lifecycle (made on its own page).  | Top-level `src/server/<name>/`.                                                                        | `categories/`                                 |
+
+Three rules go with it:
+
+- **Flat only.** No nested domain folders such as `expenses/categories/`. The
+  architecture test reads the first folder under `src/server/` as the domain.
+- **Mirror the kernel.** Where both exist, `src/domain/<name>/` and
+  `src/server/<name>/` share a name.
+- **Promote only over id links.** A sub-resource becomes its own domain once
+  every link to it is an id. A copied name would turn a rename into a
+  cross-domain write. Categories is the worked example.
+
+`auth/` holding the members service fits: auth owns the `user` table, and
+members is its service under the glossary name.
+
 ### Router map
 
 | Router today       | Folder            | tRPC controller                    | Service                        |
 | ------------------ | ----------------- | ---------------------------------- | ------------------------------ |
 | `transaction.ts`   | `transactions/`   | `transactions.trpc.controller.ts`  | transactions                   |
 | `expense.ts`       | `expenses/`       | `expenses.trpc.controller.ts`      | expenses                       |
-| `category.ts`      | `expenses/`       | `categories.trpc.controller.ts`    | expenses                       |
+| `category.ts`      | `categories/`     | `categories.trpc.controller.ts`    | categories (step 6)            |
 | `income.ts`        | `income/`         | `income.trpc.controller.ts`        | income                         |
 | `balance.ts`       | `balances/`       | `balances.trpc.controller.ts`      | balances                       |
 | `setting.ts`       | `settings/`       | `settings.trpc.controller.ts`      | settings                       |
@@ -198,13 +293,10 @@ The rule goes into the rules file, so a split is a check rather than a matter of
 | `receipts.ts`      | `receipts/`       | `receipts.trpc.controller.ts`      | `ReceiptsService` (split)      |
 | none               | `auth/`           | none                               | members                        |
 
-- **Categories join expenses.** Their schema already lives there. Renaming a
-  category rewrites `expenses.category` in one transaction. A separate categories
-  domain would turn that into a cross-domain write. Both tables share the same
-  dependencies, so the split rule gives one service. A Transaction links its
-  Expense Category by id (`expenseCategoryId`), so a rename writes no
-  `transactions` row. The text `transactions.category` is the Transaction's
-  **Group** (see CONTEXT.md), owned by transactions, and a rename leaves it alone.
+- **Categories get their own folder in step 6.** Step 2 put them in `expenses/`,
+  because a rename rewrote `expenses.category` text in one transaction. Step 6
+  replaces that text with an id link and moves categories out. See
+  [Categories as its own domain](#categories-as-its-own-domain).
 - **Cashflow owns no tables.** It calls five services and hands the results to
   the pure compute in `src/domain/cashflow/`, so it has no repository.
 - **Procedure paths stay the same.** `root.ts` imports each router from its
@@ -216,9 +308,9 @@ Each domain calls only domains below it. The graph has no cycles.
 
 | Level  | Domain                                                          | Calls                                                   |
 | ------ | --------------------------------------------------------------- | ------------------------------------------------------- |
-| Bottom | expenses (with categories), members, income, balances, settings | nothing                                                 |
-| Middle | transactions                                                    | expenses, for names                                     |
-| Upper  | receipts (member-facing and worker)                             | members, transactions, expenses                         |
+| Bottom | categories, expenses, members, income, balances, settings       | nothing                                                 |
+| Middle | transactions                                                    | expenses and categories, for names                      |
+| Upper  | receipts (member-facing and worker)                             | members, transactions, expenses, categories             |
 | Upper  | email (webhook and allowlist)                                   | receipts, for the pending write; members, for names     |
 | Top    | cashflow                                                        | transactions, expenses, income, settings, balances      |
 
@@ -273,7 +365,7 @@ gets the same lazy memo.
 ### The context gets its own file
 
 `createTRPCContext` moves out of `trpc.ts` into a new `src/server/api/context.ts`,
-in step 1. `context.ts` imports `auth`, `db` (until step 7) and `services.ts`.
+in step 1. `context.ts` imports `auth`, `db` (until step 8) and `services.ts`.
 The tRPC route and `src/trpc/server.ts` import it from there.
 
 `trpc.ts` keeps `t`, the middleware and the procedures. It takes the context
@@ -293,17 +385,17 @@ need it. Only composition roots and other module files import a module file. A
 module may import a lower domain's module, so the module graph follows the
 dependency graph and stays acyclic. Each service is then built once per process.
 
-Five exist after the migration:
+Six exist after the migration:
 
 - **`outbox.module.ts`** already exists. The Inngest cron, the repositories that
-  write events, and the bound shim share it until step 6.
-- **`receipts.module.ts`** is new in step 6. It builds the member-facing receipts
+  write events, and the bound shim share it until step 7.
+- **`receipts.module.ts`** is new in step 7. It builds the member-facing receipts
   service. The tRPC root, the image route, the upload route and the inbound route
   import it.
-- **`transactions.module.ts`, `expenses.module.ts` and `members.module.ts`** are
-  new in step 6. `receipts.module.ts` needs all three, and the Inngest root needs
-  the expenses service for the worker's category read. Until then, only the tRPC
-  root uses them, so `services.ts` calls `new` directly.
+- **`transactions.module.ts`, `expenses.module.ts`, `categories.module.ts` and
+  `members.module.ts`** are new in step 7. `receipts.module.ts` needs all four, and
+  the Inngest root needs the categories service for the worker's category read.
+  Until then, only the tRPC root uses them, so `services.ts` calls `new` directly.
 
 The Inngest root, `src/server/inngest/functions.ts`, still builds the worker
 tiers. Each route file still builds its HTTP controller lazily in `compose()`, as
@@ -344,7 +436,7 @@ stays its own composition root.
 
 ### Database handle
 
-`ctx.db` stays until the last router migrates. Step 7 removes it, and
+`ctx.db` stays until the last router migrates. Step 8 removes it, and
 `context.ts` stops importing `db`. (`trpc.ts` stops in step 1, when the context moves out.)
 
 ## Errors
@@ -356,7 +448,7 @@ The new `src/server/errors/` holds:
 - **`NotFoundError` and `ConflictError`.** Each extends `Error` and takes the
   member-facing message plus an optional `{ cause }`.
 - **`parse-error.ts` and `assert-row.ts`,** moved from `src/server/api/lib/`.
-  `src/server/api/lib/` keeps re-exports for unmigrated routers until step 6
+  `src/server/api/lib/` keeps re-exports for unmigrated routers until step 7
   deletes it.
 - **One FK-conflict helper.** It replaces the two `rethrowFkConflict` copies and
   throws `ConflictError`.
@@ -449,12 +541,13 @@ missing id gives a null name.
 
 | Read                     | Owner                  | Asks                                                |
 | ------------------------ | ---------------------- | --------------------------------------------------- |
-| Transaction list         | transactions           | expenses, for expense and category names            |
+| Transaction list         | transactions           | expenses, then categories, for names                |
 | Consumption per expense  | transactions           | nothing; it moved here from expenses                |
-| Receipt list and detail  | member-facing receipts | members, transactions, expenses                     |
+| Receipt list and detail  | member-facing receipts | members, transactions, expenses, categories         |
 | Match candidates         | member-facing receipts | transactions, for the date window                   |
 | Allowlist                | allowlist              | members, for names                                  |
-| Worker category list     | receipts worker        | expenses                                            |
+| Worker category list     | receipts worker        | categories                                          |
+| Categories page counts   | the client             | `category.list` and `expense.countsByCategory`      |
 | Cashflow                 | cashflow               | transactions, expenses, income, settings, balances  |
 
 ### Consumption
@@ -534,7 +627,125 @@ shape to keep in sync, and they tie modules to one database. Nothing needs them 
 
 **Likely first trigger.** The transaction list filters and sorts by Group, its own
 column. If Group is dropped, "sort by category" would sort on
-`expenseCategories.name`, a foreign column. That is the first expected view.
+`category.name`, a foreign column. That is the first expected view.
+
+### Future option: opt-in includes
+
+When a third endpoint needs the same child data, a procedure may take an
+`include` input, Stripe style:
+
+- **An allowlist.** `include: z.array(z.enum(["category"])).optional()`. No free paths.
+- **One level deep.** An included child never includes its own children.
+- **Resolved by the owning service.** The controller calls the parent service,
+  then one batched lookup, such as `categories.namesByIds`. No joins, no call per row.
+- **An optional output field.** tRPC types the output the same for every input,
+  so `category?: { id; name }` stays optional and callers check it.
+
+If a caller needs an exact type, ship fixed views as separate procedures
+instead, in the AIP-157 style: `expense.list` and `expense.listWithCategory`.
+
+Until the trigger, the client asks both domains. `httpBatchStreamLink` already
+sends both calls in one HTTP request, and react-query caches `category.list`
+once for every page.
+
+## Categories as its own domain
+
+Step 6 moves categories out of `expenses/` into `src/server/categories/`. The
+domain sits at the bottom of the graph and calls nothing.
+
+### The data change
+
+| Today                                         | After step 6                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| table `expense_category`, export `expenseCategories` | table `category`, export `categories`                          |
+| `expense.category` text, not null             | `expense.categoryId` int, not null, FK to `category.id`, `on delete restrict`, indexed |
+| `transaction.expenseCategoryId`, `set null`   | `transaction.categoryId`, `set null`                                  |
+| `receipt_item.expenseCategoryId`, `set null`  | `receipt_item.categoryId`, `set null`                                 |
+| `transaction.category` (Group), default "Uncategorised" | `transaction.group`, same default. The legacy label for imported data. |
+| `expenseCategoryId` in `receipt-extraction.dto.ts` | `categoryId`                                                     |
+
+`group` is a Postgres reserved word. The column stays `"group"` to match the
+glossary. Drizzle quotes every name, and the `"transaction"` table already needs
+quotes in hand-written SQL, so this adds no new habit.
+
+`on delete restrict` on expenses keeps an Expense from losing its Category.
+Transactions and receipt items keep `set null`, because a Category there is optional.
+
+### The backfill
+
+One custom migration, made with `drizzle-kit generate --custom` and run with
+`make db_migrate`. Never `drizzle-kit push`. In order:
+
+1. Rename the table, columns, constraints and indexes.
+2. Add `expense."categoryId"` as nullable. Columns are camelCase, as in
+   `"expenseCategoryId"` today.
+3. Fill it by matching `expense.category` to `category.name`.
+4. Create one "Needs refiling" Category only if some Expense found no match, and
+   point those Expenses at it. The name avoids "Uncategorised", which is
+   already Group's default and would mean "no Group" on the Transactions page.
+5. Set `"categoryId"` not null, add the FK and index, and drop the text column.
+
+Before writing it, count the orphan names on prod. The plan must also grep raw
+`sql` for the old names, and check whether old `receipt.rawJson` gets parsed
+again, since it holds `expenseCategoryId`.
+
+### The services
+
+`CategoriesService` (`categories.service.ts`) takes over the category methods:
+
+- **`list`, `create`, `update`, `reorder`.** A rename writes one table. `list`
+  drops `expenseCount`.
+- **`delete`.** The FK refuses while an Expense uses the Category. The service
+  turns the violation into `ConflictError('Cannot delete "X" — expenses still use it.')`.
+- **`namesByIds`.** The batched lookup for transactions and receipts.
+
+The receipts worker reads `list` through a narrow port.
+
+`ExpensesService` loses every category method. Its `namesByIds` returns Expense
+names only. It gains `countsByCategory()`, served as `expense.countsByCategory`.
+
+### The read paths
+
+- **Transactions page.** The transactions service calls `expenses.namesByIds`,
+  which also returns each Expense's `categoryId`. It then calls
+  `categories.namesByIds` once, for the Transactions' own ids plus the Expenses'
+  ids. Two batched calls, one after the other, once per page. Until commit C,
+  the two calls run in parallel, because no Category comes through an Expense yet.
+- **Expenses and Unplanned pages.** They group by `categoryId` and take names and
+  order from `category.list`. The branch for names with no Category row goes away.
+- **Categories page.** It calls `category.list` and `expense.countsByCategory`,
+  sent in one batched request, and joins them on the client.
+
+The page, its route and the `category.*` tRPC paths stay the same.
+
+### A linked Expense sets the Category
+
+A Transaction linked to an Expense is filed under that Expense's Category and
+cannot be filed separately. Only an Unplanned Transaction is filed directly.
+Moving an Expense to another Category moves every linked Transaction with it.
+Receipt line items follow the same rule, with the same check constraint, the
+same link and unlink behaviour, and the same clean-up of existing rows. The
+receipts worker may still suggest a `categoryId` for an item with no Expense.
+
+- **Read, not copied.** `transaction.categoryId` holds a value only when
+  `expenseId` is null. The effective Category is the Expense's `categoryId`
+  when linked, else the Transaction's own. A copy would make an Expense's
+  Category change write to transactions, an upward write that adr022 forbids.
+- **The database enforces it.** A check constraint:
+  `"expenseId" IS NULL OR "categoryId" IS NULL`.
+- **Linking clears it.** The transactions service sets `categoryId` to null
+  when it sets `expenseId`.
+- **Unlinking keeps the filing.** The service copies the Expense's `categoryId`
+  onto the Transaction when it clears `expenseId`, so it does not turn up
+  unfiled. Transactions calling expenses is a downward call.
+- **The form follows.** The Category picker shows the Expense's Category and is
+  disabled while an Expense is linked.
+- **Existing data.** The migration clears `categoryId` where `expenseId` is set.
+  Before writing it, count on prod how many of those disagree with their
+  Expense's Category.
+
+A later filter or sort on the effective Category would read a foreign column.
+That is a published-view trigger, as above.
 
 ## Testing
 
@@ -571,6 +782,22 @@ move into repository tests. The allowlist's own-entries-only `remove` keeps a
 controller test. The type checker cannot catch a wrong id being passed, and this
 is a security rule.
 
+Step 6 adds these checks:
+
+- **`CategoriesService`.** A delete that hits the FK throws the in-use
+  `ConflictError`. A rename calls only the categories repository.
+- **`ExpensesService.countsByCategory`.** Repository SQL groups by `"categoryId"`.
+- **The transactions service.** It calls both name lookups once per page, and a
+  missing id still gives a null name. After commit C, a linked Transaction
+  shows its Expense's Category.
+- **The linked-Expense rule (6C, and the line-item commit in step 7).** Linking
+  clears `categoryId`. Unlinking copies the Expense's Category back. The check
+  constraint refuses both set at once.
+- **The migration.** Run it on a copy of prod data first. Every Expense ends
+  with a `categoryId`, and "Needs refiling" exists only if orphans did.
+- **The architecture test.** No file outside `categories/` imports
+  `categories.schema.ts`, except schema files for foreign keys.
+
 ## Migration
 
 Each step is one change, green before and after, and never mixed into a feature diff.
@@ -581,21 +808,45 @@ Each step is one change, green before and after, and never mixed into a feature 
    own commit. Transactions migrates, including consumption. The expense-name
    join in the transaction list stays on the to-do list. Fix the rules-file
    write-drift line.
-2. **Expenses and categories.** The transaction list switches to the expenses
-   service lookup, which clears its to-do entry. `expense.consumption` calls the
-   transactions service.
+2. **Expenses and categories.** Shipped. The transaction list switches to the
+   expenses service lookup, which clears its to-do entry. `expense.consumption`
+   calls the transactions service. Categories sit in `expenses/` for now.
 3. **Income, then balances, then settings.** One change each.
 4. **Members, then the allowlist.**
 5. **Cashflow.** Create the folder. It calls five services and drops the copied
    consumption query.
-6. **Receipts.** Rename the worker service to `ReceiptExtractionService` in its
+6. **Categories.** Three commits.
+   - **A: data and names.** The custom migration and every rename in
+     [The data change](#the-data-change), with the code and UI that read them.
+     Expenses link by `categoryId`. The Expenses and Unplanned pages group by id.
+     Fix the Categories page description, "Organise your budgeted expenses into
+     categories": "budgeted" is a glossary avoid-word, and a Category files more
+     than Expenses.
+   - **B: the domain move.** Create `src/server/categories/` with schema,
+     repository, service and `categories.trpc.controller.ts`. Move the category
+     methods out of `ExpensesService`. Add `expense.countsByCategory`. The
+     transactions service calls both name lookups in parallel.
+   - **C: a linked Expense sets a Transaction's Category.** A feature commit,
+     kept apart from A and B. Its own migration clears `categoryId` where
+     `expenseId` is set and adds the check constraint. The service clears on
+     link and copies back on unlink. The form locks the Category picker. The
+     name lookups become two calls, one after the other. See
+     [A linked Expense sets the Category](#a-linked-expense-sets-the-category).
+7. **Receipts.** Rename the worker service to `ReceiptExtractionService` in its
    own commit. Ship the member-facing `ReceiptsService`, `receipts.module.ts`,
    `receipts.trpc.controller.ts`, and `receipts.http.controller.ts` for the
-   image and upload routes. Add `transactions.module.ts`, `expenses.module.ts`
-   and `members.module.ts`, and switch `services.ts` to import from them. Move the email write. Put the worker's category read
-   behind the expenses service. Retire the bound `commitWithOutbox` shim and
-   delete `src/server/api/lib/`.
-7. **Cleanup.** Remove `ctx.db`. The to-do list must be empty, with health still
+   image and upload routes. Add `transactions.module.ts`, `expenses.module.ts`,
+   `categories.module.ts` and `members.module.ts`, and switch `services.ts` to
+   import from them. Move the email write. Put the worker's category read
+   behind the categories service. Retire the bound `commitWithOutbox` shim and
+   delete `src/server/api/lib/`. Then, in its own feature commit, apply the
+   linked-Expense rule to Receipt line items in the new `ReceiptsService`, with
+   its own migration. It cannot ship earlier: the old `receipts.ts` router would
+   hit the check constraint as a 500. In the same commit, swap "attribute" for
+   "link" and "file" on line items: the "Attribute to" label and the empty-state
+   text in `receipt-detail.tsx`, and the code comments. "Attribute" is for
+   Members only (CONTEXT.md).
+8. **Cleanup.** Remove `ctx.db`. The to-do list must be empty, with health still
    exempt, and `src/server/api/routers/` must be gone. Rewrite the rules file's "tRPC routers (not yet migrated)" section.
 
 ## Documentation changes
@@ -606,9 +857,13 @@ Each step is one change, green before and after, and never mixed into a feature 
 - **A new ADR refines adr004.** It withdraws the read-join allowance, replaces
   `*.router.ts` with `<domain>.trpc.controller.ts`, and settles the order
   contradiction as transactions first.
-- **Step 6 updates `bedrock-invocation.md`** and the rules file's reference
+- **Step 6 updates CONTEXT.md and the rules file.** The glossary term becomes
+  Category, Group gets its legacy-label meaning, and the rules file gains the
+  domain hierarchy table. Existing ADRs change as listed in
+  [ADR Impacts](#adr-impacts).
+- **Step 7 updates `bedrock-invocation.md`** and the rules file's reference
   implementations for the `ReceiptExtractionService` rename.
-- **Step 7 rewrites the rules file's router section.**
+- **Step 8 rewrites the rules file's router section.**
 
 ## Out of scope
 
@@ -617,7 +872,10 @@ Each step is one change, green before and after, and never mixed into a feature 
 - Tiers for the health route.
 - Household scoping. Passing session values as arguments prepares for it but
   does not add it.
-- Any tRPC path or client change.
+- Any tRPC path change. Step 6 changes client code only where field names change
+  and where the Categories page asks for counts.
+- Opt-in includes, recorded above as a future option.
+- Dropping Group. It stays until the imported data no longer needs it.
 
 ## Sources
 
@@ -645,12 +903,44 @@ Cross-domain data:
 - [Richardson, Database per service](https://microservices.io/patterns/data/database-per-service.html)
 - [Notes on Newman, Monolith to Microservices](https://eddmann.com/posts/notes-monolith-to-microservices-by-sam-newman/) (secondhand summary of the view pattern)
 
+Child domains and child data:
+
+- [Vernon, Effective Aggregate Design part II](https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf): reference other aggregates by id
+- [Shopify, Packwerk](https://github.com/Shopify/packwerk): nested packages blur boundaries
+- [tRPC FAQ](https://trpc.io/docs/faq) and [issue #3311](https://github.com/trpc/trpc/issues/3311): no output typed by input
+- [Stripe, Expanding responses](https://docs.stripe.com/expand), [JSON:API includes](https://jsonapi.org/format/#fetching-includes), [OData `$expand`](https://docs.oasis-open.org/odata/odata/v4.01/odata-v4.01-part2-url-conventions.html), [Zalando guidelines](https://opensource.zalando.com/restful-api-guidelines/)
+- [Google AIP-157, Partial responses](https://google.aip.dev/157)
+- [DataLoader](https://github.com/graphql/dataloader)
+- [Metz, The Wrong Abstraction](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)
+
 Research gaps: Evans, Khononov and Uncle Bob were not read. Newman was read only
 secondhand. No primary source covered the cost of in-memory joins.
+
+## ADR Impacts
+
+Existing ADRs this revision touches. Accepted ADRs get an italic note and a
+"Refined by" link, as adr004 already does for adr021 and adr022. Proposed and
+In Progress ADRs are edited in place. No ADR is superseded.
+
+| ADR    | Status      | What changes                                                                                                                                                                                                                                                                 | When                                          |
+| ------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| adr004 | Accepted    | Implementation status: categories leave `expenses/`, and `ExpensesService.namesByIds` returns Expense names only. (The note and "Refined by" link for adr023 are done.) | Step 6 commit B.                              |
+| adr022 | Proposed    | Done: categories added to the bottom of the dependency graph, and a "Refined by" link to adr024. The Context lines naming `expenseCategories` stay as history.                                                                                                                | Done.                                         |
+| adr021 | Proposed    | Done: option 1iv's reason no longer calls `categories` a sub-resource. "Receipts goes last" still holds.                                                                                                                                                                     | Done.                                         |
+| adr005 | Accepted    | The folder tree has no `categories/categories.schema.ts`. Add a note.                                                                                                                                                                                                      | Step 6 commit B.                              |
+| adr017 | In Progress | The member-owned columns that re-sync never touches include `expenseCategoryId` and `category`. They become `categoryId` and `group`.                                                                                                                                         | Step 6 commit A.                              |
+| adr003 | Accepted    | It cites two interactive transactions in `category.ts`. Step 6 makes a rename write one table, so only reorder keeps one. The reasoning still holds. An optional note.                                                                                                      | Optional.                                     |
+| adr010 | Accepted    | adr025 adds a check constraint tying `expenseId` to `categoryId`. The single nullable link itself is unchanged. Optional "Related" link to adr025.                                                                                             | With adr025.                                  |
+
+Already stale, not caused by this revision: adr002 says the category vocabulary
+lives in `src/lib/constants.ts`. Categories have been a table since 2026-08-10.
 
 ## Related ADRs
 
 - [adr021](../../docs/adr/adr021-trpc-router-is-the-controller-tier.md) — the tRPC router is the controller tier (candidates 1 and 4)
 - [adr022](../../docs/adr/adr022-cross-domain-data-through-the-owning-service.md) — cross-domain data goes through the owning service only (candidate 2)
+- [adr023](../../docs/adr/adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md) — a domain's child is part of its parent, a sub-resource, or its own domain, in flat folders (2026-10-06 candidate)
+- [adr024](../../docs/adr/adr024-category-own-domain-linked-by-id.md) — Category is its own domain, and every record links to it by `categoryId` (2026-10-06 candidate)
+- [adr025](../../docs/adr/adr025-linked-expense-sets-the-category.md) — a linked Expense sets the Category of its Transactions and Receipt line items (raised in /domain-model)
 - Candidate 3 (service split rule) was not made an ADR: a split is a local refactor, so it fails "hard to reverse". The rule goes in the rules file.
 - [adr004](../../docs/adr/adr004-domain-oriented-3-tier-server-architecture.md) is refined by links and tags, not rewritten.

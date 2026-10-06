@@ -113,7 +113,7 @@ Within option 1, file names:
 - **1i. `<domain>.<transport>.controller.ts` — chosen.** Good, because it names both tier and transport, and globs by either. Bad, because it renames three existing controllers.
 - **1ii. `*.router.ts`.** Bad, because it names a fourth tier that is really the controller, and it breaks the `*.controller.ts` glob.
 - **1iii. `<domain>.trpc.ts`.** Bad, because it reads like an adapter file (`email.mailbox.ts`), and adr004 wants every file to name its tier.
-- **1iv. Bare `trpc.controller.ts`.** Bad, because the same name repeats in eight folders, and sub-resources such as `categories` and `allowed-sender` need a prefix anyway.
+- **1iv. Bare `trpc.controller.ts`.** Bad, because the same name repeats in eight folders, and sub-resources such as `allowed-sender` need a prefix anyway.
 
 ### 2. A controller class per domain
 

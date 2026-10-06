@@ -59,10 +59,10 @@ _Avoid_: budgeted
 An expectation of Inflow — recurring or one-time — attributed to a person and a named source.
 _Avoid_: salary, earnings
 
-**Expense Category**:
-A named grouping maintained by the household, used to file both Expenses and Transactions.
-Despite the name it is the single category vocabulary, not an Expense-only one.
-_Avoid_: type, bucket, tag
+**Category**:
+A named grouping kept by the household, used to file Expenses, Transactions and Receipt line
+items.
+_Avoid_: expense category, type, bucket, tag
 
 ### Attributes
 
@@ -94,8 +94,8 @@ A one-time Expense's amount minus its Consumed; below zero means over.
 _Avoid_: left, balance
 
 **Group**:
-A household's own rough label on a Transaction, carried over from the spreadsheet import;
-not an Expense Category, and whether it stays is undecided.
+The household's own rough label on a Transaction, kept from the spreadsheet import to filter
+and sort the imported data; not a Category.
 _Avoid_: category (for this field)
 
 **Provenance**:
@@ -111,11 +111,16 @@ _Avoid_: source
 
 ## Relationships
 
-- A **Household** owns every **Expense**, **Income**, **Transaction**, **Expense Category**
-  and **Receipt**
-- An **Expense** is filed under exactly one **Expense Category**
-- A **Transaction** is filed under at most one **Expense Category**, by link, and may carry one
-  **Group**
+- A **Household** owns every **Expense**, **Income**, **Transaction**, **Category** and
+  **Receipt**
+- An **Expense** is filed under exactly one **Category**
+- A **Transaction** is filed under at most one **Category** and may carry one **Group**
+- A **Transaction** or **Receipt** line item linked to an **Expense** is filed under that
+  Expense's **Category** and cannot be filed separately; only one with no Expense (for a
+  Transaction, an **Unplanned** one) is filed under a Category directly
+- A **Receipt** line item is filed under at most one **Category**
+- Deleting a **Category** unfiles its **Transactions** and **Receipt** line items; it is
+  refused while any **Expense** is filed under it
 - An **Income** belongs to exactly one person
 - A **Transaction** carries one **Priority** and one **Frequency**
 - A recurring **Expense** or **Income** carries three figures derived from a single **Basis**;
@@ -143,8 +148,8 @@ _Avoid_: source
 > **Domain expert:** "Right. Which is why I don't call the green one 'positive' — a positive
 > amount is the red one."
 >
-> **Dev:** "And the category on a **Transaction** — is that the same list as the
-> **Expense Categories**?"
+> **Dev:** "And the **Category** on a **Transaction** — is that the same list your
+> **Expenses** are filed under?"
 >
 > **Domain expert:** "Same list, yes. I maintain it in one place. If a purchase doesn't fit
 > anything, I add the category there first, then file the purchase under it."
@@ -153,25 +158,36 @@ _Avoid_: source
 >
 > **Domain expert:** "No, and I don't want to — that's how I ended up with 'groceries',
 > 'Groceries' and 'food shop' meaning the same thing."
+>
+> **Dev:** "If I link a **Transaction** to the 'Weekly shop' **Expense**, can I still file it
+> under Household?"
+>
+> **Domain expert:** "No. Once it's linked, it sits wherever 'Weekly shop' sits. I only pick a
+> **Category** myself for **Unplanned** purchases. If I move 'Weekly shop' to another
+> Category, everything linked to it moves too."
 
 ## Flagged ambiguities
 
 - **"positive"** was used for both the sign of an amount and for money coming in — and they
   mean opposite things. A positive `amount` is a **Spend**. Resolved: **Inflow** is the term
   for money arriving; "positive" refers only to the sign of a number, never to direction.
-- **"category"** was used for both **Expense Category** and the label on a **Transaction**.
-  Resolved: there is one vocabulary, and **Expense Category** is it. A Transaction is filed
-  under an **Expense Category**, chosen from the maintained list — new categories are created
-  on the Categories page, never invented mid-entry. The name "Expense Category" is a
-  historical narrowing; it governs Transactions too.
-  The list governs what can be *chosen*, not what is *held* — an Expense holds its category
-  as a text label, so "filed under" is a rule the household keeps, not one the database
-  enforces. A Transaction links to its Expense Category by id instead, so a rename never
-  touches it.
-- **"category" on a Transaction** named two fields: the linked **Expense Category** and a
-  free text label from the spreadsheet import, both shown as "Category" at some point.
-  Resolved: the link is the filing; the text label is the **Group**, not an Expense Category.
-  Renaming an Expense Category leaves every Group alone.
+- **"category"** was used for both **Category** and the label on a **Transaction**.
+  Resolved: there is one list, and **Category** is it. Expenses, Transactions and Receipt
+  line items are all filed under a Category chosen from the list — new ones are created on
+  the Categories page, never invented mid-entry. Every Expense is filed under exactly one
+  Category, a Category an Expense uses cannot be deleted, and renaming a Category shows on
+  every record filed under it.
+- **"Expense Category"** was the old name for **Category**, a historical narrowing from when
+  only Expenses were filed. Resolved: say **Category**; "expense category" suggests a second,
+  Expense-only list that does not exist.
+- **"category" on a Transaction** named two fields: the linked **Category** and a free text
+  label from the spreadsheet import, both shown as "Category" at some point. Resolved: the
+  link is the filing; the text label is the **Group**, not a Category. Renaming a Category
+  leaves every Group alone.
+- **"Uncategorised"** is the placeholder **Group** on a Transaction with no Group of its own.
+  Resolved: it means "no Group" and says nothing about the **Category**; a Transaction showing
+  Group "Uncategorised" may still be filed under a Category. Do not name a Category
+  "Uncategorised".
 - **"amount"** on an **Expense** or **Income** is three figures, not one. Resolved: they are
   derived from a single entered figure and its **Basis**, so they never disagree; there is no
   independent "fortnightly amount" to set.
@@ -192,6 +208,9 @@ _Avoid_: source
   the Member as tax evidence. Resolved: the **Household owns** every Receipt (mandatory); a
   Receipt is **attributed to at most one Member** (optional, soft). "belongs to one Member"
   was too strong.
+- **"attribute"** was used both for a Receipt's **Member** and for tying a Receipt line item
+  to an **Expense** or **Category**. Resolved: "attribute" is for Members only. A line item is
+  **linked** to an Expense and **filed** under a Category, the same words as a Transaction.
 - **"user" / "person"** arrive with the analytics and auth tooling (PostHog shows "persons",
   better-auth's table is `user`) and both mean **Member**. Resolved: activity, errors and AI
   spend are attributed to a **Member**, and to the **Household** once scoping exists;
