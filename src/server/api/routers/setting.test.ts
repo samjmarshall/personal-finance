@@ -1,91 +1,122 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { type Respond, recordingDb } from "~/server/db/recording-db.fake";
+import { settingRouter } from "./setting";
 
-// Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
-// (and through them ~/env). Stub those so this stays a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
+// Characterizes the router before it moves to src/server/settings/: the SQL it
+// sends and the codes and messages it returns must survive the move unchanged.
 
-const { createCallerFactory } = await import("~/server/api/trpc");
-const { settingRouter } = await import("./setting");
-const { appSettings } = await import("~/server/settings/settings.schema");
-const { FORTNIGHT_ANCHOR_KEY } = await import(
-	"~/server/settings/settings.constants"
-);
+const router = createTRPCRouter({ setting: settingRouter });
 
-function caller(db: unknown) {
-	return createCallerFactory(settingRouter)({
+function harness(
+	respond?: Respond,
+	session: { user: { id: string } } | null = { user: { id: "member-1" } },
+) {
+	const { db, queries } = recordingDb(respond);
+	const caller = createCallerFactory(router)({
 		db,
-		session: { user: { id: "user-1" } },
+		session,
+		services: {},
 		headers: new Headers(),
 	} as never);
+	return { setting: caller.setting, queries };
 }
 
-// Fake db whose insert().values().onConflictDoUpdate().returning() yields the given
-// rows, recording what the upsert was handed so the test can assert the key/value.
-// biome-ignore lint/suspicious/noExplicitAny: hand-rolled db stands in for drizzle.
-function upsertDb(returning: any[]) {
-	// biome-ignore lint/suspicious/noExplicitAny: captured drizzle call args.
-	const captured: { values?: any; conflict?: any } = {};
-	return {
-		captured,
-		db: {
-			insert: () => ({
-				// biome-ignore lint/suspicious/noExplicitAny: captured drizzle call args.
-				values: (v: any) => {
-					captured.values = v;
-					return {
-						// biome-ignore lint/suspicious/noExplicitAny: captured drizzle call args.
-						onConflictDoUpdate: (c: any) => {
-							captured.conflict = c;
-							return { returning: async () => returning };
-						},
-					};
-				},
-			}),
-		},
-	};
-}
+describe("fortnightAnchor", () => {
+	it("selects the value under the fortnight anchor key", async () => {
+		const { setting, queries } = harness(() => [["2026-08-26"]]);
 
-beforeEach(() => vi.spyOn(console, "error").mockImplementation(() => {}));
-afterEach(() => vi.restoreAllMocks());
-
-describe("setting.setFortnightAnchor", () => {
-	it("upserts the anchor under the shared key and returns the stored string", async () => {
-		const { captured, db } = upsertDb([{ value: "2026-08-26" }]);
-
-		const result = await caller(db).setFortnightAnchor({
-			anchor: "2026-08-26",
-		});
-
-		expect(captured.values).toEqual({
-			key: FORTNIGHT_ANCHOR_KEY,
-			value: "2026-08-26",
-		});
-		expect(captured.conflict.target).toBe(appSettings.key);
-		expect(captured.conflict.set).toEqual({ value: "2026-08-26" });
-		// A Date over the wire would re-read a day early for behind-UTC members —
-		// the drift the query's string contract exists to avoid.
-		expect(result).toBe("2026-08-26");
-		expect(typeof result).toBe("string");
+		await expect(setting.fortnightAnchor()).resolves.toBe("2026-08-26");
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "fortnightAnchor",
+			    ],
+			    "sql": "select "value" from "app_setting" where "app_setting"."key" = $1",
+			  },
+			]
+		`);
 	});
 
-	it("raises INTERNAL_SERVER_ERROR when the upsert returns no row", async () => {
-		const { db } = upsertDb([]);
+	it("gives null when no row has the key", async () => {
+		const { setting } = harness();
+
+		await expect(setting.fortnightAnchor()).resolves.toBeNull();
+	});
+
+	it("gives null when the stored value is not a real date", async () => {
+		const { setting } = harness(() => [["2026-02-30"]]);
+
+		await expect(setting.fortnightAnchor()).resolves.toBeNull();
+	});
+});
+
+describe("setFortnightAnchor", () => {
+	it("upserts the anchor under the shared key and returns the stored string", async () => {
+		const { setting, queries } = harness(() => [
+			["fortnightAnchor", "2026-08-26"],
+		]);
+
+		// A Date over the wire would re-read a day early for behind-UTC members —
+		// the drift the query's string contract exists to avoid.
+		await expect(
+			setting.setFortnightAnchor({ anchor: "2026-08-26" }),
+		).resolves.toBe("2026-08-26");
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "fortnightAnchor",
+			      "2026-08-26",
+			      "2026-08-26",
+			    ],
+			    "sql": "insert into "app_setting" ("key", "value") values ($1, $2) on conflict ("key") do update set "value" = $3 returning "key", "value"",
+			  },
+			]
+		`);
+	});
+
+	it("fails as a 500 when the upsert returns no row", async () => {
+		const { setting } = harness();
 
 		await expect(
-			caller(db).setFortnightAnchor({ anchor: "2026-08-26" }),
+			setting.setFortnightAnchor({ anchor: "2026-08-26" }),
 		).rejects.toMatchObject({
 			code: "INTERNAL_SERVER_ERROR",
 			message: "Failed to set fortnight anchor.",
 		});
 	});
 
-	it("rejects a malformed date before it reaches the db", async () => {
-		const { captured, db } = upsertDb([{ value: "2026-02-30" }]);
+	it("rejects a malformed date before any query", async () => {
+		const { setting, queries } = harness();
 
 		await expect(
-			caller(db).setFortnightAnchor({ anchor: "2026-02-30" }),
-		).rejects.toThrow();
-		expect(captured.values).toBeUndefined();
+			setting.setFortnightAnchor({ anchor: "2026-02-30" }),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		expect(queries).toEqual([]);
+	});
+});
+
+describe("signed out", () => {
+	it.each([
+		[
+			"fortnightAnchor",
+			(s: ReturnType<typeof harness>["setting"]) => s.fortnightAnchor(),
+		],
+		[
+			"setFortnightAnchor",
+			(s: ReturnType<typeof harness>["setting"]) =>
+				s.setFortnightAnchor({ anchor: "2026-08-26" }),
+		],
+	])("rejects %s before any query", async (_name, call) => {
+		const { setting, queries } = harness(undefined, null);
+
+		await expect(call(setting)).rejects.toMatchObject({
+			code: "UNAUTHORIZED",
+		});
+		expect(queries).toEqual([]);
 	});
 });
