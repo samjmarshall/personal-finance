@@ -182,7 +182,7 @@ describe("expenses", () => {
 
 describe("categories", () => {
 	it("listCategories counts each category's expenses by name, ordered by sort order then name", async () => {
-		// The driver sends count(*) as text; mapWith(Number) turns it into a number.
+		// Driver sends the count as text; the repository must return a number.
 		const { repository, queries } = harness(() => [[...CATEGORY_ROW, "2"]]);
 
 		await expect(repository.listCategories()).resolves.toEqual([

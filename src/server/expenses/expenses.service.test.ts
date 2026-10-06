@@ -3,19 +3,9 @@ import type { Category } from "~/domain/categories";
 import type { Expense } from "~/domain/expenses";
 import { CommitmentKind } from "~/lib/constants";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import { failedQuery, throwing, unstaged } from "~/test/fakes";
 import type { ExpensesRepository } from "./expenses.repository";
 import { ExpensesService } from "./expenses.service";
-
-// Production shape: drizzle wraps the postgres.js error in a DrizzleQueryError
-// with the driver error on `.cause`.
-function pgError(code: string) {
-	const driver = Object.assign(new Error("postgres"), { code });
-	return Object.assign(new Error("Failed query"), { cause: driver });
-}
-
-const unstaged = async (): Promise<never> => {
-	throw new Error("not staged");
-};
 
 function serviceWith(staged: Partial<ExpensesRepository>) {
 	const repository: ExpensesRepository = {
@@ -37,10 +27,6 @@ function serviceWith(staged: Partial<ExpensesRepository>) {
 	};
 	return new ExpensesService({ repository });
 }
-
-const throwing = (error: Error) => async (): Promise<never> => {
-	throw error;
-};
 
 const EXPENSE: Expense = {
 	id: 7,
@@ -199,7 +185,7 @@ describe("createCategory", () => {
 	});
 
 	it("turns a duplicate name into a ConflictError", async () => {
-		const error = pgError("23505");
+		const error = failedQuery("23505");
 		const { service } = creating({ insertCategory: throwing(error) });
 
 		const thrown = await service
@@ -211,7 +197,7 @@ describe("createCategory", () => {
 	});
 
 	it("rethrows any other violation unchanged", async () => {
-		const error = pgError("23503");
+		const error = failedQuery("23503");
 		const { service } = creating({ insertCategory: throwing(error) });
 
 		await expect(service.createCategory({ name: "Food" })).rejects.toBe(error);
@@ -267,7 +253,7 @@ describe("updateCategory", () => {
 	});
 
 	it("turns a duplicate name into a ConflictError", async () => {
-		const error = pgError("23505");
+		const error = failedQuery("23505");
 		const { service } = updating({ updateCategory: throwing(error) });
 
 		const thrown = await service
@@ -279,7 +265,7 @@ describe("updateCategory", () => {
 	});
 
 	it("rethrows any other violation unchanged", async () => {
-		const error = pgError("23503");
+		const error = failedQuery("23503");
 		const { service } = updating({ updateCategory: throwing(error) });
 
 		await expect(
@@ -345,7 +331,7 @@ describe("deleteCategory", () => {
 		expect(deleted).toEqual([]);
 	});
 
-	// "1 expense still use it." is today's grammar, pinned as is.
+	// Wrong grammar for one expense ("use"), kept to match the old message.
 	it.each([
 		[1, 'Cannot delete "Food" — 1 expense still use it.'],
 		[2, 'Cannot delete "Food" — 2 expenses still use it.'],

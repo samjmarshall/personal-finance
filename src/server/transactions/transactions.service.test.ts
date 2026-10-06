@@ -10,19 +10,9 @@ import type {
 	ExpensesService,
 	NamesById,
 } from "~/server/expenses/expenses.service";
+import { failedQuery, throwing, unstaged } from "~/test/fakes";
 import type { TransactionsRepository } from "./transactions.repository";
 import { TransactionsService } from "./transactions.service";
-
-// Production shape: drizzle wraps the postgres.js error in a DrizzleQueryError
-// with the driver error on `.cause`.
-function pgError(code: string) {
-	const driver = Object.assign(new Error("postgres"), { code });
-	return Object.assign(new Error("Failed query"), { cause: driver });
-}
-
-const unstaged = async (): Promise<never> => {
-	throw new Error("not staged");
-};
 
 type ExpenseNames = Pick<ExpensesService, "namesByIds">;
 
@@ -44,10 +34,6 @@ function serviceWith(
 	const expenses: ExpenseNames = { namesByIds: unstaged, ...stagedExpenses };
 	return new TransactionsService({ repository, expenses });
 }
-
-const throwing = (error: Error) => async (): Promise<never> => {
-	throw error;
-};
 
 const TRANSACTION: Transaction = {
 	id: 1,
@@ -89,7 +75,7 @@ describe("create", () => {
 	});
 
 	it("turns a foreign-key violation into a ConflictError", async () => {
-		const error = pgError("23503");
+		const error = failedQuery("23503");
 		const service = serviceWith({ insert: throwing(error) });
 
 		const thrown = await service.create(FIELDS).catch((e: unknown) => e);
@@ -102,7 +88,7 @@ describe("create", () => {
 	});
 
 	it("rethrows any other violation unchanged", async () => {
-		const error = pgError("23505");
+		const error = failedQuery("23505");
 		const service = serviceWith({ insert: throwing(error) });
 
 		await expect(service.create(FIELDS)).rejects.toBe(error);
@@ -146,7 +132,7 @@ describe("update", () => {
 	});
 
 	it("turns a foreign-key violation into a ConflictError", async () => {
-		const error = pgError("23503");
+		const error = failedQuery("23503");
 		const service = serviceWith({ update: throwing(error) });
 
 		const thrown = await service
@@ -178,7 +164,7 @@ describe("linkExpense", () => {
 	});
 
 	it("names only the expense in a foreign-key ConflictError", async () => {
-		const error = pgError("23503");
+		const error = failedQuery("23503");
 		const service = serviceWith({ setExpense: throwing(error) });
 
 		const thrown = await service

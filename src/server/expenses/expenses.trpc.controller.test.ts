@@ -4,8 +4,8 @@ import type { ExpenseConsumption } from "~/domain/transactions";
 import { CommitmentKind } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
-import { NotFoundError } from "~/server/errors/domain-errors";
 import type { TransactionsService } from "~/server/transactions/transactions.service";
+import { recorder } from "~/test/fakes";
 import type { ExpensesService } from "./expenses.service";
 import { expenseRouter } from "./expenses.trpc.controller";
 
@@ -22,15 +22,6 @@ function callerWith(
 		services: { expenses, transactions },
 		session,
 	});
-}
-
-function recorder<T>(result: T) {
-	const calls: unknown[][] = [];
-	const method = async (...args: unknown[]) => {
-		calls.push(args);
-		return result;
-	};
-	return { method, calls };
 }
 
 const EXPENSE: Expense = {
@@ -104,14 +95,20 @@ describe("expense router", () => {
 		expect(calls).toEqual([[7]]);
 	});
 
-	it("surfaces a NotFoundError as NOT_FOUND", async () => {
-		const list = async (): Promise<never> => {
-			throw new NotFoundError("Expense not found.");
+	it("surfaces update's missing-row error as INTERNAL_SERVER_ERROR", async () => {
+		const update = async (): Promise<never> => {
+			throw new Error("Failed to update expense.");
 		};
 
-		await expect(callerWith({ list }).expense.list()).rejects.toMatchObject({
-			code: "NOT_FOUND",
-			message: "Expense not found.",
+		await expect(
+			callerWith({ update }).expense.update({
+				id: 7,
+				...FIELDS,
+				kind: CommitmentKind.Recurring,
+			}),
+		).rejects.toMatchObject({
+			code: "INTERNAL_SERVER_ERROR",
+			message: "Failed to update expense.",
 		});
 	});
 

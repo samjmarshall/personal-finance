@@ -4,6 +4,7 @@ import { Frequency, Priority } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
 import { NotFoundError } from "~/server/errors/domain-errors";
+import { recorder } from "~/test/fakes";
 import type { TransactionsService } from "./transactions.service";
 import { transactionRouter } from "./transactions.trpc.controller";
 
@@ -14,15 +15,6 @@ function callerWith(
 	session?: null,
 ) {
 	return createTestCaller(router, { services: { transactions }, session });
-}
-
-function recorder<T>(result: T) {
-	const calls: unknown[][] = [];
-	const method = async (...args: unknown[]) => {
-		calls.push(args);
-		return result;
-	};
-	return { method, calls };
 }
 
 const TRANSACTION: Transaction = {
