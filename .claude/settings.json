@@ -1,6 +1,11 @@
 {
 	"model": "opus",
 	"tui": "default",
+	"autoMemoryEnabled": false,
+	"disableWorkflows": false,
+	"disableRemoteControl": true,
+	"disableClaudeAiConnectors": true,
+	"disableArtifact": true,
 	"enableAllProjectMcpServers": false,
 	"enabledMcpjsonServers": [
 		"chrome-devtools",
@@ -41,10 +46,6 @@
 			"Read(!.env.example)"
 		]
 	},
-	"disableWorkflows": false,
-	"disableRemoteControl": true,
-	"disableClaudeAiConnectors": true,
-	"disableArtifact": true,
 	"hooks": {
 		"PreToolUse": [
 			{
