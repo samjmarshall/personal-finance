@@ -49,8 +49,6 @@ const TODO = [
 	"3 src/server/api/routers/cashflow.ts → ~/server/income/income.schema",
 	"3 src/server/api/routers/cashflow.ts → ~/server/settings/settings.schema",
 	"3 src/server/api/routers/cashflow.ts → ~/server/transactions/transactions.schema",
-	"3 src/server/api/routers/income.ts → drizzle-orm",
-	"3 src/server/api/routers/income.ts → ~/server/income/income.schema",
 	"3 src/server/api/routers/receipts.ts → drizzle-orm",
 	"3 src/server/api/routers/receipts.ts → ~/server/auth/auth.schema",
 	"3 src/server/api/routers/receipts.ts → ~/server/expenses/categories.schema",

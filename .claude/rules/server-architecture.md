@@ -139,9 +139,9 @@ Split on real pain, not in advance.
 - One plain `createTRPCRouter({ … })` per file in `src/server/api/routers/<name>.ts`;
   procedures talk to Drizzle directly via `ctx.db`.
 - Compose the pre-built router objects in `src/server/api/root.ts`
-  (`allowedSender, balance, cashflow, income, receipt, setting`; `category` and
-  `expense` come from `src/server/expenses/`, and `transaction` from
-  `src/server/transactions/`).
+  (`allowedSender, balance, cashflow, receipt, setting`; `category` and
+  `expense` come from `src/server/expenses/`, `income` from
+  `src/server/income/`, and `transaction` from `src/server/transactions/`).
 - Errors are thrown inline as `TRPCError`, or through the shared helpers in
   `src/server/errors/`, which throw the non-tRPC errors described under
   [Errors](#errors): `parseError(error)` (normalises a driver error into a
@@ -149,7 +149,7 @@ Split on real pain, not in advance.
   SQLSTATE; `parse-error.ts`), `assertRow(row, "op")` (`.returning()` presence,
   `assert-row.ts`) and `rethrowFkConflict(error, message)` (`fk-conflict.ts`).
   `src/server/api/lib/` only re-exports `parse-error` and `assert-row` until
-  step 6 of the migration deletes it. Step 7 rewrites this section.
+  step 7 of the migration deletes it. Step 8 rewrites this section.
 - When a router domain migrates, the router becomes the controller tier over a
   `<domain>.service.ts`; same construction rules apply.
 
