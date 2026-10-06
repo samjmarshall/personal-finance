@@ -5,6 +5,8 @@ import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository
 import { ExpensesService } from "~/server/expenses/expenses.service";
 import { DrizzleIncomeRepository } from "~/server/income/income.repository";
 import { IncomeService } from "~/server/income/income.service";
+import { DrizzleSettingsRepository } from "~/server/settings/settings.repository";
+import { SettingsService } from "~/server/settings/settings.service";
 import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
 import { TransactionsService } from "~/server/transactions/transactions.service";
 
@@ -21,6 +23,9 @@ export const services = {
 	expenses,
 	income: new IncomeService({
 		repository: new DrizzleIncomeRepository({ db }),
+	}),
+	settings: new SettingsService({
+		repository: new DrizzleSettingsRepository({ db }),
 	}),
 	transactions: new TransactionsService({
 		repository: new DrizzleTransactionsRepository({ db }),

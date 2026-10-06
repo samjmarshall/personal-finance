@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { createTestCaller } from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
 import { type Respond, recordingDb } from "~/server/db/recording-db.fake";
-import { settingRouter } from "./setting";
+import { DrizzleSettingsRepository } from "~/server/settings/settings.repository";
+import { SettingsService } from "~/server/settings/settings.service";
+import { settingRouter } from "~/server/settings/settings.trpc.controller";
 
 // Characterizes the router before it moves to src/server/settings/: the SQL it
 // sends and the codes and messages it returns must survive the move unchanged.
@@ -13,12 +16,13 @@ function harness(
 	session: { user: { id: string } } | null = { user: { id: "member-1" } },
 ) {
 	const { db, queries } = recordingDb(respond);
-	const caller = createCallerFactory(router)({
-		db,
+	const service = new SettingsService({
+		repository: new DrizzleSettingsRepository({ db: db as never }),
+	});
+	const caller = createTestCaller(router, {
+		services: { settings: service },
 		session,
-		services: {},
-		headers: new Headers(),
-	} as never);
+	});
 	return { setting: caller.setting, queries };
 }
 
