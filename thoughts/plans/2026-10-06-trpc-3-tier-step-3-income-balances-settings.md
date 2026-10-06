@@ -201,11 +201,11 @@ One change, three commits.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes. Commit 1 is green against the unchanged `income.ts`, and Commit A is green with no snapshot change.
-- [ ] `make build` passes
-- [ ] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/income/income.service.ts src/server/income/income.trpc.controller.ts` returns nothing
-- [ ] `src/server/api/routers/income.ts` no longer exists, and the to-do list has 23 entries
+- [x] `make check` passes
+- [x] `make test` passes. Commit 1 is green against the unchanged `income.ts`, and Commit A is green with no snapshot change.
+- [x] `make build` passes
+- [x] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/income/income.service.ts src/server/income/income.trpc.controller.ts` returns nothing
+- [x] `src/server/api/routers/income.ts` no longer exists, and the to-do list has 23 entries
 - [ ] At https://personal-finance.localhost, the Income page behaves as before:
   - the list order
   - creating a recurring and a one-time Income. A one-time Income with no amount shows the form error.
@@ -270,11 +270,11 @@ One change, three commits.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes. Commit 1 is green against the unchanged `balance.ts`, and Commit A is green with no snapshot change.
-- [ ] `make build` passes
-- [ ] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/balances/balances.service.ts src/server/balances/balances.trpc.controller.ts` returns nothing
-- [ ] `src/server/api/routers/balance.ts` no longer exists, and the to-do list has 21 entries
+- [x] `make check` passes
+- [x] `make test` passes. Commit 1 is green against the unchanged `balance.ts`, and Commit A is green with no snapshot change.
+- [x] `make build` passes
+- [x] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/balances/balances.service.ts src/server/balances/balances.trpc.controller.ts` returns nothing
+- [x] `src/server/api/routers/balance.ts` no longer exists, and the to-do list has 21 entries
 - [ ] At https://personal-finance.localhost, the dashboard balance card behaves as before:
   - it shows the latest snapshot
   - recording a new balance updates the card
