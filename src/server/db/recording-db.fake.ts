@@ -18,24 +18,38 @@ export function recordingDb(respond: Respond = () => []) {
 	const queries: RecordedQuery[] = [];
 	const record = (sql: string) =>
 		queries.push({ sql, params: [], method: "execute" });
-	const db = drizzle(async (sql, params, method) => {
+	const run = async (
+		sql: string,
+		params: unknown[],
+		method: RecordedQuery["method"],
+	) => {
 		const query = { sql, params, method };
 		queries.push(query);
 		const response = respond(query);
 		if (response instanceof Error) throw response;
 		return { rows: response };
+	};
+	let inTransaction = false;
+	const db = drizzle(async (sql, params, method) => {
+		// In production this statement would skip the open transaction.
+		if (inTransaction) throw new Error(`ran outside the transaction: ${sql}`);
+		return run(sql, params, method);
 	});
-	// pg-proxy's own transaction throws (pg-proxy/session.js:35-37), so run the
-	// callback over this same db. Fine while nothing here nests transactions.
+	const tx = drizzle(run);
+	// pg-proxy's own transaction throws (pg-proxy/session.js:35-37), so hand the
+	// callback a second db and fail any statement sent to the first meanwhile.
 	db.transaction = async (transaction) => {
 		record("begin");
+		inTransaction = true;
 		try {
-			const result = await transaction(db as never);
+			const result = await transaction(tx as never);
 			record("commit");
 			return result;
 		} catch (error) {
 			record("rollback");
 			throw error;
+		} finally {
+			inTransaction = false;
 		}
 	};
 	return { db, queries };
