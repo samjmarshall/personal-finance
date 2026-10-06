@@ -349,12 +349,12 @@ One change, three commits.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes. Commit 1 is green against the unchanged `setting.ts`, and Commit A is green with no snapshot change.
-- [ ] `make build` passes
-- [ ] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/settings/settings.service.ts src/server/settings/settings.trpc.controller.ts` returns nothing
-- [ ] `src/server/api/routers/` holds only `allowed-sender`, `cashflow` and `receipts` files, and the to-do list has 19 entries
-- [ ] Every path named in the edited rules-file sections exists (`git ls-files` check)
+- [x] `make check` passes
+- [x] `make test` passes. Commit 1 is green against the unchanged `setting.ts`, and Commit A is green with no snapshot change.
+- [x] `make build` passes
+- [x] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/settings/settings.service.ts src/server/settings/settings.trpc.controller.ts` returns nothing
+- [x] `src/server/api/routers/` holds only `allowed-sender`, `cashflow` and `receipts` files, and the to-do list has 19 entries
+- [x] Every path named in the edited rules-file sections exists (`git ls-files` check)
 - [ ] At https://personal-finance.localhost, these behave as before:
   - the Settings page shows the saved pay-cycle anchor
   - saving a new anchor persists after a reload
