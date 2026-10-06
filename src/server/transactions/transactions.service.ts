@@ -27,7 +27,6 @@ const distinctLinks = (ids: (number | null)[]) => [
 	...new Set(ids.filter((id) => id !== null)),
 ];
 
-// Null when unlinked or when the row is gone, as the old left join gave.
 const nameOf = (names: ReadonlyMap<number, string>, id: number | null) =>
 	id === null ? null : (names.get(id) ?? null);
 

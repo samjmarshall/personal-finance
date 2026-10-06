@@ -31,7 +31,7 @@ function rethrowNameTaken(error: unknown): never {
 	throw error;
 }
 
-function categoryValues({
+function normalizeCategory({
 	name,
 	description,
 }: CategoryCreateInput): CategoryValues {
@@ -44,7 +44,7 @@ export interface NamesById {
 	categories: ReadonlyMap<number, string>;
 }
 
-const nameById = (rows: NameRow[]) =>
+const toNameMap = (rows: NameRow[]) =>
 	new Map(rows.map(({ id, name }) => [id, name]));
 
 interface ExpensesServiceDeps {
@@ -66,8 +66,7 @@ export class ExpensesService {
 		return assertRow(await this.repository.insert(input), "create expense");
 	}
 
-	// A missing id stays a plain 500, not NotFoundError: that is the code the
-	// member saw before the migration.
+	// Missing id stays a 500, not "not found", to keep what members already see.
 	async update({ id, ...values }: ExpenseUpdateInput): Promise<Expense> {
 		return assertRow(
 			await this.repository.update(id, values),
@@ -86,7 +85,7 @@ export class ExpensesService {
 	async createCategory(input: CategoryCreateInput): Promise<Category> {
 		const sortOrder = await this.repository.nextCategorySortOrder();
 		const row = await this.repository
-			.insertCategory({ ...categoryValues(input), sortOrder })
+			.insertCategory({ ...normalizeCategory(input), sortOrder })
 			.catch(rethrowNameTaken);
 		return assertRow(row, "create category");
 	}
@@ -97,7 +96,7 @@ export class ExpensesService {
 	}: CategoryUpdateInput): Promise<Category> {
 		const existing = await this.findCategoryOrThrow(id);
 		const row = await this.repository
-			.updateCategory(id, categoryValues(input), existing.name)
+			.updateCategory(id, normalizeCategory(input), existing.name)
 			.catch(rethrowNameTaken);
 		return assertRow(row, "update category");
 	}
@@ -129,8 +128,8 @@ export class ExpensesService {
 			categoryIds.length ? this.repository.findCategoryNames(categoryIds) : [],
 		]);
 		return {
-			expenses: nameById(expenseRows),
-			categories: nameById(categoryRows),
+			expenses: toNameMap(expenseRows),
+			categories: toNameMap(categoryRows),
 		};
 	}
 
