@@ -2,10 +2,13 @@ import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Income } from "~/domain/income";
 import { CommitmentKind } from "~/lib/constants";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { createTestCaller } from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
 import { type Respond, recordingDb } from "~/server/db/recording-db.fake";
+import { DrizzleIncomeRepository } from "~/server/income/income.repository";
 import { income } from "~/server/income/income.schema";
-import { incomeRouter } from "./income";
+import { IncomeService } from "~/server/income/income.service";
+import { incomeRouter } from "~/server/income/income.trpc.controller";
 
 // Characterizes the router before it moves to src/server/income/: the SQL it
 // sends and the codes and messages it returns must survive the move unchanged.
@@ -17,12 +20,13 @@ function harness(
 	session: { user: { id: string } } | null = { user: { id: "member-1" } },
 ) {
 	const { db, queries } = recordingDb(respond);
-	const caller = createCallerFactory(router)({
-		db,
+	const service = new IncomeService({
+		repository: new DrizzleIncomeRepository({ db: db as never }),
+	});
+	const caller = createTestCaller(router, {
+		services: { income: service },
 		session,
-		services: {},
-		headers: new Headers(),
-	} as never);
+	});
 	return { income: caller.income, queries };
 }
 
