@@ -28,6 +28,21 @@ describe("expenseCreateDto", () => {
 		);
 	});
 
+	it("rejects a whitespace-only name or category", () => {
+		expect(expenseCreateDto.safeParse({ ...base, name: "  " }).success).toBe(
+			false,
+		);
+		expect(
+			expenseCreateDto.safeParse({ ...base, category: "  " }).success,
+		).toBe(false);
+	});
+
+	it("trims the name and category", () => {
+		expect(
+			expenseCreateDto.parse({ name: " Rent ", category: " Housing " }),
+		).toMatchObject(base);
+	});
+
 	it("rejects a negative fortnight", () => {
 		expect(expenseCreateDto.safeParse({ ...base, year: -1 }).success).toBe(
 			false,
