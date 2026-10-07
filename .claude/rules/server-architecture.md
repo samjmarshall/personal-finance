@@ -31,6 +31,9 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 | `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. `outbox.module.ts` exports `outboxService`. | —                                  |
 | `src/server/observability/`         | shared adapter | Shared observability provider, split OTel API vs SDK. API side (tiers may import): `logging/` (`Logger` port + `OtelLogger`), `tracing/` (`withSpan`, baggage, trace id, trace carrier), `errors/` (`captureException`, `reportError`, thrown-value helpers). SDK side: `sdk/` (boot `otel.ts`, sampler, `SpanAttributeProcessor`, prompt redaction, flush) — imported only by `instrumentation.ts`, route roots (`withFlush`) and test harnesses, never a tier. Framework adapters live with their consumer (`TracingMiddleware` in `src/server/inngest/middleware.ts`). Like `blob-store/` — lives outside any domain. | OTel SDK + PostHog SDKs            |
 
+A domain with no tables, such as `cashflow/`, has no repository: its service
+depends only on other services' ports.
+
 Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts` (earned only).
 
 A sub-resource (own table or router, used only by its parent domain) takes the
@@ -146,8 +149,9 @@ Split on real pain, not in advance.
 - One plain `createTRPCRouter({ … })` per file in `src/server/api/routers/<name>.ts`;
   procedures talk to Drizzle directly via `ctx.db`.
 - Compose the pre-built router objects in `src/server/api/root.ts`
-  (`cashflow, receipt`; `allowedSender` comes from `src/server/email/`,
-  `balance` from `src/server/balances/`, `category` and `expense` from
+  (`receipt`; `allowedSender` comes from `src/server/email/`,
+  `balance` from `src/server/balances/`, `cashflow` from
+  `src/server/cashflow/`, `category` and `expense` from
   `src/server/expenses/`, `income` from `src/server/income/`, `setting` from
   `src/server/settings/`, and `transaction` from `src/server/transactions/`).
 - Errors are thrown inline as `TRPCError`, or through the shared helpers in
