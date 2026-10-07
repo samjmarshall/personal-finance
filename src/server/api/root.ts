@@ -1,8 +1,8 @@
-import { allowedSenderRouter } from "~/server/api/routers/allowed-sender";
 import { cashflowRouter } from "~/server/api/routers/cashflow";
 import { receiptRouter } from "~/server/api/routers/receipts";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { balanceRouter } from "~/server/balances/balances.trpc.controller";
+import { allowedSenderRouter } from "~/server/email/allowed-sender.trpc.controller";
 import { categoryRouter } from "~/server/expenses/categories.trpc.controller";
 import { expenseRouter } from "~/server/expenses/expenses.trpc.controller";
 import { incomeRouter } from "~/server/income/income.trpc.controller";

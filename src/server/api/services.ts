@@ -1,6 +1,10 @@
+import { DrizzleMembersRepository } from "~/server/auth/members.repository";
+import { MembersService } from "~/server/auth/members.service";
 import { DrizzleBalancesRepository } from "~/server/balances/balances.repository";
 import { BalancesService } from "~/server/balances/balances.service";
 import { db } from "~/server/db";
+import { DrizzleAllowedSenderRepository } from "~/server/email/allowed-sender.repository";
+import { AllowedSenderService } from "~/server/email/allowed-sender.service";
 import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
 import { ExpensesService } from "~/server/expenses/expenses.service";
 import { DrizzleIncomeRepository } from "~/server/income/income.repository";
@@ -14,9 +18,18 @@ const expenses = new ExpensesService({
 	repository: new DrizzleExpensesRepository({ db }),
 });
 
+// Off `services`: no controller calls it, only other services.
+const members = new MembersService({
+	repository: new DrizzleMembersRepository({ db }),
+});
+
 // One instance per service, shared by every request. The build loads this
 // file, so no service may throw on a missing env var.
 export const services = {
+	allowedSenders: new AllowedSenderService({
+		repository: new DrizzleAllowedSenderRepository({ db }),
+		members,
+	}),
 	balances: new BalancesService({
 		repository: new DrizzleBalancesRepository({ db }),
 	}),

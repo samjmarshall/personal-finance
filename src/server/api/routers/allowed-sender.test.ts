@@ -1,15 +1,20 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AllowedSender } from "~/domain/email";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { createTestCaller } from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
+import { DrizzleMembersRepository } from "~/server/auth/members.repository";
+import { MembersService } from "~/server/auth/members.service";
 import {
 	pgError,
 	type Respond,
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
+import { DrizzleAllowedSenderRepository } from "~/server/email/allowed-sender.repository";
 import { allowedSenders } from "~/server/email/allowed-sender.schema";
-import { allowedSenderRouter } from "./allowed-sender";
+import { AllowedSenderService } from "~/server/email/allowed-sender.service";
+import { allowedSenderRouter } from "~/server/email/allowed-sender.trpc.controller";
 
 // Characterizes the router before it moves to src/server/email/: the SQL it
 // sends and the codes and messages it returns must survive the move unchanged.
@@ -21,12 +26,16 @@ function harness(
 	session: { user: { id: string } } | null = { user: { id: "member-1" } },
 ) {
 	const { db, queries } = recordingDb(respond);
-	const caller = createCallerFactory(router)({
-		db,
+	const service = new AllowedSenderService({
+		repository: new DrizzleAllowedSenderRepository({ db: db as never }),
+		members: new MembersService({
+			repository: new DrizzleMembersRepository({ db: db as never }),
+		}),
+	});
+	const caller = createTestCaller(router, {
+		services: { allowedSenders: service },
 		session,
-		services: {},
-		headers: new Headers(),
-	} as never);
+	});
 	return { allowedSender: caller.allowedSender, queries };
 }
 
@@ -34,7 +43,7 @@ function harness(
 const NOW = new Date("2026-10-07T00:00:00.000Z");
 
 const COLUMNS = Object.keys(getTableColumns(allowedSenders));
-const LIST_COLUMNS = [...COLUMNS, "userName"];
+const isNameLookup = (sql: string) => sql.includes('from "user"');
 
 const SAM_SENDER = {
 	id: 1,
@@ -58,10 +67,14 @@ afterEach(() => vi.useRealTimers());
 
 describe("allowedSender.list", () => {
 	it("lists every Member's addresses with owner names, flagging the caller's own", async () => {
-		const { allowedSender, queries } = harness(() => [
-			rowOf(LIST_COLUMNS, { ...SAM_SENDER, userName: "Sam" }),
-			rowOf(LIST_COLUMNS, { ...ALEX_SENDER, userName: "Alex" }),
-		]);
+		const { allowedSender, queries } = harness(({ sql }) =>
+			isNameLookup(sql)
+				? [
+						["member-1", "Sam"],
+						["member-2", "Alex"],
+					]
+				: [rowOf(COLUMNS, SAM_SENDER), rowOf(COLUMNS, ALEX_SENDER)],
+		);
 
 		await expect(allowedSender.list()).resolves.toEqual([
 			{ ...SAM_SENDER, userName: "Sam", isOwn: true },
@@ -72,16 +85,24 @@ describe("allowedSender.list", () => {
 			  {
 			    "method": "all",
 			    "params": [],
-			    "sql": "select "allowed_sender"."id", "allowed_sender"."email", "allowed_sender"."userId", "allowed_sender"."createdAt", "user"."name" from "allowed_sender" left join "user" on "allowed_sender"."userId" = "user"."id" order by "allowed_sender"."email" asc",
+			    "sql": "select "id", "email", "userId", "createdAt" from "allowed_sender" order by "allowed_sender"."email" asc",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      "member-1",
+			      "member-2",
+			    ],
+			    "sql": "select "id", "name" from "user" where "user"."id" in ($1, $2)",
 			  },
 			]
 		`);
 	});
 
 	it("gives a null userName when the owner has no user row", async () => {
-		const { allowedSender } = harness(() => [
-			rowOf(LIST_COLUMNS, { ...ALEX_SENDER, userName: null }),
-		]);
+		const { allowedSender } = harness(({ sql }) =>
+			isNameLookup(sql) ? [] : [rowOf(COLUMNS, ALEX_SENDER)],
+		);
 
 		await expect(allowedSender.list()).resolves.toEqual([
 			{ ...ALEX_SENDER, userName: null, isOwn: false },
