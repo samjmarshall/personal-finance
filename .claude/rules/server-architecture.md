@@ -36,22 +36,18 @@ depends only on other services' ports.
 
 Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts` (earned only).
 
-A sub-resource (own table or router, used only by its parent domain) takes the
-child's name as the file prefix in the parent folder, never a nested folder:
-`email/allowed-sender.{schema,repository,service,trpc.controller}.ts`. It gets its
-own service only under the [service split rule](#service-split-rule)
-([adr023](../../docs/adr/adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md)).
+A domain's child is one of two kinds
+([adr023](../../docs/adr/adr023-domain-hierarchy-two-kinds-of-child-flat-folders.md)).
+No middle kind: never prefixed child files in another domain's folder.
 
-A domain's child is one of three kinds (adr023):
+| Kind           | Test                                                                                              | Home                                                             | Example                                  |
+| -------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------- |
+| Part of parent | All three: made and deleted with the parent row; no other domain links to it by id; no page or router of its own. | The parent's files.                                              | `receipt_item` in `receipts.schema.ts`   |
+| Own domain     | Any part-of-parent check fails.                                                                   | Top-level `src/server/<name>/`, named like `src/domain/<name>/`. | `categories/` ↔ `src/domain/categories/` |
 
-| Kind           | Test                                                        | Home                                       | Example                                |
-| -------------- | ----------------------------------------------------------- | ------------------------------------------ | -------------------------------------- |
-| Part of parent | Lives and dies with the parent row; no page or router.      | The parent's files.                        | `receipt_item` in `receipts.schema.ts` |
-| Sub-resource   | Own table or controller, used only by the parent.           | `<parent>/<child>.*` prefixed files.       | `email/allowed-sender.*`               |
-| Own domain     | Linked by id from 2+ domains, or made on its own page.      | Top-level `src/server/<name>/`, named like `src/domain/<name>/`. | `categories/` ↔ `src/domain/categories/` |
-
-Folders stay flat. A sub-resource becomes its own domain only once every link to
-it is an id.
+`email/allowed-sender.*` is the last prefixed child; it moves to
+`allowed-senders/` in step 7. Folders stay flat. A child becomes its own domain
+only once every link to it is an id.
 
 ## Construction rules
 

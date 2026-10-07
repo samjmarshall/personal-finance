@@ -24,7 +24,7 @@ The name text is the only reason Category sits in expenses. It ties the two toge
 - **A delete** counts Expenses by name and refuses with `Cannot delete "X" — N expenses still use it.`
 - **`category.list`** joins `expense` to return `expenseCount` for the Categories page.
 
-[adr022](adr022-cross-domain-data-through-the-owning-service.md) lets a domain reach another's data only through its service, with no upward calls. [adr023](adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md) says a child linked by two or more domains is its own domain, but may only move once every link to it is an id.
+[adr022](adr022-cross-domain-data-through-the-owning-service.md) lets a domain reach another's data only through its service, with no upward calls. [adr023](adr023-domain-hierarchy-two-kinds-of-child-flat-folders.md) says a child linked by two or more domains is its own domain, but may only move once every link to it is an id.
 
 How does Category leave expenses without a rename, delete or count becoming a write or read across domains?
 
@@ -113,7 +113,7 @@ Specifics that bind:
 
 - Refines: [adr022](adr022-cross-domain-data-through-the-owning-service.md) — adds categories at the bottom of the dependency graph
 - Refined by: [adr025](adr025-linked-expense-sets-the-category.md) — a linked Expense sets the Category of its Transactions and Receipt line items
-- Applies: [adr023](adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md) — Category is the first promotion to its own domain
+- Applies: [adr023](adr023-domain-hierarchy-two-kinds-of-child-flat-folders.md) — Category is the first promotion to its own domain
 - Related: [adr005](adr005-per-domain-drizzle-schema-files.md) — `categories/categories.schema.ts` becomes a domain schema file
 - Related: [adr017](adr017-external-transaction-sync-via-cdr-redbark.md) — `categoryId` and `group` stay member-owned columns that re-sync never touches
 - Design: [2026-09-29 tRPC 3-tier migration](../../thoughts/designs/2026-09-29-trpc-3-tier-migration.md), section "Categories as its own domain"

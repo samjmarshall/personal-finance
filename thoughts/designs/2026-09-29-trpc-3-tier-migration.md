@@ -140,7 +140,7 @@ Added 2026-10-06, after step 2 shipped:
 | 15  | What order do domains migrate in?                              | Transactions first. The to-do list covers the gap. Eight steps.                                            |
 | 16  | What are controller files called?                              | `<domain>.<transport>.controller.ts`. Existing controllers are renamed to match.                           |
 | 17  | How are tRPC controllers tested?                               | A thin test per controller, with fake services on the context.                                             |
-| 18  | Where does a child of a domain live?                           | Three kinds: part of the parent, sub-resource, own domain. Flat folders only. See Domain hierarchy.       |
+| 18  | Where does a child of a domain live?                           | Two kinds: part of the parent, or own domain. Flat folders only. See Domain hierarchy.                    |
 | 19  | Is Category a child of Expense?                                | No. It is the household's shared list, and it becomes its own domain at the bottom of the graph.          |
 | 20  | How do the ties to expenses break?                             | Expenses link by `categoryId`, `on delete restrict`. A rename then writes one table.                       |
 | 21  | What are the link fields called?                               | `categoryId` on expense, transaction and receipt item. The table becomes `category`.                       |
@@ -172,8 +172,11 @@ Rejected alternatives worth remembering:
   under review.
 - **Nested domain folders (#18).** `expenses/categories/` hides the boundary from
   the architecture test, and Packwerk's experience shows nesting blurs rules.
-- **Every table its own domain (#18).** It would split `allowed-sender` out of
-  email for no gain.
+- **A sub-resource kind (#18).** Prefixed files such as `email/allowed-sender.*`
+  count as the parent's folder, so the test can't see the boundary. "Only the
+  parent uses it" also breaks the day a second domain does.
+- **Every table its own domain (#18).** It would split `receipt_item` from its
+  Receipt, so one write would span two services.
 - **Keep categories in expenses (#19).** The folder would contradict the glossary
   and the kernel, and three domains would ask expenses for Category data.
 - **A rename event, or categories calling expenses (#20).** An event needs an
@@ -257,13 +260,13 @@ The rule goes into the rules file, so a split is a check rather than a matter of
 
 ### Domain hierarchy
 
-A child of a domain is one of three kinds:
+A child of a domain is one of two kinds (revised 2026-10-07: the sub-resource
+kind is dropped):
 
-| Kind              | Test                                                                                              | Home                                                                                                   | Example                                       |
-| ----------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| Part of parent    | Lives and dies with the parent row. No page or router of its own.                                 | The parent's files.                                                                                    | `receipt_item` in `receipts.schema.ts`        |
-| Sub-resource      | Has its own table or controller, but only the parent domain uses it.                             | Prefixed files in the parent folder: `<parent>/<child>.schema.ts`, `<child>.trpc.controller.ts`. Its own service only if the split rule says so. | `email/allowed-sender.*`                      |
-| Own domain        | Two or more other domains link to it by id, or it has its own lifecycle (made on its own page).  | Top-level `src/server/<name>/`.                                                                        | `categories/`                                 |
+| Kind           | Test                                                                                                                         | Home                            | Example                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------- |
+| Part of parent | All three hold: made and deleted with the parent row; no other domain links to it by id; no page or router of its own.       | The parent's files.             | `receipt_item` in `receipts.schema.ts` |
+| Own domain     | Any part-of-parent check fails.                                                                                              | Top-level `src/server/<name>/`. | `categories/`, `allowed-senders/`      |
 
 Three rules go with it:
 
@@ -271,7 +274,7 @@ Three rules go with it:
   architecture test reads the first folder under `src/server/` as the domain.
 - **Mirror the kernel.** Where both exist, `src/domain/<name>/` and
   `src/server/<name>/` share a name.
-- **Promote only over id links.** A sub-resource becomes its own domain once
+- **Promote only over id links.** A child becomes its own domain once
   every link to it is an id. A copied name would turn a rename into a
   cross-domain write. Categories is the worked example.
 
@@ -280,18 +283,18 @@ members is its service under the glossary name.
 
 ### Router map
 
-| Router today       | Folder            | tRPC controller                    | Service                        |
-| ------------------ | ----------------- | ---------------------------------- | ------------------------------ |
-| `transaction.ts`   | `transactions/`   | `transactions.trpc.controller.ts`  | transactions                   |
-| `expense.ts`       | `expenses/`       | `expenses.trpc.controller.ts`      | expenses                       |
-| `category.ts`      | `categories/`     | `categories.trpc.controller.ts`    | categories (step 6)            |
-| `income.ts`        | `income/`         | `income.trpc.controller.ts`        | income                         |
-| `balance.ts`       | `balances/`       | `balances.trpc.controller.ts`      | balances                       |
-| `setting.ts`       | `settings/`       | `settings.trpc.controller.ts`      | settings                       |
-| `cashflow.ts`      | `cashflow/` (new) | `cashflow.trpc.controller.ts`      | cashflow (no repository)       |
-| `allowed-sender.ts`| `email/`          | `allowed-sender.trpc.controller.ts`| `AllowedSenderService` (split) |
-| `receipts.ts`      | `receipts/`       | `receipts.trpc.controller.ts`      | `ReceiptsService` (split)      |
-| none               | `auth/`           | none                               | members                        |
+| Router today        | Folder                      | tRPC controller                      | Service                   |
+| ------------------- | --------------------------- | ------------------------------------ | ------------------------- |
+| `transaction.ts`    | `transactions/`             | `transactions.trpc.controller.ts`    | transactions              |
+| `expense.ts`        | `expenses/`                 | `expenses.trpc.controller.ts`        | expenses                  |
+| `category.ts`       | `categories/`               | `categories.trpc.controller.ts`      | categories (step 6)       |
+| `income.ts`         | `income/`                   | `income.trpc.controller.ts`          | income                    |
+| `balance.ts`        | `balances/`                 | `balances.trpc.controller.ts`        | balances                  |
+| `setting.ts`        | `settings/`                 | `settings.trpc.controller.ts`        | settings                  |
+| `cashflow.ts`       | `cashflow/` (new)           | `cashflow.trpc.controller.ts`        | cashflow (no repository)  |
+| `allowed-sender.ts` | `allowed-senders/` (step 7) | `allowed-senders.trpc.controller.ts` | allowed senders           |
+| `receipts.ts`       | `receipts/`                 | `receipts.trpc.controller.ts`        | `ReceiptsService` (split) |
+| none                | `auth/`                     | none                                 | members                   |
 
 - **Categories get their own folder in step 6.** Step 2 put them in `expenses/`,
   because a rename rewrote `expenses.category` text in one transaction. Step 6
@@ -422,8 +425,8 @@ no wire string changes.
 
 Why this pattern:
 
-- **The domain prefix stays.** A bare `trpc.controller.ts` would repeat in eight
-  folders, and sub-resources need a prefix anyway.
+- **The domain prefix stays.** A bare `trpc.controller.ts` would repeat in every
+  domain folder.
 - **"Controller" stays at the end.** A transport-only suffix such as
   `receipts.inngest.ts` reads like an adapter file (`email.mailbox.ts`), and
   adr004 wants every file to name its tier.
@@ -808,7 +811,7 @@ Each step is one change, green before and after, and never mixed into a feature 
    own commit. Transactions migrates, including consumption. The expense-name
    join in the transaction list stays on the to-do list. Fix the rules-file
    write-drift line.
-2. **Expenses and categories.** Shipped. The transaction list switches to the
+2. **Expenses and categories.** Shipped. The transaction list switches to the 
    expenses service lookup, which clears its to-do entry. `expense.consumption`
    calls the transactions service. Categories sit in `expenses/` for now.
 3. **Income, then balances, then settings.** One change each.
@@ -926,7 +929,7 @@ In Progress ADRs are edited in place. No ADR is superseded.
 | ------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | adr004 | Accepted    | Implementation status: categories leave `expenses/`, and `ExpensesService.namesByIds` returns Expense names only. (The note and "Refined by" link for adr023 are done.) | Step 6 commit B.                              |
 | adr022 | Proposed    | Done: categories added to the bottom of the dependency graph, and a "Refined by" link to adr024. The Context lines naming `expenseCategories` stay as history.                                                                                                                | Done.                                         |
-| adr021 | Proposed    | Done: option 1iv's reason no longer calls `categories` a sub-resource. "Receipts goes last" still holds.                                                                                                                                                                     | Done.                                         |
+| adr021 | Proposed    | Done: option 1iv's reason drops sub-resources, since adr023 has none now. "Receipts goes last" still holds.                                                                                                                                                                     | Done.                                         |
 | adr005 | Accepted    | The folder tree has no `categories/categories.schema.ts`. Add a note.                                                                                                                                                                                                      | Step 6 commit B.                              |
 | adr017 | In Progress | The member-owned columns that re-sync never touches include `expenseCategoryId` and `category`. They become `categoryId` and `group`.                                                                                                                                         | Step 6 commit A.                              |
 | adr003 | Accepted    | It cites two interactive transactions in `category.ts`. Step 6 makes a rename write one table, so only reorder keeps one. The reasoning still holds. An optional note.                                                                                                      | Optional.                                     |
@@ -939,7 +942,7 @@ lives in `src/lib/constants.ts`. Categories have been a table since 2026-08-10.
 
 - [adr021](../../docs/adr/adr021-trpc-router-is-the-controller-tier.md) — the tRPC router is the controller tier (candidates 1 and 4)
 - [adr022](../../docs/adr/adr022-cross-domain-data-through-the-owning-service.md) — cross-domain data goes through the owning service only (candidate 2)
-- [adr023](../../docs/adr/adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md) — a domain's child is part of its parent, a sub-resource, or its own domain, in flat folders (2026-10-06 candidate)
+- [adr023](../../docs/adr/adr023-domain-hierarchy-two-kinds-of-child-flat-folders.md) — a domain's child is part of its parent or its own domain, in flat folders (2026-10-06 candidate, sub-resource kind dropped 2026-10-07)
 - [adr024](../../docs/adr/adr024-category-own-domain-linked-by-id.md) — Category is its own domain, and every record links to it by `categoryId` (2026-10-06 candidate)
 - [adr025](../../docs/adr/adr025-linked-expense-sets-the-category.md) — a linked Expense sets the Category of its Transactions and Receipt line items (raised in /domain-model)
 - Candidate 3 (service split rule) was not made an ADR: a split is a local refactor, so it fails "hard to reverse". The rule goes in the rules file.

@@ -456,7 +456,7 @@ Two commits: a characterize commit, then Commit A. Implements the data half of a
   - An Expense cannot be saved without a Category.
   - The Expenses page and the Unplanned page group in managed order, and "No category" comes last on the Unplanned page.
   - Sorting by Group on the Transactions page works.
-- [ ] A receipt item's Category picker saves. *(Validate: `receipt.setItemCategory` saves `categoryId` and `receipt.get` labels it by id, checked by direct call on item 14 and then reverted. The picker itself is not clicked: dev has no matched receipt, so it never shows. Needs a manual check.)*
+- [x] A receipt item's Category picker saves. *(Validate: receipt 9 matched to tx 643 for the test, picker clicked in the browser on item 14 → Utilities; DB held `categoryId` 3, UI showed "Utilities", options in managed order. Item and match reverted.)*
 - [x] `/design-review`: Expenses, Unplanned, Transactions (list and form), dashboard Top groups, Categories, receipt detail
 - [x] `/security-review` (`src/lib/constants.ts`)
 
@@ -657,7 +657,7 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
 - ADRs:
   - `docs/adr/adr024-category-own-domain-linked-by-id.md` (Proposed) — implemented by Phase 2 (data and names) and Phase 3 (the domain). `:65` is edited in Phase 2, `:64` in Phase 4.
   - `docs/adr/adr025-linked-expense-sets-the-category.md` (Proposed) — implemented by Phase 4 for Transactions. Line items are step 7.
-  - `docs/adr/adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md` (Proposed) — implemented by Phase 3. Categories become a top-level domain, and the rules file gains the table.
+  - `docs/adr/adr023-domain-hierarchy-two-kinds-of-child-flat-folders.md` (Proposed) — implemented by Phase 3. Categories become a top-level domain, and the rules file gains the table.
   - `docs/adr/adr021-trpc-router-is-the-controller-tier.md` (Proposed) — implemented by Phase 3 (`categories.trpc.controller.ts`, `expense.countsByCategory`).
   - `docs/adr/adr022-cross-domain-data-through-the-owning-service.md` (Proposed) — implemented by Phase 3 (the `CategoriesService.namesByIds` port) and Phase 4 (the downward unlink read).
   - Accepted ADRs edited:
