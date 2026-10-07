@@ -9,11 +9,7 @@ import { incomeRouter } from "~/server/income/income.trpc.controller";
 import { settingRouter } from "~/server/settings/settings.trpc.controller";
 import { transactionRouter } from "~/server/transactions/transactions.trpc.controller";
 
-/**
- * This is the primary router for your server.
- *
- * All routers added in /api/routers should be manually added here.
- */
+/** Every tRPC controller, keyed by client path (`api.<key>.*`); renaming a key breaks callers. */
 export const appRouter = createTRPCRouter({
 	allowedSender: allowedSenderRouter,
 	balance: balanceRouter,
