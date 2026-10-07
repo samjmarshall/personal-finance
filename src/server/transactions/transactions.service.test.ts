@@ -14,7 +14,10 @@ import {
 	throwing,
 	unstaged,
 } from "~/test/fakes";
-import type { TransactionsRepository } from "./transactions.repository";
+import type {
+	TransactionLink,
+	TransactionsRepository,
+} from "./transactions.repository";
 import { TransactionsService } from "./transactions.service";
 
 type ExpenseNames = Pick<ExpensesService, "namesByIds">;
@@ -31,7 +34,8 @@ function serviceWith(
 		insert: unstaged,
 		update: unstaged,
 		findUnplanned: unstaged,
-		setExpense: unstaged,
+		findLink: unstaged,
+		setLink: unstaged,
 		delete: unstaged,
 		consumedByExpense: unstaged,
 		datedAmounts: unstaged,
@@ -48,7 +52,7 @@ function serviceWith(
 const TRANSACTION: Transaction = {
 	id: 1,
 	expenseId: 7,
-	categoryId: 3,
+	categoryId: null,
 	date: new Date("2026-09-01T00:00:00.000Z"),
 	description: "Groceries",
 	receiptDescription: null,
@@ -70,6 +74,33 @@ const FIELDS = {
 const FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
 
+// Expense 7 sits in Category 3.
+const EXPENSE_NAMES = new Map([[7, { name: "Weekly shop", categoryId: 3 }]]);
+const LINKED: TransactionLink = { expenseId: 7, categoryId: null };
+
+// Records every write, whether through update or setLink.
+function writing(
+	link?: TransactionLink,
+	expenseNames: Awaited<ReturnType<ExpenseNames["namesByIds"]>> = EXPENSE_NAMES,
+) {
+	const written: unknown[][] = [];
+	const service = serviceWith(
+		{
+			findLink: async () => link,
+			update: async (id, values) => {
+				written.push([id, values]);
+				return TRANSACTION;
+			},
+			setLink: async (id, values) => {
+				written.push([id, values]);
+				return TRANSACTION;
+			},
+		},
+		{ namesByIds: async () => expenseNames },
+	);
+	return { service, written };
+}
+
 describe("create", () => {
 	it("inserts the input and returns the stored row", async () => {
 		const inserted: unknown[] = [];
@@ -82,6 +113,20 @@ describe("create", () => {
 
 		await expect(service.create(FIELDS)).resolves.toBe(TRANSACTION);
 		expect(inserted).toEqual([FIELDS]);
+	});
+
+	it("clears the Category of a row linked to an Expense", async () => {
+		const inserted: unknown[] = [];
+		const service = serviceWith({
+			insert: async (values) => {
+				inserted.push(values);
+				return TRANSACTION;
+			},
+		});
+
+		await service.create({ ...FIELDS, expenseId: 5, categoryId: 3 });
+
+		expect(inserted).toEqual([{ ...FIELDS, expenseId: 5, categoryId: null }]);
 	});
 
 	it("turns a foreign-key violation into a ConflictError", async () => {
@@ -154,27 +199,121 @@ describe("update", () => {
 			cause: error,
 		});
 	});
-});
 
-describe("linkExpense", () => {
-	it("sets the expense on the row", async () => {
-		const linked: unknown[][] = [];
+	it("turns a check violation into a ConflictError", async () => {
+		const error = failedQuery("23514");
+		const service = serviceWith({ update: throwing(error) });
+
+		const thrown = await service
+			.update({ id: 1, ...FIELDS, categoryId: 3 })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(ConflictError);
+		expect(thrown).toMatchObject({
+			message:
+				"A Transaction linked to an Expense takes its Category from the Expense.",
+			cause: error,
+		});
+	});
+
+	it("clears the Category when linking an Expense", async () => {
+		const { service, written } = writing();
+
+		await service.update({ id: 1, ...FIELDS, expenseId: 5, categoryId: 3 });
+
+		expect(written).toEqual([
+			[1, { ...FIELDS, expenseId: 5, categoryId: null }],
+		]);
+	});
+
+	it("copies the Expense's Category when unlinking with no Category sent", async () => {
+		const { service, written } = writing(LINKED);
+
+		await service.update({ id: 1, ...FIELDS, expenseId: null });
+
+		expect(written).toEqual([
+			[1, { ...FIELDS, expenseId: null, categoryId: 3 }],
+		]);
+	});
+
+	// The unstaged findLink throws, so a read here would fail the test.
+	it("keeps the Category sent when unlinking", async () => {
+		const { service, written } = writing();
+
+		await service.update({ id: 1, ...FIELDS, expenseId: null, categoryId: 4 });
+
+		expect(written).toEqual([
+			[1, { ...FIELDS, expenseId: null, categoryId: 4 }],
+		]);
+	});
+
+	it("passes the Category through when expenseId is left out", async () => {
 		const service = serviceWith({
-			setExpense: async (id, expenseId) => {
-				linked.push([id, expenseId]);
+			update: async (_, values) => {
+				expect(values).toEqual({ ...FIELDS, categoryId: 4 });
 				return TRANSACTION;
 			},
 		});
 
+		await expect(
+			service.update({ id: 1, ...FIELDS, categoryId: 4 }),
+		).resolves.toBe(TRANSACTION);
+	});
+
+	it("keeps an unlinked row's own Category when unlinking again", async () => {
+		const { service, written } = writing({ expenseId: null, categoryId: 4 });
+
+		await service.update({ id: 1, ...FIELDS, expenseId: null });
+
+		expect(written).toEqual([
+			[1, { ...FIELDS, expenseId: null, categoryId: 4 }],
+		]);
+	});
+
+	it("gives no Category when unlinking from a deleted Expense", async () => {
+		const { service, written } = writing(LINKED, new Map());
+
+		await service.update({ id: 1, ...FIELDS, expenseId: null });
+
+		expect(written).toEqual([
+			[1, { ...FIELDS, expenseId: null, categoryId: null }],
+		]);
+	});
+
+	it("throws NotFoundError when unlinking a missing row", async () => {
+		const { service, written } = writing(undefined);
+
+		const thrown = await service
+			.update({ id: 1, ...FIELDS, expenseId: null })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Transaction not found." });
+		expect(written).toEqual([]);
+	});
+});
+
+describe("linkExpense", () => {
+	it("sets the expense on the row and clears its Category", async () => {
+		const { service, written } = writing();
+
 		await expect(service.linkExpense({ id: 1, expenseId: 7 })).resolves.toBe(
 			TRANSACTION,
 		);
-		expect(linked).toEqual([[1, 7]]);
+		expect(written).toEqual([[1, { expenseId: 7, categoryId: null }]]);
+	});
+
+	it("copies the Expense's Category back when unlinking", async () => {
+		const { service, written } = writing(LINKED);
+
+		await service.linkExpense({ id: 1, expenseId: null });
+
+		expect(written).toEqual([[1, { expenseId: null, categoryId: 3 }]]);
 	});
 
 	it("names only the expense in a foreign-key ConflictError", async () => {
 		const error = failedQuery("23503");
-		const service = serviceWith({ setExpense: throwing(error) });
+		const service = serviceWith({ setLink: throwing(error) });
 
 		const thrown = await service
 			.linkExpense({ id: 1, expenseId: 7 })
@@ -188,7 +327,7 @@ describe("linkExpense", () => {
 	});
 
 	it("throws NotFoundError when no row matches the id", async () => {
-		const service = serviceWith({ setExpense: async () => undefined });
+		const service = serviceWith({ setLink: async () => undefined });
 
 		const thrown = await service
 			.linkExpense({ id: 1, expenseId: 7 })
@@ -222,8 +361,10 @@ describe("list", () => {
 		offset: 0,
 	} as const;
 
-	const EXPENSE_NAMES = new Map([[7, "Weekly shop"]]);
-	const CATEGORY_NAMES = new Map([[3, "Groceries"]]);
+	const CATEGORY_NAMES = new Map([
+		[3, "Groceries"],
+		[4, "Fuel"],
+	]);
 
 	const UNLINKED: Transaction = {
 		...TRANSACTION,
@@ -231,6 +372,7 @@ describe("list", () => {
 		expenseId: null,
 		categoryId: null,
 	};
+	const OWN_CATEGORY: Transaction = { ...UNLINKED, id: 3, categoryId: 4 };
 
 	function listing(
 		items: Transaction[],
@@ -304,6 +446,45 @@ describe("list", () => {
 			["expenses", [7]],
 			["categories", [3]],
 		]);
+	});
+
+	it("shows a linked row its Expense's Category", async () => {
+		const { service } = listing([TRANSACTION]);
+
+		const { items } = await service.list(QUERY);
+
+		expect(items[0]).toMatchObject({
+			categoryId: null,
+			categoryName: "Groceries",
+		});
+	});
+
+	it("shows an unlinked row its own Category", async () => {
+		const { service } = listing([OWN_CATEGORY]);
+
+		const { items } = await service.list(QUERY);
+
+		expect(items[0]).toMatchObject({ categoryId: 4, categoryName: "Fuel" });
+	});
+
+	// Category 3 is known only once the expenses lookup returns, so it proves the order.
+	it("asks categories after expenses, for the union of both kinds of row", async () => {
+		const { service, asked } = listing([TRANSACTION, OWN_CATEGORY]);
+
+		await service.list(QUERY);
+
+		expect(asked).toEqual([
+			["expenses", [7]],
+			["categories", [3, 4]],
+		]);
+	});
+
+	it("gives a null name for a Category id whose row is gone", async () => {
+		const { service } = listing([OWN_CATEGORY], { categoryNames: new Map() });
+
+		const { items } = await service.list(QUERY);
+
+		expect(items[0]).toMatchObject({ categoryName: null });
 	});
 
 	it("asks with no ids for an empty page", async () => {

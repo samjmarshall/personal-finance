@@ -158,11 +158,11 @@ describe("expenses", () => {
 });
 
 describe("lookups", () => {
-	it("findNames selects the id and name of each expense id", async () => {
-		const { repository, queries } = harness(() => [[7, "Weekly shop"]]);
+	it("findNames selects the id, name and categoryId of each expense id", async () => {
+		const { repository, queries } = harness(() => [[7, "Weekly shop", 3]]);
 
 		await expect(repository.findNames([7, 8])).resolves.toEqual([
-			{ id: 7, name: "Weekly shop" },
+			{ id: 7, name: "Weekly shop", categoryId: 3 },
 		]);
 		expect(queries).toMatchInlineSnapshot(`
 			[
@@ -172,7 +172,7 @@ describe("lookups", () => {
 			      7,
 			      8,
 			    ],
-			    "sql": "select "id", "name" from "expense" where "expense"."id" in ($1, $2)",
+			    "sql": "select "id", "name", "categoryId" from "expense" where "expense"."id" in ($1, $2)",
 			  },
 			]
 		`);

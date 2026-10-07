@@ -29,6 +29,8 @@ import type {
 import type { db as realDb } from "~/server/db";
 import { transactions } from "./transactions.schema";
 
+export type TransactionLink = Pick<Transaction, "expenseId" | "categoryId">;
+
 // One page of rows; total counts every match, not just this page
 export interface TransactionPage {
 	items: Transaction[];
@@ -47,10 +49,9 @@ export interface TransactionsRepository {
 	/** Unlinked Spend in the half-open `[from, to)` window. */
 	findUnplanned(window: UnplannedWindow): Promise<Transaction[]>;
 	/** `undefined` when no row has the id. */
-	setExpense(
-		id: number,
-		expenseId: number | null,
-	): Promise<Transaction | undefined>;
+	findLink(id: number): Promise<TransactionLink | undefined>;
+	/** `undefined` when no row has the id. */
+	setLink(id: number, link: TransactionLink): Promise<Transaction | undefined>;
 	delete(id: number): Promise<void>;
 	consumedByExpense(): Promise<ExpenseConsumption[]>;
 	/** Every Transaction's date and amount: the cash flow actuals. */
@@ -227,13 +228,24 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		);
 	}
 
-	async setExpense(
+	async findLink(id: number): Promise<TransactionLink | undefined> {
+		const [row] = await this.db
+			.select({
+				expenseId: transactions.expenseId,
+				categoryId: transactions.categoryId,
+			})
+			.from(transactions)
+			.where(eq(transactions.id, id));
+		return row;
+	}
+
+	async setLink(
 		id: number,
-		expenseId: number | null,
+		link: TransactionLink,
 	): Promise<Transaction | undefined> {
 		const [row] = await this.db
 			.update(transactions)
-			.set({ expenseId })
+			.set(link)
 			.where(eq(transactions.id, id))
 			.returning();
 		return row;

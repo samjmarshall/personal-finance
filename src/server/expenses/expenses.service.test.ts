@@ -165,17 +165,17 @@ describe("expenses", () => {
 });
 
 describe("namesByIds", () => {
-	it("asks the repository for the ids and maps the rows by id", async () => {
+	it("asks the repository for the ids and maps name and categoryId by id", async () => {
 		const asked: number[][] = [];
 		const service = serviceWith({
 			findNames: async (ids) => {
 				asked.push(ids);
-				return [{ id: 7, name: "Weekly shop" }];
+				return [{ id: 7, name: "Weekly shop", categoryId: 3 }];
 			},
 		});
 
 		await expect(service.namesByIds([7, 8])).resolves.toEqual(
-			new Map([[7, "Weekly shop"]]),
+			new Map([[7, { name: "Weekly shop", categoryId: 3 }]]),
 		);
 		expect(asked).toEqual([[7, 8]]);
 	});

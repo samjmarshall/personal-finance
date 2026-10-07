@@ -11,6 +11,7 @@ import { expenses } from "./expenses.schema";
 export interface NameRow {
 	id: number;
 	name: string;
+	categoryId: number;
 }
 
 export interface ExpensesRepository {
@@ -73,7 +74,11 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 
 	findNames(ids: number[]): Promise<NameRow[]> {
 		return this.db
-			.select({ id: expenses.id, name: expenses.name })
+			.select({
+				id: expenses.id,
+				name: expenses.name,
+				categoryId: expenses.categoryId,
+			})
 			.from(expenses)
 			.where(inArray(expenses.id, ids));
 	}

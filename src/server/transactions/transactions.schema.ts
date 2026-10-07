@@ -1,4 +1,5 @@
-import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, index, pgEnum, pgTable } from "drizzle-orm/pg-core";
 import { Frequency, Priority } from "~/lib/constants";
 import { categories } from "~/server/categories/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
@@ -41,5 +42,10 @@ export const transactions = pgTable(
 		index("transaction_priority_idx").on(t.priority),
 		index("transaction_expense_idx").on(t.expenseId),
 		index("transaction_category_idx").on(t.categoryId),
+		// adr025: a linked Transaction takes its Category from the Expense.
+		check(
+			"transaction_expense_or_category_check",
+			sql`${t.expenseId} IS NULL OR ${t.categoryId} IS NULL`,
+		),
 	],
 );

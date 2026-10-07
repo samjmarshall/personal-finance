@@ -92,6 +92,23 @@ export function TransactionForm({
 		...expenses.map((e) => ({ value: String(e.id), label: e.name })),
 	];
 
+	// adr025: a linked Expense sets the Category, so the picker shows the
+	// Expense's and locks.
+	const linkedExpense = expenses.find((e) => e.id === expenseId);
+	const shownCategoryId = linkedExpense?.categoryId ?? categoryId;
+	// One line in both states, so the swap never resizes the centred dialog.
+	const categoryHint =
+		expenseId === null
+			? "Linking an Expense sets this."
+			: "Set by the Expense. Choose None to edit.";
+
+	// Clearing the Expense keeps its Category, still editable before saving.
+	function pickExpense(value: string | null) {
+		const next = value ? Number(value) : null;
+		if (next === null && linkedExpense) setCategoryId(linkedExpense.categoryId);
+		setExpenseId(next);
+	}
+
 	// Categories are chosen from the managed list, never invented mid-entry.
 	const categoryOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
@@ -112,7 +129,7 @@ export function TransactionForm({
 			priority,
 			notes: notes.trim() || null,
 			expenseId,
-			categoryId,
+			categoryId: expenseId === null ? categoryId : null,
 		};
 		if (transaction) update.mutate({ id: transaction.id, ...payload });
 		else create.mutate(payload);
@@ -176,19 +193,6 @@ export function TransactionForm({
 						/>
 					</Field>
 					<Field>
-						<FieldLabel htmlFor="tx-category">
-							Category
-							<FieldOptional />
-						</FieldLabel>
-						<SelectField
-							className="w-full"
-							id="tx-category"
-							items={categoryOptions}
-							onValueChange={(v) => setCategoryId(v ? Number(v) : null)}
-							value={categoryId ? String(categoryId) : ""}
-						/>
-					</Field>
-					<Field>
 						<FieldLabel htmlFor="tx-expense">
 							Expense
 							<FieldOptional />
@@ -197,9 +201,28 @@ export function TransactionForm({
 							className="w-full"
 							id="tx-expense"
 							items={expenseOptions}
-							onValueChange={(v) => setExpenseId(v ? Number(v) : null)}
+							onValueChange={pickExpense}
 							value={expenseId ? String(expenseId) : ""}
 						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="tx-category">
+							Category
+							<FieldOptional />
+						</FieldLabel>
+						{/* Locked reads muted, not faded: its value is still the answer. */}
+						<SelectField
+							aria-describedby="tx-category-hint"
+							className="w-full data-readonly:cursor-default data-readonly:bg-muted data-readonly:text-muted-foreground dark:data-readonly:bg-muted"
+							id="tx-category"
+							items={categoryOptions}
+							onValueChange={(v) => setCategoryId(v ? Number(v) : null)}
+							readOnly={expenseId !== null}
+							value={shownCategoryId ? String(shownCategoryId) : ""}
+						/>
+						<FieldDescription id="tx-category-hint">
+							{categoryHint}
+						</FieldDescription>
 					</Field>
 					<div className="grid grid-cols-2 gap-4">
 						<Field>

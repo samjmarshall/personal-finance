@@ -27,7 +27,7 @@ const COLUMNS = Object.keys(getTableColumns(transactions));
 const TRANSACTION = {
 	id: 1,
 	expenseId: 7,
-	categoryId: 3,
+	categoryId: null,
 	date: new Date("2026-09-01T00:00:00.000Z"),
 	description: "Groceries",
 	receiptDescription: null,
@@ -359,7 +359,7 @@ describe("insert", () => {
 			    "method": "all",
 			    "params": [
 			      7,
-			      3,
+			      null,
 			      "2026-09-01T00:00:00.000Z",
 			      "Groceries",
 			      42.5,
@@ -406,7 +406,7 @@ describe("update", () => {
 			    "method": "all",
 			    "params": [
 			      7,
-			      3,
+			      null,
 			      "2026-09-01T00:00:00.000Z",
 			      "Groceries",
 			      42.5,
@@ -458,25 +458,22 @@ describe("findUnplanned", () => {
 	});
 });
 
-describe("setExpense", () => {
-	it("writes only the expense link, plus the updatedAt stamp", async () => {
-		const { repository, queries } = harness(() => [
-			rowOf(COLUMNS, TRANSACTION),
-		]);
+describe("findLink", () => {
+	it("selects only the expense and category links of the id", async () => {
+		const { repository, queries } = harness(() => [[7, null]]);
 
-		const row = await repository.setExpense(1, 7);
-
-		expect(row).toEqual(TRANSACTION);
+		await expect(repository.findLink(1)).resolves.toEqual({
+			expenseId: 7,
+			categoryId: null,
+		});
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
 			    "method": "all",
 			    "params": [
-			      7,
-			      "2026-09-29T00:00:00.000Z",
 			      1,
 			    ],
-			    "sql": "update "transaction" set "expenseId" = $1, "updatedAt" = $2 where "transaction"."id" = $3 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			    "sql": "select "expenseId", "categoryId" from "transaction" where "transaction"."id" = $1",
 			  },
 			]
 		`);
@@ -485,7 +482,41 @@ describe("setExpense", () => {
 	it("returns undefined when no row matches the id", async () => {
 		const { repository } = harness();
 
-		await expect(repository.setExpense(1, 7)).resolves.toBeUndefined();
+		await expect(repository.findLink(1)).resolves.toBeUndefined();
+	});
+});
+
+describe("setLink", () => {
+	it("writes both links, plus the updatedAt stamp", async () => {
+		const { repository, queries } = harness(() => [
+			rowOf(COLUMNS, TRANSACTION),
+		]);
+
+		const row = await repository.setLink(1, { expenseId: 7, categoryId: null });
+
+		expect(row).toEqual(TRANSACTION);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      7,
+			      null,
+			      "2026-09-29T00:00:00.000Z",
+			      1,
+			    ],
+			    "sql": "update "transaction" set "expenseId" = $1, "categoryId" = $2, "updatedAt" = $3 where "transaction"."id" = $4 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			  },
+			]
+		`);
+	});
+
+	it("returns undefined when no row matches the id", async () => {
+		const { repository } = harness();
+
+		await expect(
+			repository.setLink(1, { expenseId: 7, categoryId: null }),
+		).resolves.toBeUndefined();
 	});
 });
 

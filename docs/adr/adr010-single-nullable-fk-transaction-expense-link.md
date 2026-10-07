@@ -96,3 +96,4 @@ erDiagram
 - Adopts: [2026-08-11 transaction-expense mapping plan](../../thoughts/plans/2026-08-11-transaction-expense-mapping.md)
 - Design: [2026-08-16 expense-linking/receipts/cashflow design](../../thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md)
 - Table home per [adr005](adr005-per-domain-drizzle-schema-files.md): `src/server/transactions/transactions.schema.ts`
+- Related: [adr025](adr025-linked-expense-sets-the-category.md) — a linked Expense sets the Transaction's Category

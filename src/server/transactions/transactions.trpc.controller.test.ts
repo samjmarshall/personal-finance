@@ -20,7 +20,7 @@ function callerWith(
 const TRANSACTION: Transaction = {
 	id: 1,
 	expenseId: 7,
-	categoryId: 3,
+	categoryId: null,
 	date: new Date("2026-09-01T00:00:00.000Z"),
 	description: "Groceries",
 	receiptDescription: null,

@@ -190,7 +190,8 @@ Each domain owns its tables ([adr022](../../docs/adr/adr022-cross-domain-data-th
   narrow `Pick` or port (`OutboxWriteDoor`), so a test fake is an object literal.
 - A join becomes a batched lookup: `TransactionsService.list` makes one
   `ExpensesService.namesByIds` and one `CategoriesService.namesByIds` call per
-  page, together, merges in memory, and gives a null name for a missing id.
+  page, Categories after Expenses (a linked row's Category comes from its
+  Expense, adr025), merges in memory, and gives a null name for a missing id.
 - Schema files may import each other for foreign keys only.
 - `src/server/architecture.test.ts` enforces this. Its `TODO` list of known
   violations only shrinks: each migration step deletes its entries.

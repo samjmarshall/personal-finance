@@ -8,6 +8,11 @@ import { assertRow } from "~/server/errors/assert-row";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import type { ExpensesRepository } from "./expenses.repository";
 
+export interface ExpenseName {
+	name: string;
+	categoryId: number;
+}
+
 // The member deleted the picked Category in another tab.
 const CATEGORY_GONE_MESSAGE = "The selected category no longer exists.";
 
@@ -51,9 +56,12 @@ export class ExpensesService {
 	}
 
 	// The batched lookup that replaces a cross-domain join (adr022): one call per
-	// page, never per row. An id with no row has no entry.
-	async namesByIds(ids: number[]): Promise<ReadonlyMap<number, string>> {
+	// page, never per row. An id with no row has no entry. categoryId lets a
+	// linked record show the Expense's Category (adr025).
+	async namesByIds(ids: number[]): Promise<ReadonlyMap<number, ExpenseName>> {
 		const rows = ids.length ? await this.repository.findNames(ids) : [];
-		return new Map(rows.map(({ id, name }) => [id, name]));
+		return new Map(
+			rows.map(({ id, name, categoryId }) => [id, { name, categoryId }]),
+		);
 	}
 }

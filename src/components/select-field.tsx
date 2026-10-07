@@ -38,8 +38,10 @@ export function SelectField<T>({
 	id,
 	className,
 	disabled,
+	readOnly,
 	placeholder,
 	"aria-label": ariaLabel,
+	"aria-describedby": ariaDescribedBy,
 }: {
 	items: readonly SelectFieldOption<T>[];
 	value: T | null;
@@ -49,17 +51,26 @@ export function SelectField<T>({
 	id?: string;
 	className?: string;
 	disabled?: boolean;
+	// Stays focusable, unlike `disabled`, so its description is still read.
+	readOnly?: boolean;
 	placeholder?: ReactNode;
 	"aria-label"?: string;
+	"aria-describedby"?: string;
 }) {
 	return (
 		<Select
 			disabled={disabled}
 			items={items}
 			onValueChange={onValueChange}
+			readOnly={readOnly}
 			value={value}
 		>
-			<SelectTrigger aria-label={ariaLabel} className={className} id={id}>
+			<SelectTrigger
+				aria-describedby={ariaDescribedBy}
+				aria-label={ariaLabel}
+				className={className}
+				id={id}
+			>
 				<SelectValue placeholder={placeholder} />
 			</SelectTrigger>
 			<SelectContent>
