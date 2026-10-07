@@ -283,7 +283,12 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			className="mt-1 rounded-lg border border-border bg-muted/10"
 		>
 			<Collapsible onOpenChange={setOpen} open={open}>
-				<CollapsibleTrigger className="flex w-full">
+				<CollapsibleTrigger
+					className={cn(
+						"flex w-full rounded-lg outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50",
+						open && "rounded-b-none",
+					)}
+				>
 					<header
 						className={cn(
 							"flex flex-1 items-center gap-2 px-3 py-2",
