@@ -160,7 +160,7 @@ The tRPC paths, the Categories page and its route do not change.
   - **Unplanned page.** Grouped by the Transaction's Category, in managed order. A last "No category" group holds the rest.
   - **Transactions page.**
     - The Group column is headed "Group". The search hint says "group".
-    - The form has a plain "Group" text input (blank saves "Uncategorised") and a "Category" picker. The picker is disabled and shows the Expense's Category while an Expense is linked.
+    - The form has a plain "Group" text input (blank saves "Uncategorised") and a "Category" picker. The picker is read-only and shows the Expense's Category while an Expense is linked.
   - **Dashboard.** "Top groups".
   - **Categories page.**
     - Title "Categories", with a new description.
@@ -451,12 +451,12 @@ Two commits: a characterize commit, then Commit A. Implements the data half of a
 - [x] `make build` passes
 - [x] On the Phase 1 branch, `make db_migrate` applies `0012`–`0014` in one run, and the Phase 2 step 7 checks hold
 - [x] `git grep -n -E "expenseCategor|expense_category|EXPENSE_CATEGORIES|topCategories" -- src` returns nothing. `drizzle/` is history and is not searched. Only hit: the plan's own index name `expense_category_idx` (`expenses.schema.ts:37`).
-- [ ] At https://personal-finance.localhost (on the migrated branch):
+- [x] At https://personal-finance.localhost (on the migrated branch):
   - Renaming a Category updates the Expenses page group label with no Expense write.
   - An Expense cannot be saved without a Category.
   - The Expenses page and the Unplanned page group in managed order, and "No category" comes last on the Unplanned page.
   - Sorting by Group on the Transactions page works.
-  - A receipt item's Category picker saves. *(Not verified: dev has no matched receipt, so the picker never shows. Needs a manual check.)*
+- [ ] A receipt item's Category picker saves. *(Validate: `receipt.setItemCategory` saves `categoryId` and `receipt.get` labels it by id, checked by direct call on item 14 and then reverted. The picker itself is not clicked: dev has no matched receipt, so it never shows. Needs a manual check.)*
 - [x] `/design-review`: Expenses, Unplanned, Transactions (list and form), dashboard Top groups, Categories, receipt detail
 - [x] `/security-review` (`src/lib/constants.ts`)
 
@@ -586,7 +586,7 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
   - Add `findLink(id): Promise<Pick<Transaction,"expenseId"|"categoryId"> | undefined>`.
   - `setExpense(id, expenseId)` → `setLink(id, { expenseId, categoryId })`, which writes both (`:230-240`).
   - Add SQL snapshots for both.
-- **`src/server/transactions/transactions.service.ts`** — a private `linkRule(values)` step used by `create`, `update` and `linkExpense`:
+- **`src/server/transactions/transactions.service.ts`** — a private `categoryPatch(values)` step used by `create` and `update` (`linkExpense` applies the same rule inline):
   - **Link.** `expenseId` is a number → `categoryId: null`, whatever was sent.
   - **Unlink.** `expenseId` is `null` and `categoryId` was not sent:
     - Read `findLink(id)`. A missing row gives `NotFoundError`.
@@ -621,9 +621,9 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
     - a missing Category id → `null`
 - **`transactions/_components/transaction-form.tsx`**
   - While `expenseId` is set, the Category select:
-    - is `disabled`
+    - is `readOnly`, not `disabled`, so it stays focusable and its value is read out
     - shows the linked Expense's `categoryId` (from the `expenses` prop)
-    - shows a hint below it: "Set by the linked Expense."
+    - shows a hint below it: "Set by the Expense. Choose None to edit." Unlinked, it reads "Linking an Expense sets this."
   - Picking an Expense sends `categoryId: null`.
   - Clearing the Expense pre-fills the Expense's Category, so it can still be changed before saving.
 - **Docs**

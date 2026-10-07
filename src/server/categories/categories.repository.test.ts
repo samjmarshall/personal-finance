@@ -18,7 +18,7 @@ function harness(respond?: Respond) {
 	};
 }
 
-// Pins the $defaultFn / $onUpdate timestamps drizzle adds to writes.
+// Fixed clock, so the auto-set created/updated times are predictable.
 const NOW = new Date("2026-10-02T00:00:00.000Z");
 
 const CATEGORY_COLUMNS = Object.keys(getTableColumns(categories));

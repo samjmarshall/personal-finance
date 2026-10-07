@@ -9,14 +9,14 @@ import {
 } from "~/server/db/recording-db.fake";
 import { receiptItems, receipts } from "~/server/receipts/receipts.schema";
 
-// Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
-// (and through them ~/env). Stub those so this stays a pure unit test.
+// The router loads the real db, auth and env on import. Stub them so this stays
+// a pure unit test.
 vi.mock("~/server/db", () => ({ db: {} }));
 vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock("~/server/outbox", () => ({ commitWithOutbox: vi.fn() }));
 vi.mock("@vercel/blob", () => ({ del: vi.fn() }));
-// No project id, so `get` builds no trace link. The root logger re-exports
-// LogLevel from ~/env, so the mock must carry it too.
+// No project id, so no trace link. The logger re-exports a log-level enum from
+// env, so the mock needs it too.
 vi.mock("~/env", () => ({
 	env: {
 		POSTHOG_UI_HOST: "https://us.posthog.com",

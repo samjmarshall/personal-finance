@@ -24,7 +24,7 @@ const CATEGORY: Category = {
 
 describe("category router", () => {
 	it("list returns the service's categories", async () => {
-		const rows = [{ ...CATEGORY, expenseCount: 2 }];
+		const rows = [CATEGORY];
 		const { method } = recorder(rows);
 
 		await expect(callerWith({ list: method }).category.list()).resolves.toEqual(
@@ -84,7 +84,7 @@ describe("category router", () => {
 	});
 
 	it("surfaces a ConflictError as CONFLICT", async () => {
-		const message = 'Cannot delete "Food" — 2 expenses still use it.';
+		const message = 'Cannot delete "Food" — expenses still use it.';
 		const deleteCategory = throwing(new ConflictError(message));
 
 		await expect(
