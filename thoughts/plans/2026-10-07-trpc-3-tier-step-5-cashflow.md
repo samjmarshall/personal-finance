@@ -74,7 +74,7 @@ Steps 1–4 shipped. `cashflow.ts` is still a plain router. It reads five other 
 - **`services.ts` builds each service once.** `balances`, `income`, `settings` and `transactions` become local consts, shared by their own key and by `cashflow`.
 - **`src/server/api/routers/` holds only the `receipts` files.**
 - **The to-do list has 10 entries.** No new entry was added.
-- **The member sees one accepted change.** Tooltip items now follow the Planned page order:
+- **The member sees one accepted change.** Tooltip items now follow the list reads' fixed order (not the Planned page, which ranks categories by their managed sort order and splits one-time items by date):
   - Expenses: category, sort order, name.
   - Income: person, sort order, source.
   - Today their order depends on where Postgres stored each row. Bucket totals stay the same, apart from a possible last-digit floating-point shift.
@@ -253,7 +253,7 @@ One change, three commits.
 - [x] Every path named in the edited rules-file lines exists (`git ls-files` check)
 - [x] At https://personal-finance.localhost, the dashboard cash flow chart behaves as before:
   - Fortnight and Month both render 25 buckets, with the today marker on the current bucket.
-  - The tooltip on a forward bucket lists Expenses and Income. The order now follows the Planned page.
+  - The tooltip on a forward bucket lists Expenses and Income, in the list reads' order: Expenses by category A–Z, sort order, name; then Income by person, sort order, source. (Validation: 521 items checked against `expense.list` + `income.list`, no item out of order.)
   - The balance line shows when a snapshot exists.
   - Saving a balance snapshot, or changing the pay cycle anchor in Settings, refreshes the chart. (Pay cycle path checked in the browser. Balance save not run, to keep real data intact; its client invalidation is unchanged.)
 
