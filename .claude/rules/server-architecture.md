@@ -33,6 +33,12 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 
 Unchanged homes: `*.schema.ts` (adr005), `*.dto.ts`, `*.errors.ts`, `*.decide.ts` (earned only).
 
+A sub-resource (own table or router, used only by its parent domain) takes the
+child's name as the file prefix in the parent folder, never a nested folder:
+`email/allowed-sender.{schema,repository,service,trpc.controller}.ts`. It gets its
+own service only under the [service split rule](#service-split-rule)
+([adr023](../../docs/adr/adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md)).
+
 ## Construction rules
 
 - **Classes, built with `new X({ … })`.** One `interface XDeps` directly above the
