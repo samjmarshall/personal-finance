@@ -62,7 +62,7 @@
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
 		"date-fns": "4.4.0",
-		"drizzle-orm": "0.45.2",
+		"drizzle-orm": "0.45.3",
 		"heic-to": "1.5.2",
 		"inngest": "4.22.0",
 		"lucide-react": "1.31.0",
