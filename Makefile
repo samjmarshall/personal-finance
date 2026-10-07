@@ -60,7 +60,7 @@ db_generate: install
 	pnpm run db:generate
 
 db_custom: install
-	pnpm run db:custom -- --name=$(name)
+	pnpm run db:custom --name=$(name)
 
 db_migrate: install
 	pnpm run db:migrate
