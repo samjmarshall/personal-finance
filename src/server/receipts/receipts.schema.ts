@@ -7,7 +7,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import { user } from "~/server/auth/auth.schema";
-import { expenseCategories } from "~/server/expenses/categories.schema";
+import { categories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
 
@@ -80,9 +80,9 @@ export const receiptItems = pgTable(
 		expenseId: d
 			.integer()
 			.references(() => expenses.id, { onDelete: "set null" }),
-		expenseCategoryId: d
+		categoryId: d
 			.integer()
-			.references(() => expenseCategories.id, { onDelete: "set null" }),
+			.references(() => categories.id, { onDelete: "set null" }),
 		createdAt: d
 			.timestamp({ withTimezone: true })
 			.$defaultFn(() => new Date())

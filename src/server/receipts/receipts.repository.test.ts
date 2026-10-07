@@ -1,7 +1,7 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
-import { expenseCategories } from "~/server/expenses/categories.schema";
+import { categories } from "~/server/expenses/categories.schema";
 import {
 	DrizzleReceiptsRepository,
 	type ReceiptRow,
@@ -19,10 +19,10 @@ const render = (cond: unknown) =>
 // (no where), receipts always go through `.where()`.
 function harness({
 	rows = [],
-	categories = [],
+	categoryRows = [],
 }: {
 	rows?: unknown[];
-	categories?: { id: number; name: string }[];
+	categoryRows?: { id: number; name: string }[];
 } = {}) {
 	let selectWhere: unknown;
 	let transactions = 0;
@@ -45,7 +45,7 @@ function harness({
 	const db = {
 		select: () => ({
 			from: (table: unknown) => {
-				if (table === expenseCategories) return Promise.resolve(categories);
+				if (table === categories) return Promise.resolve(categoryRows);
 				return {
 					where: (cond: unknown) => {
 						selectWhere = cond;
@@ -154,13 +154,13 @@ describe("DrizzleReceiptsRepository", () => {
 		});
 	});
 
-	describe("listExpenseCategories", () => {
+	describe("listCategories", () => {
 		it("returns id + name for every category", async () => {
-			const categories = [{ id: 7, name: "Groceries" }];
-			const h = harness({ categories });
+			const categoryRows = [{ id: 7, name: "Groceries" }];
+			const h = harness({ categoryRows });
 
-			await expect(h.repository.listExpenseCategories()).resolves.toEqual(
-				categories,
+			await expect(h.repository.listCategories()).resolves.toEqual(
+				categoryRows,
 			);
 		});
 	});
@@ -178,8 +178,8 @@ describe("DrizzleReceiptsRepository", () => {
 			const h = harness();
 
 			await h.repository.saveExtraction(1, values, [
-				{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
-				{ name: "Bread", price: 2.5, quantity: 2, expenseCategoryId: null },
+				{ name: "Milk", price: 3.99, quantity: 1, categoryId: 7 },
+				{ name: "Bread", price: 2.5, quantity: 2, categoryId: null },
 			]);
 
 			expect(h.transactions()).toBe(1);
@@ -195,14 +195,14 @@ describe("DrizzleReceiptsRepository", () => {
 					name: "Milk",
 					price: 3.99,
 					quantity: 1,
-					expenseCategoryId: 7,
+					categoryId: 7,
 				},
 				{
 					receiptId: 1,
 					name: "Bread",
 					price: 2.5,
 					quantity: 2,
-					expenseCategoryId: null,
+					categoryId: null,
 				},
 			]);
 		});

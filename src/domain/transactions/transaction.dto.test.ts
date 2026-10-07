@@ -66,72 +66,68 @@ describe("transactionCreateDto.expenseId", () => {
 	});
 });
 
-describe("transactionCreateDto.expenseCategoryId", () => {
-	it("accepts a positive integer expenseCategoryId", () => {
+describe("transactionCreateDto.categoryId", () => {
+	it("accepts a positive integer categoryId", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, expenseCategoryId: 3 }).success,
+			transactionCreateDto.safeParse({ ...base, categoryId: 3 }).success,
 		).toBe(true);
 	});
 
 	it("accepts null (uncategorised)", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, expenseCategoryId: null })
-				.success,
+			transactionCreateDto.safeParse({ ...base, categoryId: null }).success,
 		).toBe(true);
 	});
 
-	it("accepts an omitted expenseCategoryId", () => {
+	it("accepts an omitted categoryId", () => {
 		expect(transactionCreateDto.safeParse(base).success).toBe(true);
 	});
 
-	it("rejects a string expenseCategoryId", () => {
+	it("rejects a string categoryId", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, expenseCategoryId: "3" })
-				.success,
+			transactionCreateDto.safeParse({ ...base, categoryId: "3" }).success,
 		).toBe(false);
 	});
 
-	it("rejects a non-integer expenseCategoryId", () => {
+	it("rejects a non-integer categoryId", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, expenseCategoryId: 3.5 })
-				.success,
+			transactionCreateDto.safeParse({ ...base, categoryId: 3.5 }).success,
 		).toBe(false);
 	});
 
-	it("rejects a negative expenseCategoryId", () => {
+	it("rejects a negative categoryId", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, expenseCategoryId: -1 })
-				.success,
+			transactionCreateDto.safeParse({ ...base, categoryId: -1 }).success,
 		).toBe(false);
 	});
 
-	it("rejects a 0 expenseCategoryId", () => {
+	it("rejects a 0 categoryId", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, expenseCategoryId: 0 }).success,
+			transactionCreateDto.safeParse({ ...base, categoryId: 0 }).success,
 		).toBe(false);
 	});
 });
 
-describe("transactionCreateDto.category", () => {
-	it("accepts a non-empty category", () => {
+describe("transactionCreateDto.group", () => {
+	it("accepts a non-empty group", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, category: "Food" }).success,
+			transactionCreateDto.safeParse({ ...base, group: "Food" }).success,
 		).toBe(true);
 	});
 
-	it("accepts an omitted category (DB default fills it)", () => {
+	it("accepts an omitted group (DB default fills it)", () => {
 		expect(transactionCreateDto.safeParse(base).success).toBe(true);
 	});
 
-	it("rejects an empty category", () => {
-		expect(
-			transactionCreateDto.safeParse({ ...base, category: "" }).success,
-		).toBe(false);
+	it("rejects an empty group", () => {
+		expect(transactionCreateDto.safeParse({ ...base, group: "" }).success).toBe(
+			false,
+		);
 	});
 
-	it("rejects a whitespace-only category", () => {
+	it("rejects a whitespace-only group", () => {
 		expect(
-			transactionCreateDto.safeParse({ ...base, category: "   " }).success,
+			transactionCreateDto.safeParse({ ...base, group: "   " }).success,
 		).toBe(false);
 	});
 });
@@ -155,11 +151,11 @@ describe("transactionUpdateDto", () => {
 	const baseUpdate = { ...base, id: 1 };
 
 	// The regression this guards: update must NOT re-apply create's defaults. An
-	// omitted category/frequency/priority has to parse to undefined so .set() skips
+	// omitted group/frequency/priority has to parse to undefined so .set() skips
 	// it and the stored value survives a partial update instead of being reset.
-	it("leaves omitted category, frequency and priority undefined", () => {
+	it("leaves omitted group, frequency and priority undefined", () => {
 		const parsed = transactionUpdateDto.parse(baseUpdate);
-		expect(parsed.category).toBe(undefined);
+		expect(parsed.group).toBe(undefined);
 		expect(parsed.frequency).toBe(undefined);
 		expect(parsed.priority).toBe(undefined);
 	});

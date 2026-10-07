@@ -3,13 +3,13 @@ import type { Frequency, Priority } from "~/lib/constants";
 export interface Transaction {
 	id: number;
 	amount: number;
-	category: string;
+	categoryId: number | null;
 	createdAt: Date;
 	date: Date;
 	description: string;
 	expenseId: number | null;
-	expenseCategoryId: number | null;
 	frequency: Frequency;
+	group: string;
 	notes: string | null;
 	priority: Priority;
 	receiptDescription: string | null;
@@ -22,11 +22,11 @@ export interface ExpenseConsumption {
 	consumed: number;
 }
 
-// list rows carry the linked expense and managed category names, looked up by id
+// list rows carry the linked expense and Category names, looked up by id
 // through the expenses service; null when unlinked or the referenced row is gone
 export interface TransactionListItem extends Transaction {
 	expenseName: string | null;
-	expenseCategoryName: string | null;
+	categoryName: string | null;
 }
 
 // One page of list rows; total counts every match, not just this page
@@ -56,8 +56,8 @@ export interface TransactionSummary {
 		month: string;
 		total: number;
 	}[];
-	topCategories: {
-		category: string;
+	topGroups: {
+		group: string;
 		total: number;
 		count: number;
 	}[];

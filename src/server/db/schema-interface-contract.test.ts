@@ -11,7 +11,7 @@ import type { Receipt, ReceiptItem } from "~/domain/receipts/receipt.interface";
 import type { Transaction } from "~/domain/transactions/transaction.interface";
 import type { balanceSnapshots } from "~/server/balances/balances.schema";
 import type { allowedSenders } from "~/server/email/allowed-sender.schema";
-import type { expenseCategories } from "~/server/expenses/categories.schema";
+import type { categories } from "~/server/expenses/categories.schema";
 import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
 import type { receiptItems, receipts } from "~/server/receipts/receipts.schema";
@@ -28,9 +28,7 @@ type Contracts = [
 	Expect<Equal<typeof income.$inferSelect, Income>>,
 	Expect<Equal<typeof expenses.$inferSelect, Expense>>,
 	Expect<Equal<typeof transactions.$inferSelect, Transaction>>,
-	Expect<
-		Equal<typeof expenseCategories.$inferSelect, Omit<Category, "expenseCount">>
-	>,
+	Expect<Equal<typeof categories.$inferSelect, Omit<Category, "expenseCount">>>,
 	Expect<Equal<typeof receipts.$inferSelect, Receipt>>,
 	Expect<Equal<typeof allowedSenders.$inferSelect, AllowedSender>>,
 ];

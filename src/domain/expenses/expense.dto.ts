@@ -5,7 +5,7 @@ import { CommitmentKind } from "~/lib/constants";
 // .notNull().default(0); update omits them so .set() preserves stored values.
 const expenseFields = {
 	name: z.string().trim().min(1, "Name is required"),
-	category: z.string().trim().min(1, "Category is required"),
+	categoryId: z.number().int().positive(),
 	kind: z.enum(CommitmentKind).optional(),
 	fortnight: z.number().nonnegative().optional(),
 	month: z.number().nonnegative().optional(),

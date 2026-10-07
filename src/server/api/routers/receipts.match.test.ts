@@ -144,19 +144,19 @@ describe("receipt.setItemExpense", () => {
 describe("receipt.setItemCategory", () => {
 	it("attributes the item to a category", async () => {
 		const { db, written } = updateDb({
-			rows: [{ id: 5, expenseCategoryId: 2 }],
+			rows: [{ id: 5, categoryId: 2 }],
 		});
 
-		await caller(db).setItemCategory({ itemId: 5, expenseCategoryId: 2 });
+		await caller(db).setItemCategory({ itemId: 5, categoryId: 2 });
 
-		expect(written.values).toEqual({ expenseCategoryId: 2 });
+		expect(written.values).toEqual({ categoryId: 2 });
 	});
 
 	it("maps a vanished category (23503) to CONFLICT", async () => {
 		const { db } = updateDb({ throws: pgError("23503") });
 
 		await expect(
-			caller(db).setItemCategory({ itemId: 5, expenseCategoryId: 2 }),
+			caller(db).setItemCategory({ itemId: 5, categoryId: 2 }),
 		).rejects.toMatchObject({ code: "CONFLICT" });
 	});
 });

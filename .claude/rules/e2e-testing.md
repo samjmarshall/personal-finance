@@ -8,7 +8,7 @@ paths:
 
 ## Domain tables are unscoped — for now
 
-`transaction`, `expense`, `income` and `expense_category` currently have **no scoping column** —
+`transaction`, `expense`, `income` and `category` currently have **no scoping column** —
 every signed-in user reads the same rows. Signing in as a fresh user does **not** give a spec a
 clean dataset.
 
@@ -32,8 +32,8 @@ Those survive the `householdId` migration unchanged; specs that assume an empty 
 
 ## Unique per run
 
-Only three columns are `UNIQUE`: `user.email`, `session.token`, `expense_category.name`.
-`expense_category.name` is the one that bites — two specs creating "Groceries" collide and the
+Only three columns are `UNIQUE`: `user.email`, `session.token`, `category.name`.
+`category.name` is the one that bites — two specs creating "Groceries" collide and the
 second fails on the constraint, not on the behaviour under test. (That constraint is global today;
 under `householdId` it should become composite, at which point the collision disappears.)
 

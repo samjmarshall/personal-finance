@@ -68,7 +68,7 @@ describe("receipt_item table shape", () => {
 
 	// Attribution is filled by the member on the detail page; null until then.
 	it("leaves the expense/category links nullable without a default", () => {
-		for (const col of [itemCols.expenseId, itemCols.expenseCategoryId]) {
+		for (const col of [itemCols.expenseId, itemCols.categoryId]) {
 			expect(col.notNull).toBe(false);
 			expect(col.hasDefault).toBe(false);
 		}

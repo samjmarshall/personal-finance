@@ -20,12 +20,12 @@ function callerWith(
 const TRANSACTION: Transaction = {
 	id: 1,
 	expenseId: 7,
-	expenseCategoryId: 3,
+	categoryId: 3,
 	date: new Date("2026-09-01T00:00:00.000Z"),
 	description: "Groceries",
 	receiptDescription: null,
 	amount: 42.5,
-	category: "Food",
+	group: "Food",
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
@@ -58,7 +58,7 @@ describe("transaction router", () => {
 			byPriority: [],
 			byFrequency: [],
 			byMonth: [],
-			topCategories: [],
+			topGroups: [],
 		};
 		const { method } = recorder(summary);
 

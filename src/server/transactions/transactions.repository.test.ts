@@ -27,12 +27,12 @@ const COLUMNS = Object.keys(getTableColumns(transactions));
 const TRANSACTION = {
 	id: 1,
 	expenseId: 7,
-	expenseCategoryId: 3,
+	categoryId: 3,
 	date: new Date("2026-09-01T00:00:00.000Z"),
 	description: "Groceries",
 	receiptDescription: null,
 	amount: 42.5,
-	category: "Food",
+	group: "Food",
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
@@ -44,12 +44,12 @@ const FIELDS = {
 	date: TRANSACTION.date,
 	description: TRANSACTION.description,
 	amount: TRANSACTION.amount,
-	category: TRANSACTION.category,
+	group: TRANSACTION.group,
 	frequency: TRANSACTION.frequency,
 	priority: TRANSACTION.priority,
 	notes: null,
 	expenseId: TRANSACTION.expenseId,
-	expenseCategoryId: TRANSACTION.expenseCategoryId,
+	categoryId: TRANSACTION.categoryId,
 };
 
 // What the list DTO hands over for `{}`.
@@ -88,7 +88,7 @@ describe("list", () => {
 			    "params": [
 			      50,
 			    ],
-			    "sql": "select "id", "expenseId", "expenseCategoryId", "date", "description", "receiptDescription", "amount", "category", "frequency", "priority", "notes", "createdAt", "updatedAt" from "transaction" order by "transaction"."date" desc, "transaction"."id" desc limit $1",
+			    "sql": "select "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt" from "transaction" order by "transaction"."date" desc, "transaction"."id" desc limit $1",
 			  },
 			  {
 			    "method": "all",
@@ -134,7 +134,7 @@ describe("list", () => {
 			search: { search: "cafe" },
 			priority: { priority: Priority.MustHave },
 			frequency: { frequency: Frequency.Recurring },
-			category: { category: "Food" },
+			group: { group: "Food" },
 			from: { from: new Date("2026-09-01T00:00:00.000Z") },
 			to: { to: new Date("2026-09-30T00:00:00.000Z") },
 		};
@@ -151,21 +151,6 @@ describe("list", () => {
 
 		expect(rendered).toMatchInlineSnapshot(`
 			{
-			  "category": [
-			    {
-			      "params": [
-			        "Food",
-			        50,
-			      ],
-			      "sql": " where "transaction"."category" = $1 order by "transaction"."date" desc, "transaction"."id" desc limit $2",
-			    },
-			    {
-			      "params": [
-			        "Food",
-			      ],
-			      "sql": " where "transaction"."category" = $1",
-			    },
-			  ],
 			  "frequency": [
 			    {
 			      "params": [
@@ -196,6 +181,21 @@ describe("list", () => {
 			      "sql": " where "transaction"."date" >= $1",
 			    },
 			  ],
+			  "group": [
+			    {
+			      "params": [
+			        "Food",
+			        50,
+			      ],
+			      "sql": " where "transaction"."group" = $1 order by "transaction"."date" desc, "transaction"."id" desc limit $2",
+			    },
+			    {
+			      "params": [
+			        "Food",
+			      ],
+			      "sql": " where "transaction"."group" = $1",
+			    },
+			  ],
 			  "priority": [
 			    {
 			      "params": [
@@ -219,7 +219,7 @@ describe("list", () => {
 			        "%cafe%",
 			        50,
 			      ],
-			      "sql": " where ("transaction"."description" ilike $1 or "transaction"."category" ilike $2 or "transaction"."notes" ilike $3) order by "transaction"."date" desc, "transaction"."id" desc limit $4",
+			      "sql": " where ("transaction"."description" ilike $1 or "transaction"."group" ilike $2 or "transaction"."notes" ilike $3) order by "transaction"."date" desc, "transaction"."id" desc limit $4",
 			    },
 			    {
 			      "params": [
@@ -227,7 +227,7 @@ describe("list", () => {
 			        "%cafe%",
 			        "%cafe%",
 			      ],
-			      "sql": " where ("transaction"."description" ilike $1 or "transaction"."category" ilike $2 or "transaction"."notes" ilike $3)",
+			      "sql": " where ("transaction"."description" ilike $1 or "transaction"."group" ilike $2 or "transaction"."notes" ilike $3)",
 			    },
 			  ],
 			  "to": [
@@ -254,7 +254,7 @@ describe("list", () => {
 			"date",
 			"description",
 			"amount",
-			"category",
+			"group",
 			"priority",
 		] as const;
 		const rendered: Record<string, string> = {};
@@ -269,9 +269,9 @@ describe("list", () => {
 		expect(rendered).toMatchInlineSnapshot(`
 			{
 			  "amount": " order by "transaction"."amount" asc, "transaction"."id" desc limit $1",
-			  "category": " order by "transaction"."category" asc, "transaction"."id" desc limit $1",
 			  "date": " order by "transaction"."date" asc, "transaction"."id" desc limit $1",
 			  "description": " order by "transaction"."description" asc, "transaction"."id" desc limit $1",
+			  "group": " order by "transaction"."group" asc, "transaction"."id" desc limit $1",
 			  "priority": " order by "transaction"."priority" asc, "transaction"."id" desc limit $1",
 			}
 		`);
@@ -299,7 +299,7 @@ describe("summary", () => {
 			byPriority: [{ priority: Priority.MustHave, total: 60, count: 1 }],
 			byFrequency: [{ frequency: Frequency.OneOff, total: 60, count: 1 }],
 			byMonth: [{ month: "2026-09", total: 80 }],
-			topCategories: [{ category: "Food", total: 80, count: 2 }],
+			topGroups: [{ group: "Food", total: 80, count: 2 }],
 		});
 		expect(
 			queries.map(({ sql, params }) => ({ sql, params })),
@@ -325,7 +325,7 @@ describe("summary", () => {
 			    "params": [
 			      8,
 			    ],
-			    "sql": "select "category", coalesce(sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end), 0), cast(count(*) as int) from "transaction" group by "transaction"."category" order by sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end) desc limit $1",
+			    "sql": "select "group", coalesce(sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end), 0), cast(count(*) as int) from "transaction" group by "transaction"."group" order by sum(case when "transaction"."amount" > 0 then "transaction"."amount" else 0 end) desc limit $1",
 			  },
 			]
 		`);
@@ -339,7 +339,7 @@ describe("summary", () => {
 			byPriority: [],
 			byFrequency: [],
 			byMonth: [],
-			topCategories: [],
+			topGroups: [],
 		});
 	});
 });
@@ -370,7 +370,7 @@ describe("insert", () => {
 			      "2026-09-29T00:00:00.000Z",
 			      "2026-09-29T00:00:00.000Z",
 			    ],
-			    "sql": "insert into "transaction" ("id", "expenseId", "expenseCategoryId", "date", "description", "receiptDescription", "amount", "category", "frequency", "priority", "notes", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, default, $5, $6, $7, $8, $9, $10, $11) returning "id", "expenseId", "expenseCategoryId", "date", "description", "receiptDescription", "amount", "category", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			    "sql": "insert into "transaction" ("id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, default, $5, $6, $7, $8, $9, $10, $11) returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
@@ -417,7 +417,7 @@ describe("update", () => {
 			      "2026-09-29T00:00:00.000Z",
 			      1,
 			    ],
-			    "sql": "update "transaction" set "expenseId" = $1, "expenseCategoryId" = $2, "date" = $3, "description" = $4, "amount" = $5, "category" = $6, "frequency" = $7, "priority" = $8, "notes" = $9, "updatedAt" = $10 where "transaction"."id" = $11 returning "id", "expenseId", "expenseCategoryId", "date", "description", "receiptDescription", "amount", "category", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			    "sql": "update "transaction" set "expenseId" = $1, "categoryId" = $2, "date" = $3, "description" = $4, "amount" = $5, "group" = $6, "frequency" = $7, "priority" = $8, "notes" = $9, "updatedAt" = $10 where "transaction"."id" = $11 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
@@ -451,7 +451,7 @@ describe("findUnplanned", () => {
 			      "2026-09-01T00:00:00.000Z",
 			      "2026-09-15T00:00:00.000Z",
 			    ],
-			    "sql": "select "id", "expenseId", "expenseCategoryId", "date", "description", "receiptDescription", "amount", "category", "frequency", "priority", "notes", "createdAt", "updatedAt" from "transaction" where ("transaction"."amount" > $1 and "transaction"."expenseId" is null and "transaction"."date" >= $2 and "transaction"."date" < $3) order by "transaction"."category" asc, "transaction"."date" desc, "transaction"."id" desc",
+			    "sql": "select "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt" from "transaction" where ("transaction"."amount" > $1 and "transaction"."expenseId" is null and "transaction"."date" >= $2 and "transaction"."date" < $3) order by "transaction"."categoryId" asc, "transaction"."date" desc, "transaction"."id" desc",
 			  },
 			]
 		`);
@@ -476,7 +476,7 @@ describe("setExpense", () => {
 			      "2026-09-29T00:00:00.000Z",
 			      1,
 			    ],
-			    "sql": "update "transaction" set "expenseId" = $1, "updatedAt" = $2 where "transaction"."id" = $3 returning "id", "expenseId", "expenseCategoryId", "date", "description", "receiptDescription", "amount", "category", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			    "sql": "update "transaction" set "expenseId" = $1, "updatedAt" = $2 where "transaction"."id" = $3 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
 			  },
 			]
 		`);

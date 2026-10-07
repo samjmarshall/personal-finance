@@ -14,7 +14,7 @@ const NOW = new Date("2026-10-07T12:00:00.000Z");
 const RENT: Expense = {
 	id: 1,
 	name: "Rent",
-	category: "Bills & Subscriptions",
+	categoryId: 1,
 	kind: CommitmentKind.Recurring,
 	fortnight: 0,
 	month: 2000,
@@ -32,7 +32,7 @@ const CAR_SERVICE: Expense = {
 	...RENT,
 	id: 2,
 	name: "Car service",
-	category: "Transport",
+	categoryId: 2,
 	kind: CommitmentKind.OneTime,
 	month: 0,
 	year: 0,

@@ -15,7 +15,7 @@ import { BalanceSnapshotCard } from "./_components/balance-snapshot-card";
 import { CashFlowChart } from "./_components/cash-flow-chart";
 import { MonthlySpendChart } from "./_components/monthly-spend-chart";
 import { PriorityBreakdown } from "./_components/priority-breakdown";
-import { TopCategories } from "./_components/top-categories";
+import { TopGroups } from "./_components/top-groups";
 
 export default async function DashboardPage() {
 	const [summary, expenses, income] = await Promise.all([
@@ -171,12 +171,12 @@ export default async function DashboardPage() {
 					<Card>
 						<CardContent>
 							<h2 className="font-semibold text-foreground text-sm">
-								Top categories
+								Top groups
 							</h2>
 							<p className="mb-4 text-muted-foreground text-xs">
 								Largest recorded spend across all transactions
 							</p>
-							<TopCategories data={summary.topCategories} />
+							<TopGroups data={summary.topGroups} />
 						</CardContent>
 					</Card>
 				</div>

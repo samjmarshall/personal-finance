@@ -416,9 +416,9 @@ export function ReceiptDetail({
 															</span>
 															{/* Once pickers are up they show the category; the
 															    read-only echo would just repeat them. */}
-															{!matched && item.expenseCategoryName && (
+															{!matched && item.categoryName && (
 																<span className="mt-0.5 block text-muted-foreground text-xs">
-																	{item.expenseCategoryName}
+																	{item.categoryName}
 																</span>
 															)}
 														</td>
@@ -458,14 +458,14 @@ export function ReceiptDetail({
 																			setCategory.variables?.itemId === item.id
 																		}
 																		items={categoryOptions}
-																		onValueChange={(expenseCategoryId) =>
+																		onValueChange={(categoryId) =>
 																			setCategory.mutate({
 																				itemId: item.id,
-																				expenseCategoryId,
+																				categoryId,
 																			})
 																		}
 																		placeholder="Category…"
-																		value={item.expenseCategoryId}
+																		value={item.categoryId}
 																	/>
 																</div>
 															</td>

@@ -3,7 +3,7 @@ import type { CommitmentKind } from "~/lib/constants";
 export interface Expense {
 	id: number;
 	name: string;
-	category: string;
+	categoryId: number;
 	kind: CommitmentKind;
 	fortnight: number;
 	month: number;

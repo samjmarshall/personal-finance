@@ -9,7 +9,7 @@ type Contracts = [
 	Expect<WritesInto<z.infer<typeof expenseUpdateDto>, Expense>>,
 ];
 
-const base = { name: "Rent", category: "Housing" };
+const base = { name: "Rent", categoryId: 3 };
 
 describe("expenseCreateDto", () => {
 	it("accepts a valid expense", () => {
@@ -22,25 +22,33 @@ describe("expenseCreateDto", () => {
 		);
 	});
 
-	it("rejects an empty category", () => {
-		expect(expenseCreateDto.safeParse({ ...base, category: "" }).success).toBe(
-			false,
-		);
-	});
-
-	it("rejects a whitespace-only name or category", () => {
+	it("rejects a whitespace-only name", () => {
 		expect(expenseCreateDto.safeParse({ ...base, name: "  " }).success).toBe(
 			false,
 		);
-		expect(
-			expenseCreateDto.safeParse({ ...base, category: "  " }).success,
-		).toBe(false);
 	});
 
-	it("trims the name and category", () => {
-		expect(
-			expenseCreateDto.parse({ name: " Rent ", category: " Housing " }),
-		).toMatchObject(base);
+	it("trims the name", () => {
+		expect(expenseCreateDto.parse({ ...base, name: " Rent " })).toMatchObject(
+			base,
+		);
+	});
+
+	it("accepts a positive integer categoryId", () => {
+		expect(expenseCreateDto.safeParse({ ...base, categoryId: 1 }).success).toBe(
+			true,
+		);
+	});
+
+	it.each([
+		["0", 0],
+		["a negative", -1],
+		["a string", "3"],
+		["a missing", undefined],
+	])("rejects %s categoryId", (_label, categoryId) => {
+		expect(expenseCreateDto.safeParse({ ...base, categoryId }).success).toBe(
+			false,
+		);
 	});
 
 	it("rejects a negative fortnight", () => {

@@ -9,7 +9,7 @@ export const transactionSortBy = z.enum([
 	"date",
 	"description",
 	"amount",
-	"category",
+	"group",
 	"priority",
 ] satisfies readonly (keyof Transaction)[]);
 
@@ -17,7 +17,7 @@ export const transactionListQueryDto = z.object({
 	search: z.string().optional(),
 	priority: z.enum(Priority).optional(),
 	frequency: z.enum(Frequency).optional(),
-	category: z.string().optional(),
+	group: z.string().optional(),
 	from: z.date().optional(),
 	to: z.date().optional(),
 	sortBy: transactionSortBy.default("date"),
@@ -32,12 +32,12 @@ const transactionFields = {
 	date: z.date(),
 	description: z.string().min(1, "Description is required"),
 	amount: z.number(),
-	category: z.string().trim().min(1, "Category is required").optional(),
+	group: z.string().trim().min(1, "Group is required").optional(),
 	frequency: z.enum(Frequency).optional(),
 	priority: z.enum(Priority).optional(),
 	notes: z.string().nullable().optional(),
 	expenseId: z.number().int().positive().nullable().optional(),
-	expenseCategoryId: z.number().int().positive().nullable().optional(),
+	categoryId: z.number().int().positive().nullable().optional(),
 };
 
 export const transactionCreateDto = z.object({

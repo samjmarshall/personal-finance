@@ -7,8 +7,8 @@ import { transactions } from "./transactions.schema";
 const cols = getTableColumns(transactions);
 
 describe("transaction insert defaults", () => {
-	it("defaults an untagged category to Uncategorised", () => {
-		expect(cols.category.default).toBe("Uncategorised");
+	it("defaults an untagged group to Uncategorised", () => {
+		expect(cols.group.default).toBe("Uncategorised");
 	});
 
 	it("defaults frequency to one-off", () => {

@@ -1,11 +1,15 @@
-import { getTableColumns } from "drizzle-orm";
+import { getTableColumns, getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import { expenseCategories } from "./categories.schema";
+import { categories } from "./categories.schema";
 
-const cols = getTableColumns(expenseCategories);
+const cols = getTableColumns(categories);
 
-describe("expense category insert defaults", () => {
+describe("category insert defaults", () => {
+	it("lives in the category table", () => {
+		expect(getTableName(categories)).toBe("category");
+	});
+
 	it("defaults sortOrder to 0", () => {
 		expect(cols.sortOrder.default).toBe(0);
 	});

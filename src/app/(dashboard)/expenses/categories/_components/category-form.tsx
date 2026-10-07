@@ -34,7 +34,6 @@ export function CategoryForm({
 
 	const onSuccess = async () => {
 		await utils.category.list.invalidate();
-		await utils.expense.list.invalidate();
 		onClose();
 	};
 	// Server/mutation failures surface via the global MutationCache toast
@@ -65,7 +64,7 @@ export function CategoryForm({
 						{category ? "Edit category" : "Add category"}
 					</DialogTitle>
 					<DialogDescription>
-						Categories group your budgeted expenses.
+						A Category files Expenses, Transactions and receipt items.
 					</DialogDescription>
 				</DialogHeader>
 				<form className="flex flex-col gap-4" onSubmit={onSubmit}>

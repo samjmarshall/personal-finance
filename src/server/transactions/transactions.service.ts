@@ -15,7 +15,7 @@ import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
 import type { TransactionsRepository } from "./transactions.repository";
 
-// Either FK on the create/update DTO (expenseId, expenseCategoryId) can raise 23503.
+// Either FK on the create/update DTO (expenseId, categoryId) can raise 23503.
 const FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
 // linkExpense writes only expenseId, so a 23503 here can only be the expense FK —
@@ -48,13 +48,13 @@ export class TransactionsService {
 		const { items, total } = await this.repository.list(query);
 		const names = await this.expenses.namesByIds({
 			expenseIds: distinctLinks(items.map((row) => row.expenseId)),
-			categoryIds: distinctLinks(items.map((row) => row.expenseCategoryId)),
+			categoryIds: distinctLinks(items.map((row) => row.categoryId)),
 		});
 		return {
 			items: items.map((row) => ({
 				...row,
 				expenseName: nameOf(names.expenses, row.expenseId),
-				expenseCategoryName: nameOf(names.categories, row.expenseCategoryId),
+				categoryName: nameOf(names.categories, row.categoryId),
 			})),
 			total,
 		};

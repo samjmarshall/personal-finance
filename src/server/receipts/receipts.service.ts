@@ -178,7 +178,7 @@ function failureAttrs(
 
 /**
  * Prompt listing the household's categories by id so each item comes back with a
- * prefilled `expenseCategoryId`. The id/name list is the only allowed vocabulary —
+ * prefilled `categoryId`. The id/name list is the only allowed vocabulary —
  * the model must map to one of these or return null, never coin a new category.
  * `mediaType` only selects the forwarded-email preamble; it never changes the schema.
  */
@@ -191,7 +191,7 @@ export function buildExtractionPrompt(
 	const hint = kind ? MODEL_MEDIA[kind].hint : "";
 	return `Extract the receipt's vendor, date (YYYY-MM-DD), grand total, currency, and every line item (name, price, quantity).
 ${hint}
-For each item, set expenseCategoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
+For each item, set categoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
 ${list}`;
 }
 
@@ -388,7 +388,7 @@ export class ReceiptsService {
 		bytes: Uint8Array,
 		mediaType: string,
 	): Promise<void> {
-		const categories = await this.repository.listExpenseCategories();
+		const categories = await this.repository.listCategories();
 		const extracted = await this.analyzeReceipt({
 			categories,
 			bytes,
@@ -402,10 +402,9 @@ export class ReceiptsService {
 			name: i.name,
 			price: i.price,
 			quantity: i.quantity,
-			expenseCategoryId:
-				i.expenseCategoryId !== null &&
-				knownCategoryIds.has(i.expenseCategoryId)
-					? i.expenseCategoryId
+			categoryId:
+				i.categoryId !== null && knownCategoryIds.has(i.categoryId)
+					? i.categoryId
 					: null,
 		}));
 

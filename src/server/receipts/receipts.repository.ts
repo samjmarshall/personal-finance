@@ -2,7 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { ExtractionCategory } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
-import { expenseCategories } from "~/server/expenses/categories.schema";
+import { categories } from "~/server/expenses/categories.schema";
 import { receiptItems, receipts } from "./receipts.schema";
 
 export type ReceiptRow = typeof receipts.$inferSelect;
@@ -32,7 +32,7 @@ export interface ReceiptsRepository {
 	/** status → duplicate, pointing at the original. */
 	markDuplicate(id: number, duplicateOfId: number): Promise<void>;
 	/** Sibling-domain read (server-architecture rule allows read joins). */
-	listExpenseCategories(): Promise<ExtractionCategory[]>;
+	listCategories(): Promise<ExtractionCategory[]>;
 	/** status → processed + line items, in one transaction. */
 	saveExtraction(
 		id: number,
@@ -95,10 +95,10 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.where(eq(receipts.id, id));
 	}
 
-	async listExpenseCategories(): Promise<ExtractionCategory[]> {
+	async listCategories(): Promise<ExtractionCategory[]> {
 		return this.db
-			.select({ id: expenseCategories.id, name: expenseCategories.name })
-			.from(expenseCategories);
+			.select({ id: categories.id, name: categories.name })
+			.from(categories);
 	}
 
 	async saveExtraction(

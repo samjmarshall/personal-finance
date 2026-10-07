@@ -6,7 +6,7 @@ import type {
 	ExpenseUpdateInput,
 } from "~/domain/expenses";
 import type { db as realDb } from "~/server/db";
-import { expenseCategories } from "./categories.schema";
+import { categories } from "./categories.schema";
 import { expenses } from "./expenses.schema";
 
 export type CategoryValues = Pick<Category, "name" | "description">;
@@ -25,7 +25,7 @@ export interface ExpensesRepository {
 		values: Omit<ExpenseUpdateInput, "id">,
 	): Promise<Expense | undefined>;
 	delete(id: number): Promise<void>;
-	/** Each carries `expenseCount`: the Expenses filed under its name. */
+	/** Each carries `expenseCount`: the Expenses filed under it. */
 	listCategories(): Promise<Category[]>;
 	/** One past the highest `sortOrder`; 0 when there are none. */
 	nextCategorySortOrder(): Promise<number>;
@@ -33,15 +33,14 @@ export interface ExpensesRepository {
 		values: CategoryValues & Pick<Category, "sortOrder">,
 	): Promise<Category | undefined>;
 	findCategory(id: number): Promise<Category | undefined>;
-	/** `undefined` when no row has the id. Rewrites Expenses on a rename. */
+	/** `undefined` when no row has the id. */
 	updateCategory(
 		id: number,
 		values: CategoryValues,
-		previousName: string,
 	): Promise<Category | undefined>;
 	/** Each id's `sortOrder` becomes its position in `ids`. */
 	reorderCategories(ids: number[]): Promise<void>;
-	countExpensesInCategory(name: string): Promise<number>;
+	countExpensesInCategory(categoryId: number): Promise<number>;
 	deleteCategory(id: number): Promise<void>;
 	/** Ids with no row are absent from the result. */
 	findExpenseNames(ids: number[]): Promise<NameRow[]>;
@@ -65,7 +64,7 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 			.select()
 			.from(expenses)
 			.orderBy(
-				asc(expenses.category),
+				asc(expenses.categoryId),
 				asc(expenses.sortOrder),
 				asc(expenses.name),
 			);
@@ -95,18 +94,18 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 	listCategories(): Promise<Category[]> {
 		return this.db
 			.select({
-				id: expenseCategories.id,
-				name: expenseCategories.name,
-				description: expenseCategories.description,
-				sortOrder: expenseCategories.sortOrder,
-				createdAt: expenseCategories.createdAt,
-				updatedAt: expenseCategories.updatedAt,
+				id: categories.id,
+				name: categories.name,
+				description: categories.description,
+				sortOrder: categories.sortOrder,
+				createdAt: categories.createdAt,
+				updatedAt: categories.updatedAt,
 				expenseCount: sql<number>`count(${expenses.id})`.mapWith(Number),
 			})
-			.from(expenseCategories)
-			.leftJoin(expenses, eq(expenses.category, expenseCategories.name))
-			.groupBy(expenseCategories.id)
-			.orderBy(asc(expenseCategories.sortOrder), asc(expenseCategories.name));
+			.from(categories)
+			.leftJoin(expenses, eq(expenses.categoryId, categories.id))
+			.groupBy(categories.id)
+			.orderBy(asc(categories.sortOrder), asc(categories.name));
 	}
 
 	// MAX, not count: deletes can leave gaps, so count would collide.
@@ -114,52 +113,38 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 		const [next] = await this.db
 			.select({
 				sortOrder:
-					sql<number>`coalesce(max(${expenseCategories.sortOrder}) + 1, 0)`.mapWith(
+					sql<number>`coalesce(max(${categories.sortOrder}) + 1, 0)`.mapWith(
 						Number,
 					),
 			})
-			.from(expenseCategories);
+			.from(categories);
 		return next?.sortOrder ?? 0;
 	}
 
 	async insertCategory(
 		values: CategoryValues & Pick<Category, "sortOrder">,
 	): Promise<Category | undefined> {
-		const [row] = await this.db
-			.insert(expenseCategories)
-			.values(values)
-			.returning();
+		const [row] = await this.db.insert(categories).values(values).returning();
 		return row;
 	}
 
 	async findCategory(id: number): Promise<Category | undefined> {
 		const [row] = await this.db
 			.select()
-			.from(expenseCategories)
-			.where(eq(expenseCategories.id, id));
+			.from(categories)
+			.where(eq(categories.id, id));
 		return row;
 	}
 
 	async updateCategory(
 		id: number,
 		values: CategoryValues,
-		previousName: string,
 	): Promise<Category | undefined> {
-		const [row] = await this.db.transaction(async (tx) => {
-			// An Expense files its category by name text, so a rename must move
-			// them in the same commit.
-			if (values.name !== previousName) {
-				await tx
-					.update(expenses)
-					.set({ category: values.name })
-					.where(eq(expenses.category, previousName));
-			}
-			return tx
-				.update(expenseCategories)
-				.set(values)
-				.where(eq(expenseCategories.id, id))
-				.returning();
-		});
+		const [row] = await this.db
+			.update(categories)
+			.set(values)
+			.where(eq(categories.id, id))
+			.returning();
 		return row;
 	}
 
@@ -167,23 +152,23 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 		await this.db.transaction(async (tx) => {
 			for (const [index, id] of ids.entries()) {
 				await tx
-					.update(expenseCategories)
+					.update(categories)
 					.set({ sortOrder: index })
-					.where(eq(expenseCategories.id, id));
+					.where(eq(categories.id, id));
 			}
 		});
 	}
 
-	async countExpensesInCategory(name: string): Promise<number> {
+	async countExpensesInCategory(categoryId: number): Promise<number> {
 		const [countRow] = await this.db
 			.select({ count: sql<number>`count(*)`.mapWith(Number) })
 			.from(expenses)
-			.where(eq(expenses.category, name));
+			.where(eq(expenses.categoryId, categoryId));
 		return countRow?.count ?? 0;
 	}
 
 	async deleteCategory(id: number): Promise<void> {
-		await this.db.delete(expenseCategories).where(eq(expenseCategories.id, id));
+		await this.db.delete(categories).where(eq(categories.id, id));
 	}
 
 	findExpenseNames(ids: number[]): Promise<NameRow[]> {
@@ -195,8 +180,8 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 
 	findCategoryNames(ids: number[]): Promise<NameRow[]> {
 		return this.db
-			.select({ id: expenseCategories.id, name: expenseCategories.name })
-			.from(expenseCategories)
-			.where(inArray(expenseCategories.id, ids));
+			.select({ id: categories.id, name: categories.name })
+			.from(categories)
+			.where(inArray(categories.id, ids));
 	}
 }

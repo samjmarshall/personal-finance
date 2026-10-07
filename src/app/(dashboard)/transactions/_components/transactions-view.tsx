@@ -31,7 +31,7 @@ import { api, type RouterOutputs } from "~/trpc/react";
 import { TransactionForm } from "./transaction-form";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
-type SortBy = "date" | "description" | "amount" | "category" | "priority";
+type SortBy = "date" | "description" | "amount" | "group" | "priority";
 
 const PAGE_SIZE = 50;
 
@@ -66,13 +66,7 @@ export function TransactionsView() {
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
 
-	// Category picker is constrained to the managed expense_category list, not the
-	// distinct labels already on transactions (which can't seed a new category).
 	const [categoryRows] = api.category.list.useSuspenseQuery();
-	const categories = useMemo(
-		() => categoryRows.map((c) => c.name),
-		[categoryRows],
-	);
 	const [expenses] = api.expense.list.useSuspenseQuery();
 
 	const queryInput = {
@@ -116,7 +110,7 @@ export function TransactionsView() {
 			setSortDir((d) => (d === "asc" ? "desc" : "asc"));
 		} else {
 			setSortBy(col);
-			setSortDir(col === "description" || col === "category" ? "asc" : "desc");
+			setSortDir(col === "description" || col === "group" ? "asc" : "desc");
 		}
 		setPage(0);
 	}
@@ -187,7 +181,7 @@ export function TransactionsView() {
 								setSearch(e.target.value);
 								setPage(0);
 							}}
-							placeholder="Search description, category or notes..."
+							placeholder="Search description, group or notes..."
 							value={search}
 						/>
 					</div>
@@ -234,7 +228,7 @@ export function TransactionsView() {
 									<SortHeader col="description">Description</SortHeader>
 								</th>
 								<th className="px-4 py-2.5">
-									<SortHeader col="category">Category</SortHeader>
+									<SortHeader col="group">Group</SortHeader>
 								</th>
 								<th className="px-4 py-2.5">
 									<span className="font-medium text-muted-foreground">
@@ -276,10 +270,10 @@ export function TransactionsView() {
 											)}
 										</td>
 										<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-											{tx.category}
-											{tx.expenseCategoryName && (
+											{tx.group}
+											{tx.categoryName && (
 												<span className="mt-0.5 block text-muted-foreground text-xs">
-													{tx.expenseCategoryName}
+													{tx.categoryName}
 												</span>
 											)}
 										</td>
@@ -378,7 +372,6 @@ export function TransactionsView() {
 			</Card>
 
 			<TransactionForm
-				categories={categories}
 				expenses={expenses}
 				managedCategories={categoryRows}
 				onClose={() => setFormOpen(false)}

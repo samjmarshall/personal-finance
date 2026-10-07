@@ -68,8 +68,8 @@ export function CategoriesView() {
 						Add category
 					</Button>
 				}
-				description="Organise your budgeted expenses into categories."
-				title="Expense Categories"
+				description="File Expenses, Transactions and receipt items under one shared list."
+				title="Categories"
 			/>
 
 			<div className="mt-6 flex flex-col gap-3">

@@ -75,8 +75,8 @@ const extraction: ReceiptExtraction = {
 	total: 8.99,
 	currency: "USD",
 	items: [
-		{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
-		{ name: "Bread", price: 2.5, quantity: 2, expenseCategoryId: null },
+		{ name: "Milk", price: 3.99, quantity: 1, categoryId: 7 },
+		{ name: "Bread", price: 2.5, quantity: 2, categoryId: null },
 	],
 };
 
@@ -144,7 +144,7 @@ function harness(
 			log.push("markDuplicate");
 			calls.markDuplicate.push({ id, duplicateOfId });
 		},
-		listExpenseCategories: async () => opts.categories ?? [],
+		listCategories: async () => opts.categories ?? [],
 		saveExtraction: async (id, values, items) => {
 			log.push("saveExtraction");
 			calls.saveExtraction.push({ id, values, items });
@@ -243,8 +243,8 @@ describe("ReceiptsService.process", () => {
 			rawJson: extraction,
 		});
 		expect(saved?.items).toEqual([
-			{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
-			{ name: "Bread", price: 2.5, quantity: 2, expenseCategoryId: null },
+			{ name: "Milk", price: 3.99, quantity: 1, categoryId: 7 },
+			{ name: "Bread", price: 2.5, quantity: 2, categoryId: null },
 		]);
 		expect(h.calls.markFailed).toEqual([]);
 	});
@@ -283,8 +283,8 @@ describe("ReceiptsService.process", () => {
 			extract: async () => ({
 				...extraction,
 				items: [
-					{ name: "Milk", price: 3.99, quantity: 1, expenseCategoryId: 7 },
-					{ name: "Soap", price: 1.5, quantity: 1, expenseCategoryId: 99 },
+					{ name: "Milk", price: 3.99, quantity: 1, categoryId: 7 },
+					{ name: "Soap", price: 1.5, quantity: 1, categoryId: 99 },
 				],
 			}),
 		});
@@ -292,8 +292,8 @@ describe("ReceiptsService.process", () => {
 		await h.service.process(1);
 
 		expect(h.calls.saveExtraction[0]?.items).toEqual([
-			expect.objectContaining({ name: "Milk", expenseCategoryId: 7 }),
-			expect.objectContaining({ name: "Soap", expenseCategoryId: null }),
+			expect.objectContaining({ name: "Milk", categoryId: 7 }),
+			expect.objectContaining({ name: "Soap", categoryId: null }),
 		]);
 	});
 
@@ -641,7 +641,7 @@ describe("ReceiptsService.process", () => {
 });
 
 describe("buildExtractionPrompt", () => {
-	it("lists every category's id and name so the model prefills expenseCategoryId", () => {
+	it("lists every category's id and name so the model prefills categoryId", () => {
 		const prompt = buildExtractionPrompt([
 			{ id: 7, name: "Groceries" },
 			{ id: 9, name: "Household" },

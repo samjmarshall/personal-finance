@@ -36,7 +36,7 @@ function expense(o: Partial<Expense>): Expense {
 	return {
 		id: 1,
 		name: "Expense",
-		category: "Bills & Subscriptions",
+		categoryId: 1,
 		kind: CommitmentKind.Recurring,
 		fortnight: 0,
 		month: 0,

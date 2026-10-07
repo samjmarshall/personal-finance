@@ -10,6 +10,7 @@ import type {
 } from "~/domain/expenses";
 import { assertRow } from "~/server/errors/assert-row";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
 import type {
 	CategoryValues,
@@ -19,6 +20,8 @@ import type {
 
 const CATEGORY_NAME_TAKEN_MESSAGE = "A category with that name already exists.";
 const CATEGORY_NOT_FOUND_MESSAGE = "Category not found.";
+// The member deleted the picked Category in another tab.
+const CATEGORY_GONE_MESSAGE = "The selected category no longer exists.";
 const categoryInUseMessage = (name: string, count: number) =>
 	`Cannot delete "${name}" — ${count} expense${count === 1 ? "" : "s"} still use it.`;
 
@@ -30,6 +33,9 @@ function rethrowNameTaken(error: unknown): never {
 	}
 	throw error;
 }
+
+const rethrowCategoryGone = (error: unknown): never =>
+	rethrowFkConflict(error, CATEGORY_GONE_MESSAGE);
 
 function normalizeCategory({
 	name,
@@ -63,15 +69,16 @@ export class ExpensesService {
 	}
 
 	async create(input: ExpenseCreateInput): Promise<Expense> {
-		return assertRow(await this.repository.insert(input), "create expense");
+		const row = await this.repository.insert(input).catch(rethrowCategoryGone);
+		return assertRow(row, "create expense");
 	}
 
 	// Missing id stays a 500, not "not found", to keep what members already see.
 	async update({ id, ...values }: ExpenseUpdateInput): Promise<Expense> {
-		return assertRow(
-			await this.repository.update(id, values),
-			"update expense",
-		);
+		const row = await this.repository
+			.update(id, values)
+			.catch(rethrowCategoryGone);
+		return assertRow(row, "update expense");
 	}
 
 	delete(id: number): Promise<void> {
@@ -94,9 +101,9 @@ export class ExpensesService {
 		id,
 		...input
 	}: CategoryUpdateInput): Promise<Category> {
-		const existing = await this.findCategoryOrThrow(id);
+		await this.findCategoryOrThrow(id);
 		const row = await this.repository
-			.updateCategory(id, normalizeCategory(input), existing.name)
+			.updateCategory(id, normalizeCategory(input))
 			.catch(rethrowNameTaken);
 		return assertRow(row, "update category");
 	}
@@ -107,7 +114,7 @@ export class ExpensesService {
 
 	async deleteCategory(id: number): Promise<void> {
 		const existing = await this.findCategoryOrThrow(id);
-		const count = await this.repository.countExpensesInCategory(existing.name);
+		const count = await this.repository.countExpensesInCategory(existing.id);
 		if (count > 0) {
 			throw new ConflictError(categoryInUseMessage(existing.name, count));
 		}

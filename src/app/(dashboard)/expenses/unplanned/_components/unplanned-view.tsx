@@ -37,7 +37,7 @@ function periodLabel(kind: PeriodKind, range: PeriodWindow): string {
 export function UnplannedView() {
 	const [anchor] = api.setting.fortnightAnchor.useSuspenseQuery();
 	const [expenses] = api.expense.list.useSuspenseQuery();
-	const { data: categories } = api.category.list.useQuery();
+	const [categories] = api.category.list.useSuspenseQuery();
 
 	// Memoised so it's a stable effect dependency (fromDateInput mints a fresh
 	// Date each call) and parsed once, not again in the seed effect below.
@@ -96,22 +96,30 @@ export function UnplannedView() {
 		[expenses],
 	);
 
+	// Managed order (`category.list` arrives sorted), then "No category" last.
+	// An id this tab's list doesn't know yet joins "No category" rather than vanish.
 	const groups = useMemo(() => {
-		const map = new Map<string, UnplannedRow[]>();
+		const known = new Set(categories.map((c) => c.id));
+		const byId = new Map<number | null, UnplannedRow[]>();
 		for (const row of rows ?? []) {
-			const arr = map.get(row.category) ?? [];
+			const id =
+				row.categoryId !== null && known.has(row.categoryId)
+					? row.categoryId
+					: null;
+			const arr = byId.get(id) ?? [];
 			arr.push(row);
-			map.set(row.category, arr);
+			byId.set(id, arr);
 		}
-		// Rank each category by its managed sortOrder; categories without a
-		// managed record fall to the end and are broken by name.
-		const order = new Map(
-			(categories ?? []).map((c, i) => [c.name, c.sortOrder * 1000 + i]),
-		);
-		const rank = (name: string) => order.get(name) ?? Number.MAX_SAFE_INTEGER;
-		return [...map.entries()].sort(
-			(a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]),
-		);
+		const filed = categories.flatMap((c) => {
+			const grouped = byId.get(c.id);
+			return grouped
+				? [{ key: String(c.id), label: c.name, rows: grouped }]
+				: [];
+		});
+		const unfiled = byId.get(null);
+		return unfiled
+			? [...filed, { key: "none", label: "No category", rows: unfiled }]
+			: filed;
 	}, [rows, categories]);
 
 	function selectKind(next: PeriodKind) {
@@ -216,17 +224,17 @@ export function UnplannedView() {
 						isFetching && "opacity-60",
 					)}
 				>
-					{groups.map(([category, rowsInGroup]) => {
+					{groups.map(({ key, label, rows: rowsInGroup }) => {
 						const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
 						return (
-							<Card className="[--card-spacing:0px]" key={category}>
+							<Card className="[--card-spacing:0px]" key={key}>
 								{/* Mirror the row grid so the group total sits in the same
 							    column as the amounts it sums (col 3); the picker column
 							    (col 4) stays empty. */}
 								<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
 									<span className="flex items-center gap-2 sm:col-span-2">
 										<span className="font-semibold text-foreground text-sm">
-											{category}
+											{label}
 										</span>
 										<span className="text-muted-foreground text-xs">
 											({rowsInGroup.length})

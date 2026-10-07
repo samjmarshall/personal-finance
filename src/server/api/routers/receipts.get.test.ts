@@ -44,7 +44,7 @@ const RECEIPT_FIELDS = [
 const ITEM_FIELDS = [
 	...Object.keys(getTableColumns(receiptItems)),
 	"expenseName",
-	"expenseCategoryName",
+	"categoryName",
 ];
 
 const RECEIPT = {
@@ -77,11 +77,11 @@ const ITEM = {
 	price: 3.99,
 	quantity: 1,
 	expenseId: null,
-	expenseCategoryId: 2,
+	categoryId: 2,
 	createdAt: new Date("2026-09-10T01:00:00.000Z"),
 	updatedAt: null,
 	expenseName: null,
-	expenseCategoryName: "Groceries",
+	categoryName: "Groceries",
 };
 
 function getDb(
@@ -107,7 +107,7 @@ describe("receipt.get", () => {
 		expect(queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
 			  "select "receipt"."id", "receipt"."status", "receipt"."channel", "receipt"."userId", "receipt"."blobUrl", "receipt"."blobPathname", "receipt"."contentType", "receipt"."contentHash", "receipt"."vendor", "receipt"."receiptDate", "receipt"."total", "receipt"."currency", "receipt"."rawJson", "receipt"."error", "receipt"."traceId", "receipt"."transactionId", "receipt"."duplicateOfId", "receipt"."createdAt", "receipt"."updatedAt", "transaction"."description" from "receipt" left join "transaction" on "receipt"."transactionId" = "transaction"."id" where "receipt"."id" = $1",
-			  "select "receipt_item"."id", "receipt_item"."receiptId", "receipt_item"."name", "receipt_item"."price", "receipt_item"."quantity", "receipt_item"."expenseId", "receipt_item"."expenseCategoryId", "receipt_item"."createdAt", "receipt_item"."updatedAt", "expense"."name", "expense_category"."name" from "receipt_item" left join "expense" on "receipt_item"."expenseId" = "expense"."id" left join "expense_category" on "receipt_item"."expenseCategoryId" = "expense_category"."id" where "receipt_item"."receiptId" = $1 order by "receipt_item"."id" asc",
+			  "select "receipt_item"."id", "receipt_item"."receiptId", "receipt_item"."name", "receipt_item"."price", "receipt_item"."quantity", "receipt_item"."expenseId", "receipt_item"."categoryId", "receipt_item"."createdAt", "receipt_item"."updatedAt", "expense"."name", "category"."name" from "receipt_item" left join "expense" on "receipt_item"."expenseId" = "expense"."id" left join "category" on "receipt_item"."categoryId" = "category"."id" where "receipt_item"."receiptId" = $1 order by "receipt_item"."id" asc",
 			]
 		`);
 	});
@@ -121,22 +121,20 @@ describe("receipt.get", () => {
 			id: 3,
 			transactionDescription: "COLES 123",
 			traceUrl: null,
-			items: [
-				{ id: 5, expenseCategoryId: 2, expenseCategoryName: "Groceries" },
-			],
+			items: [{ id: 5, categoryId: 2, categoryName: "Groceries" }],
 		});
 	});
 
 	it("returns a null category name for an unattributed item", async () => {
 		const { db } = getDb(RECEIPT, [
-			{ ...ITEM, expenseCategoryId: null, expenseCategoryName: null },
+			{ ...ITEM, categoryId: null, categoryName: null },
 		]);
 
 		const detail = await caller(db).get({ id: 3 });
 
 		expect(detail.items[0]).toMatchObject({
-			expenseCategoryId: null,
-			expenseCategoryName: null,
+			categoryId: null,
+			categoryName: null,
 		});
 	});
 

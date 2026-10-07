@@ -78,7 +78,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			const term = `%${query.search}%`;
 			const clause = or(
 				ilike(transactions.description, term),
-				ilike(transactions.category, term),
+				ilike(transactions.group, term),
 				ilike(transactions.notes, term),
 			);
 			if (clause) filters.push(clause);
@@ -86,7 +86,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		if (query.priority) filters.push(eq(transactions.priority, query.priority));
 		if (query.frequency)
 			filters.push(eq(transactions.frequency, query.frequency));
-		if (query.category) filters.push(eq(transactions.category, query.category));
+		if (query.group) filters.push(eq(transactions.group, query.group));
 		if (query.from) filters.push(gte(transactions.date, query.from));
 		if (query.to) filters.push(lte(transactions.date, query.to));
 
@@ -99,7 +99,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			date: transactions.date,
 			description: transactions.description,
 			amount: transactions.amount,
-			category: transactions.category,
+			group: transactions.group,
 			priority: transactions.priority,
 		};
 		const orderCol = sortableColumns[query.sortBy];
@@ -126,7 +126,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 	}
 
 	async summary(): Promise<TransactionSummary> {
-		const [totalsRows, byPriority, byFrequency, byMonth, topCategories] =
+		const [totalsRows, byPriority, byFrequency, byMonth, topGroups] =
 			await Promise.all([
 				this.db
 					.select({
@@ -162,12 +162,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					.orderBy(sql`date_trunc('month', ${transactions.date})`),
 				this.db
 					.select({
-						category: transactions.category,
+						group: transactions.group,
 						total: sql<number>`coalesce(sum(${spendAmount}), 0)`,
 						count: sql<number>`cast(count(*) as int)`,
 					})
 					.from(transactions)
-					.groupBy(transactions.category)
+					.groupBy(transactions.group)
 					.orderBy(desc(sql`sum(${spendAmount})`))
 					.limit(8),
 			]);
@@ -178,7 +178,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			byPriority,
 			byFrequency,
 			byMonth,
-			topCategories,
+			topGroups,
 		};
 	}
 
@@ -217,10 +217,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 						lt(transactions.date, window.to),
 					),
 				)
-				// desc(id) is a stable final tiebreaker so same-category/same-date
+				// desc(id) is a stable final tiebreaker so same-Category/same-date
 				// rows keep a fixed order across refetches (matches `list`).
 				.orderBy(
-					asc(transactions.category),
+					asc(transactions.categoryId),
 					desc(transactions.date),
 					desc(transactions.id),
 				)

@@ -33,7 +33,7 @@ import { isPgViolation, PgViolation } from "~/server/api/lib/parse-error";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { user } from "~/server/auth/auth.schema";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
-import { expenseCategories } from "~/server/expenses/categories.schema";
+import { categories } from "~/server/expenses/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { buildOutboxEvent } from "~/server/inngest/events";
 import { currentTraceId } from "~/server/observability/tracing/current-trace-id";
@@ -43,7 +43,7 @@ import { transactions } from "~/server/transactions/transactions.schema";
 
 const byId = z.object({ id: z.number() });
 
-// Attribution writes an expenseId or an expenseCategoryId; either FK can raise 23503
+// Attribution writes an expenseId or a categoryId; either FK can raise 23503
 // if the member deleted the target in another tab.
 const ITEM_FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
@@ -133,14 +133,11 @@ export const receiptRouter = createTRPCRouter({
 				.select({
 					...getTableColumns(receiptItems),
 					expenseName: expenses.name,
-					expenseCategoryName: expenseCategories.name,
+					categoryName: categories.name,
 				})
 				.from(receiptItems)
 				.leftJoin(expenses, eq(receiptItems.expenseId, expenses.id))
-				.leftJoin(
-					expenseCategories,
-					eq(receiptItems.expenseCategoryId, expenseCategories.id),
-				)
+				.leftJoin(categories, eq(receiptItems.categoryId, categories.id))
 				.where(eq(receiptItems.receiptId, input.id))
 				.orderBy(asc(receiptItems.id));
 
@@ -339,7 +336,7 @@ export const receiptRouter = createTRPCRouter({
 			try {
 				[row] = await ctx.db
 					.update(receiptItems)
-					.set({ expenseCategoryId: input.expenseCategoryId })
+					.set({ categoryId: input.categoryId })
 					.where(eq(receiptItems.id, input.itemId))
 					.returning();
 			} catch (error) {

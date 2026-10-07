@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SelectField, toOptions } from "~/components/select-field";
+import { SelectField } from "~/components/select-field";
 import { Button } from "~/components/ui/button";
 import {
 	Dialog,
@@ -18,11 +18,7 @@ import {
 	FieldOptional,
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-	CommitmentKind,
-	EXPENSE_CATEGORIES,
-	toCommitmentKind,
-} from "~/lib/constants";
+import { CommitmentKind, toCommitmentKind } from "~/lib/constants";
 import { fromDateInput, toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -61,12 +57,13 @@ export function ExpenseForm({
 	expense: Expense | null;
 }) {
 	const utils = api.useUtils();
-	const { data: managedCategories } = api.category.list.useQuery();
-	const categoryOptions = managedCategories?.length
-		? managedCategories.map((c) => c.name)
-		: [...EXPENSE_CATEGORIES];
+	const { data: categories } = api.category.list.useQuery();
+	const categoryOptions = (categories ?? []).map((c) => ({
+		value: c.id,
+		label: c.name,
+	}));
 	const [name, setName] = useState("");
-	const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[1]);
+	const [categoryId, setCategoryId] = useState<number | null>(null);
 	const [basis, setBasis] = useState<"fortnight" | "month" | "year">("month");
 	const [kind, setKind] = useState(CommitmentKind.Recurring);
 	const [expectedDate, setExpectedDate] = useState(() =>
@@ -84,7 +81,7 @@ export function ExpenseForm({
 	useEffect(() => {
 		if (!open) return;
 		setName(expense?.name ?? "");
-		setCategory(expense?.category ?? EXPENSE_CATEGORIES[1]);
+		setCategoryId(expense?.categoryId ?? null);
 		setBasis("month");
 		setKind(toCommitmentKind(expense?.kind));
 		setExpectedDate(toDateInput(expense?.expectedDate ?? new Date()));
@@ -120,6 +117,7 @@ export function ExpenseForm({
 		setError(null);
 		const value = Number.parseFloat(amount);
 		if (!name.trim()) return setError("Please enter a name.");
+		if (categoryId === null) return setError("Please choose a category.");
 		if (Number.isNaN(value) || value < 0)
 			return setError("Please enter a valid amount.");
 
@@ -140,7 +138,7 @@ export function ExpenseForm({
 		const payload = isOneTime
 			? {
 					name: name.trim(),
-					category,
+					categoryId,
 					kind,
 					amount: value,
 					expectedDate: date,
@@ -150,7 +148,7 @@ export function ExpenseForm({
 				}
 			: {
 					name: name.trim(),
-					category,
+					categoryId,
 					kind,
 					amount: null,
 					expectedDate: null,
@@ -191,13 +189,10 @@ export function ExpenseForm({
 						<SelectField
 							className="w-full"
 							id="exp-cat"
-							items={toOptions(
-								categoryOptions.includes(category)
-									? categoryOptions
-									: [category, ...categoryOptions],
-							)}
-							onValueChange={(v) => v && setCategory(v)}
-							value={category}
+							items={categoryOptions}
+							onValueChange={setCategoryId}
+							placeholder="Choose a category"
+							value={categoryId}
 						/>
 					</Field>
 					<Field>

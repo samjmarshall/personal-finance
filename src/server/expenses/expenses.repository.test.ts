@@ -9,7 +9,7 @@ import {
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
-import { expenseCategories } from "./categories.schema";
+import { categories } from "./categories.schema";
 import { DrizzleExpensesRepository } from "./expenses.repository";
 import { expenses } from "./expenses.schema";
 
@@ -25,12 +25,12 @@ function harness(respond?: Respond) {
 const NOW = new Date("2026-10-02T00:00:00.000Z");
 
 const EXPENSE_COLUMNS = Object.keys(getTableColumns(expenses));
-const CATEGORY_COLUMNS = Object.keys(getTableColumns(expenseCategories));
+const CATEGORY_COLUMNS = Object.keys(getTableColumns(categories));
 
 const EXPENSE = {
 	id: 7,
 	name: "Weekly shop",
-	category: "Food",
+	categoryId: 3,
 	kind: CommitmentKind.Recurring,
 	fortnight: 200,
 	month: 433,
@@ -56,8 +56,6 @@ const CATEGORY = {
 const EXPENSE_ROW = rowOf(EXPENSE_COLUMNS, EXPENSE);
 const CATEGORY_ROW = rowOf(CATEGORY_COLUMNS, CATEGORY);
 
-const isExpenseUpdate = (sql: string) => sql.startsWith('update "expense" ');
-
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["Date"] });
 	vi.setSystemTime(NOW);
@@ -65,7 +63,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("expenses", () => {
-	it("list selects every expense by category, sort order, then name", async () => {
+	it("list selects every expense by category id, sort order, then name", async () => {
 		const { repository, queries } = harness(() => [EXPENSE_ROW]);
 
 		await expect(repository.list()).resolves.toEqual([EXPENSE]);
@@ -74,7 +72,7 @@ describe("expenses", () => {
 			  {
 			    "method": "all",
 			    "params": [],
-			    "sql": "select "id", "name", "category", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt" from "expense" order by "expense"."category" asc, "expense"."sortOrder" asc, "expense"."name" asc",
+			    "sql": "select "id", "name", "categoryId", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt" from "expense" order by "expense"."categoryId" asc, "expense"."sortOrder" asc, "expense"."name" asc",
 			  },
 			]
 		`);
@@ -86,7 +84,7 @@ describe("expenses", () => {
 		await expect(
 			repository.insert({
 				name: "Weekly shop",
-				category: "Food",
+				categoryId: 3,
 				fortnight: 200,
 			}),
 		).resolves.toEqual(EXPENSE);
@@ -96,12 +94,12 @@ describe("expenses", () => {
 			    "method": "all",
 			    "params": [
 			      "Weekly shop",
-			      "Food",
+			      3,
 			      200,
 			      "2026-10-02T00:00:00.000Z",
 			      "2026-10-02T00:00:00.000Z",
 			    ],
-			    "sql": "insert into "expense" ("id", "name", "category", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt") values (default, $1, $2, default, $3, default, default, default, default, default, default, default, $4, $5) returning "id", "name", "category", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt"",
+			    "sql": "insert into "expense" ("id", "name", "categoryId", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt") values (default, $1, $2, default, $3, default, default, default, default, default, default, default, $4, $5) returning "id", "name", "categoryId", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
@@ -111,7 +109,7 @@ describe("expenses", () => {
 		const { repository } = harness();
 
 		await expect(
-			repository.insert({ name: "Weekly shop", category: "Food" }),
+			repository.insert({ name: "Weekly shop", categoryId: 3 }),
 		).resolves.toBeUndefined();
 	});
 
@@ -121,7 +119,7 @@ describe("expenses", () => {
 		await expect(
 			repository.update(7, {
 				name: "Weekly shop",
-				category: "Food",
+				categoryId: 3,
 				kind: CommitmentKind.Recurring,
 			}),
 		).resolves.toEqual(EXPENSE);
@@ -131,12 +129,12 @@ describe("expenses", () => {
 			    "method": "all",
 			    "params": [
 			      "Weekly shop",
-			      "Food",
+			      3,
 			      "recurring",
 			      "2026-10-02T00:00:00.000Z",
 			      7,
 			    ],
-			    "sql": "update "expense" set "name" = $1, "category" = $2, "kind" = $3, "updatedAt" = $4 where "expense"."id" = $5 returning "id", "name", "category", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt"",
+			    "sql": "update "expense" set "name" = $1, "categoryId" = $2, "kind" = $3, "updatedAt" = $4 where "expense"."id" = $5 returning "id", "name", "categoryId", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
@@ -148,7 +146,7 @@ describe("expenses", () => {
 		await expect(
 			repository.update(7, {
 				name: "Weekly shop",
-				category: "Food",
+				categoryId: 3,
 				kind: CommitmentKind.Recurring,
 			}),
 		).resolves.toBeUndefined();
@@ -174,7 +172,7 @@ describe("expenses", () => {
 });
 
 describe("categories", () => {
-	it("listCategories counts each category's expenses by name, ordered by sort order then name", async () => {
+	it("listCategories counts each category's expenses by id, ordered by sort order then name", async () => {
 		// Driver sends the count as text; the repository must return a number.
 		const { repository, queries } = harness(() => [[...CATEGORY_ROW, "2"]]);
 
@@ -186,7 +184,7 @@ describe("categories", () => {
 			  {
 			    "method": "all",
 			    "params": [],
-			    "sql": "select "expense_category"."id", "expense_category"."name", "expense_category"."description", "expense_category"."sortOrder", "expense_category"."createdAt", "expense_category"."updatedAt", count("expense"."id") from "expense_category" left join "expense" on "expense"."category" = "expense_category"."name" group by "expense_category"."id" order by "expense_category"."sortOrder" asc, "expense_category"."name" asc",
+			    "sql": "select "category"."id", "category"."name", "category"."description", "category"."sortOrder", "category"."createdAt", "category"."updatedAt", count("expense"."id") from "category" left join "expense" on "expense"."categoryId" = "category"."id" group by "category"."id" order by "category"."sortOrder" asc, "category"."name" asc",
 			  },
 			]
 		`);
@@ -201,7 +199,7 @@ describe("categories", () => {
 			  {
 			    "method": "all",
 			    "params": [],
-			    "sql": "select coalesce(max("sortOrder") + 1, 0) from "expense_category"",
+			    "sql": "select coalesce(max("sortOrder") + 1, 0) from "category"",
 			  },
 			]
 		`);
@@ -234,7 +232,7 @@ describe("categories", () => {
 			      "2026-10-02T00:00:00.000Z",
 			      "2026-10-02T00:00:00.000Z",
 			    ],
-			    "sql": "insert into "expense_category" ("id", "name", "description", "sortOrder", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5) returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
+			    "sql": "insert into "category" ("id", "name", "description", "sortOrder", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5) returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
@@ -263,7 +261,7 @@ describe("categories", () => {
 			    "params": [
 			      3,
 			    ],
-			    "sql": "select "id", "name", "description", "sortOrder", "createdAt", "updatedAt" from "expense_category" where "expense_category"."id" = $1",
+			    "sql": "select "id", "name", "description", "sortOrder", "createdAt", "updatedAt" from "category" where "category"."id" = $1",
 			  },
 			]
 		`);
@@ -275,71 +273,17 @@ describe("categories", () => {
 		await expect(repository.findCategory(3)).resolves.toBeUndefined();
 	});
 
-	it("updateCategory keeps the same name without touching expenses", async () => {
-		const { repository, queries } = harness(() => [CATEGORY_ROW]);
-
-		await expect(
-			repository.updateCategory(
-				3,
-				{ name: "Food", description: "Groceries and takeaway" },
-				"Food",
-			),
-		).resolves.toEqual(CATEGORY);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "execute",
-			    "params": [],
-			    "sql": "begin",
-			  },
-			  {
-			    "method": "all",
-			    "params": [
-			      "Food",
-			      "Groceries and takeaway",
-			      "2026-10-02T00:00:00.000Z",
-			      3,
-			    ],
-			    "sql": "update "expense_category" set "name" = $1, "description" = $2, "updatedAt" = $3 where "expense_category"."id" = $4 returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
-			  },
-			  {
-			    "method": "execute",
-			    "params": [],
-			    "sql": "commit",
-			  },
-			]
-		`);
-	});
-
-	it("updateCategory moves expenses to a new name in the same transaction", async () => {
+	it("updateCategory renames in one statement, never touching expenses", async () => {
 		const renamed = { ...CATEGORY, name: "Groceries", description: null };
-		const { repository, queries } = harness(({ sql }) =>
-			isExpenseUpdate(sql) ? [] : [rowOf(CATEGORY_COLUMNS, renamed)],
-		);
+		const { repository, queries } = harness(() => [
+			rowOf(CATEGORY_COLUMNS, renamed),
+		]);
 
 		await expect(
-			repository.updateCategory(
-				3,
-				{ name: "Groceries", description: null },
-				"Food",
-			),
+			repository.updateCategory(3, { name: "Groceries", description: null }),
 		).resolves.toEqual(renamed);
 		expect(queries).toMatchInlineSnapshot(`
 			[
-			  {
-			    "method": "execute",
-			    "params": [],
-			    "sql": "begin",
-			  },
-			  {
-			    "method": "execute",
-			    "params": [
-			      "Groceries",
-			      "2026-10-02T00:00:00.000Z",
-			      "Food",
-			    ],
-			    "sql": "update "expense" set "category" = $1, "updatedAt" = $2 where "expense"."category" = $3",
-			  },
 			  {
 			    "method": "all",
 			    "params": [
@@ -348,44 +292,25 @@ describe("categories", () => {
 			      "2026-10-02T00:00:00.000Z",
 			      3,
 			    ],
-			    "sql": "update "expense_category" set "name" = $1, "description" = $2, "updatedAt" = $3 where "expense_category"."id" = $4 returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
-			  },
-			  {
-			    "method": "execute",
-			    "params": [],
-			    "sql": "commit",
+			    "sql": "update "category" set "name" = $1, "description" = $2, "updatedAt" = $3 where "category"."id" = $4 returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
 	});
 
-	it("updateCategory rolls back and lets a driver error bubble", async () => {
-		const { repository, queries } = harness(({ sql }) =>
-			isExpenseUpdate(sql) ? [] : pgError("23505"),
-		);
+	it("updateCategory lets a driver error bubble", async () => {
+		const { repository } = harness(() => pgError("23505"));
 
 		await expect(
-			repository.updateCategory(
-				3,
-				{ name: "Groceries", description: null },
-				"Food",
-			),
+			repository.updateCategory(3, { name: "Groceries", description: null }),
 		).rejects.toMatchObject({ cause: { code: "23505" } });
-		expect(queries.map(({ sql }) => sql)).toMatchInlineSnapshot(`
-			[
-			  "begin",
-			  "update "expense" set "category" = $1, "updatedAt" = $2 where "expense"."category" = $3",
-			  "update "expense_category" set "name" = $1, "description" = $2, "updatedAt" = $3 where "expense_category"."id" = $4 returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
-			  "rollback",
-			]
-		`);
 	});
 
 	it("updateCategory gives undefined when no row matches the id", async () => {
 		const { repository } = harness();
 
 		await expect(
-			repository.updateCategory(3, { name: "Food", description: null }, "Food"),
+			repository.updateCategory(3, { name: "Food", description: null }),
 		).resolves.toBeUndefined();
 	});
 
@@ -408,7 +333,7 @@ describe("categories", () => {
 			      "2026-10-02T00:00:00.000Z",
 			      3,
 			    ],
-			    "sql": "update "expense_category" set "sortOrder" = $1, "updatedAt" = $2 where "expense_category"."id" = $3",
+			    "sql": "update "category" set "sortOrder" = $1, "updatedAt" = $2 where "category"."id" = $3",
 			  },
 			  {
 			    "method": "execute",
@@ -417,7 +342,7 @@ describe("categories", () => {
 			      "2026-10-02T00:00:00.000Z",
 			      1,
 			    ],
-			    "sql": "update "expense_category" set "sortOrder" = $1, "updatedAt" = $2 where "expense_category"."id" = $3",
+			    "sql": "update "category" set "sortOrder" = $1, "updatedAt" = $2 where "category"."id" = $3",
 			  },
 			  {
 			    "method": "execute",
@@ -426,7 +351,7 @@ describe("categories", () => {
 			      "2026-10-02T00:00:00.000Z",
 			      2,
 			    ],
-			    "sql": "update "expense_category" set "sortOrder" = $1, "updatedAt" = $2 where "expense_category"."id" = $3",
+			    "sql": "update "category" set "sortOrder" = $1, "updatedAt" = $2 where "category"."id" = $3",
 			  },
 			  {
 			    "method": "execute",
@@ -437,19 +362,19 @@ describe("categories", () => {
 		`);
 	});
 
-	it("countExpensesInCategory counts expenses filed under the name", async () => {
+	it("countExpensesInCategory counts expenses filed under the id", async () => {
 		// The driver sends count(*) as text; mapWith(Number) turns it into a number.
 		const { repository, queries } = harness(() => [["2"]]);
 
-		await expect(repository.countExpensesInCategory("Food")).resolves.toBe(2);
+		await expect(repository.countExpensesInCategory(3)).resolves.toBe(2);
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
 			    "method": "all",
 			    "params": [
-			      "Food",
+			      3,
 			    ],
-			    "sql": "select count(*) from "expense" where "expense"."category" = $1",
+			    "sql": "select count(*) from "expense" where "expense"."categoryId" = $1",
 			  },
 			]
 		`);
@@ -458,7 +383,7 @@ describe("categories", () => {
 	it("countExpensesInCategory is 0 when the count row is missing", async () => {
 		const { repository } = harness();
 
-		await expect(repository.countExpensesInCategory("Food")).resolves.toBe(0);
+		await expect(repository.countExpensesInCategory(3)).resolves.toBe(0);
 	});
 
 	it("deleteCategory deletes by id", async () => {
@@ -473,7 +398,7 @@ describe("categories", () => {
 			    "params": [
 			      3,
 			    ],
-			    "sql": "delete from "expense_category" where "expense_category"."id" = $1",
+			    "sql": "delete from "category" where "category"."id" = $1",
 			  },
 			]
 		`);
@@ -515,7 +440,7 @@ describe("names", () => {
 			      3,
 			      4,
 			    ],
-			    "sql": "select "id", "name" from "expense_category" where "expense_category"."id" in ($1, $2)",
+			    "sql": "select "id", "name" from "category" where "category"."id" in ($1, $2)",
 			  },
 			]
 		`);

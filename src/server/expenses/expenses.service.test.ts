@@ -36,7 +36,7 @@ function serviceWith(staged: Partial<ExpensesRepository>) {
 const EXPENSE: Expense = {
 	id: 7,
 	name: "Weekly shop",
-	category: "Food",
+	categoryId: 3,
 	kind: CommitmentKind.Recurring,
 	fortnight: 200,
 	month: 433,
@@ -59,8 +59,9 @@ const CATEGORY: Category = {
 	updatedAt: null,
 };
 
-const EXPENSE_FIELDS = { name: "Weekly shop", category: "Food" };
+const EXPENSE_FIELDS = { name: "Weekly shop", categoryId: 3 };
 const NAME_TAKEN_MESSAGE = "A category with that name already exists.";
+const CATEGORY_GONE_MESSAGE = "The selected category no longer exists.";
 
 describe("expenses", () => {
 	it("list returns the repository's expenses", async () => {
@@ -119,6 +120,53 @@ describe("expenses", () => {
 				.catch((e: unknown) => e),
 			"Failed to update expense.",
 		);
+	});
+
+	it.each([
+		["create", (service: ExpensesService) => service.create(EXPENSE_FIELDS)],
+		[
+			"update",
+			(service: ExpensesService) =>
+				service.update({
+					id: 7,
+					...EXPENSE_FIELDS,
+					kind: CommitmentKind.Recurring,
+				}),
+		],
+	])(
+		"%s turns a missing category (23503) into a ConflictError",
+		async (_, write) => {
+			const error = failedQuery("23503");
+			const service = serviceWith({
+				insert: throwing(error),
+				update: throwing(error),
+			});
+
+			const thrown = await write(service).catch((e: unknown) => e);
+
+			expect(thrown).toBeInstanceOf(ConflictError);
+			expect(thrown).toMatchObject({
+				message: CATEGORY_GONE_MESSAGE,
+				cause: error,
+			});
+		},
+	);
+
+	it("create and update rethrow any other error unchanged", async () => {
+		const error = new Error("connection lost");
+		const service = serviceWith({
+			insert: throwing(error),
+			update: throwing(error),
+		});
+
+		await expect(service.create(EXPENSE_FIELDS)).rejects.toBe(error);
+		await expect(
+			service.update({
+				id: 7,
+				...EXPENSE_FIELDS,
+				kind: CommitmentKind.Recurring,
+			}),
+		).rejects.toBe(error);
 	});
 
 	it("delete deletes by id", async () => {
@@ -227,15 +275,13 @@ describe("updateCategory", () => {
 		return { service, updated };
 	}
 
-	it("trims the input and hands over the existing name as previousName", async () => {
+	it("trims the input and updates by id", async () => {
 		const { service, updated } = updating();
 
 		await expect(
 			service.updateCategory({ id: 3, name: " Groceries ", description: "  " }),
 		).resolves.toBe(CATEGORY);
-		expect(updated).toEqual([
-			[3, { name: "Groceries", description: null }, "Food"],
-		]);
+		expect(updated).toEqual([[3, { name: "Groceries", description: null }]]);
 	});
 
 	it("throws NotFoundError for a missing id and never updates", async () => {
@@ -302,12 +348,12 @@ describe("reorderCategories", () => {
 
 describe("deleteCategory", () => {
 	function deleting(count: number, staged: Partial<ExpensesRepository> = {}) {
-		const counted: string[] = [];
+		const counted: number[] = [];
 		const deleted: number[] = [];
 		const service = serviceWith({
 			findCategory: async () => CATEGORY,
-			countExpensesInCategory: async (name) => {
-				counted.push(name);
+			countExpensesInCategory: async (categoryId) => {
+				counted.push(categoryId);
 				return count;
 			},
 			deleteCategory: async (id) => {
@@ -335,7 +381,7 @@ describe("deleteCategory", () => {
 	it.each([
 		[1, 'Cannot delete "Food" — 1 expense still use it.'],
 		[2, 'Cannot delete "Food" — 2 expenses still use it.'],
-	])("refuses while %i expense(s) use the name", async (count, message) => {
+	])("refuses while %i expense(s) use it", async (count, message) => {
 		const { service, counted, deleted } = deleting(count);
 
 		const thrown = await service.deleteCategory(3).catch((e: unknown) => e);
@@ -343,7 +389,7 @@ describe("deleteCategory", () => {
 		expect(thrown).toBeInstanceOf(ConflictError);
 		expect(thrown).toMatchObject({ message });
 		expect((thrown as Error).cause).toBeUndefined();
-		expect(counted).toEqual(["Food"]);
+		expect(counted).toEqual([3]);
 		expect(deleted).toEqual([]);
 	});
 

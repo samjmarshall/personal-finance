@@ -39,7 +39,7 @@ const receiptItemExpenseDto = z.object({
 
 const receiptItemCategoryDto = z.object({
 	itemId: z.number().int(),
-	expenseCategoryId: z.number().int().nullable(),
+	categoryId: z.number().int().nullable(),
 });
 
 export {

@@ -44,12 +44,12 @@ function serviceWith(
 const TRANSACTION: Transaction = {
 	id: 1,
 	expenseId: 7,
-	expenseCategoryId: 3,
+	categoryId: 3,
 	date: new Date("2026-09-01T00:00:00.000Z"),
 	description: "Groceries",
 	receiptDescription: null,
 	amount: 42.5,
-	category: "Food",
+	group: "Food",
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
@@ -227,7 +227,7 @@ describe("list", () => {
 		...TRANSACTION,
 		id: 2,
 		expenseId: null,
-		expenseCategoryId: null,
+		categoryId: null,
 	};
 
 	function listing(items: Transaction[], names: NamesById = NAMES) {
@@ -258,7 +258,7 @@ describe("list", () => {
 				{
 					...TRANSACTION,
 					expenseName: "Weekly shop",
-					expenseCategoryName: "Groceries",
+					categoryName: "Groceries",
 				},
 			],
 			total: 9,
@@ -284,7 +284,7 @@ describe("list", () => {
 
 		expect(items[1]).toMatchObject({
 			expenseName: null,
-			expenseCategoryName: null,
+			categoryName: null,
 		});
 		expect(asked).toEqual([{ expenseIds: [7], categoryIds: [3] }]);
 	});
@@ -299,7 +299,7 @@ describe("list", () => {
 
 		expect(items[0]).toMatchObject({
 			expenseName: null,
-			expenseCategoryName: null,
+			categoryName: null,
 		});
 	});
 
@@ -321,7 +321,7 @@ describe("reads", () => {
 			byPriority: [],
 			byFrequency: [],
 			byMonth: [],
-			topCategories: [],
+			topGroups: [],
 		};
 		const service = serviceWith({ summary: async () => summary });
 

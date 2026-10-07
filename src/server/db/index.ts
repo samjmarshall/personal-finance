@@ -5,7 +5,7 @@ import { env } from "~/env";
 import * as authSchema from "~/server/auth/auth.schema";
 import * as balancesSchema from "~/server/balances/balances.schema";
 import * as allowedSenderSchema from "~/server/email/allowed-sender.schema";
-import * as expenseCategoriesSchema from "~/server/expenses/categories.schema";
+import * as categoriesSchema from "~/server/expenses/categories.schema";
 import * as expensesSchema from "~/server/expenses/expenses.schema";
 import * as incomeSchema from "~/server/income/income.schema";
 import * as outboxSchema from "~/server/outbox/outbox.schema";
@@ -17,7 +17,7 @@ import * as transactionsSchema from "~/server/transactions/transactions.schema";
 const schema = {
 	...allowedSenderSchema,
 	...balancesSchema,
-	...expenseCategoriesSchema,
+	...categoriesSchema,
 	...expensesSchema,
 	...incomeSchema,
 	...outboxSchema,

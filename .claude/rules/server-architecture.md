@@ -197,7 +197,7 @@ here imports `src/server/**`.
 
 Multi-statement writes that must be atomic use the postgres-js interactive
 transaction — `db.transaction(async (tx) => { … })` (adr002/adr003). In a
-repository that is `this.db.transaction(...)` (`saveExtraction`, `updateCategory`,
+repository that is `this.db.transaction(...)` (`saveExtraction`,
 `reorderCategories`).
 
 ## Outbox + Inngest (adr002)

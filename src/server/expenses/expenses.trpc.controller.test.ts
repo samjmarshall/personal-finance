@@ -27,7 +27,7 @@ function callerWith(
 const EXPENSE: Expense = {
 	id: 7,
 	name: "Weekly shop",
-	category: "Food",
+	categoryId: 3,
 	kind: CommitmentKind.Recurring,
 	fortnight: 200,
 	month: 433,
@@ -41,7 +41,7 @@ const EXPENSE: Expense = {
 	updatedAt: null,
 };
 
-const FIELDS = { name: "Weekly shop", category: "Food" };
+const FIELDS = { name: "Weekly shop", categoryId: 3 };
 
 describe("expense router", () => {
 	it("list returns the service's expenses", async () => {

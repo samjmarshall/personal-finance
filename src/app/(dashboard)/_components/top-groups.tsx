@@ -1,15 +1,15 @@
 import { Money } from "~/components/money";
 
-export function TopCategories({
+export function TopGroups({
 	data,
 }: {
-	data: { category: string; total: number; count: number }[];
+	data: { group: string; total: number; count: number }[];
 }) {
 	const rows = data.filter((d) => d.total > 0);
 	if (!rows.length) {
 		return (
 			<p className="py-6 text-center text-muted-foreground text-sm">
-				No categories to show yet.
+				No groups to show yet.
 			</p>
 		);
 	}
@@ -18,10 +18,10 @@ export function TopCategories({
 	return (
 		<div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
 			{rows.map((row) => (
-				<div className="flex flex-col gap-1.5" key={row.category}>
+				<div className="flex flex-col gap-1.5" key={row.group}>
 					<div className="flex items-center justify-between gap-3 text-sm">
 						<span className="truncate font-medium text-foreground">
-							{row.category}
+							{row.group}
 						</span>
 						<Money
 							className="shrink-0 font-medium text-foreground text-sm"
