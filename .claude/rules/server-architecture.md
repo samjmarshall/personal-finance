@@ -107,14 +107,15 @@ Split on real pain, not in advance.
 
 ## Tests (colocated, see unit-testing rule)
 
-- `*.repository.test.ts` — hand-rolled chain-capturing fake `db`; render a WHERE
-  with `new PgDialect().sqlToQuery(cond).sql` and assert on the text; assert `set()`
-  payloads. Never hit Postgres. For a query-heavy repository (joins, many
-  aggregates) use `recordingDb()` (`src/server/db/recording-db.fake.ts`) instead:
-  it renders every query through the real `PgDialect` and records
-  `{ sql, params, method }`. It supports `db.transaction(cb)` and records
-  `begin` / `commit` / `rollback`. `src/server/transactions/transactions.repository.test.ts`
-  is the example.
+- `*.repository.test.ts` — never hit Postgres. A tRPC domain uses `recordingDb()`
+  (`src/server/db/recording-db.fake.ts`): it renders every query through the real
+  `PgDialect` and records `{ sql, params, method }`, so the router's
+  characterization snapshots carry over unchanged. It supports
+  `db.transaction(cb)` and records `begin` / `commit` / `rollback`.
+  `src/server/transactions/transactions.repository.test.ts` is the example. The
+  worker domains (`outbox`, `receipts`, `email`) use a hand-rolled chain-capturing
+  fake `db` instead: render a WHERE with `new PgDialect().sqlToQuery(cond).sql`,
+  assert on the text, and assert `set()` payloads.
 - `*.service.test.ts` — fake repository + adapters as object literals typed
   against the interfaces, recording calls in arrays. No module mocking. Fake
   `logger: Logger` (object literal recording `{ level, msg, attrs }`) asserts
