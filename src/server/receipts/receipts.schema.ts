@@ -77,6 +77,7 @@ export const receiptItems = pgTable(
 		name: d.text().notNull(),
 		price: d.doublePrecision().notNull(),
 		quantity: d.doublePrecision().notNull().default(1),
+		// Deleting the Expense first copies its Category here if none (trigger, 0017).
 		expenseId: d
 			.integer()
 			.references(() => expenses.id, { onDelete: "set null" }),

@@ -44,7 +44,8 @@ Specifics that bind:
 - **A check constraint** on `transaction` and on `receipt_item`: `"expenseId" IS NULL OR "categoryId" IS NULL`.
 - **Linking clears.** The owning service sets `categoryId` to null when it sets `expenseId`.
 - **Unlinking copies back.** The owning service copies the Expense's `categoryId` onto the record when it clears `expenseId`. Transactions and receipts calling expenses is a downward call.
-- **The form follows.** The Category picker shows the Expense's Category and is disabled while an Expense is linked.
+- **Deleting an Expense copies back too.** A `BEFORE DELETE` trigger on `expense` (migration `0017`) unlinks each record and copies the Category in one statement. It is the database's delete rule, like adr010's `ON DELETE SET NULL`, not an Expenses write. A line item keeps its own Category if it has one, until step 7.
+- **The form follows.** The Category picker shows the Expense's Category and is read-only while an Expense is linked. Read-only, not disabled, so it stays focusable and its value is read out.
 - **Reads take two batched calls.** The transactions service calls `expenses.namesByIds`, which also returns each Expense's `categoryId`, then `categories.namesByIds` for the union of ids. Receipts reads the same way.
 - **Existing rows are cleaned.** A migration clears `categoryId` where `expenseId` is set. Count on prod first how many disagree with their Expense's Category.
 - **The receipts worker may still suggest a `categoryId`** for a line item with no Expense.

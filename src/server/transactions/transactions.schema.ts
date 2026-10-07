@@ -17,6 +17,7 @@ export const transactions = pgTable(
 	"transaction",
 	(d) => ({
 		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		// Deleting the Expense first copies its Category here (trigger, 0017).
 		expenseId: d
 			.integer()
 			.references(() => expenses.id, { onDelete: "set null" }),
