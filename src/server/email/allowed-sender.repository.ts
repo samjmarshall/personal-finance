@@ -44,9 +44,8 @@ export class DrizzleAllowedSenderRepository implements AllowedSenderRepository {
 		memberId: string,
 		id: number,
 	): Promise<{ id: number } | undefined> {
-		// Delete-or-404 in one statement, per the receipt router. Another member's
-		// id matches no row under this filter and so 404s, which also keeps the
-		// response identical whether it is absent or merely not theirs.
+		// One scoped statement: another member's row matches nothing, so it looks
+		// the same as a missing one and leaks no ownership.
 		const [row] = await this.db
 			.delete(allowedSenders)
 			.where(

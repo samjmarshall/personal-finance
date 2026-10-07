@@ -6,9 +6,8 @@ export const allowedSenderRouter = createTRPCRouter({
 		ctx.services.allowedSenders.list(ctx.session.user.id),
 	),
 
-	// Members self-register the address they forward from. Ownership is server-set
-	// from the session — a client-supplied userId would let anyone route someone
-	// else's mail into their own name.
+	// Owner comes from the session, never the input: else a client could file an
+	// address under another member.
 	add: protectedProcedure
 		.input(allowedSenderCreateDto)
 		.mutation(({ ctx, input }) =>

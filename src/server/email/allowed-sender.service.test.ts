@@ -96,7 +96,7 @@ describe("AllowedSenderService.list", () => {
 		expect(calls).toEqual([[["member-1"]]]);
 	});
 
-	// namesByIds is left unstaged, so a lookup here would throw.
+	// No members stub given: any name lookup would throw.
 	it("gives an empty list without a name lookup when no addresses are allowed", async () => {
 		const service = serviceWith({ list: async () => [] });
 

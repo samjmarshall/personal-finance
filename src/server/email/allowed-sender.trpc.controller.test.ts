@@ -49,9 +49,8 @@ describe("allowedSender router", () => {
 		expect(calls).toEqual([["member-1", "sam@example.com"]]);
 	});
 
-	// The owner filter on the delete is only as good as the member id it gets. That
-	// id must come from the session, never the input, and the type checker cannot
-	// catch a wrong one being passed (design § Testing).
+	// The owner check is only as good as the id it gets. Types can't catch a wrong
+	// one, so pin it to the session's.
 	it("remove hands the service the session's member id, not one from the input", async () => {
 		const { method, calls } = recorder(undefined);
 

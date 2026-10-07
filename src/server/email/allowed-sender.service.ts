@@ -22,15 +22,15 @@ export class AllowedSenderService {
 		this.members = members;
 	}
 
-	// The whole allowlist, not just the caller's: it is household config, and a member
-	// needs to see an address is already claimed before the CONFLICT tells them so.
+	// Whole household's list, not just the caller's: a member should see an address
+	// is taken before a duplicate add fails.
 	async list(memberId: string): Promise<AllowedSenderListItem[]> {
 		const rows = await this.repository.list();
 		if (!rows.length) return [];
 		const names = await this.members.namesByIds([
 			...new Set(rows.map((row) => row.userId)),
 		]);
-		// isOwn is derived here rather than compared in the client, which has no session.
+		// Own-row flag set here: the client has no session to compare against.
 		return rows.map((row) => ({
 			...row,
 			userName: names.get(row.userId) ?? null,
@@ -52,10 +52,8 @@ export class AllowedSenderService {
 		return assertRow(row, "add allowed sender");
 	}
 
-	// Scoped to the caller's own entries, unlike `list`. Removing someone else's
-	// address silently stops their forwarded receipts arriving — the webhook only
-	// logs a drop — so the blast radius is another member's data quietly going
-	// missing. Seeing the whole allowlist is useful; editing it is not.
+	// Own entries only: deleting another member's address silently stops their
+	// forwarded receipts, since a drop is only logged.
 	async remove(memberId: string, id: number): Promise<void> {
 		const row = await this.repository.deleteOwn(memberId, id);
 		if (!row) throw new NotFoundError(NOT_YOURS_MESSAGE);

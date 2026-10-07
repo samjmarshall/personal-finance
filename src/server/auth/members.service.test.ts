@@ -52,7 +52,7 @@ describe("MembersService", () => {
 		expect(calls).toEqual([["member-1", "member-2"]]);
 	});
 
-	// findNames is left unstaged, so a query here would throw.
+	// No repository stub given: any query would throw.
 	it("namesByIds gives an empty map for no ids without querying", async () => {
 		const service = serviceWith({});
 
