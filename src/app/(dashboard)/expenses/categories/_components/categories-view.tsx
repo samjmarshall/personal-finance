@@ -94,10 +94,13 @@ export function CategoriesView() {
 							<SortableItem key={category.id} value={String(category.id)}>
 								<Card>
 									<CardContent className="flex items-center justify-between gap-4">
-										<SortableItemHandle className="text-muted-foreground hover:text-foreground">
+										<SortableItemHandle
+											aria-label={`Reorder ${category.name}`}
+											className="rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+										>
 											<GripVerticalIcon className="size-4" />
 										</SortableItemHandle>
-										<div className="flex flex-1 items-center gap-2">
+										<div className="flex min-w-0 flex-1 items-center gap-2">
 											<span className="truncate font-semibold text-foreground text-sm">
 												{category.name}
 											</span>

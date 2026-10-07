@@ -4,6 +4,7 @@
 import { useRender } from "@base-ui/react/use-render";
 import type {
 	DragEndEvent,
+	DraggableAttributes,
 	DraggableSyntheticListeners,
 	DragStartEvent,
 	DropAnimation,
@@ -46,6 +47,7 @@ import {
 	isValidElement,
 	useCallback,
 	useContext,
+	useId,
 	useLayoutEffect,
 	useMemo,
 	useState,
@@ -54,8 +56,12 @@ import { createPortal } from "react-dom";
 import { cn } from "~/lib/utils";
 
 // Sortable Item Context
+// The handle, not the whole item, takes focus and the keyboard: dnd-kit listens
+// for keys only on the element that holds the listeners.
 const SortableItemContext = createContext<{
+	attributes?: DraggableAttributes;
 	listeners: DraggableSyntheticListeners | undefined;
+	setActivatorNodeRef?: (element: HTMLElement | null) => void;
 	isDragging?: boolean;
 	disabled?: boolean;
 }>({
@@ -144,6 +150,8 @@ function Sortable<T>({
 }: SortableRootProps<T>) {
 	const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
 	const [mounted, setMounted] = useState(false);
+	// dnd-kit's own id counter differs on server and browser; React's id doesn't.
+	const dndId = useId();
 
 	useLayoutEffect(() => setMounted(true), []);
 
@@ -245,6 +253,7 @@ function Sortable<T>({
 	return (
 		<SortableInternalContext.Provider value={contextValue}>
 			<DndContext
+				id={dndId}
 				measuring={{
 					droppable: {
 						strategy: MeasuringStrategy.Always,
@@ -303,6 +312,7 @@ function SortableItem({
 
 	const {
 		setNodeRef,
+		setActivatorNodeRef,
 		transform,
 		transition,
 		attributes,
@@ -340,22 +350,27 @@ function SortableItem({
 
 	return (
 		<SortableItemContext.Provider
-			value={{ listeners, isDragging: isSortableDragging, disabled }}
+			value={{
+				attributes,
+				listeners,
+				setActivatorNodeRef,
+				isDragging: isSortableDragging,
+				disabled,
+			}}
 		>
 			<SortableSlot
 				asChild={asChild}
+				className={cn(
+					isSortableDragging && "z-50 opacity-50",
+					disabled && "opacity-50",
+					className,
+				)}
 				data-disabled={disabled}
 				data-dragging={isSortableDragging}
 				data-slot="sortable-item"
 				data-value={value}
 				ref={setNodeRef}
 				style={style}
-				{...attributes}
-				className={cn(
-					isSortableDragging && "z-50 opacity-50",
-					disabled && "opacity-50",
-					className,
-				)}
 				{...props}
 			>
 				{children}
@@ -377,7 +392,8 @@ function SortableItemHandle({
 	children,
 	...props
 }: SortableItemHandleProps) {
-	const { listeners, isDragging, disabled } = useContext(SortableItemContext);
+	const { attributes, listeners, setActivatorNodeRef, isDragging, disabled } =
+		useContext(SortableItemContext);
 
 	return (
 		<SortableSlot
@@ -385,6 +401,8 @@ function SortableItemHandle({
 			data-disabled={disabled}
 			data-dragging={isDragging}
 			data-slot="sortable-item-handle"
+			ref={setActivatorNodeRef}
+			{...attributes}
 			{...listeners}
 			className={cn(
 				cursor && (isDragging ? "cursor-grabbing!" : "cursor-grab!"),
