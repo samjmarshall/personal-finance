@@ -23,8 +23,8 @@ import type {
 // A save can fail because the Expense or Category was deleted.
 const FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
-// Linking only writes the Expense; its Category is copied from a live row. So
-// only the Expense can be gone.
+// Unlink also writes a Category, but one just read from a live row. So only
+// the Expense can be gone.
 const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
 // The database blocks changing the Category of a Transaction linked to an Expense.
 const LINKED_CATEGORY_MESSAGE =
@@ -119,7 +119,6 @@ export class TransactionsService {
 		return this.repository.findUnplanned(window);
 	}
 
-	// Same 404 as update.
 	async linkExpense({ id, expenseId }: LinkExpenseInput): Promise<Transaction> {
 		const categoryId =
 			expenseId === null ? await this.categoryBeforeUnlink(id) : null;
@@ -158,7 +157,8 @@ export class TransactionsService {
 		return {};
 	}
 
-	// A deleted Expense gives null.
+	// The Category the row shows now: its Expense's if linked, else its own.
+	// Null if the Expense is gone.
 	private async categoryBeforeUnlink(id: number): Promise<number | null> {
 		const link = await this.repository.findLink(id);
 		if (!link) throw new NotFoundError(NOT_FOUND_MESSAGE);

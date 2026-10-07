@@ -43,8 +43,7 @@ import { transactions } from "~/server/transactions/transactions.schema";
 
 const byId = z.object({ id: z.number() });
 
-// Attribution writes an expenseId or a categoryId; either FK can raise 23503
-// if the member deleted the target in another tab.
+// Picking an Expense or Category can fail if another tab just deleted it.
 const ITEM_FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
 

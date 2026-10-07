@@ -77,7 +77,6 @@ const FK_CONFLICT_MESSAGE =
 const EXPENSE_NAMES = new Map([[7, { name: "Weekly shop", categoryId: 3 }]]);
 const LINKED: TransactionLink = { expenseId: 7, categoryId: null };
 
-// Records every write, whether through update or setLink.
 function writing(
 	link?: TransactionLink,
 	expenseNames: Awaited<ReturnType<ExpenseNames["namesByIds"]>> = EXPENSE_NAMES,
