@@ -109,6 +109,17 @@ describe("DrizzleAllowedSenderRepository", () => {
 		`);
 	});
 
+	// Every member sees every address id, so a client can send another member's.
+	// Without the owner check this deletes it, and their receipts drop unseen.
+	it("deleteOwn never deletes without the member as owner", async () => {
+		const { repository, queries } = harness();
+
+		await repository.deleteOwn("member-2", 1);
+
+		expect(queries[0]?.sql).toContain(`"allowed_sender"."userId" = $2`);
+		expect(queries[0]?.params).toEqual([1, "member-2"]);
+	});
+
 	it("deleteOwn gives undefined when no row matched", async () => {
 		const { repository } = harness();
 
