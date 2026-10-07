@@ -17,9 +17,8 @@ import {
 	shiftWindow,
 } from "~/lib/period";
 import { cn, formatDate, fromDateInput } from "~/lib/utils";
-import { api, type RouterOutputs } from "~/trpc/react";
-
-type UnplannedRow = RouterOutputs["transaction"]["unplanned"][number];
+import { api } from "~/trpc/react";
+import { groupByCategory } from "../../_components/group-by-category";
 
 const monthLabelFormatter = new Intl.DateTimeFormat("en-AU", {
 	month: "long",
@@ -96,31 +95,10 @@ export function UnplannedView() {
 		[expenses],
 	);
 
-	// Managed order (`category.list` arrives sorted), then "No category" last.
-	// An id this tab's list doesn't know yet joins "No category" rather than vanish.
-	const groups = useMemo(() => {
-		const known = new Set(categories.map((c) => c.id));
-		const byId = new Map<number | null, UnplannedRow[]>();
-		for (const row of rows ?? []) {
-			const id =
-				row.categoryId !== null && known.has(row.categoryId)
-					? row.categoryId
-					: null;
-			const arr = byId.get(id) ?? [];
-			arr.push(row);
-			byId.set(id, arr);
-		}
-		const filed = categories.flatMap((c) => {
-			const grouped = byId.get(c.id);
-			return grouped
-				? [{ key: String(c.id), label: c.name, rows: grouped }]
-				: [];
-		});
-		const unfiled = byId.get(null);
-		return unfiled
-			? [...filed, { key: "none", label: "No category", rows: unfiled }]
-			: filed;
-	}, [rows, categories]);
+	const groups = useMemo(
+		() => groupByCategory(rows ?? [], categories),
+		[rows, categories],
+	);
 
 	function selectKind(next: PeriodKind) {
 		// Re-clicking the active length would reset the window back to today,
@@ -224,7 +202,7 @@ export function UnplannedView() {
 						isFetching && "opacity-60",
 					)}
 				>
-					{groups.map(({ key, label, rows: rowsInGroup }) => {
+					{groups.map(({ key, label, items: rowsInGroup }) => {
 						const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
 						return (
 							<Card className="[--card-spacing:0px]" key={key}>

@@ -20,23 +20,9 @@ import { CommitmentKind } from "~/lib/constants";
 import { cn, formatCurrency, formatDate, isPast } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ExpenseForm } from "./expense-form";
+import { groupByCategory } from "./group-by-category";
 
 type Expense = RouterOutputs["expense"]["list"][number];
-type Category = RouterOutputs["category"]["list"][number];
-
-// Groups in the managed order: `category.list` arrives sorted.
-function groupByCategory(items: Expense[], categories: Category[]) {
-	const byId = new Map<number, Expense[]>();
-	for (const item of items) {
-		const arr = byId.get(item.categoryId) ?? [];
-		arr.push(item);
-		byId.set(item.categoryId, arr);
-	}
-	return categories.flatMap((category) => {
-		const grouped = byId.get(category.id);
-		return grouped ? [{ category, items: grouped }] : [];
-	});
-}
 
 export function ExpensesView() {
 	const [list] = api.expense.list.useSuspenseQuery();
@@ -64,8 +50,8 @@ export function ExpensesView() {
 	const [editing, setEditing] = useState<Expense | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
-	// Category cards start expanded; the Set tracks which are collapsed. Keys are
-	// namespaced ("r:"/"o:") since a Category can hold both recurring and one-time.
+	// Cards start open; this tracks closed ones. A Category can hold recurring and
+	// one-time, so each kind gets its own key.
 	const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
 	function toggle(key: string) {
@@ -262,11 +248,11 @@ export function ExpensesView() {
 					</div>
 
 					<div className="mt-6 flex flex-col gap-4">
-						{recurringGroups.map(({ category, items }) => {
+						{recurringGroups.map(({ key: groupKey, label, items }) => {
 							const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
-							const key = `r:${category.id}`;
+							const key = `r:${groupKey}`;
 							const isCollapsed = collapsed.has(key);
-							const panelId = `expense-recurring-${category.id}`;
+							const panelId = `expense-recurring-${groupKey}`;
 							return (
 								<Card className="[--card-spacing:0px]" key={key}>
 									<button
@@ -284,7 +270,7 @@ export function ExpensesView() {
 												)}
 											/>
 											<span className="font-semibold text-foreground text-sm">
-												{category.name}
+												{label}
 											</span>
 											<span className="text-muted-foreground text-xs">
 												({items.length})
@@ -353,7 +339,7 @@ export function ExpensesView() {
 
 				<Tabs.Panel value="onetime">
 					<div className="mt-6 flex flex-col gap-4">
-						{oneTimeGroups.map(({ category, items: itemsRaw }) => {
+						{oneTimeGroups.map(({ key: groupKey, label, items: itemsRaw }) => {
 							// Upcoming first (soonest → latest), then past (most recent → oldest).
 							const items = [...itemsRaw].sort((a, b) => {
 								const pa = isPastItem(a);
@@ -364,9 +350,9 @@ export function ExpensesView() {
 								return pa ? db - da : da - db;
 							});
 							const total = items.reduce((s, e) => s + (e.amount ?? 0), 0);
-							const key = `o:${category.id}`;
+							const key = `o:${groupKey}`;
 							const isCollapsed = collapsed.has(key);
-							const panelId = `expense-onetime-${category.id}`;
+							const panelId = `expense-onetime-${groupKey}`;
 							return (
 								<Card className="[--card-spacing:0px]" key={key}>
 									<button
@@ -384,7 +370,7 @@ export function ExpensesView() {
 												)}
 											/>
 											<span className="font-semibold text-foreground text-sm">
-												{category.name}
+												{label}
 											</span>
 											<span className="text-muted-foreground text-xs">
 												({items.length})

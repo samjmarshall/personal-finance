@@ -44,11 +44,13 @@ export function CategoriesView() {
 
 	const [formOpen, setFormOpen] = useState(false);
 	const [editing, setEditing] = useState<Category | null>(null);
+	// New key per open, so Cancel throws the typing away.
+	const [formKey, setFormKey] = useState(0);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
 	const handleSortOrderChange = (next: Category[]) => {
-		utils.category.list.setData(undefined, next); // optimistic
+		utils.category.list.setData(undefined, next);
 		reorder.mutate({ ids: next.map((category) => category.id) });
 	};
 
@@ -56,10 +58,12 @@ export function CategoriesView() {
 
 	function openAdd() {
 		setEditing(null);
+		setFormKey((key) => key + 1);
 		setFormOpen(true);
 	}
 	function openEdit(category: Category) {
 		setEditing(category);
+		setFormKey((key) => key + 1);
 		setFormOpen(true);
 	}
 
@@ -152,7 +156,7 @@ export function CategoriesView() {
 
 			<CategoryForm
 				category={editing}
-				key={editing ? `edit-${editing.id}` : "add"}
+				key={formKey}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
 			/>
