@@ -245,17 +245,17 @@ One change, three commits.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes. Commit 1 is green against the unchanged `cashflow.ts`. In Commit A, only the `expense` and `income` SQL snapshots change.
-- [ ] `make build` passes
-- [ ] `git grep -n -E "drizzle-orm|\.schema|TRPCError|ctx\.db" src/server/cashflow/` returns nothing
-- [ ] `src/server/api/routers/` holds only `receipts` files, and the to-do list has 10 entries
-- [ ] Every path named in the edited rules-file lines exists (`git ls-files` check)
-- [ ] At https://personal-finance.localhost, the dashboard cash flow chart behaves as before:
+- [x] `make check` passes
+- [x] `make test` passes. Commit 1 is green against the unchanged `cashflow.ts`. In Commit A, only the `expense` and `income` SQL snapshots change.
+- [x] `make build` passes
+- [x] `git grep -n -E "drizzle-orm|\.schema|TRPCError|ctx\.db" src/server/cashflow/` returns nothing
+- [x] `src/server/api/routers/` holds only `receipts` files, and the to-do list has 10 entries
+- [x] Every path named in the edited rules-file lines exists (`git ls-files` check)
+- [x] At https://personal-finance.localhost, the dashboard cash flow chart behaves as before:
   - Fortnight and Month both render 25 buckets, with the today marker on the current bucket.
   - The tooltip on a forward bucket lists Expenses and Income. The order now follows the Planned page.
   - The balance line shows when a snapshot exists.
-  - Saving a balance snapshot, or changing the pay cycle anchor in Settings, refreshes the chart.
+  - Saving a balance snapshot, or changing the pay cycle anchor in Settings, refreshes the chart. (Pay cycle path checked in the browser. Balance save not run, to keep real data intact; its client invalidation is unchanged.)
 
 ## References
 
