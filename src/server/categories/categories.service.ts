@@ -55,11 +55,11 @@ export class CategoriesService {
 	}
 
 	async update({ id, ...input }: CategoryUpdateInput): Promise<Category> {
-		await this.findOrThrow(id);
 		const row = await this.repository
 			.update(id, normalize(input))
 			.catch(rethrowNameTaken);
-		return assertRow(row, "update category");
+		if (!row) throw new NotFoundError(NOT_FOUND_MESSAGE);
+		return row;
 	}
 
 	reorder(ids: number[]): Promise<void> {

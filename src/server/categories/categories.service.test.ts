@@ -118,7 +118,6 @@ describe("update", () => {
 	function updating(staged: Partial<CategoriesRepository> = {}) {
 		const updated: unknown[][] = [];
 		const service = serviceWith({
-			find: async () => CATEGORY,
 			update: async (...args) => {
 				updated.push(args);
 				return CATEGORY;
@@ -138,8 +137,8 @@ describe("update", () => {
 		expect(updated).toEqual([[3, { name: "Groceries", description: null }]]);
 	});
 
-	it("throws NotFoundError for a missing id and never updates", async () => {
-		const { service, updated } = updating({ find: async () => undefined });
+	it("throws NotFoundError when no row was updated", async () => {
+		const { service } = updating({ update: async () => undefined });
 
 		const thrown = await service
 			.update({ id: 3, name: "Food" })
@@ -147,7 +146,6 @@ describe("update", () => {
 
 		expect(thrown).toBeInstanceOf(NotFoundError);
 		expect(thrown).toMatchObject({ message: "Category not found." });
-		expect(updated).toEqual([]);
 	});
 
 	it("turns a duplicate name into a ConflictError", async () => {
@@ -168,15 +166,6 @@ describe("update", () => {
 
 		await expect(service.update({ id: 3, name: "Groceries" })).rejects.toBe(
 			error,
-		);
-	});
-
-	it("throws a plain Error when the update returns no row", async () => {
-		const { service } = updating({ update: async () => undefined });
-
-		expectPlainError(
-			await service.update({ id: 3, name: "Food" }).catch((e: unknown) => e),
-			"Failed to update category.",
 		);
 	});
 });
