@@ -4,7 +4,6 @@ import { type BuildCashflowInput, buildCashflow } from "~/domain/cashflow";
 import type { Expense } from "~/domain/expenses";
 import type { Income } from "~/domain/income";
 import { CommitmentKind } from "~/lib/constants";
-import { fromDateInput } from "~/lib/utils";
 import { recorder, throwing } from "~/test/fakes";
 import { CashflowService } from "./cashflow.service";
 
@@ -92,7 +91,7 @@ function expected(overrides: Partial<BuildCashflowInput> = {}) {
 	return buildCashflow({
 		now: NOW,
 		periodKind: "fortnight",
-		fortnightAnchor: fromDateInput(ANCHOR),
+		fortnightAnchor: new Date("2026-08-26T00:00:00.000Z"),
 		transactions: TRANSACTIONS,
 		expenses: [RENT, CAR_SERVICE],
 		incomes: [SALARY],
@@ -106,7 +105,10 @@ beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["Date"] });
 	vi.setSystemTime(NOW);
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllEnvs();
+});
 
 describe("get", () => {
 	it("hands the five services' reads to the compute", async () => {
@@ -114,6 +116,24 @@ describe("get", () => {
 
 		expect(result).toEqual(expected());
 		expect(result.hasBalanceAnchor).toBe(true);
+		expect(result.buckets).toHaveLength(25);
+		const historic = result.buckets.filter((b) => b.key <= "2026-09-01").pop();
+		expect(historic).toMatchObject({ spend: 80, inflow: 20, items: [] });
+		const current = result.buckets.find((b) => b.isCurrent);
+		expect(current?.items.map((item) => item.label)).toEqual([
+			"Rent",
+			"Car service",
+			"Salary",
+		]);
+	});
+
+	it("starts each fortnight on the anchor day east of UTC", async () => {
+		vi.stubEnv("TZ", "Australia/Brisbane");
+
+		const { buckets } = await serviceWith().get("fortnight");
+
+		// 26 Aug + 3 fortnights = 7 Oct, the current bucket.
+		expect(buckets.find((b) => b.isCurrent)?.key).toBe("2026-10-07");
 	});
 
 	it("passes the period kind through", async () => {

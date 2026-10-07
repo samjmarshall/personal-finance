@@ -1,6 +1,5 @@
 import { buildCashflow, type CashflowResult } from "~/domain/cashflow";
 import type { PeriodKind } from "~/lib/period";
-import { fromDateInput } from "~/lib/utils";
 import type { BalancesService } from "~/server/balances/balances.service";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
 import type { IncomeService } from "~/server/income/income.service";
@@ -38,23 +37,33 @@ export class CashflowService {
 		this.balances = balances;
 	}
 
-	// Loads every row (volume stays small for a household) and windows in the pure TS
-	// core — no SQL windowing. Buckets carry string key/label — no Date crosses the wire.
+	// Household data stays small: load every row, window in plain code, not SQL.
+	// Buckets name their period with strings, so no Date crosses the wire.
 	async get(periodKind: PeriodKind): Promise<CashflowResult> {
-		const [transactions, expenses, incomes, consumption, anchor, snapshot] =
-			await Promise.all([
-				this.transactions.datedAmounts(),
-				this.expenses.list(),
-				this.income.list(),
-				this.transactions.consumedByExpense(),
-				this.settings.fortnightAnchor(),
-				this.balances.latest(),
-			]);
+		const [
+			transactions,
+			expenses,
+			incomes,
+			consumption,
+			fortnightAnchor,
+			snapshot,
+		] = await Promise.all([
+			this.transactions.datedAmounts(),
+			this.expenses.list(),
+			this.income.list(),
+			this.transactions.consumedByExpense(),
+			this.settings.fortnightAnchor(),
+			this.balances.latest(),
+		]);
 
 		return buildCashflow({
 			now: new Date(),
 			periodKind,
-			fortnightAnchor: anchor ? fromDateInput(anchor) : null,
+			// UTC midnight: the grid reads UTC days, and a local midnight east of UTC
+			// lands on the day before. Settings already checked the date is real.
+			fortnightAnchor: fortnightAnchor
+				? new Date(`${fortnightAnchor}T00:00:00.000Z`)
+				: null,
 			transactions,
 			expenses,
 			incomes,
