@@ -299,17 +299,17 @@ One change, three commits.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes. Commit 1 is green against the unchanged `allowed-sender.ts`. In Commit A, only the main `list` SQL snapshot changes.
-- [ ] `make build` passes
-- [ ] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db|auth\.schema" src/server/email/allowed-sender.service.ts src/server/email/allowed-sender.trpc.controller.ts` returns nothing
-- [ ] `git grep -n "auth.schema" src/server/email/allowed-sender.repository.ts` returns nothing
-- [ ] `src/server/api/routers/` holds only `cashflow` and `receipts` files, and the to-do list has 16 entries
-- [ ] Every path named in the edited rules-file section exists (`git ls-files` check)
-- [ ] `/security-review` (the own-entries-only `remove` rule moves tiers)
-- [ ] At https://personal-finance.localhost, the Settings page allowlist behaves as before:
+- [x] `make check` passes
+- [x] `make test` passes. Commit 1 is green against the unchanged `allowed-sender.ts`. In Commit A, only the main `list` SQL snapshot changes.
+- [x] `make build` passes
+- [x] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db|auth\.schema" src/server/email/allowed-sender.service.ts src/server/email/allowed-sender.trpc.controller.ts` returns nothing
+- [x] `git grep -n "auth.schema" src/server/email/allowed-sender.repository.ts` returns nothing
+- [x] `src/server/api/routers/` holds only `cashflow` and `receipts` files, and the to-do list has 16 entries
+- [x] Every path named in the edited rules-file section exists (`git ls-files` check)
+- [x] `/security-review` (the own-entries-only `remove` rule moves tiers)
+- [x] At https://personal-finance.localhost, the Settings page allowlist behaves as before:
   - it lists every Member's addresses in email order, each with "Files to <name>"
-  - only your own rows offer a remove button
+  - only your own rows offer a remove button (dev DB holds only own rows; other-Member `isOwn: false` is pinned by the service test)
   - adding a new address works, and re-adding it shows "That address is already on the allowlist."
   - an invalid address shows the form error
   - removing your own address works
