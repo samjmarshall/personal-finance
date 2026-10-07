@@ -527,3 +527,26 @@ describe("consumedByExpense", () => {
 		`);
 	});
 });
+
+describe("datedAmounts", () => {
+	it("selects every Transaction's date and amount", async () => {
+		const { repository, queries } = harness(() => [
+			["2026-09-01T00:00:00.000Z", 42.5],
+		]);
+
+		const rows = await repository.datedAmounts();
+
+		expect(rows).toEqual([
+			{ date: new Date("2026-09-01T00:00:00.000Z"), amount: 42.5 },
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [],
+			    "sql": "select "date", "amount" from "transaction"",
+			  },
+			]
+		`);
+	});
+});

@@ -34,6 +34,7 @@ function serviceWith(
 		setExpense: unstaged,
 		delete: unstaged,
 		consumedByExpense: unstaged,
+		datedAmounts: unstaged,
 		...staged,
 	};
 	const expenses: ExpenseNames = { namesByIds: unstaged, ...stagedExpenses };
@@ -354,5 +355,12 @@ describe("reads", () => {
 		});
 
 		await expect(service.consumedByExpense()).resolves.toBe(consumption);
+	});
+
+	it("returns the repository's dated amounts", async () => {
+		const rows = [{ date: TRANSACTION.date, amount: TRANSACTION.amount }];
+		const service = serviceWith({ datedAmounts: async () => rows });
+
+		await expect(service.datedAmounts()).resolves.toBe(rows);
 	});
 });

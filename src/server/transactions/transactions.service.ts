@@ -106,4 +106,8 @@ export class TransactionsService {
 	consumedByExpense(): Promise<ExpenseConsumption[]> {
 		return this.repository.consumedByExpense();
 	}
+
+	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]> {
+		return this.repository.datedAmounts();
+	}
 }

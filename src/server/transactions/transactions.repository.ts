@@ -53,6 +53,8 @@ export interface TransactionsRepository {
 	): Promise<Transaction | undefined>;
 	delete(id: number): Promise<void>;
 	consumedByExpense(): Promise<ExpenseConsumption[]>;
+	/** Every Transaction's date and amount: the cash flow actuals. */
+	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]>;
 }
 
 // Spend is a positive amount; a refund (negative) counts as 0 toward it.
@@ -259,5 +261,11 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			expenseId: r.expenseId as number,
 			consumed: r.consumed,
 		}));
+	}
+
+	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]> {
+		return this.db
+			.select({ date: transactions.date, amount: transactions.amount })
+			.from(transactions);
 	}
 }
