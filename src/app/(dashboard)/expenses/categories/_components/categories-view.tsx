@@ -19,22 +19,21 @@ import { CategoryForm } from "./category-form";
 type Category = RouterOutputs["category"]["list"][number];
 
 export function CategoriesView() {
-	const [list] = api.category.list.useSuspenseQuery();
+	const [categories] = api.category.list.useSuspenseQuery();
 	const utils = api.useUtils();
 	const remove = api.category.delete.useMutation({
 		onSuccess: async () => {
 			await utils.category.list.invalidate();
 		},
 	});
-	const [categories, setCategories] = useState(list);
 	const reorder = api.category.reorder.useMutation({
 		onSuccess: async () => {
 			await utils.category.list.invalidate();
 			toast.success("Category order saved");
 		},
-		onError: () => {
-			// Roll back to the last-known-good order; the global toast shows the error.
-			setCategories(list);
+		onError: async () => {
+			// Refetch the saved order to undo the optimistic move; the global toast shows the error.
+			await utils.category.list.invalidate();
 		},
 	});
 
@@ -44,7 +43,7 @@ export function CategoriesView() {
 	const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
 	const handleSortOrderChange = (next: Category[]) => {
-		setCategories(next); // optimistic
+		utils.category.list.setData(undefined, next); // optimistic
 		reorder.mutate({ ids: next.map((category) => category.id) });
 	};
 
