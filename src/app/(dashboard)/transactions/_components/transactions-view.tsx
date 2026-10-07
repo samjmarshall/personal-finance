@@ -66,7 +66,7 @@ export function TransactionsView() {
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
 
-	const [categoryRows] = api.category.list.useSuspenseQuery();
+	const [categories] = api.category.list.useSuspenseQuery();
 	const [expenses] = api.expense.list.useSuspenseQuery();
 
 	const queryInput = {
@@ -89,6 +89,7 @@ export function TransactionsView() {
 			await Promise.all([
 				utils.transaction.list.invalidate(),
 				utils.transaction.summary.invalidate(),
+				utils.transaction.unplanned.invalidate(),
 				// Deleting a linked transaction changes its expense's consumed total.
 				utils.expense.consumption.invalidate(),
 			]);
@@ -372,8 +373,8 @@ export function TransactionsView() {
 			</Card>
 
 			<TransactionForm
+				categories={categories}
 				expenses={expenses}
-				managedCategories={categoryRows}
 				onClose={() => setFormOpen(false)}
 				open={formOpen}
 				transaction={editing}

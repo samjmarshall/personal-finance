@@ -39,13 +39,13 @@ export function TransactionForm({
 	open,
 	onClose,
 	transaction,
-	managedCategories,
+	categories,
 	expenses,
 }: {
 	open: boolean;
 	onClose: () => void;
 	transaction: Transaction | null;
-	managedCategories: RouterOutputs["category"]["list"];
+	categories: RouterOutputs["category"]["list"];
 	expenses: RouterOutputs["expense"]["list"];
 }) {
 	const utils = api.useUtils();
@@ -58,7 +58,8 @@ export function TransactionForm({
 	const [notes, setNotes] = useState("");
 	// Empty string is the "— None —" option; converted to null on submit.
 	const [expenseId, setExpenseId] = useState<number | null>(null);
-	const [categoryId, setCategoryId] = useState<number | null>(null);
+	// undefined: unlinked from the saved Expense, no Category picked since.
+	const [categoryId, setCategoryId] = useState<number | null | undefined>(null);
 
 	useEffect(() => {
 		if (!open) return;
@@ -77,6 +78,7 @@ export function TransactionForm({
 		await Promise.all([
 			utils.transaction.list.invalidate(),
 			utils.transaction.summary.invalidate(),
+			utils.transaction.unplanned.invalidate(),
 			// A transaction's amount/expenseId feeds the Planned consumed/remaining
 			// read-model — refresh it so those figures don't go stale.
 			utils.expense.consumption.invalidate(),
@@ -95,24 +97,34 @@ export function TransactionForm({
 	// adr025: a linked Expense sets the Category, so the picker shows the
 	// Expense's and locks.
 	const linkedExpense = expenses.find((e) => e.id === expenseId);
-	const shownCategoryId = linkedExpense?.categoryId ?? categoryId;
+	const savedExpense = expenses.find((e) => e.id === transaction?.expenseId);
+	const shownCategoryId =
+		linkedExpense?.categoryId ??
+		(categoryId === undefined ? savedExpense?.categoryId : categoryId);
 	// One line in both states, so the swap never resizes the centred dialog.
 	const categoryHint =
 		expenseId === null
 			? "Linking an Expense sets this."
 			: "Set by the Expense. Choose None to edit.";
 
-	// Clearing the Expense keeps its Category, still editable before saving.
+	// Clearing the Expense keeps its Category, still editable before saving. For
+	// the saved Expense the server copies it, so a stale Expense list can't lose it.
 	function pickExpense(value: string | null) {
 		const next = value ? Number(value) : null;
-		if (next === null && linkedExpense) setCategoryId(linkedExpense.categoryId);
+		if (next === null && expenseId !== null) {
+			setCategoryId(
+				expenseId === transaction?.expenseId
+					? undefined
+					: (linkedExpense?.categoryId ?? null),
+			);
+		}
 		setExpenseId(next);
 	}
 
 	// Categories are chosen from the managed list, never invented mid-entry.
 	const categoryOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
-		...managedCategories.map((c) => ({
+		...categories.map((c) => ({
 			value: String(c.id),
 			label: c.name,
 		})),

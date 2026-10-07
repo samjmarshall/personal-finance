@@ -74,7 +74,6 @@ const FIELDS = {
 const FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
 
-// Expense 7 sits in Category 3.
 const EXPENSE_NAMES = new Map([[7, { name: "Weekly shop", categoryId: 3 }]]);
 const LINKED: TransactionLink = { expenseId: 7, categoryId: null };
 
@@ -236,7 +235,7 @@ describe("update", () => {
 		]);
 	});
 
-	// The unstaged findLink throws, so a read here would fail the test.
+	// No stored link is set up, so any read before the write fails the test.
 	it("keeps the Category sent when unlinking", async () => {
 		const { service, written } = writing();
 

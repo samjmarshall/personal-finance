@@ -20,13 +20,13 @@ import type {
 	TransactionsRepository,
 } from "./transactions.repository";
 
-// Either FK on the create/update DTO (expenseId, categoryId) can raise 23503.
+// A save can fail because the Expense or Category was deleted.
 const FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
-// linkExpense picks only expenseId; the categoryId it writes is copied from a
-// live row, so a 23503 here is the expense FK and the message names just that.
+// Linking only writes the Expense; its Category is copied from a live row. So
+// only the Expense can be gone.
 const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
-// The check trips when a categoryId is sent, without expenseId, to a linked row.
+// The database blocks changing the Category of a Transaction linked to an Expense.
 const LINKED_CATEGORY_MESSAGE =
 	"A Transaction linked to an Expense takes its Category from the Expense.";
 const NOT_FOUND_MESSAGE = "Transaction not found.";
@@ -93,7 +93,7 @@ export class TransactionsService {
 
 	async create(input: TransactionCreateInput): Promise<Transaction> {
 		const row = await this.repository
-			.insert({ ...input, ...(await this.linkRule(input)) })
+			.insert({ ...input, ...(await this.categoryPatch(input)) })
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, FK_CONFLICT_MESSAGE),
 			);
@@ -107,7 +107,7 @@ export class TransactionsService {
 		...values
 	}: TransactionUpdateInput): Promise<Transaction> {
 		const row = await this.repository
-			.update(id, { ...values, ...(await this.linkRule(values, id)) })
+			.update(id, { ...values, ...(await this.categoryPatch(values, id)) })
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, FK_CONFLICT_MESSAGE),
 			);
@@ -119,16 +119,12 @@ export class TransactionsService {
 		return this.repository.findUnplanned(window);
 	}
 
-	// Same 404 as `update`. linkRule always sets categoryId when expenseId is
-	// sent; the null only satisfies the type.
+	// Same 404 as update.
 	async linkExpense({ id, expenseId }: LinkExpenseInput): Promise<Transaction> {
-		const link = {
-			expenseId,
-			categoryId: null,
-			...(await this.linkRule({ expenseId }, id)),
-		};
+		const categoryId =
+			expenseId === null ? await this.categoryBeforeUnlink(id) : null;
 		const row = await this.repository
-			.setLink(id, link)
+			.setLink(id, { expenseId, categoryId })
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, LINK_EXPENSE_CONFLICT_MESSAGE),
 			);
@@ -150,7 +146,7 @@ export class TransactionsService {
 
 	// adr025: a linked Transaction takes its Category from the Expense. Returns
 	// the categoryId to write over what was sent, if any.
-	private async linkRule(
+	private async categoryPatch(
 		{ expenseId, categoryId }: Partial<TransactionLink>,
 		id?: number,
 	): Promise<Pick<Partial<TransactionLink>, "categoryId">> {
