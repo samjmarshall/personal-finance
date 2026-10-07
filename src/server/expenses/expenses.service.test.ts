@@ -3,7 +3,12 @@ import type { Category } from "~/domain/categories";
 import type { Expense } from "~/domain/expenses";
 import { CommitmentKind } from "~/lib/constants";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
-import { failedQuery, throwing, unstaged } from "~/test/fakes";
+import {
+	expectPlainError,
+	failedQuery,
+	throwing,
+	unstaged,
+} from "~/test/fakes";
 import type { ExpensesRepository } from "./expenses.repository";
 import { ExpensesService } from "./expenses.service";
 
@@ -56,11 +61,6 @@ const CATEGORY: Category = {
 
 const EXPENSE_FIELDS = { name: "Weekly shop", category: "Food" };
 const NAME_TAKEN_MESSAGE = "A category with that name already exists.";
-
-function expectPlainError(thrown: unknown, message: string) {
-	expect(Object.getPrototypeOf(thrown)).toBe(Error.prototype);
-	expect(thrown).toMatchObject({ message });
-}
 
 describe("expenses", () => {
 	it("list returns the repository's expenses", async () => {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { BalanceSnapshot } from "~/domain/balances";
-import { failedQuery, throwing, unstaged } from "~/test/fakes";
+import {
+	expectPlainError,
+	failedQuery,
+	throwing,
+	unstaged,
+} from "~/test/fakes";
 import type { BalancesRepository } from "./balances.repository";
 import { BalancesService } from "./balances.service";
 
@@ -53,8 +58,7 @@ describe("BalancesService", () => {
 
 		const thrown = await service.set(INPUT).catch((e: unknown) => e);
 
-		expect(Object.getPrototypeOf(thrown)).toBe(Error.prototype);
-		expect(thrown).toMatchObject({ message: "Failed to set balance." });
+		expectPlainError(thrown, "Failed to set balance.");
 	});
 
 	it("set lets a driver error through unchanged", async () => {

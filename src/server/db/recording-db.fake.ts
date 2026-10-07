@@ -14,6 +14,14 @@ export type RecordedQuery = {
 // `query.sql`, not call order: `Promise.all` callers don't promise an order.
 export type Respond = (query: RecordedQuery) => unknown[][] | Error;
 
+// Driver sends timestamps as text; drizzle parses them back into Dates.
+export function rowOf(fields: string[], fixture: Record<string, unknown>) {
+	return fields.map((field) => {
+		const value = fixture[field];
+		return value instanceof Date ? value.toISOString() : (value ?? null);
+	});
+}
+
 export function recordingDb(respond: Respond = () => []) {
 	const queries: RecordedQuery[] = [];
 	const record = (sql: string) =>

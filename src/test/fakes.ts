@@ -1,6 +1,8 @@
+import { expect } from "vitest";
+
 /**
- * Stand-in methods shared by the service and controller unit tests. Not a
- * *.test.ts, so vitest never collects it.
+ * Stand-in methods and assertions shared by the service and controller unit
+ * tests. Not a *.test.ts, so vitest never collects it.
  */
 
 /** A fake method that resolves `result` and keeps each call's arguments. */
@@ -28,4 +30,10 @@ export const unstaged = async (): Promise<never> => {
 export function failedQuery(code: string) {
 	const driver = Object.assign(new Error("postgres"), { code });
 	return Object.assign(new Error("Failed query"), { cause: driver });
+}
+
+// A bare Error, not a domain error, so the tRPC middleware leaves it a 500.
+export function expectPlainError(thrown: unknown, message: string) {
+	expect(Object.getPrototypeOf(thrown)).toBe(Error.prototype);
+	expect(thrown).toMatchObject({ message });
 }

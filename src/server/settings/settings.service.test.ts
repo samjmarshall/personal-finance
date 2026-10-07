@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { failedQuery, throwing, unstaged } from "~/test/fakes";
+import {
+	expectPlainError,
+	failedQuery,
+	throwing,
+	unstaged,
+} from "~/test/fakes";
 import { FORTNIGHT_ANCHOR_KEY } from "./settings.constants";
 import type { SettingsRepository } from "./settings.repository";
 import { SettingsService } from "./settings.service";
@@ -61,10 +66,7 @@ describe("SettingsService", () => {
 			.setFortnightAnchor("2026-08-26")
 			.catch((e: unknown) => e);
 
-		expect(Object.getPrototypeOf(thrown)).toBe(Error.prototype);
-		expect(thrown).toMatchObject({
-			message: "Failed to set fortnight anchor.",
-		});
+		expectPlainError(thrown, "Failed to set fortnight anchor.");
 	});
 
 	it("setFortnightAnchor lets a driver error through unchanged", async () => {

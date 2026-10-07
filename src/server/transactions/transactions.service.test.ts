@@ -10,7 +10,12 @@ import type {
 	ExpensesService,
 	NamesById,
 } from "~/server/expenses/expenses.service";
-import { failedQuery, throwing, unstaged } from "~/test/fakes";
+import {
+	expectPlainError,
+	failedQuery,
+	throwing,
+	unstaged,
+} from "~/test/fakes";
 import type { TransactionsRepository } from "./transactions.repository";
 import { TransactionsService } from "./transactions.service";
 
@@ -99,8 +104,7 @@ describe("create", () => {
 
 		const thrown = await service.create(FIELDS).catch((e: unknown) => e);
 
-		expect(Object.getPrototypeOf(thrown)).toBe(Error.prototype);
-		expect(thrown).toMatchObject({ message: "Failed to create transaction." });
+		expectPlainError(thrown, "Failed to create transaction.");
 	});
 });
 

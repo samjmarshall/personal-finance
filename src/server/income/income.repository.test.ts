@@ -6,6 +6,7 @@ import {
 	pgError,
 	type Respond,
 	recordingDb,
+	rowOf,
 } from "~/server/db/recording-db.fake";
 import { DrizzleIncomeRepository } from "./income.repository";
 import { income } from "./income.schema";
@@ -22,14 +23,6 @@ function harness(respond?: Respond) {
 const NOW = new Date("2026-10-06T00:00:00.000Z");
 
 const COLUMNS = Object.keys(getTableColumns(income));
-
-// Driver sends timestamps as text; drizzle parses them back into Dates.
-function rowOf(fields: string[], fixture: Record<string, unknown>) {
-	return fields.map((field) => {
-		const value = fixture[field];
-		return value instanceof Date ? value.toISOString() : (value ?? null);
-	});
-}
 
 const INCOME = {
 	id: 4,

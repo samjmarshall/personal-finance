@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Income } from "~/domain/income";
 import { CommitmentKind } from "~/lib/constants";
-import { failedQuery, throwing, unstaged } from "~/test/fakes";
+import {
+	expectPlainError,
+	failedQuery,
+	throwing,
+	unstaged,
+} from "~/test/fakes";
 import type { IncomeRepository } from "./income.repository";
 import { IncomeService } from "./income.service";
 
@@ -34,11 +39,6 @@ const INCOME: Income = {
 };
 
 const FIELDS = { person: "Alex", source: "Salary" };
-
-function expectPlainError(thrown: unknown, message: string) {
-	expect(Object.getPrototypeOf(thrown)).toBe(Error.prototype);
-	expect(thrown).toMatchObject({ message });
-}
 
 describe("IncomeService", () => {
 	it("list returns the repository's income", async () => {
