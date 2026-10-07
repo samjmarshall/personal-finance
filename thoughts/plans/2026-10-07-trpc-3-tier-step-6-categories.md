@@ -543,14 +543,14 @@ One commit. Implements adr024 (the domain), adr023 (a top-level domain that mirr
 
 ### Success
 
-- [ ] `make check` passes. `make db_generate` produces no file.
-- [ ] `make test` passes. `categories.trpc.controller.test.ts` differs from the old file only in its import, the `callerWith` key and the method names.
-- [ ] `make build` passes
-- [ ] `git grep -n -E "categor" src/server/expenses/` hits only `categoryId` and `countsByCategory`
-- [ ] `git grep -n "~/server/categories/categories.schema" -- src` hits only schema files, `db/index.ts`, the contract test, and the two to-do entries' files
-- [ ] The to-do list has 10 entries
-- [ ] Every path named in the edited rules-file lines exists (`git ls-files` check)
-- [ ] At https://personal-finance.localhost/expenses/categories:
+- [x] `make check` passes. `make db_generate` produces no file.
+- [x] `make test` passes. `categories.trpc.controller.test.ts` differs from the old file only in its import, the `callerWith` key and the method names.
+- [x] `make build` passes
+- [x] `git grep -n -E "categor" src/server/expenses/` hits only `categoryId` and `countsByCategory`
+- [x] `git grep -n "~/server/categories/categories.schema" -- src` hits only schema files, `db/index.ts`, the contract test, and the two to-do entries' files
+- [x] The to-do list has 10 entries
+- [x] Every path named in the edited rules-file lines exists (`git ls-files` check)
+- [x] At https://personal-finance.localhost/expenses/categories:
   - The counts match the Expenses page.
   - Deleting a used Category shows `Cannot delete "X" — expenses still use it.`
   - Deleting an empty Category works.
