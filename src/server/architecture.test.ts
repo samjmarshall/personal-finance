@@ -38,9 +38,6 @@ const EXEMPT = [
 const TODO = [
 	"1 src/server/email/email.repository.ts → ~/server/receipts/receipts.schema",
 	"1 src/server/receipts/receipts.repository.ts → ~/server/expenses/categories.schema",
-	"3 src/server/api/routers/allowed-sender.ts → drizzle-orm",
-	"3 src/server/api/routers/allowed-sender.ts → ~/server/auth/auth.schema",
-	"3 src/server/api/routers/allowed-sender.ts → ~/server/email/allowed-sender.schema",
 	"3 src/server/api/routers/cashflow.ts → drizzle-orm",
 	"3 src/server/api/routers/cashflow.ts → ~/server/balances/balances.schema",
 	"3 src/server/api/routers/cashflow.ts → ~/server/expenses/expenses.schema",
