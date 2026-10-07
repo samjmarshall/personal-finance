@@ -206,7 +206,7 @@ One change, three commits.
 - [x] `make build` passes
 - [x] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/income/income.service.ts src/server/income/income.trpc.controller.ts` returns nothing
 - [x] `src/server/api/routers/income.ts` no longer exists, and the to-do list has 23 entries
-- [ ] At https://personal-finance.localhost, the Income page behaves as before:
+- [x] At https://personal-finance.localhost, the Income page behaves as before:
   - the list order
   - creating a recurring and a one-time Income. A one-time Income with no amount shows the form error.
   - editing and deleting
@@ -275,7 +275,7 @@ One change, three commits.
 - [x] `make build` passes
 - [x] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/balances/balances.service.ts src/server/balances/balances.trpc.controller.ts` returns nothing
 - [x] `src/server/api/routers/balance.ts` no longer exists, and the to-do list has 21 entries
-- [ ] At https://personal-finance.localhost, the dashboard balance card behaves as before:
+- [x] At https://personal-finance.localhost, the dashboard balance card behaves as before:
   - it shows the latest snapshot
   - recording a new balance updates the card
   - recording a new balance re-anchors the cash flow chart (`balance-snapshot-card.tsx:26` invalidates `cashflow.get`)
@@ -355,7 +355,7 @@ One change, three commits.
 - [x] `git grep -n -E "drizzle-orm|TRPCError|ctx\.db" src/server/settings/settings.service.ts src/server/settings/settings.trpc.controller.ts` returns nothing
 - [x] `src/server/api/routers/` holds only `allowed-sender`, `cashflow` and `receipts` files, and the to-do list has 19 entries
 - [x] Every path named in the edited rules-file sections exists (`git ls-files` check)
-- [ ] At https://personal-finance.localhost, these behave as before:
+- [x] At https://personal-finance.localhost, these behave as before:
   - the Settings page shows the saved pay-cycle anchor
   - saving a new anchor persists after a reload
   - the Unplanned page's fortnight picker uses the anchor
