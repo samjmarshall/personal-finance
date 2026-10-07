@@ -1,7 +1,7 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
-import { categories } from "~/server/expenses/categories.schema";
+import { categories } from "~/server/categories/categories.schema";
 import {
 	DrizzleReceiptsRepository,
 	type ReceiptRow,

@@ -1,15 +1,12 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Category } from "~/domain/categories";
 import type { Expense } from "~/domain/expenses";
 import { CommitmentKind } from "~/lib/constants";
 import {
-	pgError,
 	type Respond,
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
-import { categories } from "./categories.schema";
 import { DrizzleExpensesRepository } from "./expenses.repository";
 import { expenses } from "./expenses.schema";
 
@@ -25,7 +22,6 @@ function harness(respond?: Respond) {
 const NOW = new Date("2026-10-02T00:00:00.000Z");
 
 const EXPENSE_COLUMNS = Object.keys(getTableColumns(expenses));
-const CATEGORY_COLUMNS = Object.keys(getTableColumns(categories));
 
 const EXPENSE = {
 	id: 7,
@@ -44,17 +40,7 @@ const EXPENSE = {
 	updatedAt: null,
 } satisfies Expense;
 
-const CATEGORY = {
-	id: 3,
-	name: "Food",
-	description: "Groceries and takeaway",
-	sortOrder: 1,
-	createdAt: new Date("2026-09-01T01:00:00.000Z"),
-	updatedAt: null,
-} satisfies Category;
-
 const EXPENSE_ROW = rowOf(EXPENSE_COLUMNS, EXPENSE);
-const CATEGORY_ROW = rowOf(CATEGORY_COLUMNS, CATEGORY);
 
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["Date"] });
@@ -171,245 +157,11 @@ describe("expenses", () => {
 	});
 });
 
-describe("categories", () => {
-	it("listCategories counts each category's expenses by id, ordered by sort order then name", async () => {
-		// Driver sends the count as text; the repository must return a number.
-		const { repository, queries } = harness(() => [[...CATEGORY_ROW, "2"]]);
-
-		await expect(repository.listCategories()).resolves.toEqual([
-			{ ...CATEGORY, expenseCount: 2 },
-		]);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "all",
-			    "params": [],
-			    "sql": "select "category"."id", "category"."name", "category"."description", "category"."sortOrder", "category"."createdAt", "category"."updatedAt", count("expense"."id") from "category" left join "expense" on "expense"."categoryId" = "category"."id" group by "category"."id" order by "category"."sortOrder" asc, "category"."name" asc",
-			  },
-			]
-		`);
-	});
-
-	it("nextCategorySortOrder is one past the highest sort order", async () => {
-		const { repository, queries } = harness(() => [[4]]);
-
-		await expect(repository.nextCategorySortOrder()).resolves.toBe(4);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "all",
-			    "params": [],
-			    "sql": "select coalesce(max("sortOrder") + 1, 0) from "category"",
-			  },
-			]
-		`);
-	});
-
-	it("nextCategorySortOrder is 0 when there is no sort order row", async () => {
-		const { repository } = harness();
-
-		await expect(repository.nextCategorySortOrder()).resolves.toBe(0);
-	});
-
-	it("insertCategory returns the stored row", async () => {
-		const { repository, queries } = harness(() => [CATEGORY_ROW]);
-
-		await expect(
-			repository.insertCategory({
-				name: "Food",
-				description: "Groceries and takeaway",
-				sortOrder: 4,
-			}),
-		).resolves.toEqual(CATEGORY);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "all",
-			    "params": [
-			      "Food",
-			      "Groceries and takeaway",
-			      4,
-			      "2026-10-02T00:00:00.000Z",
-			      "2026-10-02T00:00:00.000Z",
-			    ],
-			    "sql": "insert into "category" ("id", "name", "description", "sortOrder", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5) returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
-			  },
-			]
-		`);
-	});
-
-	it("insertCategory lets a driver error bubble", async () => {
-		const { repository } = harness(() => pgError("23505"));
-
-		await expect(
-			repository.insertCategory({
-				name: "Food",
-				description: null,
-				sortOrder: 4,
-			}),
-		).rejects.toMatchObject({ cause: { code: "23505" } });
-	});
-
-	it("findCategory selects by id", async () => {
-		const { repository, queries } = harness(() => [CATEGORY_ROW]);
-
-		await expect(repository.findCategory(3)).resolves.toEqual(CATEGORY);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "all",
-			    "params": [
-			      3,
-			    ],
-			    "sql": "select "id", "name", "description", "sortOrder", "createdAt", "updatedAt" from "category" where "category"."id" = $1",
-			  },
-			]
-		`);
-	});
-
-	it("findCategory gives undefined when no row has the id", async () => {
-		const { repository } = harness();
-
-		await expect(repository.findCategory(3)).resolves.toBeUndefined();
-	});
-
-	it("updateCategory renames in one statement, never touching expenses", async () => {
-		const renamed = { ...CATEGORY, name: "Groceries", description: null };
-		const { repository, queries } = harness(() => [
-			rowOf(CATEGORY_COLUMNS, renamed),
-		]);
-
-		await expect(
-			repository.updateCategory(3, { name: "Groceries", description: null }),
-		).resolves.toEqual(renamed);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "all",
-			    "params": [
-			      "Groceries",
-			      null,
-			      "2026-10-02T00:00:00.000Z",
-			      3,
-			    ],
-			    "sql": "update "category" set "name" = $1, "description" = $2, "updatedAt" = $3 where "category"."id" = $4 returning "id", "name", "description", "sortOrder", "createdAt", "updatedAt"",
-			  },
-			]
-		`);
-	});
-
-	it("updateCategory lets a driver error bubble", async () => {
-		const { repository } = harness(() => pgError("23505"));
-
-		await expect(
-			repository.updateCategory(3, { name: "Groceries", description: null }),
-		).rejects.toMatchObject({ cause: { code: "23505" } });
-	});
-
-	it("updateCategory gives undefined when no row matches the id", async () => {
-		const { repository } = harness();
-
-		await expect(
-			repository.updateCategory(3, { name: "Food", description: null }),
-		).resolves.toBeUndefined();
-	});
-
-	it("reorderCategories sets each id's sort order to its position in one transaction", async () => {
-		const { repository, queries } = harness();
-
-		await repository.reorderCategories([3, 1, 2]);
-
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "execute",
-			    "params": [],
-			    "sql": "begin",
-			  },
-			  {
-			    "method": "execute",
-			    "params": [
-			      0,
-			      "2026-10-02T00:00:00.000Z",
-			      3,
-			    ],
-			    "sql": "update "category" set "sortOrder" = $1, "updatedAt" = $2 where "category"."id" = $3",
-			  },
-			  {
-			    "method": "execute",
-			    "params": [
-			      1,
-			      "2026-10-02T00:00:00.000Z",
-			      1,
-			    ],
-			    "sql": "update "category" set "sortOrder" = $1, "updatedAt" = $2 where "category"."id" = $3",
-			  },
-			  {
-			    "method": "execute",
-			    "params": [
-			      2,
-			      "2026-10-02T00:00:00.000Z",
-			      2,
-			    ],
-			    "sql": "update "category" set "sortOrder" = $1, "updatedAt" = $2 where "category"."id" = $3",
-			  },
-			  {
-			    "method": "execute",
-			    "params": [],
-			    "sql": "commit",
-			  },
-			]
-		`);
-	});
-
-	it("countExpensesInCategory counts expenses filed under the id", async () => {
-		// The driver sends count(*) as text; mapWith(Number) turns it into a number.
-		const { repository, queries } = harness(() => [["2"]]);
-
-		await expect(repository.countExpensesInCategory(3)).resolves.toBe(2);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "all",
-			    "params": [
-			      3,
-			    ],
-			    "sql": "select count(*) from "expense" where "expense"."categoryId" = $1",
-			  },
-			]
-		`);
-	});
-
-	it("countExpensesInCategory is 0 when the count row is missing", async () => {
-		const { repository } = harness();
-
-		await expect(repository.countExpensesInCategory(3)).resolves.toBe(0);
-	});
-
-	it("deleteCategory deletes by id", async () => {
-		const { repository, queries } = harness();
-
-		await repository.deleteCategory(3);
-
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "execute",
-			    "params": [
-			      3,
-			    ],
-			    "sql": "delete from "category" where "category"."id" = $1",
-			  },
-			]
-		`);
-	});
-});
-
-describe("names", () => {
-	it("findExpenseNames selects the id and name of each expense id", async () => {
+describe("lookups", () => {
+	it("findNames selects the id and name of each expense id", async () => {
 		const { repository, queries } = harness(() => [[7, "Weekly shop"]]);
 
-		await expect(repository.findExpenseNames([7, 8])).resolves.toEqual([
+		await expect(repository.findNames([7, 8])).resolves.toEqual([
 			{ id: 7, name: "Weekly shop" },
 		]);
 		expect(queries).toMatchInlineSnapshot(`
@@ -426,21 +178,19 @@ describe("names", () => {
 		`);
 	});
 
-	it("findCategoryNames selects the id and name of each category id", async () => {
-		const { repository, queries } = harness(() => [[3, "Food"]]);
+	it("countsByCategory counts expenses per category id", async () => {
+		// The driver sends count() as text; the repository must return a number.
+		const { repository, queries } = harness(() => [[3, "2"]]);
 
-		await expect(repository.findCategoryNames([3, 4])).resolves.toEqual([
-			{ id: 3, name: "Food" },
+		await expect(repository.countsByCategory()).resolves.toEqual([
+			{ categoryId: 3, count: 2 },
 		]);
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
 			    "method": "all",
-			    "params": [
-			      3,
-			      4,
-			    ],
-			    "sql": "select "id", "name" from "category" where "category"."id" in ($1, $2)",
+			    "params": [],
+			    "sql": "select "categoryId", count("id") from "expense" group by "expense"."categoryId"",
 			  },
 			]
 		`);

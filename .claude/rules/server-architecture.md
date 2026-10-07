@@ -15,8 +15,8 @@ domain per change (strangler). Reference implementations: `src/server/outbox/`
 (cron workers + the write door), `src/server/receipts/receipts.*` (event worker +
 external adapters) and `src/server/email/email.*` (HTTP webhook
 controller behind `src/app/api/receipts/inbound/route.ts`),
-`src/server/transactions/` (the reference tRPC domain) and `src/server/expenses/`
-(two tRPC controllers, `expenses` and `categories`, over one service).
+`src/server/transactions/` (the reference tRPC domain) and `src/server/categories/`
+(a top-level domain other domains link to by id).
 Existing plain tRPC routers stay as they are until their domain is migrated in
 its own change — never refactor a router toward 3-tier inside a feature diff.
 
@@ -41,6 +41,17 @@ child's name as the file prefix in the parent folder, never a nested folder:
 `email/allowed-sender.{schema,repository,service,trpc.controller}.ts`. It gets its
 own service only under the [service split rule](#service-split-rule)
 ([adr023](../../docs/adr/adr023-domain-hierarchy-three-kinds-of-child-flat-folders.md)).
+
+A domain's child is one of three kinds (adr023):
+
+| Kind           | Test                                                        | Home                                       | Example                                |
+| -------------- | ----------------------------------------------------------- | ------------------------------------------ | -------------------------------------- |
+| Part of parent | Lives and dies with the parent row; no page or router.      | The parent's files.                        | `receipt_item` in `receipts.schema.ts` |
+| Sub-resource   | Own table or controller, used only by the parent.           | `<parent>/<child>.*` prefixed files.       | `email/allowed-sender.*`               |
+| Own domain     | Linked by id from 2+ domains, or made on its own page.      | Top-level `src/server/<name>/`, named like `src/domain/<name>/`. | `categories/` ↔ `src/domain/categories/` |
+
+Folders stay flat. A sub-resource becomes its own domain only once every link to
+it is an id.
 
 ## Construction rules
 
@@ -151,8 +162,8 @@ Split on real pain, not in advance.
 - Compose the pre-built router objects in `src/server/api/root.ts`
   (`receipt`; `allowedSender` comes from `src/server/email/`,
   `balance` from `src/server/balances/`, `cashflow` from
-  `src/server/cashflow/`, `category` and `expense` from
-  `src/server/expenses/`, `income` from `src/server/income/`, `setting` from
+  `src/server/cashflow/`, `category` from `src/server/categories/`, `expense`
+  from `src/server/expenses/`, `income` from `src/server/income/`, `setting` from
   `src/server/settings/`, and `transaction` from `src/server/transactions/`).
 - Errors are thrown inline as `TRPCError`, or through the shared helpers in
   `src/server/errors/`, which throw the non-tRPC errors described under
@@ -168,7 +179,7 @@ Split on real pain, not in advance.
 ## Schema homes (adr005 / adr022)
 
 Drizzle tables live per-domain in `src/server/<domain>/<domain>.schema.ts` — e.g.
-`expenses/expenses.schema.ts`, `expenses/categories.schema.ts`,
+`expenses/expenses.schema.ts`, `categories/categories.schema.ts`,
 `balances/balances.schema.ts`, `auth/auth.schema.ts`. drizzle-kit globs
 `src/server/**/*.schema.ts`.
 
@@ -178,8 +189,8 @@ Each domain owns its tables ([adr022](../../docs/adr/adr022-cross-domain-data-th
 - Cross-domain reads **and** writes go through the owning service, typed as a
   narrow `Pick` or port (`OutboxWriteDoor`), so a test fake is an object literal.
 - A join becomes a batched lookup: `TransactionsService.list` makes one
-  `ExpensesService.namesByIds` call per page, merges in memory, and gives a null
-  name for a missing id.
+  `ExpensesService.namesByIds` and one `CategoriesService.namesByIds` call per
+  page, together, merges in memory, and gives a null name for a missing id.
 - Schema files may import each other for foreign keys only.
 - `src/server/architecture.test.ts` enforces this. Its `TODO` list of known
   violations only shrinks: each migration step deletes its entries.
@@ -198,7 +209,7 @@ here imports `src/server/**`.
 Multi-statement writes that must be atomic use the postgres-js interactive
 transaction — `db.transaction(async (tx) => { … })` (adr002/adr003). In a
 repository that is `this.db.transaction(...)` (`saveExtraction`,
-`reorderCategories`).
+`CategoriesRepository.reorder`).
 
 ## Outbox + Inngest (adr002)
 

@@ -9,6 +9,7 @@ import type {
 	TransactionUpdateInput,
 	UnplannedWindow,
 } from "~/domain/transactions";
+import type { CategoriesService } from "~/server/categories/categories.service";
 import { assertRow } from "~/server/errors/assert-row";
 import { NotFoundError } from "~/server/errors/domain-errors";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
@@ -33,28 +34,35 @@ const nameOf = (names: ReadonlyMap<number, string>, id: number | null) =>
 interface TransactionsServiceDeps {
 	repository: TransactionsRepository;
 	expenses: Pick<ExpensesService, "namesByIds">;
+	categories: Pick<CategoriesService, "namesByIds">;
 }
 
 export class TransactionsService {
 	private readonly repository: TransactionsRepository;
 	private readonly expenses: Pick<ExpensesService, "namesByIds">;
+	private readonly categories: Pick<CategoriesService, "namesByIds">;
 
-	constructor({ repository, expenses }: TransactionsServiceDeps) {
+	constructor({ repository, expenses, categories }: TransactionsServiceDeps) {
 		this.repository = repository;
 		this.expenses = expenses;
+		this.categories = categories;
 	}
 
 	async list(query: TransactionListQuery): Promise<TransactionListResult> {
 		const { items, total } = await this.repository.list(query);
-		const names = await this.expenses.namesByIds({
-			expenseIds: distinctLinks(items.map((row) => row.expenseId)),
-			categoryIds: distinctLinks(items.map((row) => row.categoryId)),
-		});
+		const [expenseNames, categoryNames] = await Promise.all([
+			this.expenses.namesByIds(
+				distinctLinks(items.map((row) => row.expenseId)),
+			),
+			this.categories.namesByIds(
+				distinctLinks(items.map((row) => row.categoryId)),
+			),
+		]);
 		return {
 			items: items.map((row) => ({
 				...row,
-				expenseName: nameOf(names.expenses, row.expenseId),
-				categoryName: nameOf(names.categories, row.categoryId),
+				expenseName: nameOf(expenseNames, row.expenseId),
+				categoryName: nameOf(categoryNames, row.categoryId),
 			})),
 			total,
 		};

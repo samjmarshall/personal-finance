@@ -92,7 +92,13 @@ export function ExpenseForm({
 	}, [open, expense]);
 
 	const onSuccess = async () => {
-		await utils.expense.list.invalidate();
+		await Promise.all([
+			utils.expense.list.invalidate(),
+			// Only the Categories page shows counts; refetch now so it opens fresh.
+			utils.expense.countsByCategory.invalidate(undefined, {
+				refetchType: "all",
+			}),
+		]);
 		onClose();
 	};
 

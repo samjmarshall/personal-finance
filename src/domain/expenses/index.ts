@@ -4,7 +4,7 @@ import {
 	expenseCreateDto,
 	expenseUpdateDto,
 } from "./expense.dto";
-import type { Expense } from "./expense.interface";
+import type { CategoryCount, Expense } from "./expense.interface";
 
-export type { Expense, ExpenseCreateInput, ExpenseUpdateInput };
+export type { CategoryCount, Expense, ExpenseCreateInput, ExpenseUpdateInput };
 export { expenseCreateDto, expenseUpdateDto };

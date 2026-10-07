@@ -1,6 +1,6 @@
 import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
 import { Frequency, Priority } from "~/lib/constants";
-import { categories } from "~/server/expenses/categories.schema";
+import { categories } from "~/server/categories/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 
 export const transactionFrequency = pgEnum(

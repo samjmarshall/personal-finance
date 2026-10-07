@@ -37,10 +37,10 @@ const EXEMPT = [
 // Shrink-only: each migration step deletes the entries it clears.
 const TODO = [
 	"1 src/server/email/email.repository.ts → ~/server/receipts/receipts.schema",
-	"1 src/server/receipts/receipts.repository.ts → ~/server/expenses/categories.schema",
+	"1 src/server/receipts/receipts.repository.ts → ~/server/categories/categories.schema",
 	"3 src/server/api/routers/receipts.ts → drizzle-orm",
 	"3 src/server/api/routers/receipts.ts → ~/server/auth/auth.schema",
-	"3 src/server/api/routers/receipts.ts → ~/server/expenses/categories.schema",
+	"3 src/server/api/routers/receipts.ts → ~/server/categories/categories.schema",
 	"3 src/server/api/routers/receipts.ts → ~/server/expenses/expenses.schema",
 	"3 src/server/api/routers/receipts.ts → ~/server/receipts/receipts.schema",
 	"3 src/server/api/routers/receipts.ts → ~/server/transactions/transactions.schema",

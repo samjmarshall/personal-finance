@@ -4,13 +4,13 @@ import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { recorder, throwing } from "~/test/fakes";
+import type { CategoriesService } from "./categories.service";
 import { categoryRouter } from "./categories.trpc.controller";
-import type { ExpensesService } from "./expenses.service";
 
 const router = createTRPCRouter({ category: categoryRouter });
 
-function callerWith(expenses: Partial<ExpensesService>, session?: null) {
-	return createTestCaller(router, { services: { expenses }, session });
+function callerWith(categories: Partial<CategoriesService>, session?: null) {
+	return createTestCaller(router, { services: { categories }, session });
 }
 
 const CATEGORY: Category = {
@@ -27,9 +27,9 @@ describe("category router", () => {
 		const rows = [{ ...CATEGORY, expenseCount: 2 }];
 		const { method } = recorder(rows);
 
-		await expect(
-			callerWith({ listCategories: method }).category.list(),
-		).resolves.toEqual(rows);
+		await expect(callerWith({ list: method }).category.list()).resolves.toEqual(
+			rows,
+		);
 	});
 
 	it("create hands the service the parsed input", async () => {
@@ -37,7 +37,7 @@ describe("category router", () => {
 		const input = { name: "Food", description: "Groceries and takeaway" };
 
 		await expect(
-			callerWith({ createCategory: method }).category.create(input),
+			callerWith({ create: method }).category.create(input),
 		).resolves.toEqual(CATEGORY);
 		expect(calls).toEqual([[input]]);
 	});
@@ -47,7 +47,7 @@ describe("category router", () => {
 		const input = { id: 3, name: "Food" };
 
 		await expect(
-			callerWith({ updateCategory: method }).category.update(input),
+			callerWith({ update: method }).category.update(input),
 		).resolves.toEqual(CATEGORY);
 		expect(calls).toEqual([[input]]);
 	});
@@ -56,7 +56,7 @@ describe("category router", () => {
 		const { method, calls } = recorder(undefined);
 
 		await expect(
-			callerWith({ reorderCategories: method }).category.reorder({
+			callerWith({ reorder: method }).category.reorder({
 				ids: [3, 1, 2],
 			}),
 		).resolves.toEqual({ success: true });
@@ -67,16 +67,16 @@ describe("category router", () => {
 		const { method, calls } = recorder(undefined);
 
 		await expect(
-			callerWith({ deleteCategory: method }).category.delete({ id: 3 }),
+			callerWith({ delete: method }).category.delete({ id: 3 }),
 		).resolves.toEqual({ success: true });
 		expect(calls).toEqual([[3]]);
 	});
 
 	it("surfaces a NotFoundError as NOT_FOUND", async () => {
-		const updateCategory = throwing(new NotFoundError("Category not found."));
+		const update = throwing(new NotFoundError("Category not found."));
 
 		await expect(
-			callerWith({ updateCategory }).category.update({ id: 3, name: "Food" }),
+			callerWith({ update }).category.update({ id: 3, name: "Food" }),
 		).rejects.toMatchObject({
 			code: "NOT_FOUND",
 			message: "Category not found.",
@@ -88,7 +88,7 @@ describe("category router", () => {
 		const deleteCategory = throwing(new ConflictError(message));
 
 		await expect(
-			callerWith({ deleteCategory }).category.delete({ id: 3 }),
+			callerWith({ delete: deleteCategory }).category.delete({ id: 3 }),
 		).rejects.toMatchObject({ code: "CONFLICT", message });
 	});
 
@@ -96,7 +96,7 @@ describe("category router", () => {
 		const { method, calls } = recorder(undefined);
 
 		await expect(
-			callerWith({ deleteCategory: method }, null).category.delete({ id: 3 }),
+			callerWith({ delete: method }, null).category.delete({ id: 3 }),
 		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
 		expect(calls).toEqual([]);
 	});

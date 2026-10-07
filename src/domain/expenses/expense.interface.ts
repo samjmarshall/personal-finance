@@ -16,3 +16,9 @@ export interface Expense {
 	createdAt: Date;
 	updatedAt: Date | null;
 }
+
+/** Expenses filed under one Category; a Category with none has no row. */
+export interface CategoryCount {
+	categoryId: number;
+	count: number;
+}

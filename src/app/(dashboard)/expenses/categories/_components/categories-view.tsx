@@ -20,10 +20,15 @@ type Category = RouterOutputs["category"]["list"][number];
 
 export function CategoriesView() {
 	const [categories] = api.category.list.useSuspenseQuery();
+	const [counts] = api.expense.countsByCategory.useSuspenseQuery();
+	const countOf = new Map(counts.map((row) => [row.categoryId, row.count]));
 	const utils = api.useUtils();
 	const remove = api.category.delete.useMutation({
 		onSuccess: async () => {
-			await utils.category.list.invalidate();
+			await Promise.all([
+				utils.category.list.invalidate(),
+				utils.expense.countsByCategory.invalidate(),
+			]);
 		},
 	});
 	const reorder = api.category.reorder.useMutation({
@@ -79,52 +84,55 @@ export function CategoriesView() {
 					strategy="vertical"
 					value={categories}
 				>
-					{categories.map((category) => (
-						<SortableItem key={category.id} value={String(category.id)}>
-							<Card>
-								<CardContent className="flex items-center justify-between gap-4">
-									<SortableItemHandle className="text-muted-foreground hover:text-foreground">
-										<GripVerticalIcon className="size-4" />
-									</SortableItemHandle>
-									<div className="flex flex-1 items-center gap-2">
-										<span className="truncate font-semibold text-foreground text-sm">
-											{category.name}
-										</span>
-										<Badge className="border-border bg-muted text-muted-foreground">
-											{category.expenseCount} item
-											{category.expenseCount === 1 ? "" : "s"}
-										</Badge>
-									</div>
-									{category.description && (
-										<p className="mt-1 truncate text-muted-foreground text-sm">
-											{category.description}
-										</p>
-									)}
-									<div className="flex shrink-0 gap-0.5">
-										<button
-											aria-label={`Edit ${category.name}`}
-											className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-											onClick={() => openEdit(category)}
-											type="button"
-										>
-											<Pencil className="h-4 w-4" />
-										</button>
-										<button
-											aria-label={`Delete ${category.name}`}
-											className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
-											onClick={() => {
-												setDeleteTarget(category);
-												setConfirmOpen(true);
-											}}
-											type="button"
-										>
-											<Trash2 className="h-4 w-4" />
-										</button>
-									</div>
-								</CardContent>
-							</Card>
-						</SortableItem>
-					))}
+					{categories.map((category) => {
+						const expenseCount = countOf.get(category.id) ?? 0;
+						return (
+							<SortableItem key={category.id} value={String(category.id)}>
+								<Card>
+									<CardContent className="flex items-center justify-between gap-4">
+										<SortableItemHandle className="text-muted-foreground hover:text-foreground">
+											<GripVerticalIcon className="size-4" />
+										</SortableItemHandle>
+										<div className="flex flex-1 items-center gap-2">
+											<span className="truncate font-semibold text-foreground text-sm">
+												{category.name}
+											</span>
+											<Badge className="border-border bg-muted text-muted-foreground">
+												{expenseCount} item
+												{expenseCount === 1 ? "" : "s"}
+											</Badge>
+										</div>
+										{category.description && (
+											<p className="mt-1 truncate text-muted-foreground text-sm">
+												{category.description}
+											</p>
+										)}
+										<div className="flex shrink-0 gap-0.5">
+											<button
+												aria-label={`Edit ${category.name}`}
+												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+												onClick={() => openEdit(category)}
+												type="button"
+											>
+												<Pencil className="h-4 w-4" />
+											</button>
+											<button
+												aria-label={`Delete ${category.name}`}
+												className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend"
+												onClick={() => {
+													setDeleteTarget(category);
+													setConfirmOpen(true);
+												}}
+												type="button"
+											>
+												<Trash2 className="h-4 w-4" />
+											</button>
+										</div>
+									</CardContent>
+								</Card>
+							</SortableItem>
+						);
+					})}
 				</Sortable>
 
 				{!categories.length && (

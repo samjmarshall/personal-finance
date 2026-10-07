@@ -50,6 +50,10 @@ export function ExpensesView() {
 			await Promise.all([
 				utils.expense.list.invalidate(),
 				utils.expense.consumption.invalidate(),
+				// Only the Categories page shows counts; refetch now so it opens fresh.
+				utils.expense.countsByCategory.invalidate(undefined, {
+					refetchType: "all",
+				}),
 				utils.transaction.unplanned.invalidate(),
 				utils.transaction.list.invalidate(),
 			]);

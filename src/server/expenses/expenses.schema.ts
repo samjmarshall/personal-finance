@@ -1,6 +1,6 @@
 import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
 import { CommitmentKind } from "~/lib/constants";
-import { categories } from "./categories.schema";
+import { categories } from "~/server/categories/categories.schema";
 
 export const expenseKind = pgEnum(
 	"expense_kind",

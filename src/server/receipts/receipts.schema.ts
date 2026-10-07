@@ -7,7 +7,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import { user } from "~/server/auth/auth.schema";
-import { categories } from "~/server/expenses/categories.schema";
+import { categories } from "~/server/categories/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 import { transactions } from "~/server/transactions/transactions.schema";
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Expense } from "~/domain/expenses";
+import type { CategoryCount, Expense } from "~/domain/expenses";
 import type { ExpenseConsumption } from "~/domain/transactions";
 import { CommitmentKind } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
@@ -65,6 +65,28 @@ describe("expense router", () => {
 			).expense.consumption(),
 		).resolves.toEqual(consumption);
 		expect(calls).toEqual([[]]);
+	});
+
+	it("countsByCategory returns the service's counts", async () => {
+		const counts: CategoryCount[] = [{ categoryId: 3, count: 2 }];
+		const { method, calls } = recorder(counts);
+
+		await expect(
+			callerWith({ countsByCategory: method }).expense.countsByCategory(),
+		).resolves.toEqual(counts);
+		expect(calls).toEqual([[]]);
+	});
+
+	it("countsByCategory rejects a signed-out call before reaching the service", async () => {
+		const { method, calls } = recorder([]);
+
+		await expect(
+			callerWith(
+				{ countsByCategory: method },
+				{ session: null },
+			).expense.countsByCategory(),
+		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+		expect(calls).toEqual([]);
 	});
 
 	it("create hands the service the parsed input", async () => {

@@ -1,8 +1,8 @@
 import { and, eq, ne } from "drizzle-orm";
 import type { ExtractionCategory } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
+import { categories } from "~/server/categories/categories.schema";
 import type { db as realDb } from "~/server/db";
-import { categories } from "~/server/expenses/categories.schema";
 import { receiptItems, receipts } from "./receipts.schema";
 
 export type ReceiptRow = typeof receipts.$inferSelect;

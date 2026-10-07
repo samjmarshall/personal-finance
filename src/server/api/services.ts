@@ -3,6 +3,8 @@ import { MembersService } from "~/server/auth/members.service";
 import { DrizzleBalancesRepository } from "~/server/balances/balances.repository";
 import { BalancesService } from "~/server/balances/balances.service";
 import { CashflowService } from "~/server/cashflow/cashflow.service";
+import { DrizzleCategoriesRepository } from "~/server/categories/categories.repository";
+import { CategoriesService } from "~/server/categories/categories.service";
 import { db } from "~/server/db";
 import { DrizzleAllowedSenderRepository } from "~/server/email/allowed-sender.repository";
 import { AllowedSenderService } from "~/server/email/allowed-sender.service";
@@ -17,6 +19,10 @@ import { TransactionsService } from "~/server/transactions/transactions.service"
 
 const balances = new BalancesService({
 	repository: new DrizzleBalancesRepository({ db }),
+});
+
+const categories = new CategoriesService({
+	repository: new DrizzleCategoriesRepository({ db }),
 });
 
 const expenses = new ExpensesService({
@@ -39,6 +45,7 @@ const settings = new SettingsService({
 const transactions = new TransactionsService({
 	repository: new DrizzleTransactionsRepository({ db }),
 	expenses,
+	categories,
 });
 
 // One instance per service, shared by every request. The build loads this
@@ -56,6 +63,7 @@ export const services = {
 		settings,
 		balances,
 	}),
+	categories,
 	expenses,
 	income,
 	settings,

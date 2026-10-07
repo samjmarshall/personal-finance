@@ -5,11 +5,9 @@ import type {
 	TransactionSummary,
 } from "~/domain/transactions";
 import { Frequency, Priority } from "~/lib/constants";
+import type { CategoriesService } from "~/server/categories/categories.service";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
-import type {
-	ExpensesService,
-	NamesById,
-} from "~/server/expenses/expenses.service";
+import type { ExpensesService } from "~/server/expenses/expenses.service";
 import {
 	expectPlainError,
 	failedQuery,
@@ -20,10 +18,12 @@ import type { TransactionsRepository } from "./transactions.repository";
 import { TransactionsService } from "./transactions.service";
 
 type ExpenseNames = Pick<ExpensesService, "namesByIds">;
+type CategoryNames = Pick<CategoriesService, "namesByIds">;
 
 function serviceWith(
 	staged: Partial<TransactionsRepository>,
 	stagedExpenses: Partial<ExpenseNames> = {},
+	stagedCategories: Partial<CategoryNames> = {},
 ) {
 	const repository: TransactionsRepository = {
 		list: unstaged,
@@ -38,7 +38,11 @@ function serviceWith(
 		...staged,
 	};
 	const expenses: ExpenseNames = { namesByIds: unstaged, ...stagedExpenses };
-	return new TransactionsService({ repository, expenses });
+	const categories: CategoryNames = {
+		namesByIds: unstaged,
+		...stagedCategories,
+	};
+	return new TransactionsService({ repository, expenses, categories });
 }
 
 const TRANSACTION: Transaction = {
@@ -218,10 +222,8 @@ describe("list", () => {
 		offset: 0,
 	} as const;
 
-	const NAMES: NamesById = {
-		expenses: new Map([[7, "Weekly shop"]]),
-		categories: new Map([[3, "Groceries"]]),
-	};
+	const EXPENSE_NAMES = new Map([[7, "Weekly shop"]]);
+	const CATEGORY_NAMES = new Map([[3, "Groceries"]]);
 
 	const UNLINKED: Transaction = {
 		...TRANSACTION,
@@ -230,9 +232,12 @@ describe("list", () => {
 		categoryId: null,
 	};
 
-	function listing(items: Transaction[], names: NamesById = NAMES) {
+	function listing(
+		items: Transaction[],
+		{ expenseNames = EXPENSE_NAMES, categoryNames = CATEGORY_NAMES } = {},
+	) {
 		const queries: unknown[] = [];
-		const asked: unknown[] = [];
+		const asked: unknown[][] = [];
 		const service = serviceWith(
 			{
 				list: async (query) => {
@@ -242,8 +247,14 @@ describe("list", () => {
 			},
 			{
 				namesByIds: async (ids) => {
-					asked.push(ids);
-					return names;
+					asked.push(["expenses", ids]);
+					return expenseNames;
+				},
+			},
+			{
+				namesByIds: async (ids) => {
+					asked.push(["categories", ids]);
+					return categoryNames;
 				},
 			},
 		);
@@ -266,7 +277,7 @@ describe("list", () => {
 		expect(queries).toEqual([QUERY]);
 	});
 
-	it("asks for the names once, with distinct ids", async () => {
+	it("asks each lookup once, with distinct ids", async () => {
 		const { service, asked } = listing([
 			TRANSACTION,
 			{ ...TRANSACTION, id: 2 },
@@ -274,7 +285,10 @@ describe("list", () => {
 
 		await service.list(QUERY);
 
-		expect(asked).toEqual([{ expenseIds: [7], categoryIds: [3] }]);
+		expect(asked).toEqual([
+			["expenses", [7]],
+			["categories", [3]],
+		]);
 	});
 
 	it("gives a null link a null name and never asks for it", async () => {
@@ -286,13 +300,29 @@ describe("list", () => {
 			expenseName: null,
 			categoryName: null,
 		});
-		expect(asked).toEqual([{ expenseIds: [7], categoryIds: [3] }]);
+		expect(asked).toEqual([
+			["expenses", [7]],
+			["categories", [3]],
+		]);
+	});
+
+	it("asks with no ids for an empty page", async () => {
+		const { service, asked } = listing([]);
+
+		await expect(service.list(QUERY)).resolves.toEqual({
+			items: [],
+			total: 9,
+		});
+		expect(asked).toEqual([
+			["expenses", []],
+			["categories", []],
+		]);
 	});
 
 	it("gives a null name for an id whose row is gone", async () => {
 		const { service } = listing([TRANSACTION], {
-			expenses: new Map(),
-			categories: new Map(),
+			expenseNames: new Map(),
+			categoryNames: new Map(),
 		});
 
 		const { items } = await service.list(QUERY);
@@ -303,14 +333,17 @@ describe("list", () => {
 		});
 	});
 
-	it("lets a namesByIds error propagate", async () => {
-		const error = new Error("connection lost");
+	it.each([
+		["expenses", { namesByIds: throwing(new Error("connection lost")) }, {}],
+		["categories", {}, { namesByIds: throwing(new Error("connection lost")) }],
+	])("lets a %s lookup error propagate", async (_, expenses, categories) => {
 		const service = serviceWith(
 			{ list: async () => ({ items: [TRANSACTION], total: 1 }) },
-			{ namesByIds: throwing(error) },
+			{ namesByIds: async () => EXPENSE_NAMES, ...expenses },
+			{ namesByIds: async () => CATEGORY_NAMES, ...categories },
 		);
 
-		await expect(service.list(QUERY)).rejects.toBe(error);
+		await expect(service.list(QUERY)).rejects.toThrow("connection lost");
 	});
 });
 

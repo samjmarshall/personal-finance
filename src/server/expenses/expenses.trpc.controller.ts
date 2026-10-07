@@ -10,6 +10,11 @@ export const expenseRouter = createTRPCRouter({
 		ctx.services.transactions.consumedByExpense(),
 	),
 
+	// Feeds the Categories page's counts; the expenses service owns them (adr024).
+	countsByCategory: protectedProcedure.query(({ ctx }) =>
+		ctx.services.expenses.countsByCategory(),
+	),
+
 	create: protectedProcedure
 		.input(expenseCreateDto)
 		.mutation(({ ctx, input }) => ctx.services.expenses.create(input)),

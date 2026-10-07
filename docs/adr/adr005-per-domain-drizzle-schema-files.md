@@ -39,6 +39,8 @@ src/server/
 │   └── transactions.schema.ts   # transaction table + its indexes
 ├── expenses/
 │   └── expenses.schema.ts       # expense table
+├── categories/
+│   └── categories.schema.ts     # category table
 ├── income/
 │   └── income.schema.ts         # income table
 ├── outbox/

@@ -13,7 +13,7 @@ Date: '2026-09-01'
 
 **This ADR reverses its own 2026-08-10 decision**, which chose `neon-http` + `db.batch()` and rejected the `postgres-js` status quo on platform grounds; the driver swap never shipped, and by the time the outbox came to be built the platform premises had weakened enough that keeping `postgres-js` is the honest call (the original decision is preserved in git history).
 
-This project runs the **`postgres-js`** driver (`src/server/db/index.ts:1-2,32-35`, with an HMR connection cache on `globalThis`) against Neon Postgres. `postgres-js` supports real interactive transactions — `db.transaction(async tx => …)` — so adr002's atomicity requirement is already satisfied with the simplest possible code, and is relied on today (`reorderCategories` in `src/server/expenses/expenses.repository.ts`).
+This project runs the **`postgres-js`** driver (`src/server/db/index.ts:1-2,32-35`, with an HMR connection cache on `globalThis`) against Neon Postgres. `postgres-js` supports real interactive transactions — `db.transaction(async tx => …)` — so adr002's atomicity requirement is already satisfied with the simplest possible code, and is relied on today (`reorder` in `src/server/categories/categories.repository.ts`).
 
 Two facts reshape the original driver question:
 
@@ -28,7 +28,7 @@ The question this ADR now answers: given that `db.transaction()` already clears 
 - **Present cost vs. future cost.** The swap is not free — it forces a `uuid` PK migration on any table referenced by an event payload (see below) and gives up interactive transactions everywhere. Paying that now, before any measured pressure, is speculative.
 - **The pooled endpoint.** `DATABASE_URL` already routes through Neon PgBouncer, so the connection-multiplication argument that drove the original decision is mostly pre-answered.
 - **Simplicity of the write path.** Interactive transactions are the more familiar and more capable primitive, and two live sites already depend on statement-to-statement data flow. Giving them up has to buy something measurable.
-- **Reversibility.** Both interactive-tx sites at the time (the Category rename and `reorderCategories`, now in `expenses.repository.ts`) build their statements up front and port cleanly to `db.batch()` if the swap is ever forced. Deferring costs almost nothing to undo.
+- **Reversibility.** Both interactive-tx sites at the time (the Category rename and `reorderCategories`, now `CategoriesRepository.reorder`) build their statements up front and port cleanly to `db.batch()` if the swap is ever forced. Deferring costs almost nothing to undo.
 
 ## Considered Options
 
