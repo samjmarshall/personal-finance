@@ -6,12 +6,24 @@ import type { Expense } from "~/domain/expenses";
 import type { Income } from "~/domain/income";
 import { CommitmentKind } from "~/lib/constants";
 import { fromDateInput } from "~/lib/utils";
-import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { createTestCaller } from "~/server/api/test-caller";
+import { createTRPCRouter } from "~/server/api/trpc";
+import { DrizzleBalancesRepository } from "~/server/balances/balances.repository";
 import { balanceSnapshots } from "~/server/balances/balances.schema";
+import { BalancesService } from "~/server/balances/balances.service";
+import { CashflowService } from "~/server/cashflow/cashflow.service";
+import { cashflowRouter } from "~/server/cashflow/cashflow.trpc.controller";
 import { recordingDb, rowOf } from "~/server/db/recording-db.fake";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
 import { expenses } from "~/server/expenses/expenses.schema";
+import { ExpensesService } from "~/server/expenses/expenses.service";
+import { DrizzleIncomeRepository } from "~/server/income/income.repository";
 import { income } from "~/server/income/income.schema";
-import { cashflowRouter } from "./cashflow";
+import { IncomeService } from "~/server/income/income.service";
+import { DrizzleSettingsRepository } from "~/server/settings/settings.repository";
+import { SettingsService } from "~/server/settings/settings.service";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
+import { TransactionsService } from "~/server/transactions/transactions.service";
 
 // Characterizes the router before it moves to src/server/cashflow/: the SQL it
 // sends and the result it builds must survive the move unchanged.
@@ -117,12 +129,29 @@ function harness(
 		const slot = slotOf(sql);
 		return staged[slot] ?? ROWS[slot];
 	});
-	const caller = createCallerFactory(router)({
-		db,
+	const expenseService = new ExpensesService({
+		repository: new DrizzleExpensesRepository({ db: db as never }),
+	});
+	const service = new CashflowService({
+		transactions: new TransactionsService({
+			repository: new DrizzleTransactionsRepository({ db: db as never }),
+			expenses: expenseService,
+		}),
+		expenses: expenseService,
+		income: new IncomeService({
+			repository: new DrizzleIncomeRepository({ db: db as never }),
+		}),
+		settings: new SettingsService({
+			repository: new DrizzleSettingsRepository({ db: db as never }),
+		}),
+		balances: new BalancesService({
+			repository: new DrizzleBalancesRepository({ db: db as never }),
+		}),
+	});
+	const caller = createTestCaller(router, {
+		services: { cashflow: service },
 		session,
-		services: {},
-		headers: new Headers(),
-	} as never);
+	});
 	return { cashflow: caller.cashflow, queries };
 }
 
@@ -185,11 +214,11 @@ describe("cashflow.get", () => {
 			  },
 			  {
 			    "params": [],
-			    "sql": "select "id", "name", "category", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt" from "expense"",
+			    "sql": "select "id", "name", "category", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt" from "expense" order by "expense"."category" asc, "expense"."sortOrder" asc, "expense"."name" asc",
 			  },
 			  {
 			    "params": [],
-			    "sql": "select "id", "person", "source", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt" from "income"",
+			    "sql": "select "id", "person", "source", "kind", "fortnight", "month", "year", "amount", "expectedDate", "dueDay", "dueMonth", "sortOrder", "createdAt", "updatedAt" from "income" order by "income"."person" asc, "income"."sortOrder" asc, "income"."source" asc",
 			  },
 			  {
 			    "params": [
