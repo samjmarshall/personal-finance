@@ -632,16 +632,16 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
 
 ### Success
 
-- [ ] `make check` passes. `make db_generate` after C2 produces no file.
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] On the branch, `make db_migrate` applies C1 and C2. The Phase 4 migration checks hold.
-- [ ] At https://personal-finance.localhost/transactions:
+- [x] `make check` passes. `make db_generate` after C2 produces no file.
+- [x] `make test` passes
+- [x] `make build` passes
+- [x] On the branch, `make db_migrate` applies C1 and C2. The Phase 4 migration checks hold.
+- [x] At https://personal-finance.localhost/transactions:
   - Linking an Expense in the form locks the Category picker to that Expense's Category. After saving, the list shows that Category.
   - Clearing the Expense pre-fills its Category. After saving, the Transaction keeps it.
   - Linking from the Unplanned page moves the row out of Unplanned. After unlinking (edit form, Expense → None), the row returns to Unplanned under its old Expense's Category.
   - Moving an Expense to another Category changes the Category shown on its linked Transactions.
-- [ ] `/design-review`: the Transactions form, linked and unlinked
+- [x] `/design-review`: the Transactions form, linked and unlinked
 
 ## References
 
