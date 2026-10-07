@@ -13,7 +13,6 @@ export class BalancesService {
 		this.repository = repository;
 	}
 
-	// Newest snapshot anchors the projection; tiebreak id desc for same-asOf rows.
 	async latest(): Promise<BalanceSnapshot | null> {
 		return (await this.repository.findLatest()) ?? null;
 	}

@@ -14,17 +14,15 @@ export class SettingsService {
 		this.repository = repository;
 	}
 
-	// The household payday (YYYY-MM-DD) that seeds fortnight windows. A string,
-	// not a Date: a Date crosses the wire as a UTC instant, and behind-UTC
-	// browsers read it a day early. null when unseeded or malformed, so the
-	// Unplanned picker falls back to month-only instead of erroring.
+	// A YYYY-MM-DD string, not a Date: a Date goes over the wire as UTC and reads a
+	// day early behind UTC. null when unset or invalid, so pickers fall back to month.
 	async fortnightAnchor(): Promise<string | null> {
 		const value = await this.repository.findValue(FORTNIGHT_ANCHOR_KEY);
 		return value && fromDateInput(value) ? value : null;
 	}
 
-	// Upsert, not insert: the seed migration already planted the row. Returns a
-	// string for the same wire reason as fortnightAnchor.
+	// Upsert, not insert: a migration already seeded the row. Returns a string for
+	// the same timezone reason as the read.
 	async setFortnightAnchor(anchor: string): Promise<string> {
 		const row = await this.repository.upsert(FORTNIGHT_ANCHOR_KEY, anchor);
 		return assertRow(row, "set fortnight anchor").value;

@@ -20,6 +20,7 @@ export class DrizzleBalancesRepository implements BalancesRepository {
 		this.db = db;
 	}
 
+	// Newest as-of time wins; an exact tie goes to the last one saved.
 	async findLatest(): Promise<BalanceSnapshot | undefined> {
 		const [row] = await this.db
 			.select()
