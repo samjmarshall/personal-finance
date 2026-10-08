@@ -21,7 +21,7 @@ The tRPC paths (`api.receipt.*`), the HTTP routes and the frozen event names do 
 
 ## Current State
 
-- **Precondition.** The working tree holds an uncommitted step-6 follow-up. It adds migration `drizzle/0017_expense_delete_keeps_category.sql` (a `BEFORE DELETE` trigger on `expense`) and touches `receipts.schema.ts:79` and `routers/receipts.get.test.ts`. It must be committed before Phase 1. Step 7's migrations are therefore `0018` and `0019`.
+- **Precondition.** Met. `drizzle/0017_expense_delete_keeps_category.sql` (a `BEFORE DELETE` trigger on `expense`) landed in 2e229a3, and `0018_rename_category_pkey.sql` in 0fd693f. Step 7's migrations are therefore `0019` and `0020`.
 - **The router** (`src/server/api/routers/receipts.ts`, 352 lines):
   - Imports `drizzle-orm` (`:3-12`), the `api/lib` helpers (`:31-32`), and the schemas of `auth` (`:34`), `categories` (`:35`), `expenses` (`:37`), `receipts` (`:41`) and `transactions` (`:42`). It writes through `commitWithOutbox` (`:40`).
   - `ITEM_FK_CONFLICT_MESSAGE` `:46-49`.
@@ -94,7 +94,7 @@ The tRPC paths (`api.receipt.*`), the HTTP routes and the frozen event names do 
     - takes `outbox: OutboxWriteDoor` (`:33-36`)
     - emits `receipt/email.received` per row
   - `EmailService.ingest` calls it with `currentTraceId()` (`email.service.ts:133-137`).
-  - Repository tests: `email.repository.test.ts:97-150`. Service fake: `email.service.test.ts:128-136`. Trace test: `:399-410`.
+  - Repository tests: `email.repository.test.ts:97-157`. Service fake: `email.service.test.ts:128-136`. Trace test: `:399-410`.
   - The inbound route builds the repository with `outboxService` (`src/app/api/receipts/inbound/route.ts:33-36`). Its test mocks `outbox.module` (`route.test.ts:21`) and `~/server/db` (`:20`).
 - **Allowed senders** live as prefixed files in `src/server/email/`, the last child adr023 no longer allows there:
   - `allowed-sender.{schema,repository,service,trpc.controller}.ts`, each with a test
@@ -124,7 +124,7 @@ The tRPC paths (`api.receipt.*`), the HTTP routes and the frozen event names do 
     - members (`src/server/auth/members.service.ts:17`, string ids)
     - expenses (`expenses.service.ts:61`, `{ name, categoryId }`)
     - categories (`categories.service.ts:82`)
-  - `TransactionsService` has no description lookup and no window scan (`transactions.service.ts:55-172`).
+  - `TransactionsService` has no description lookup and no window scan (`transactions.service.ts:55-169`).
   - `CategoriesService.list` orders by `sortOrder, name` (`categories.repository.ts:42-47`).
   - `posthogTraceUrl(config, traceId)` (`src/lib/posthog-trace-url.ts:12-23`).
 - **Blob store.** `BlobStore { read, write }` (`src/server/blob-store/blob-store.ts:15-24`). The email service uses only `write` (`email.service.ts:184`).
@@ -259,10 +259,10 @@ One test-only commit: `test(receipts): characterize router and routes`. No produ
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] Every procedure has a SQL snapshot and asserts its exact member-facing message
-- [ ] `git diff --stat` touches only `*.test.ts` files
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] Every procedure has a SQL snapshot and asserts its exact member-facing message
+- [x] `git diff --stat` touches only `*.test.ts` files
 
 ## Phase 2: Rename the worker to `ReceiptExtractionService`
 
@@ -319,7 +319,7 @@ One commit: `refactor: shared module files, worker reads Categories via service`
   - The prompt now lists Categories in page order (`sortOrder, name`) instead of heap order.
 - **`receipt-extraction.repository.ts`** — drop `listCategories` from the port and the class (`:34-35`, `:98-102`), and drop the `categories.schema` import (`:4`).
 - **`receipt-extraction.service.test.ts`** — fake `categories.list` instead of the repository's `listCategories` (`:147`). Add one case: the prompt gets the list in the order `list()` gave.
-- **`receipt-extraction.repository.test.ts`** — drop the `listCategories` case.
+- **`receipt-extraction.repository.test.ts`** — drop the `listCategories` case and every trace of the categories table in the fake `db`: the `categories.schema` import (`:4`), the dispatch note (`:18-19`), the `categoryRows` option (`:22`) and its branch (`:48`).
 - **`src/server/inngest/functions.ts`** — pass `categories: categoriesService` from `categories.module`. Update the root comment (`:14-17`): the outbox and categories services come from module files.
 - **`src/server/architecture.test.ts:40`** — delete the entry.
 - **Docs**:
@@ -428,7 +428,7 @@ Implements adr021 (controller naming, `:76`) and adr022 (batched lookups, `:50`;
 - **Wiring** — `services.ts` gains `receipts: receiptsService`. `root.ts:1` imports `receiptRouter` from `~/server/receipts/receipts.trpc.controller`.
 - **Re-point the Phase 1 tests**:
   - The caller becomes `createTestCaller(receiptRouter, { services: { receipts } })`.
-  - `receipts` is a real `ReceiptsService` over real repositories on the same `recordingDb` (`db as never`), including the real members, transactions, expenses and categories services. Its blob store is fake.
+  - `receipts` is a real `ReceiptsService` over real repositories on the same `recordingDb` (`db as never`), including the real members, transactions, expenses and categories services. Its blob store is fake. Its outbox door is a fake `OutboxWriteDoor`, as in Phase 1: `commit` runs `writes` in `db.transaction` and records the events. A real door would add `insert into "outbox"` to the create and retry snapshots.
   - Expected snapshot diffs, and only these:
     - list: joins → batched `user` / `transaction` lookups
     - get: joins → lookups
@@ -503,7 +503,7 @@ One commit: `refactor(receipts): http controller for image and upload routes`, b
     - the span, the logs and the status mapping are unchanged
 - **`receipts.http.controller.test.ts`** (new):
   - fake service and fake `SessionReader`
-  - move the image cases and the upload route cases (`route.test.ts:114-279`) here, with the span exporter (`:80-81`) and the logger fake (`:39-57`)
+  - move the image cases and the upload route cases (`route.test.ts:114-297`) here, with the span exporter (`:80-81`) and the logger fake (`:39-57`)
 - **Routes** — composition roots with a lazy `compose()` memo, as at `inbound/route.ts:24-44`:
   - **`[id]/image/route.ts`**:
     - builds the controller from `receiptsService`, `new BetterAuthSessionReader()` and a logger with `component: "image-route"`
@@ -551,7 +551,7 @@ One commit: `refactor(email): mint receipts through ReceiptsService`, built by t
   - drop `createPendingReceipts`, the `outbox` dep and its field
   - drop the imports at `:3`, `:5`, `:6`, `:7`
   - the port comment becomes "the allowlist read"
-- **`email.repository.test.ts`** — drop `:97-150`.
+- **`email.repository.test.ts`** — drop `:97-157`.
 - **`src/app/api/receipts/inbound/route.ts:33-38`**:
   - `new DrizzleEmailRepository({ db })`
   - add `receipts: receiptsService` from `receipts.module`
@@ -680,7 +680,7 @@ One feature commit: `feat(receipts): linked Expense sets a line item's Category`
 
   Planning counted 0 (2026-10-07).
 - **Migration**:
-  1. **`make db_custom name=clear_linked_receipt_item_category`** → `0018`. It holds data only:
+  1. **`make db_custom name=clear_linked_receipt_item_category`** → `0019`. It holds data only:
 
      ```sql
      -- Pre-flight (<date>): <n> linked line items held their own Category, <d> of
@@ -692,7 +692,7 @@ One feature commit: `feat(receipts): linked Expense sets a line item's Category`
      - import `check` and `sql`
      - add `check("receipt_item_expense_or_category_check", sql\`${t.expenseId} IS NULL OR ${t.categoryId} IS NULL\`)` to the extra-config (`:93`)
      - the `:79` comment becomes: "A linked item has no Category of its own (adr025). Deleting the Expense copies its Category here (trigger, 0017)."
-  3. **`make db_generate`** → `0019`, holding only `ADD CONSTRAINT … CHECK`. Add a header: `-- Rollback: ALTER TABLE "receipt_item" DROP CONSTRAINT "receipt_item_expense_or_category_check";`
+  3. **`make db_generate`** → `0020`, holding only `ADD CONSTRAINT … CHECK`. Add a header: `-- Rollback: ALTER TABLE "receipt_item" DROP CONSTRAINT "receipt_item_expense_or_category_check";`
   4. **`make db_migrate`** on the branch. Verify:
      - the count is 0
      - writing both columns on one row fails with 23514
@@ -702,7 +702,7 @@ One feature commit: `feat(receipts): linked Expense sets a line item's Category`
 - **`ReceiptsRepository`**:
   - replace `setItemExpense` with `findItemLink(itemId): Promise<Pick<ReceiptItem, "expenseId" | "categoryId"> | undefined>` and `setItemLink(itemId, { expenseId, categoryId })`
   - add SQL snapshots
-- **`ReceiptsService`**, as at `transactions.service.ts:34-39,124-172`:
+- **`ReceiptsService`**, as at `transactions.service.ts:34-39,122-168`:
   - **Link:** `setItemExpense(itemId, n)` → `setItemLink(itemId, { expenseId: n, categoryId: null })`.
   - **Unlink:** `setItemExpense(itemId, null)`:
     1. `findItemLink`. A miss → `NotFoundError("Receipt item not found.")`.
@@ -750,10 +750,10 @@ One feature commit: `feat(receipts): linked Expense sets a line item's Category`
 
 ### Success
 
-- [ ] `make check` passes. `make db_generate` after `0019` produces no file.
+- [ ] `make check` passes. `make db_generate` after `0020` produces no file.
 - [ ] `make test` passes
 - [ ] `make build` passes
-- [ ] On the branch, `make db_migrate` applies `0018` and `0019`, and the Phase 9 migration checks hold
+- [ ] On the branch, `make db_migrate` applies `0019` and `0020`, and the Phase 9 migration checks hold
 - [ ] At https://personal-finance.localhost/receipts, on a matched receipt:
   - linking an item to an Expense locks its Category picker to that Expense's Category, with the hint
   - choosing "No expense" keeps that Category, and it can then be changed
@@ -769,8 +769,8 @@ One feature commit: `feat(receipts): linked Expense sets a line item's Category`
   - module files `:381-404`
   - email write `:567-574`
   - linked Expense `:721-748`
-  - testing `:793-795`
-  - docs `:864-866`
+  - testing `:796-798`
+  - docs `:867-868`
 - ADRs:
   - `docs/adr/adr021-*.md` (Proposed) — implemented by Phase 4 (tRPC controller), Phase 5 (`receipts.http.controller.ts`) and Phase 8 (shim retired)
   - `docs/adr/adr022-*.md` (Proposed) — implemented by Phase 3 (worker category read), Phase 4 (batched lookups), Phase 5 (routes without data access), Phase 6 (email write), Phase 7 (email reads the allowlist through its service) and Phase 8 (one write door)
@@ -784,5 +784,5 @@ One feature commit: `feat(receipts): linked Expense sets a line item's Category`
   - `src/server/db/recording-db.fake.ts`
   - `src/test/fakes.ts`
   - `src/server/errors/`
-  - `src/server/transactions/transactions.service.ts:124-172`
+  - `src/server/transactions/transactions.service.ts:122-168`
   - `src/app/(dashboard)/transactions/_components/transaction-form.tsx:96-122`
