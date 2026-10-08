@@ -23,7 +23,11 @@ import {
 	unstaged,
 } from "~/test/fakes";
 import type { ReceiptsRepository } from "./receipts.repository";
-import { ReceiptsService, UploadUnauthorizedError } from "./receipts.service";
+import {
+	ReceiptsService,
+	type StoredBlob,
+	UploadUnauthorizedError,
+} from "./receipts.service";
 
 // No tracer set up means no trace id. Register one to prove it reaches the row.
 const provider = new NodeTracerProvider();
@@ -163,6 +167,62 @@ describe("create", () => {
 			.catch((e: unknown) => e);
 
 		expectPlainError(thrown, "Failed to create receipt.");
+	});
+});
+
+describe("createFromEmail", () => {
+	const BLOBS: StoredBlob[] = [
+		{
+			blobUrl: "https://blob.test/receipts/email/a.pdf",
+			blobPathname: "receipts/email/a.pdf",
+			contentType: "application/pdf",
+		},
+		{
+			blobUrl: "https://blob.test/receipts/email/b.png",
+			blobPathname: "receipts/email/b.png",
+			contentType: "image/png",
+		},
+	];
+
+	it("mints one pending email row per blob, firing receipt/email.received, and returns the ids in order", async () => {
+		const { method, calls } = recorder([
+			{ ...RECEIPT, id: 11 },
+			{ ...RECEIPT, id: 12 },
+		]);
+		const service = serviceWith({ repository: { insertPending: method } });
+
+		const { traceId, result } = inSpan(() =>
+			service.createFromEmail("member-1", BLOBS),
+		);
+
+		await expect(result).resolves.toEqual([11, 12]);
+		expect(calls).toEqual([
+			[
+				BLOBS.map((blob) => ({
+					userId: "member-1",
+					channel: ReceiptChannel.Email,
+					...blob,
+					traceId,
+				})),
+				"receipt/email.received",
+			],
+		]);
+	});
+
+	// The worker continues this trace (adr016), so the row must store the live one.
+	it("stores the active span's trace id on the minted receipt", async () => {
+		const { method, calls } = recorder([RECEIPT]);
+		const service = serviceWith({ repository: { insertPending: method } });
+		const span = trace.getTracer("test").startSpan("email.inbound");
+
+		await context.with(trace.setSpan(context.active(), span), () =>
+			service.createFromEmail("member-1", BLOBS.slice(0, 1)),
+		);
+		span.end();
+
+		expect(calls[0]?.[0]).toMatchObject([
+			{ traceId: span.spanContext().traceId },
+		]);
 	});
 });
 

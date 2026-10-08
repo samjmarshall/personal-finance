@@ -55,6 +55,13 @@ const ITEM_FK_CONFLICT_MESSAGE =
 
 export type ReceiptImage = StreamedBlob;
 
+/** Blob columns for a row about to be minted; the store has already accepted the write. */
+export interface StoredBlob {
+	blobUrl: string;
+	blobPathname: string;
+	contentType: string;
+}
+
 const distinctIds = <T>(ids: (T | null)[]) => [
 	...new Set(ids.filter((id): id is T => id !== null)),
 ];
@@ -125,6 +132,26 @@ export class ReceiptsService {
 			"receipt/uploaded",
 		);
 		return assertRow(row, "create receipt");
+	}
+
+	// The frozen payload carries only a receiptId, so the row must exist before the
+	// event fires — which is what makes the event a function of the write's result.
+	// Blobs were written before this transaction, so a rolled-back commit leaves an
+	// orphan blob: the same trade the receipt delete path already makes.
+	async createFromEmail(
+		memberId: string,
+		blobs: StoredBlob[],
+	): Promise<number[]> {
+		const rows = await this.repository.insertPending(
+			blobs.map((blob) => ({
+				userId: memberId,
+				channel: ReceiptChannel.Email,
+				...blob,
+				traceId: currentTraceId(),
+			})),
+			"receipt/email.received",
+		);
+		return rows.map((row) => row.id);
 	}
 
 	// Status and "unmatched only" stack. Kept apart so a matched receipt can still

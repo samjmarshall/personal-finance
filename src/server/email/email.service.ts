@@ -5,9 +5,12 @@ import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import type { Logger } from "~/server/observability/logging/logger";
 import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
-import { currentTraceId } from "~/server/observability/tracing/current-trace-id";
+import type {
+	ReceiptsService,
+	StoredBlob,
+} from "~/server/receipts/receipts.service";
 import type { InboundMailbox } from "./email.mailbox";
-import type { EmailRepository, StoredBlob } from "./email.repository";
+import type { EmailRepository } from "./email.repository";
 
 /** Bare lower-cased address, matching the shape the allowlist stores. */
 export function parseFromAddress(from: string): string {
@@ -70,6 +73,7 @@ export type IngestResult =
 
 interface EmailServiceDeps {
 	repository: EmailRepository;
+	receipts: Pick<ReceiptsService, "createFromEmail">;
 	mailbox: InboundMailbox;
 	blobStore: Pick<BlobStore, "write">;
 	logger: Logger;
@@ -78,12 +82,20 @@ interface EmailServiceDeps {
 /** Application tier for the Resend inbound webhook: allowlist gate, blob, mint. */
 export class EmailService {
 	private readonly repository: EmailRepository;
+	private readonly receipts: Pick<ReceiptsService, "createFromEmail">;
 	private readonly mailbox: InboundMailbox;
 	private readonly blobStore: Pick<BlobStore, "write">;
 	private readonly logger: Logger;
 
-	constructor({ repository, mailbox, blobStore, logger }: EmailServiceDeps) {
+	constructor({
+		repository,
+		receipts,
+		mailbox,
+		blobStore,
+		logger,
+	}: EmailServiceDeps) {
 		this.repository = repository;
+		this.receipts = receipts;
 		this.mailbox = mailbox;
 		this.blobStore = blobStore;
 		this.logger = logger;
@@ -130,10 +142,9 @@ export class EmailService {
 					return { status: "empty" };
 				}
 
-				const receiptIds = await this.repository.createPendingReceipts(
+				const receiptIds = await this.receipts.createFromEmail(
 					sender.userId,
 					stored,
-					currentTraceId(),
 				);
 				this.logger.info("inbound email ingested", {
 					"email.id": event.data.email_id,

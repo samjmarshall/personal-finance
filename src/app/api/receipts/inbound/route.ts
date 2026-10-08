@@ -9,7 +9,7 @@ import { DrizzleEmailRepository } from "~/server/email/email.repository";
 import { EmailService } from "~/server/email/email.service";
 import { createRootLogger } from "~/server/observability/logging/logger";
 import { withFlush } from "~/server/observability/sdk/flush";
-import { outboxService } from "~/server/outbox/outbox.module";
+import { receiptsService } from "~/server/receipts/receipts.module";
 
 const rootLogger = createRootLogger().with({ domain: "email" });
 
@@ -30,10 +30,8 @@ function compose(apiKey: string, webhookSecret: string): EmailHttpController {
 		resend,
 		webhookSecret,
 		service: new EmailService({
-			repository: new DrizzleEmailRepository({
-				db,
-				outbox: outboxService,
-			}),
+			repository: new DrizzleEmailRepository({ db }),
+			receipts: receiptsService,
 			mailbox: new ResendInboundMailbox({ resend }),
 			blobStore: new VercelBlobStore(),
 			logger: rootLogger.with({ component: "service" }),

@@ -1,26 +1,12 @@
-import { context, trace } from "@opentelemetry/api";
-import {
-	InMemorySpanExporter,
-	SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { InboundEmailEvent } from "~/domain/email";
 import type {
 	LogAttributes,
 	Logger,
 } from "~/server/observability/logging/logger";
+import type { StoredBlob } from "~/server/receipts/receipts.service";
 import type { AttachmentDownload, EmailBody } from "./email.mailbox";
-import type { EmailRepository, StoredBlob } from "./email.repository";
+import type { EmailRepository } from "./email.repository";
 import {
 	EmailService,
 	emailBlobPathname,
@@ -32,18 +18,6 @@ import {
 const SENDER_USER_ID = "user-1";
 
 type LogEntry = { level: string; msg: string; attrs: LogAttributes };
-
-// The service tags the minted ids onto whatever span is active and runs the mint
-// inside member.id baggage; both are no-ops with no SDK registered, so register one
-// to prove the wiring is live.
-const exporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider({
-	spanProcessors: [new SimpleSpanProcessor(exporter)],
-});
-
-beforeAll(() => provider.register());
-afterAll(() => provider.shutdown());
-beforeEach(() => exporter.reset());
 
 describe("parseFromAddress", () => {
 	// The stored allowlist is lower-cased and bare, so the parsed sender has to land
@@ -122,16 +96,14 @@ function harness({
 	attachments?: AttachmentDownload[];
 	email?: EmailBody;
 } = {}) {
-	const created: {
-		userId: string;
-		blobs: StoredBlob[];
-		traceId: string | null;
-	}[] = [];
+	const created: { userId: string; blobs: StoredBlob[] }[] = [];
 
 	const repository: EmailRepository = {
 		findAllowedSender: async () => allowlist[0],
-		createPendingReceipts: async (userId, blobs, traceId) => {
-			created.push({ userId, blobs, traceId });
+	};
+	const receipts = {
+		createFromEmail: async (userId: string, blobs: StoredBlob[]) => {
+			created.push({ userId, blobs });
 			return blobs.map((_, i) => i + 1);
 		},
 	};
@@ -162,7 +134,13 @@ function harness({
 	};
 
 	return {
-		service: new EmailService({ repository, mailbox, blobStore, logger }),
+		service: new EmailService({
+			repository,
+			receipts,
+			mailbox,
+			blobStore,
+			logger,
+		}),
 		mailbox,
 		blobStore,
 		created,
@@ -239,8 +217,6 @@ describe("EmailService.ingest", () => {
 		expect(h.created).toEqual([
 			{
 				userId: SENDER_USER_ID,
-				// No span active in this test, so the persisted id is null.
-				traceId: null,
 				blobs: [
 					{
 						blobUrl: expect.stringContaining("receipts/email/"),
@@ -394,19 +370,6 @@ describe("EmailService.ingest", () => {
 		const ingested = h.logs.find((l) => l.msg === "inbound email ingested");
 		expect(ingested?.level).toBe("info");
 		expect(ingested?.attrs["receipt.ids"]).toEqual([1]);
-	});
-
-	// The worker continues this trace (adr016), so the row must store the live one.
-	it("stores the active span's trace id on the minted receipt", async () => {
-		const h = harness({ email: { html: "<p>Total $9</p>", text: null } });
-		const span = trace.getTracer("test").startSpan("email.inbound");
-
-		await context.with(trace.setSpan(context.active(), span), () =>
-			h.service.ingest(event()),
-		);
-		span.end();
-
-		expect(h.created[0]?.traceId).toBe(span.spanContext().traceId);
 	});
 
 	// html carries the line-item table; text is the flattened fallback the sender's

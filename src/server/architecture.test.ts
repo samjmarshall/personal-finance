@@ -36,10 +36,7 @@ const EXEMPT = [
 ];
 
 // Shrink-only: each migration step deletes the entries it clears.
-const TODO = [
-	"1 src/server/email/email.repository.ts → ~/server/receipts/receipts.schema",
-	"5 src/server/outbox/index.ts → ./outbox.module",
-];
+const TODO = ["5 src/server/outbox/index.ts → ./outbox.module"];
 
 // Also catches `from "…"` inside comments; a false hit fails loudly, a strict
 // parse could miss a real one.

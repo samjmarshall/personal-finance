@@ -18,7 +18,7 @@ vi.mock("~/env", () => ({
 	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/outbox/outbox.module", () => ({ outboxService: {} }));
+vi.mock("~/server/receipts/receipts.module", () => ({ receiptsService: {} }));
 vi.mock("resend", () => ({
 	Resend: class {
 		readonly apiKey: string;

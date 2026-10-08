@@ -569,11 +569,12 @@ One commit: `refactor(email): mint receipts through ReceiptsService`, built by t
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] `src/server/architecture.test.ts` passes. Its to-do list holds only the rule-5 shim entry.
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes (ran `pnpm run build`; `make build` wipes the running dev server's `.next`)
+- [x] `src/server/architecture.test.ts` passes. Its to-do list holds only the rule-5 shim entry.
 - [ ] An email from an allowed sender with a PDF creates one pending receipt that extracts. Use the existing inbound flow from `docs/feature/` on the preview, or a signed fixture POST locally.
+  - not run locally: the flow fetches the mail body from Resend, so it needs a real inbound email on the preview. Unit tests cover the wiring (`createFromEmail` → `insertPending`, `EmailService` → `createFromEmail`).
 
 ## Phase 7: Allowed senders become their own domain
 
