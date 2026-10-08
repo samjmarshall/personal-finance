@@ -186,7 +186,6 @@ describe("receipt.retry", () => {
 });
 
 describe("receipt.delete", () => {
-	// The three statements delete runs, told apart by their text.
 	function deleteDb({
 		pathname,
 		duplicateId,
@@ -207,6 +206,11 @@ describe("receipt.delete", () => {
 
 	it("removes the row then best-effort deletes the stored blob pathname", async () => {
 		const { db, queries } = deleteDb({ pathname: "receipt-abc.jpg" });
+		// Noted, not asserted, here: delete swallows anything the blob call throws.
+		let rowGoneFirst = false;
+		del.mockImplementationOnce(async () => {
+			rowGoneFirst = queries.some((q) => q.sql.startsWith("delete"));
+		});
 
 		const result = await caller(db).delete({ id: 3 });
 
@@ -237,6 +241,7 @@ describe("receipt.delete", () => {
 			]
 		`);
 		expect(del).toHaveBeenCalledWith("receipt-abc.jpg");
+		expect(rowGoneFirst).toBe(true);
 		expect(result).toEqual({ success: true });
 	});
 
@@ -248,6 +253,7 @@ describe("receipt.delete", () => {
 			success: true,
 		});
 		expect(queries.some((q) => q.sql.startsWith("delete"))).toBe(true);
+		expect(del).toHaveBeenCalledWith("x.jpg");
 	});
 
 	it("blocks with CONFLICT (row kept) when duplicate copies still reference it", async () => {

@@ -116,6 +116,7 @@ describe("receipt.get", () => {
 			  "select "receipt_item"."id", "receipt_item"."receiptId", "receipt_item"."name", "receipt_item"."price", "receipt_item"."quantity", "receipt_item"."expenseId", "receipt_item"."categoryId", "receipt_item"."createdAt", "receipt_item"."updatedAt", "expense"."name", "category"."name" from "receipt_item" left join "expense" on "receipt_item"."expenseId" = "expense"."id" left join "category" on "receipt_item"."categoryId" = "category"."id" where "receipt_item"."receiptId" = $1 order by "receipt_item"."id" asc",
 			]
 		`);
+		expect(queries.map((q) => q.params)).toEqual([[3], [3]]);
 	});
 
 	it("returns an item's category name when it has one", async () => {

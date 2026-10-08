@@ -56,7 +56,6 @@ const input = {
 	contentType: "image/jpeg",
 };
 
-// The insert echoes back the row it was handed, with the id the database mints.
 function createDb(id: number) {
 	return recordingDb((query) =>
 		query.sql.startsWith("insert into")

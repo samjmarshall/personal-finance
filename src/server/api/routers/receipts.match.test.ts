@@ -1,3 +1,4 @@
+import type { TRPCError } from "@trpc/server";
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -130,14 +131,17 @@ describe("receipt.confirmMatch", () => {
 		});
 	});
 
-	it("leaves a non-SQLSTATE failure a 500, not a CONFLICT", async () => {
-		const { db } = updateDb("receipt", {
-			throws: new Error("connection lost"),
-		});
+	it("leaves a non-SQLSTATE failure a 500 that keeps the driver error", async () => {
+		const driverError = new Error("connection lost");
+		const { db } = updateDb("receipt", { throws: driverError });
 
-		await expect(
-			caller(db).confirmMatch({ receiptId: 3, transactionId: 77 }),
-		).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+		const thrown = await caller(db)
+			.confirmMatch({ receiptId: 3, transactionId: 77 })
+			.catch((error: unknown) => error);
+
+		expect(thrown).toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+		// tRPC wraps the query error, which wraps the driver's.
+		expect((thrown as TRPCError).cause?.cause).toBe(driverError);
 	});
 
 	it("404s with the exact message when the receipt is gone", async () => {
@@ -264,8 +268,7 @@ describe("receipt.setItemCategory", () => {
 	});
 });
 
-// matchCandidates runs two selects: the receipt's match input, then the windowed
-// transactions leftJoined to receipts (the linked flag).
+// The last column flags a transaction that already has a receipt.
 const TX_FIELDS = ["id", "description", "amount", "date", "linkedReceiptId"];
 
 function matchDb(
@@ -323,6 +326,7 @@ describe("receipt.matchCandidates", () => {
 			  "select "transaction"."id", "transaction"."description", "transaction"."amount", "transaction"."date", "receipt"."id" from "transaction" left join "receipt" on "receipt"."transactionId" = "transaction"."id" where ("transaction"."date" >= $1 and "transaction"."date" < $2)",
 			]
 		`);
+		expect(queries[0]?.params).toEqual([3]);
 	});
 
 	it("scans the half-open [from, to) window around the receipt date", async () => {

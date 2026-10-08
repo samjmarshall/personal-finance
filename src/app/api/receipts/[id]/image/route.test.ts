@@ -6,12 +6,14 @@ import { type RecordedQuery, recordingDb } from "~/server/db/recording-db.fake";
 // back with inert headers. Auth, the db and Blob are stubbed so this stays a unit
 // over that job.
 const { getSession } = vi.hoisted(() => ({
-	getSession: vi.fn<() => Promise<{ user: { id: string } } | null>>(),
+	getSession:
+		vi.fn<
+			(opts: { headers: Headers }) => Promise<{ user: { id: string } } | null>
+		>(),
 }));
 vi.mock("~/server/auth", () => ({ auth: { api: { getSession } } }));
 
-// `vi.mock` hoists above module-level consts, so the db lives in a hoisted holder
-// the tests reset. Every test sets `row` to the pathname the select should find.
+// Mocks run before top-level consts, so the db sits in a hoisted holder each test resets.
 const store = vi.hoisted(() => ({
 	row: undefined as string | undefined,
 	db: undefined as unknown,
@@ -28,7 +30,10 @@ vi.mock("@vercel/blob", () => ({ get }));
 
 const { GET } = await import("./route");
 
-const request = () => new Request("https://ledger.test/api/receipts/3/image");
+const request = () =>
+	new Request("https://ledger.test/api/receipts/3/image", {
+		headers: { cookie: "session=abc" },
+	});
 const call = (id: string) =>
 	GET(request(), { params: Promise.resolve({ id }) });
 
@@ -73,10 +78,19 @@ describe("GET /api/receipts/[id]/image", () => {
 		expect(get).not.toHaveBeenCalled();
 	});
 
+	it("reads the session from the request's own cookies", async () => {
+		await call("3");
+
+		expect(getSession.mock.calls[0]?.[0].headers.get("cookie")).toBe(
+			"session=abc",
+		);
+	});
+
 	it("404s a non-numeric id without touching the db", async () => {
 		const response = await call("abc");
 
 		expect(response.status).toBe(404);
+		await expect(response.text()).resolves.toBe("Not found");
 		expect(store.queries).toEqual([]);
 		expect(get).not.toHaveBeenCalled();
 	});
@@ -87,6 +101,7 @@ describe("GET /api/receipts/[id]/image", () => {
 		const response = await call("3");
 
 		expect(response.status).toBe(404);
+		await expect(response.text()).resolves.toBe("Not found");
 		expect(store.queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
 			  "select "blobPathname" from "receipt" where "receipt"."id" = $1",
@@ -105,6 +120,7 @@ describe("GET /api/receipts/[id]/image", () => {
 		const response = await call("3");
 
 		expect(response.status).toBe(404);
+		await expect(response.text()).resolves.toBe("Not found");
 	});
 
 	it("streams the private blob under its type with inert, uncacheable headers", async () => {
