@@ -11,6 +11,7 @@ const RULES = {
 	2: "a non-composition-root imports another domain's repository",
 	3: "an entry point does data access",
 	4: "the relational db.query API reaches every domain's tables",
+	5: "a non-composition-root imports a shared module instance",
 } as const;
 
 type Rule = keyof typeof RULES;
@@ -45,6 +46,7 @@ const TODO = [
 	"3 src/server/api/routers/receipts.ts → ~/server/transactions/transactions.schema",
 	"3 src/app/api/receipts/[id]/image/route.ts → drizzle-orm",
 	"3 src/app/api/receipts/[id]/image/route.ts → ~/server/receipts/receipts.schema",
+	"5 src/server/outbox/index.ts → ./outbox.module",
 ];
 
 // Also catches `from "…"` inside comments; a false hit fails loudly, a strict
@@ -88,6 +90,7 @@ function ruleBroken(file: string, specifier: string): Rule | undefined {
 	) {
 		return 2;
 	}
+	if (target.endsWith(".module") && !isCompositionRoot(file)) return 5;
 	const isController =
 		file.endsWith(".controller.ts") ||
 		file.startsWith("src/server/api/routers/");
@@ -187,6 +190,18 @@ describe("architecture (adr022)", () => {
 			const source = 'import { R } from "~/server/outbox/outbox.repository";';
 			expect(rulesIn("src/server/inngest/functions.ts", source)).toEqual([]);
 			expect(rulesIn("src/server/email/email.service.ts", source)).toEqual([2]);
+		});
+
+		it("lets only a composition root or module import a module", () => {
+			const source =
+				'import { c } from "~/server/categories/categories.module";';
+			expect(rulesIn("src/server/api/services.ts", source)).toEqual([]);
+			expect(
+				rulesIn("src/server/transactions/transactions.module.ts", source),
+			).toEqual([]);
+			expect(
+				rulesIn("src/server/receipts/receipt-extraction.service.ts", source),
+			).toEqual([5]);
 		});
 
 		it("flags drizzle-orm/* in a controller, not better-auth's drizzle adapter", () => {
