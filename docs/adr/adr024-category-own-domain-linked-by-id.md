@@ -1,7 +1,7 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-10-06'
+Date: '2026-10-08'
 # prettier-ignore
 ---
 
@@ -71,7 +71,7 @@ Specifics that bind:
 - **A rename writes one row.** No cross-domain write, no event, no stale names.
 - **The database guards filing.** An Expense cannot point at a missing Category, which the name text never enforced.
 - **`expenses/` holds only Expense code.** The folder, kernel and glossary agree.
-- **The receipts worker reads categories directly** through a narrow port on `CategoriesService`, not through expenses.
+- **The receipts worker reads categories directly** through a narrow port on `CategoriesService`, not through expenses. Done in step 7: `ReceiptExtractionService` takes `categories: Pick<CategoriesService, "list">`.
 
 ### Negative Consequences
 

@@ -26,6 +26,7 @@ import {
 import type { ExtractionCategory, ReceiptExtraction } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import type { FetchedBlob } from "~/server/blob-store/blob-store";
+import type { CategoriesService } from "~/server/categories/categories.service";
 import type {
 	LogAttributes,
 	Logger,
@@ -144,7 +145,6 @@ function harness(
 			log.push("markDuplicate");
 			calls.markDuplicate.push({ id, duplicateOfId });
 		},
-		listCategories: async () => opts.categories ?? [],
 		saveExtraction: async (id, values, items) => {
 			log.push("saveExtraction");
 			calls.saveExtraction.push({ id, values, items });
@@ -153,6 +153,17 @@ function harness(
 			log.push("markFailed");
 			calls.markFailed.push({ id, error });
 		},
+	};
+	// Padded to full Category rows, so a test can see the service trim them to { id, name }.
+	const categories: Pick<CategoriesService, "list"> = {
+		list: async () =>
+			(opts.categories ?? []).map((c) => ({
+				...c,
+				description: null,
+				sortOrder: 0,
+				createdAt: new Date(),
+				updatedAt: null,
+			})),
 	};
 	const blobStore = {
 		read: vi.fn(async () => opts.blob ?? okBlob),
@@ -178,6 +189,7 @@ function harness(
 	};
 	const service = new ReceiptExtractionService({
 		repository,
+		categories,
 		blobStore,
 		languageModel: opts.languageModel ?? ({} as LanguageModel),
 		logger,
@@ -274,6 +286,27 @@ describe("ReceiptExtractionService.process", () => {
 		);
 		expect(h.calls.saveExtraction).toHaveLength(1);
 		expect(h.calls.saveExtraction[0]?.values.vendor).toBe("Corner Grocer");
+	});
+
+	it("hands the model the Categories as { id, name }, in the order list() gave", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			categories: [
+				{ id: 9, name: "Household" },
+				{ id: 7, name: "Groceries" },
+			],
+		});
+
+		await h.service.process(1);
+
+		expect(h.analyze).toHaveBeenCalledWith(
+			expect.objectContaining({
+				categories: [
+					{ id: 9, name: "Household" },
+					{ id: 7, name: "Groceries" },
+				],
+			}),
+		);
 	});
 
 	it("nulls a category id the model invented instead of failing the whole extraction", async () => {

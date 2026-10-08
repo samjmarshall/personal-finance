@@ -20,6 +20,7 @@ import {
 import { ReceiptStatus } from "~/lib/constants";
 import { bareMediaType } from "~/lib/utils";
 import type { BlobStore } from "~/server/blob-store/blob-store";
+import type { CategoriesService } from "~/server/categories/categories.service";
 import type {
 	LogAttributes,
 	Logger,
@@ -218,6 +219,7 @@ export interface ErrorReporter {
 
 interface ReceiptExtractionServiceDeps {
 	repository: ReceiptExtractionRepository;
+	categories: Pick<CategoriesService, "list">;
 	blobStore: BlobStore;
 	// The provider is bound once in the composition root (functions.ts), so this tier
 	// never touches `~/env` or `~/server/aws/bedrock` — see bedrock-invocation.md.
@@ -232,6 +234,7 @@ interface ReceiptExtractionServiceDeps {
  */
 export class ReceiptExtractionService {
 	private readonly repository: ReceiptExtractionRepository;
+	private readonly categories: Pick<CategoriesService, "list">;
 	private readonly blobStore: BlobStore;
 	private readonly languageModel: LanguageModel;
 	private readonly logger: Logger;
@@ -239,12 +242,14 @@ export class ReceiptExtractionService {
 
 	constructor({
 		repository,
+		categories,
 		blobStore,
 		languageModel,
 		logger,
 		errorReporter,
 	}: ReceiptExtractionServiceDeps) {
 		this.repository = repository;
+		this.categories = categories;
 		this.blobStore = blobStore;
 		this.languageModel = languageModel;
 		this.logger = logger;
@@ -387,7 +392,9 @@ export class ReceiptExtractionService {
 		bytes: Uint8Array,
 		mediaType: string,
 	): Promise<void> {
-		const categories = await this.repository.listCategories();
+		const categories: ExtractionCategory[] = (await this.categories.list()).map(
+			({ id, name }) => ({ id, name }),
+		);
 		const extracted = await this.analyzeReceipt({
 			categories,
 			bytes,

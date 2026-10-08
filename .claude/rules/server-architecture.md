@@ -28,7 +28,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 | `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptExtractionService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
-| `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. `outbox.module.ts` exports `outboxService`. | —                                  |
+| `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. Each exports one instance: `outbox.module.ts`, `categories.module.ts`, `expenses.module.ts`, `transactions.module.ts`, `auth/members.module.ts`. | —                                  |
 | `src/server/observability/`         | shared adapter | Shared observability provider, split OTel API vs SDK. API side (tiers may import): `logging/` (`Logger` port + `OtelLogger`), `tracing/` (`withSpan`, baggage, trace id, trace carrier), `errors/` (`captureException`, `reportError`, thrown-value helpers). SDK side: `sdk/` (boot `otel.ts`, sampler, `SpanAttributeProcessor`, prompt redaction, flush) — imported only by `instrumentation.ts`, route roots (`withFlush`) and test harnesses, never a tier. Framework adapters live with their consumer (`TracingMiddleware` in `src/server/inngest/middleware.ts`). Like `blob-store/` — lives outside any domain. | OTel SDK + PostHog SDKs            |
 
 A domain with no tables, such as `cashflow/`, has no repository: its service
@@ -73,7 +73,8 @@ only once every link to it is an id.
   attaches them as `ctx.services`. No service may throw on a missing env var, because
   the build loads that file. Services hold no per-request state: session values go in
   as `memberId` arguments, and only to methods that read them. A `*.module.ts` exists
-  only when two or more composition roots need the same instance.
+  only when two or more composition roots (or another module) need the same instance;
+  `services.ts` imports those shared instances instead of building them.
 - **Worker root is `src/server/inngest/functions.ts`.** Real
   `db`, `inngest`, and provider SDKs (Bedrock via `~/env`) are touched only there —
   see `bedrock-invocation.md`. A controller exposes `get functions()`; the root

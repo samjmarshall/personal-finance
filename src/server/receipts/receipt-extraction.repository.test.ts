@@ -1,7 +1,6 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
-import { categories } from "~/server/categories/categories.schema";
 import {
 	DrizzleReceiptExtractionRepository,
 	type ReceiptRow,
@@ -15,15 +14,7 @@ const render = (cond: unknown) =>
 
 // Chain-capturing fake db (mirrors outbox.repository.test.ts): selects resolve to the
 // staged rows and capture their WHERE; every `set()`/`values()` write is recorded.
-// Selects dispatch on the table object: categories are awaited straight off `.from()`
-// (no where), receipts always go through `.where()`.
-function harness({
-	rows = [],
-	categoryRows = [],
-}: {
-	rows?: unknown[];
-	categoryRows?: { id: number; name: string }[];
-} = {}) {
+function harness({ rows = [] }: { rows?: unknown[] } = {}) {
 	let selectWhere: unknown;
 	let transactions = 0;
 	const updates: {
@@ -44,15 +35,12 @@ function harness({
 
 	const db = {
 		select: () => ({
-			from: (table: unknown) => {
-				if (table === categories) return Promise.resolve(categoryRows);
-				return {
-					where: (cond: unknown) => {
-						selectWhere = cond;
-						return Promise.resolve(rows);
-					},
-				};
-			},
+			from: () => ({
+				where: (cond: unknown) => {
+					selectWhere = cond;
+					return Promise.resolve(rows);
+				},
+			}),
 		}),
 		update: mkUpdate,
 		transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
@@ -151,17 +139,6 @@ describe("DrizzleReceiptExtractionRepository", () => {
 				status: ReceiptStatus.Duplicate,
 				duplicateOfId: 42,
 			});
-		});
-	});
-
-	describe("listCategories", () => {
-		it("returns id + name for every category", async () => {
-			const categoryRows = [{ id: 7, name: "Groceries" }];
-			const h = harness({ categoryRows });
-
-			await expect(h.repository.listCategories()).resolves.toEqual(
-				categoryRows,
-			);
 		});
 	});
 

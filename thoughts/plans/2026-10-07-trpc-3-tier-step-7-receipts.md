@@ -331,11 +331,11 @@ One commit: `refactor: shared module files, worker reads Categories via service`
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes. Module load throws on no missing env var.
-- [ ] No file but a composition root or a module imports a `*.module.ts` (`grep -rn "\.module\"" src`)
-- [ ] `/security-review`: `src/server/auth/members.module.ts`
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes. Module load throws on no missing env var.
+- [x] No file but a composition root or a module imports a `*.module.ts` (`grep -rn "\.module\"" src`). The shim `src/server/outbox/index.ts` still hits until Phase 8 deletes it.
+- [x] `/security-review`: `src/server/auth/members.module.ts`. No findings.
 
 ## Phase 4: Member-facing `ReceiptsService` and the tRPC controller
 

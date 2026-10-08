@@ -1,7 +1,5 @@
 import { and, eq, ne } from "drizzle-orm";
-import type { ExtractionCategory } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
-import { categories } from "~/server/categories/categories.schema";
 import type { db as realDb } from "~/server/db";
 import { receiptItems, receipts } from "./receipts.schema";
 
@@ -31,8 +29,6 @@ export interface ReceiptExtractionRepository {
 	): Promise<{ id: number } | undefined>;
 	/** status → duplicate, pointing at the original. */
 	markDuplicate(id: number, duplicateOfId: number): Promise<void>;
-	/** Reads the Categories table directly: a known adr022 breach, fixed in step 7. */
-	listCategories(): Promise<ExtractionCategory[]>;
 	/** status → processed + line items, in one transaction. */
 	saveExtraction(
 		id: number,
@@ -95,12 +91,6 @@ export class DrizzleReceiptExtractionRepository
 			.update(receipts)
 			.set({ status: ReceiptStatus.Duplicate, duplicateOfId })
 			.where(eq(receipts.id, id));
-	}
-
-	async listCategories(): Promise<ExtractionCategory[]> {
-		return this.db
-			.select({ id: categories.id, name: categories.name })
-			.from(categories);
 	}
 
 	async saveExtraction(
