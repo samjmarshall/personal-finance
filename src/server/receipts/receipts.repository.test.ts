@@ -35,7 +35,7 @@ function harness(respond?: Respond) {
 	};
 }
 
-// Pins the $defaultFn / $onUpdate timestamps drizzle adds to writes.
+// Fixed clock so auto-set timestamps stay stable in snapshots.
 const NOW = new Date("2026-09-29T00:00:00.000Z");
 
 const RECEIPT_COLUMNS = Object.keys(getTableColumns(receipts));
@@ -182,6 +182,40 @@ describe("findAll", () => {
 			      "failed",
 			    ],
 			    "sql": "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" where ("receipt"."status" = $1 and "receipt"."transactionId" is null) order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  },
+			]
+		`);
+	});
+
+	it("narrows by status alone", async () => {
+		const { repository, queries } = harness(() => []);
+
+		await repository.findAll({ status: ReceiptStatus.Failed });
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "failed",
+			    ],
+			    "sql": "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" where "receipt"."status" = $1 order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  },
+			]
+		`);
+	});
+
+	it("narrows to unmatched rows alone", async () => {
+		const { repository, queries } = harness(() => []);
+
+		await repository.findAll({ unmatchedOnly: true });
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [],
+			    "sql": "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" where "receipt"."transactionId" is null order by "receipt"."createdAt" desc, "receipt"."id" desc",
 			  },
 			]
 		`);
@@ -497,6 +531,25 @@ describe("setItemExpense", () => {
 			]
 		`);
 	});
+
+	it("unlinks the Expense with null", async () => {
+		const { repository, queries } = harness(() => [rowOf(ITEM_COLUMNS, ITEM)]);
+
+		await expect(repository.setItemExpense(5, null)).resolves.toEqual(ITEM);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      null,
+			      "2026-09-29T00:00:00.000Z",
+			      5,
+			    ],
+			    "sql": "update "receipt_item" set "expenseId" = $1, "updatedAt" = $2 where "receipt_item"."id" = $3 returning "id", "receiptId", "name", "price", "quantity", "expenseId", "categoryId", "createdAt", "updatedAt"",
+			  },
+			]
+		`);
+	});
 });
 
 describe("setItemCategory", () => {
@@ -515,6 +568,25 @@ describe("setItemCategory", () => {
 			    "method": "all",
 			    "params": [
 			      3,
+			      "2026-09-29T00:00:00.000Z",
+			      5,
+			    ],
+			    "sql": "update "receipt_item" set "categoryId" = $1, "updatedAt" = $2 where "receipt_item"."id" = $3 returning "id", "receiptId", "name", "price", "quantity", "expenseId", "categoryId", "createdAt", "updatedAt"",
+			  },
+			]
+		`);
+	});
+
+	it("unlinks the Category with null", async () => {
+		const { repository, queries } = harness(() => [rowOf(ITEM_COLUMNS, ITEM)]);
+
+		await expect(repository.setItemCategory(5, null)).resolves.toEqual(ITEM);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      null,
 			      "2026-09-29T00:00:00.000Z",
 			      5,
 			    ],

@@ -64,6 +64,15 @@ describe("receipt router", () => {
 		expect(calls).toEqual([["member-1", UPLOAD]]);
 	});
 
+	it("create drops an owner sent in the input", async () => {
+		const { method, calls } = recorder(RECEIPT);
+		const forged = { ...UPLOAD, userId: "member-2" };
+
+		await callerWith({ create: method }).receipt.create(forged);
+
+		expect(calls).toEqual([["member-1", UPLOAD]]);
+	});
+
 	it("list hands the service the filter", async () => {
 		const { method, calls } = recorder([]);
 		const filter = { status: ReceiptStatus.Failed, unmatchedOnly: true };
