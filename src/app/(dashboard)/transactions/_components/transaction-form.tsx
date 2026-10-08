@@ -196,7 +196,10 @@ export function TransactionForm({
 						/>
 					</Field>
 					<Field>
-						<FieldLabel htmlFor="tx-group">Group</FieldLabel>
+						<FieldLabel htmlFor="tx-group">
+							Group
+							<FieldOptional />
+						</FieldLabel>
 						<Input
 							id="tx-group"
 							onChange={(e) => setGroup(e.target.value)}
@@ -232,7 +235,7 @@ export function TransactionForm({
 							readOnly={expenseId !== null}
 							value={shownCategoryId ? String(shownCategoryId) : ""}
 						/>
-						<FieldDescription id="tx-category-hint">
+						<FieldDescription aria-live="polite" id="tx-category-hint">
 							{categoryHint}
 						</FieldDescription>
 					</Field>
@@ -264,6 +267,7 @@ export function TransactionForm({
 							<FieldOptional />
 						</FieldLabel>
 						<Textarea
+							className="wrap-anywhere"
 							id="tx-notes"
 							onChange={(e) => setNotes(e.target.value)}
 							placeholder="Optional context"

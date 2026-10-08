@@ -87,6 +87,7 @@ export function CategoryForm({
 							<FieldOptional />
 						</FieldLabel>
 						<Textarea
+							className="wrap-anywhere"
 							id="cat-desc"
 							onChange={(e) => setDescription(e.target.value)}
 							placeholder="What belongs in this category?"

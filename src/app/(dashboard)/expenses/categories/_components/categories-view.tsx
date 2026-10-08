@@ -52,7 +52,9 @@ export function CategoriesView() {
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
-	const handleSortOrderChange = (next: Category[]) => {
+	const handleSortOrderChange = async (next: Category[]) => {
+		// Stop a refetch already on its way, or it lands the old order on top.
+		await utils.category.list.cancel();
 		utils.category.list.setData(undefined, next);
 		reorder.mutate({ ids: next.map((category) => category.id) });
 	};
@@ -60,7 +62,7 @@ export function CategoriesView() {
 	const getItemValue = (category: Category) => String(category.id);
 
 	// Screen readers hear the Category name and place, not its id. The first
-	// "is at" replaces the pick-up message at once, so it must read as one too.
+	// "is at" fires right after pick-up and replaces it, so it names the Category too.
 	const indexOf = (id: UniqueIdentifier) =>
 		categories.findIndex((category) => getItemValue(category) === id);
 	const nameOf = (id: UniqueIdentifier) => categories[indexOf(id)]?.name;
@@ -129,7 +131,7 @@ export function CategoriesView() {
 													{category.name}
 												</span>
 												<Badge className="border-border bg-muted text-muted-foreground">
-													{expenseCount} item
+													{expenseCount} expense
 													{expenseCount === 1 ? "" : "s"}
 												</Badge>
 											</div>
