@@ -29,6 +29,13 @@ The dev server runs via Vercel Portless - no port.
 
 Never use `drizzle-kit push`. Always generate and run git tracked migration files with `pnpm run db:generate` and then `pnpm run db:migrate`.
 
+## Local Database
+
+On any branch except `main`, local dev uses a throwaway Neon branch `local/<git-branch>` (made by `scripts/neon-branch.sh` via the `post-checkout` hook). Create, update and delete freely there.
+
+- Check first: `make db_branch_status` must show `*` on `local/<branch>`. On `main`, `.env` points at production, so no writes.
+- Vercel Blob is not branched. Rows copied from production share production's files, so deleting a receipt there deletes production's file. Only delete rows you made on the branch.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
