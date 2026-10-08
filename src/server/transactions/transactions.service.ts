@@ -143,8 +143,8 @@ export class TransactionsService {
 		return this.repository.datedAmounts();
 	}
 
-	// A linked Transaction takes its Category from the Expense (adr025). Gives
-	// the Category to save instead of the sent one, if any.
+	// A linked Transaction takes its Category from the Expense (adr025), so
+	// linking drops any Category sent. Unlinking with none sent keeps the old one.
 	private async categoryPatch(
 		{ expenseId, categoryId }: Partial<TransactionLink>,
 		id?: number,

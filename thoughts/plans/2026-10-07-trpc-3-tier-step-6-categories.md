@@ -172,7 +172,7 @@ The tRPC paths, the Categories page and its route do not change.
 - **Step 7.** All of these wait:
   - the receipts router migration
   - the worker reading Categories through `CategoriesService` (adr024 `:74`)
-  - the line-item check constraint and the link and unlink rules for line items (adr025 `:51`)
+  - the line-item check constraint and the link and unlink rules for line items (adr025 `:52`)
   - "Attribute to" and hint copy in `receipt-detail.tsx:405,489-491`
   - every `*.module.ts`
 - **Step 8.** Removing `ctx.db`, and the rewrite of the rules-file router section.
@@ -559,7 +559,7 @@ One commit. Implements adr024 (the domain), adr023 (a top-level domain that mirr
 
 ## Phase 4: Commit C — a linked Expense sets a Transaction's Category
 
-One feature commit. Implements adr025 for Transactions. Line items wait for step 7 (adr025 `:51`). Build it by the TDD vertical-slice loop: one test, then its implementation, then repeat, in the order listed.
+One feature commit. Implements adr025 for Transactions. Line items wait for step 7 (adr025 `:52`). Build it by the TDD vertical-slice loop: one test, then its implementation, then repeat, in the order listed.
 
 ### Changes
 
@@ -601,7 +601,7 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
     2. `categories.namesByIds` for the union of each unlinked row's `categoryId` and each linked Expense's `categoryId`
 
     `categoryName` is the effective Category's name, and `expenseName` is unchanged.
-  - Update the deps comment: Transactions → Expenses and Categories are downward calls (adr025 `:47`).
+  - Update the deps comment: Transactions → Expenses and Categories are downward calls (adr025 `:46`).
 - **`transactions.service.test.ts`** — new cases, one slice each:
   - `create` with `expenseId: 5, categoryId: 3` writes `categoryId: null`.
   - `update` linking clears `categoryId`.
@@ -641,6 +641,7 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
   - Clearing the Expense pre-fills its Category. After saving, the Transaction keeps it.
   - Linking from the Unplanned page moves the row out of Unplanned. After unlinking (edit form, Expense → None), the row returns to Unplanned under its old Expense's Category.
   - Moving an Expense to another Category changes the Category shown on its linked Transactions.
+  - *(Re-validated 2026-10-08: tx 10 linked to Expense 3 from Unplanned, Expense moved to Utilities and back, unlinked, Category cleared. DB checked at each step, tx 10 restored.)*
 - [x] `/design-review`: the Transactions form, linked and unlinked
 
 ## Deviations (validate, 2026-10-08)
@@ -650,6 +651,7 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
 - **Expense form.** Submit is not disabled while no Category is picked. Saving shows "Please choose a category." instead.
 - **Unlink copy.** When the saved Expense is cleared, the form sends no `categoryId` and the service copies the Expense's Category. A just-picked (unsaved) Expense still pre-fills in the form.
 - **Category update** no longer reads first. A write that matches no row gives `NotFoundError`.
+- **Extra migration `0018`.** `0012` renamed the table, but Postgres kept `expense_category_pkey`. `0018` renames it to `category_pkey`. Step 7's migrations start at `0019`.
 
 ## References
 

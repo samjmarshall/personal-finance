@@ -66,8 +66,8 @@ export class CategoriesService {
 		return this.repository.reorder(ids);
 	}
 
-	// Expenses hold the Category with `on delete restrict` (adr024), so the
-	// database refuses for us; Transactions and receipt items just lose the link.
+	// The database refuses while an Expense uses it (adr024). Transactions and
+	// receipt items just lose their Category.
 	async delete(id: number): Promise<void> {
 		const existing = await this.findOrThrow(id);
 		await this.repository

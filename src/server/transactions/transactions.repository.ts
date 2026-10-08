@@ -218,8 +218,8 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 						lt(transactions.date, window.to),
 					),
 				)
-				// desc(id) is a stable final tiebreaker so same-Category/same-date
-				// rows keep a fixed order across refetches (matches `list`).
+				// Last tiebreak on id, so rows with the same Category and date keep
+				// one order across refetches.
 				.orderBy(
 					asc(transactions.categoryId),
 					desc(transactions.date),

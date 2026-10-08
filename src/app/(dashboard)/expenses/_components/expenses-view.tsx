@@ -31,8 +31,8 @@ export function ExpensesView() {
 	const utils = api.useUtils();
 	const remove = api.expense.delete.useMutation({
 		onSuccess: async () => {
-			// Deleting an expense SET NULLs its linked transactions: they drop out of
-			// the consumed total and reappear on the Unplanned/transaction lists.
+			// Deleting an Expense unlinks its Transactions (they keep its Category):
+			// they leave the consumed total and reappear on Unplanned.
 			await Promise.all([
 				utils.expense.list.invalidate(),
 				utils.expense.consumption.invalidate(),

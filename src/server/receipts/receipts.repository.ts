@@ -31,7 +31,7 @@ export interface ReceiptsRepository {
 	): Promise<{ id: number } | undefined>;
 	/** status → duplicate, pointing at the original. */
 	markDuplicate(id: number, duplicateOfId: number): Promise<void>;
-	/** Sibling-domain read (server-architecture rule allows read joins). */
+	/** Reads the Categories table directly: a known adr022 breach, fixed in step 7. */
 	listCategories(): Promise<ExtractionCategory[]>;
 	/** status → processed + line items, in one transaction. */
 	saveExtraction(
