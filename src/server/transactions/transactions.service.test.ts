@@ -512,9 +512,10 @@ describe("list", () => {
 		});
 	});
 
+	const lookupError = new Error("connection lost");
 	it.each([
-		["expenses", { namesByIds: throwing(new Error("connection lost")) }, {}],
-		["categories", {}, { namesByIds: throwing(new Error("connection lost")) }],
+		["expenses", { namesByIds: throwing(lookupError) }, {}],
+		["categories", {}, { namesByIds: throwing(lookupError) }],
 	])("lets a %s lookup error propagate", async (_, expenses, categories) => {
 		const service = serviceWith(
 			{ list: async () => ({ items: [TRANSACTION], total: 1 }) },
@@ -522,7 +523,7 @@ describe("list", () => {
 			{ namesByIds: async () => CATEGORY_NAMES, ...categories },
 		);
 
-		await expect(service.list(QUERY)).rejects.toThrow("connection lost");
+		await expect(service.list(QUERY)).rejects.toBe(lookupError);
 	});
 });
 
