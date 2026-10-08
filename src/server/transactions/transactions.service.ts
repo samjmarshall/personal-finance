@@ -26,7 +26,7 @@ const FK_CONFLICT_MESSAGE =
 // Unlink also writes a Category, but one just read from a live row. So only
 // the Expense can be gone.
 const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
-// The database blocks changing the Category of a Transaction linked to an Expense.
+// The database refuses a Category on a Transaction that has an Expense.
 const LINKED_CATEGORY_MESSAGE =
 	"A Transaction linked to an Expense takes its Category from the Expense.";
 const NOT_FOUND_MESSAGE = "Transaction not found.";
@@ -143,8 +143,8 @@ export class TransactionsService {
 		return this.repository.datedAmounts();
 	}
 
-	// adr025: a linked Transaction takes its Category from the Expense. Returns
-	// the categoryId to write over what was sent, if any.
+	// A linked Transaction takes its Category from the Expense (adr025). Gives
+	// the Category to save instead of the sent one, if any.
 	private async categoryPatch(
 		{ expenseId, categoryId }: Partial<TransactionLink>,
 		id?: number,

@@ -643,6 +643,14 @@ One feature commit. Implements adr025 for Transactions. Line items wait for step
   - Moving an Expense to another Category changes the Category shown on its linked Transactions.
 - [x] `/design-review`: the Transactions form, linked and unlinked
 
+## Deviations (validate, 2026-10-08)
+
+- **Sequence rename sits in `0014`, not `0012`.** drizzle-kit 0.31 crashed when the table rename and the identity rename shared one diff. adr024 `:65` records it.
+- **Extra migration `0017`.** A `BEFORE DELETE` trigger on `expense` copies its Category onto linked Transactions and receipt items, then unlinks them, so an Expense delete keeps their filing (adr025). No unit test covers it; checked by hand on the branch in a rolled-back transaction.
+- **Expense form.** Submit is not disabled while no Category is picked. Saving shows "Please choose a category." instead.
+- **Unlink copy.** When the saved Expense is cleared, the form sends no `categoryId` and the service copies the Expense's Category. A just-picked (unsaved) Expense still pre-fills in the form.
+- **Category update** no longer reads first. A write that matches no row gives `NotFoundError`.
+
 ## References
 
 - Design doc: `thoughts/designs/2026-09-29-trpc-3-tier-migration.md`. It carries `## Related ADRs` (`:938-946`). Relevant sections:

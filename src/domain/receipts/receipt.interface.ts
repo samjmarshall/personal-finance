@@ -24,8 +24,8 @@ export interface Receipt {
 	updatedAt: Date | null;
 }
 
-// The vocabulary the extractor maps each line item to: the household's categories
-// by id, so the model prefills `categoryId` from this list or returns null.
+// The Categories the extractor may pick from, by id. Each line item gets one of
+// these or none.
 export interface ExtractionCategory {
 	id: number;
 	name: string;

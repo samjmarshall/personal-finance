@@ -21,8 +21,7 @@ export const expenses = pgTable(
 		month: d.doublePrecision().notNull().default(0),
 		year: d.doublePrecision().notNull().default(0),
 		// One-time figures (null for recurring): the fixed amount and the date it is
-		// consumed against. dueDay/dueMonth are Timing for both kinds; the pickers
-		// arrive in stage 3, the columns land now so the shape is fixed.
+		// consumed against. dueDay/dueMonth are Timing for both kinds.
 		amount: d.doublePrecision(),
 		expectedDate: d.timestamp({ withTimezone: true }),
 		dueDay: d.integer(),

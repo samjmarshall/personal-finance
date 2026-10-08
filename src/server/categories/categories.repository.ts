@@ -12,7 +12,7 @@ export interface NameRow {
 
 export interface CategoriesRepository {
 	list(): Promise<Category[]>;
-	/** One past the highest `sortOrder`; 0 when there are none. */
+	/** Next free sort position: one past the highest, 0 when empty. */
 	nextSortOrder(): Promise<number>;
 	insert(
 		values: CategoryValues & Pick<Category, "sortOrder">,
@@ -20,7 +20,7 @@ export interface CategoriesRepository {
 	find(id: number): Promise<Category | undefined>;
 	/** `undefined` when no row has the id. */
 	update(id: number, values: CategoryValues): Promise<Category | undefined>;
-	/** Each id's `sortOrder` becomes its position in `ids`. */
+	/** Each id's sort position becomes its place in the list. */
 	reorder(ids: number[]): Promise<void>;
 	/** Throws a 23503 while an Expense still uses the id. */
 	delete(id: number): Promise<void>;

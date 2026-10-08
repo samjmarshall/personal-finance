@@ -56,8 +56,8 @@ export class ExpensesService {
 	}
 
 	// The batched lookup that replaces a cross-domain join (adr022): one call per
-	// page, never per row. An id with no row has no entry. categoryId lets a
-	// linked record show the Expense's Category (adr025).
+	// page, never per row. An id with no row has no entry. Also gives each
+	// Expense's Category, so a linked record can show it (adr025).
 	async namesByIds(ids: number[]): Promise<ReadonlyMap<number, ExpenseName>> {
 		const rows = ids.length ? await this.repository.findNames(ids) : [];
 		return new Map(

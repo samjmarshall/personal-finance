@@ -177,9 +177,8 @@ function failureAttrs(
 }
 
 /**
- * Prompt listing the household's categories by id so each item comes back with a
- * prefilled `categoryId`. The id/name list is the only allowed vocabulary —
- * the model must map to one of these or return null, never coin a new category.
+ * Prompt listing the household's Categories by id, so each item comes back with
+ * its Category pre-filled. The model picks one from the list or none, never a new one.
  * `mediaType` only selects the forwarded-email preamble; it never changes the schema.
  */
 export function buildExtractionPrompt(
