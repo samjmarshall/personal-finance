@@ -357,7 +357,11 @@ Implements adr021 (controller naming, `:76`) and adr022 (batched lookups, `:50`;
     - the update is guarded on `status = failed` and sets `{ status: Pending, traceId, error: null }`
     - `receipt/retry` fires only when a row came back
     - an empty list skips the outbox insert (`outbox.repository.ts:64`)
-  - `findBlobPathname(id)`, `hasDuplicates(id)` (with `limit 1`), `delete(id)`
+  - `findBlobPathname(id)`
+  - `deleteUnlessDuplicated(id): Promise<{ blobPathname: string } | "missing" | "has-duplicates">`. One `this.db.transaction`:
+    - `select blobPathname … for update`. The lock makes a copy being marked against this row wait, since the FK check needs the row.
+    - the duplicate probe (`limit 1`), then the delete
+    - Today the probe and the delete are separate statements (`receipts.ts:202-213`). A copy marked between them is stranded by `set null`.
   - `findMatchInput(id): Promise<{ total; receiptDate } | undefined>`
   - `findMatchedTransactionIds(transactionIds): Promise<number[]>`. No query when the list is empty.
   - `setTransaction(id, transactionId)`, `setItemExpense(itemId, expenseId)`, `setItemCategory(itemId, categoryId)`. Each returns the row or `undefined`.
@@ -392,10 +396,9 @@ Implements adr021 (controller naming, `:76`) and adr022 (batched lookups, `:50`;
     - `traceUrl = posthogTraceUrl(this.posthogUi, receipt.traceId)`
   - **`retry(id)`** → `requeueFailed(id, currentTraceId())`. A miss → `NotFoundError("Receipt not found or not in a failed state.")`.
   - **`delete(id)`**:
-    1. a miss → `NotFoundError("Receipt not found.")`
-    2. duplicates → `ConflictError("Delete the duplicate copies of this receipt first.")`
-    3. `repository.delete`
-    4. `blobStore.delete` inside a try/catch that swallows the failure. Keep the router's comments (`:188-191`, `:216-220`).
+    1. `deleteUnlessDuplicated`. `"missing"` → `NotFoundError("Receipt not found.")`
+    2. `"has-duplicates"` → `ConflictError("Delete the duplicate copies of this receipt first.")`
+    3. `blobStore.delete`, after the commit, inside a try/catch that swallows the failure. Keep the router's comments (`:188-191`, `:216-220`).
   - **`matchCandidates(receiptId, timeZone)`**:
     - a miss → `NotFoundError`
     - a null `total` or no `matchScanWindow` → `[]`
@@ -418,12 +421,14 @@ Implements adr021 (controller naming, `:76`) and adr022 (batched lookups, `:50`;
   - `posthogUi: { uiHost: env.POSTHOG_UI_HOST, projectId: env.POSTHOG_PROJECT_ID }`
 - **`src/server/receipts/receipts.trpc.controller.ts`** (new) — `receiptRouter`:
   - same procedure names and inputs (`byId` and the `list` input stay inline, as at `:44`, `:85-92`)
+  - `byId` gains `.int()`. Today a decimal id reaches Postgres and 500s.
   - each procedure makes one `ctx.services.receipts.*` call
   - `create` passes `ctx.session.user.id`
   - `delete` returns `{ success: true }` (as at `transactions.trpc.controller.ts:36-40`)
 - **`receipts.trpc.controller.test.ts`** (new):
   - `createTestCaller` with `Partial<ReceiptsService>` fakes
   - each procedure → its method with the parsed input
+  - a decimal id → `BAD_REQUEST`, with no service call
   - `NotFoundError` → `NOT_FOUND` and `ConflictError` → `CONFLICT` through the real middleware
 - **Wiring** — `services.ts` gains `receipts: receiptsService`. `root.ts:1` imports `receiptRouter` from `~/server/receipts/receipts.trpc.controller`.
 - **Re-point the Phase 1 tests**:
@@ -434,6 +439,7 @@ Implements adr021 (controller naming, `:76`) and adr022 (batched lookups, `:50`;
     - get: joins → lookups
     - matchCandidates: join → window scan plus matched-id probe
     - retry miss: `rollback` → `commit`
+    - delete: `begin` / `commit` around the three statements, and the select gains `for update`. The 404 case's query count goes from 1 to 3.
   - Every message assertion stays unchanged.
 
 ### Changes (4b)
@@ -493,7 +499,7 @@ One commit: `refactor(receipts): http controller for image and upload routes`, b
   - **Deps:** `{ service: ReceiptsService, sessions: SessionReader, logger: Logger }`. It uses plain `Request` / `Response`.
   - **`image(request, id)`**:
     - signed out → 401 "Unauthorized"
-    - non-integer id → 404 "Not found"
+    - an id that is not a plain integer in `1..2³¹−1` (the `int4` column) → 404 "Not found". Today `99999999999` reaches Postgres and 500s, and `1e3` reads as 1000.
     - `NotFoundError` → 404 "Not found"
     - otherwise streams with the three headers (`route.ts:52-61`)
   - **`upload(request)`** — moves `handle` (`route.ts:78-161`):
