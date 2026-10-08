@@ -77,8 +77,8 @@ export class ReceiptsService {
 		this.posthogUi = posthogUi;
 	}
 
-	// The client has already put the file in Blob and sends where it landed.
-	// Ownership and status are set here, so a client can't forge them.
+	// Client uploads the file first. Owner and channel come from the server, never
+	// the client.
 	async create(memberId: string, input: ReceiptCreateInput): Promise<Receipt> {
 		const [row] = await this.repository.insertPending(
 			[
@@ -96,8 +96,8 @@ export class ReceiptsService {
 		return assertRow(row, "create receipt");
 	}
 
-	// The two filters are independent. Folded into one, a matched receipt would
-	// be unreachable through every filter value.
+	// Status and "unmatched only" stack. Kept apart so a matched receipt can still
+	// be listed.
 	async list(filter: ReceiptFilter): Promise<ReceiptListItem[]> {
 		const rows = await this.repository.findAll(filter);
 		const [memberNames, descriptions] = await Promise.all([
@@ -200,8 +200,8 @@ export class ReceiptsService {
 		const row = await this.repository
 			.setTransaction(receiptId, transactionId)
 			.catch((error: unknown) => {
-				// The unique index on transactionId is the dup-photo catcher: two photos
-				// of one purchase race here and the loser is told why, not 500'd.
+				// Two photos of one purchase can race for the same transaction. Loser
+				// gets a clear conflict, not a 500.
 				if (isPgViolation(error, PgViolation.UniqueViolation)) {
 					throw new ConflictError("That transaction already has a receipt.", {
 						cause: error,
