@@ -458,6 +458,62 @@ describe("findUnplanned", () => {
 	});
 });
 
+describe("findDescriptions", () => {
+	it("selects the id and description of each id", async () => {
+		const { repository, queries } = harness(() => [[1, "Groceries"]]);
+
+		await expect(repository.findDescriptions([1, 2])).resolves.toEqual([
+			{ id: 1, description: "Groceries" },
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      1,
+			      2,
+			    ],
+			    "sql": "select "id", "description" from "transaction" where "transaction"."id" in ($1, $2)",
+			  },
+			]
+		`);
+	});
+});
+
+describe("findInDateWindow", () => {
+	it("selects the match fields of every row in the half-open window", async () => {
+		const { repository, queries } = harness(() => [
+			[1, "Groceries", 42.5, "2026-09-01T00:00:00.000Z"],
+		]);
+
+		const rows = await repository.findInDateWindow({
+			from: new Date("2026-09-01T00:00:00.000Z"),
+			to: new Date("2026-09-15T00:00:00.000Z"),
+		});
+
+		expect(rows).toEqual([
+			{
+				id: 1,
+				description: "Groceries",
+				amount: 42.5,
+				date: new Date("2026-09-01T00:00:00.000Z"),
+			},
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "2026-09-01T00:00:00.000Z",
+			      "2026-09-15T00:00:00.000Z",
+			    ],
+			    "sql": "select "id", "description", "amount", "date" from "transaction" where ("transaction"."date" >= $1 and "transaction"."date" < $2)",
+			  },
+			]
+		`);
+	});
+});
+
 describe("findLink", () => {
 	it("selects only the expense and category links of the id", async () => {
 		const { repository, queries } = harness(() => [[7, null]]);

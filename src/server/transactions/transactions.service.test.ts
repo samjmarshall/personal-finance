@@ -34,6 +34,8 @@ function serviceWith(
 		insert: unstaged,
 		update: unstaged,
 		findUnplanned: unstaged,
+		findDescriptions: unstaged,
+		findInDateWindow: unstaged,
 		findLink: unstaged,
 		setLink: unstaged,
 		delete: unstaged,
@@ -559,6 +561,31 @@ describe("reads", () => {
 		expect(windows).toEqual([window]);
 	});
 
+	it("returns the repository's rows in the date window", async () => {
+		const rows = [
+			{
+				id: 1,
+				description: "Groceries",
+				amount: 42.5,
+				date: TRANSACTION.date,
+			},
+		];
+		const windows: unknown[] = [];
+		const service = serviceWith({
+			findInDateWindow: async (window) => {
+				windows.push(window);
+				return rows;
+			},
+		});
+		const window = {
+			from: new Date("2026-09-01T00:00:00.000Z"),
+			to: new Date("2026-09-15T00:00:00.000Z"),
+		};
+
+		await expect(service.inDateWindow(window)).resolves.toBe(rows);
+		expect(windows).toEqual([window]);
+	});
+
 	it("returns the repository's Consumed per Expense", async () => {
 		const consumption: ExpenseConsumption[] = [
 			{ expenseId: 7, consumed: 12.5 },
@@ -575,5 +602,28 @@ describe("reads", () => {
 		const service = serviceWith({ datedAmounts: async () => rows });
 
 		await expect(service.datedAmounts()).resolves.toBe(rows);
+	});
+});
+
+describe("descriptionsByIds", () => {
+	it("maps each found id to its description", async () => {
+		const asked: number[][] = [];
+		const service = serviceWith({
+			findDescriptions: async (ids) => {
+				asked.push(ids);
+				return [{ id: 1, description: "Groceries" }];
+			},
+		});
+
+		await expect(service.descriptionsByIds([1, 2])).resolves.toEqual(
+			new Map([[1, "Groceries"]]),
+		);
+		expect(asked).toEqual([[1, 2]]);
+	});
+
+	it("skips the query for no ids", async () => {
+		const service = serviceWith({});
+
+		await expect(service.descriptionsByIds([])).resolves.toEqual(new Map());
 	});
 });

@@ -1,9 +1,10 @@
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VercelBlobStore } from "./blob-store";
 
-vi.mock("@vercel/blob", () => ({ get: vi.fn(), put: vi.fn() }));
+vi.mock("@vercel/blob", () => ({ del: vi.fn(), get: vi.fn(), put: vi.fn() }));
 
+const delMock = vi.mocked(del);
 const getMock = vi.mocked(get);
 const putMock = vi.mocked(put);
 
@@ -76,5 +77,24 @@ describe("VercelBlobStore.write", () => {
 		const [, body] = putMock.mock.calls[0] ?? [];
 		expect(Buffer.isBuffer(body)).toBe(true);
 		expect(Array.from(body as Buffer)).toEqual([1, 2, 3]);
+	});
+});
+
+describe("VercelBlobStore.delete", () => {
+	it("deletes by pathname", async () => {
+		delMock.mockResolvedValue(undefined);
+
+		await new VercelBlobStore().delete("receipts/r1.png");
+
+		expect(delMock).toHaveBeenCalledWith("receipts/r1.png");
+	});
+
+	it("lets a store refusal propagate", async () => {
+		const refusal = new Error("store down");
+		delMock.mockRejectedValue(refusal);
+
+		await expect(new VercelBlobStore().delete("receipts/r1.png")).rejects.toBe(
+			refusal,
+		);
 	});
 });

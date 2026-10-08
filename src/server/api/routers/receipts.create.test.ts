@@ -2,41 +2,22 @@ import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import { createTestCaller } from "~/server/api/test-caller";
+import { DrizzleMembersRepository } from "~/server/auth/members.repository";
+import { MembersService } from "~/server/auth/members.service";
+import { DrizzleCategoriesRepository } from "~/server/categories/categories.repository";
+import { CategoriesService } from "~/server/categories/categories.service";
 import { recordingDb, rowOf } from "~/server/db/recording-db.fake";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
+import { ExpensesService } from "~/server/expenses/expenses.service";
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
-import type { OutboxEvents, OutboxWrites } from "~/server/outbox";
+import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
 import { receipts } from "~/server/receipts/receipts.schema";
-
-// Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
-// (and through them ~/env). Stub those so this stays a pure producer unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-vi.mock("@vercel/blob", () => ({ del: vi.fn() }));
-
-// Stand-in write door: runs the writes in the test db's transaction and records the
-// derived events, so the insert SQL lands in the snapshot. The real door is
-// exercised in outbox/outbox.service.test.ts.
-const door = vi.hoisted(() => ({
-	db: undefined as
-		| {
-				transaction: (run: (tx: never) => Promise<unknown>) => Promise<unknown>;
-		  }
-		| undefined,
-	events: [] as OutboxEventDescriptor[],
-}));
-vi.mock("~/server/outbox", () => ({
-	commitWithOutbox: async <T>(
-		writes: OutboxWrites<T>,
-		events: OutboxEvents<T>,
-	): Promise<T> => {
-		if (!door.db) throw new Error("door has no db");
-		return (await door.db.transaction(async (tx) => {
-			const result = await writes(tx);
-			door.events.push(...events(result));
-			return result;
-		})) as T;
-	},
-}));
+import { ReceiptsService } from "~/server/receipts/receipts.service";
+import { receiptRouter } from "~/server/receipts/receipts.trpc.controller";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
+import { TransactionsService } from "~/server/transactions/transactions.service";
+import { unstaged } from "~/test/fakes";
 
 // currentTraceId reads the ambient OTel span; stub it so the test asserts the id is
 // threaded onto the insert, not whether a provider happens to be registered.
@@ -45,8 +26,47 @@ vi.mock("~/server/observability/tracing/current-trace-id", () => ({
 	currentTraceId,
 }));
 
-const { createCallerFactory } = await import("~/server/api/trpc");
-const { receiptRouter } = await import("./receipts");
+const door = { events: [] as OutboxEventDescriptor[] };
+
+// The real service stack on the recording db. Stand-in write door: runs the writes
+// in the test db's transaction and records the derived events, so the insert SQL
+// lands in the snapshot. The real door is exercised in outbox/outbox.service.test.ts.
+function caller(db: ReturnType<typeof recordingDb>["db"]) {
+	const on = { db: db as never };
+	const expenses = new ExpensesService({
+		repository: new DrizzleExpensesRepository(on),
+	});
+	const categories = new CategoriesService({
+		repository: new DrizzleCategoriesRepository(on),
+	});
+	const receipts = new ReceiptsService({
+		repository: new DrizzleReceiptsRepository({
+			...on,
+			outbox: {
+				commit: (writes, events) =>
+					db.transaction(async (tx) => {
+						const result = await writes(tx as never);
+						door.events.push(...events(result));
+						return result;
+					}),
+				publish: unstaged,
+			},
+		}),
+		members: new MembersService({
+			repository: new DrizzleMembersRepository(on),
+		}),
+		transactions: new TransactionsService({
+			repository: new DrizzleTransactionsRepository(on),
+			expenses,
+			categories,
+		}),
+		expenses,
+		categories,
+		blobStore: { delete: unstaged },
+		posthogUi: { uiHost: "https://us.posthog.com" },
+	});
+	return createTestCaller(receiptRouter, { services: { receipts } });
+}
 
 const RECEIPT_FIELDS = Object.keys(getTableColumns(receipts));
 
@@ -72,15 +92,6 @@ function createDb(id: number) {
 				]
 			: new Error(`unexpected query: ${query.sql}`),
 	);
-}
-
-function caller(db: ReturnType<typeof createDb>["db"]) {
-	door.db = db as never;
-	return createCallerFactory(receiptRouter)({
-		db,
-		session: { user: { id: "member-1" } },
-		headers: new Headers(),
-	} as never);
 }
 
 beforeEach(() => {

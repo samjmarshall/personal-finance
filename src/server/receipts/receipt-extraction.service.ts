@@ -220,7 +220,7 @@ export interface ErrorReporter {
 interface ReceiptExtractionServiceDeps {
 	repository: ReceiptExtractionRepository;
 	categories: Pick<CategoriesService, "list">;
-	blobStore: BlobStore;
+	blobStore: Pick<BlobStore, "read">;
 	// The provider is bound once in the composition root (functions.ts), so this tier
 	// never touches `~/env` or `~/server/aws/bedrock` — see bedrock-invocation.md.
 	languageModel: LanguageModel;
@@ -235,7 +235,7 @@ interface ReceiptExtractionServiceDeps {
 export class ReceiptExtractionService {
 	private readonly repository: ReceiptExtractionRepository;
 	private readonly categories: Pick<CategoriesService, "list">;
-	private readonly blobStore: BlobStore;
+	private readonly blobStore: Pick<BlobStore, "read">;
 	private readonly languageModel: LanguageModel;
 	private readonly logger: Logger;
 	private readonly errorReporter: ErrorReporter;

@@ -1,53 +1,69 @@
 import { getTableColumns } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import { createTestCaller } from "~/server/api/test-caller";
+import { DrizzleMembersRepository } from "~/server/auth/members.repository";
+import { MembersService } from "~/server/auth/members.service";
+import { DrizzleCategoriesRepository } from "~/server/categories/categories.repository";
+import { CategoriesService } from "~/server/categories/categories.service";
 import {
 	type Respond,
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
+import { ExpensesService } from "~/server/expenses/expenses.service";
+import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
 import { receiptItems, receipts } from "~/server/receipts/receipts.schema";
+import { ReceiptsService } from "~/server/receipts/receipts.service";
+import { receiptRouter } from "~/server/receipts/receipts.trpc.controller";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
+import { TransactionsService } from "~/server/transactions/transactions.service";
+import { unstaged } from "~/test/fakes";
 
-// The router loads the real db, auth and env on import. Stub them so this stays
-// a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-vi.mock("~/server/outbox", () => ({ commitWithOutbox: vi.fn() }));
-vi.mock("@vercel/blob", () => ({ del: vi.fn() }));
-// No project id by default, so no trace link; a case sets one. The logger
-// re-exports a log-level enum from env, so the mock needs it too.
-const env = vi.hoisted(() => ({
+// The env pair receipts.module.ts reads. No project id by default, so no trace
+// link; a case sets one.
+const env = {
 	POSTHOG_UI_HOST: "https://us.posthog.com",
 	POSTHOG_PROJECT_ID: undefined as string | undefined,
-	PROJECT_NAME: "personal-finance",
-	LOG_LEVEL: "info",
-}));
-vi.mock("~/env", () => ({
-	env,
-	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
-}));
+};
 
-const { createCallerFactory } = await import("~/server/api/trpc");
-const { receiptRouter } = await import("./receipts");
-
-function caller(db: unknown) {
-	return createCallerFactory(receiptRouter)({
-		db,
-		session: { user: { id: "user-1" } },
-		headers: new Headers(),
-	} as never);
+// The real service stack on the recording db.
+function caller(db: ReturnType<typeof recordingDb>["db"]) {
+	const on = { db: db as never };
+	const expenses = new ExpensesService({
+		repository: new DrizzleExpensesRepository(on),
+	});
+	const categories = new CategoriesService({
+		repository: new DrizzleCategoriesRepository(on),
+	});
+	const receipts = new ReceiptsService({
+		repository: new DrizzleReceiptsRepository({
+			...on,
+			outbox: { commit: unstaged, publish: unstaged },
+		}),
+		members: new MembersService({
+			repository: new DrizzleMembersRepository(on),
+		}),
+		transactions: new TransactionsService({
+			repository: new DrizzleTransactionsRepository(on),
+			expenses,
+			categories,
+		}),
+		expenses,
+		categories,
+		blobStore: { delete: unstaged },
+		posthogUi: {
+			uiHost: env.POSTHOG_UI_HOST,
+			projectId: env.POSTHOG_PROJECT_ID,
+		},
+	});
+	return createTestCaller(receiptRouter, { services: { receipts } });
 }
 
-const RECEIPT_FIELDS = [
-	...Object.keys(getTableColumns(receipts)),
-	"transactionDescription",
-];
-const ITEM_FIELDS = [
-	...Object.keys(getTableColumns(receiptItems)),
-	"expenseName",
-	"categoryName",
-];
+const RECEIPT_FIELDS = Object.keys(getTableColumns(receipts));
+const ITEM_FIELDS = Object.keys(getTableColumns(receiptItems));
 
 const RECEIPT = {
 	id: 3,
@@ -90,12 +106,24 @@ function getDb(
 	receipt: typeof RECEIPT | null,
 	items: Record<string, unknown>[],
 ) {
-	const respond: Respond = (query) => {
-		if (query.sql.includes('from "receipt" left join'))
+	const respond: Respond = ({ sql }) => {
+		if (sql.includes('from "receipt" '))
 			return receipt ? [rowOf(RECEIPT_FIELDS, receipt)] : [];
-		if (query.sql.includes('from "receipt_item"'))
+		if (sql.includes('from "receipt_item"'))
 			return items.map((item) => rowOf(ITEM_FIELDS, item));
-		return new Error(`unexpected query: ${query.sql}`);
+		if (sql.includes('from "transaction"'))
+			return receipt
+				? [[receipt.transactionId, receipt.transactionDescription]]
+				: [];
+		if (sql.includes('from "expense"'))
+			return items
+				.filter((item) => item.expenseName)
+				.map((item) => [item.expenseId, item.expenseName, null]);
+		if (sql.includes('from "category"'))
+			return items
+				.filter((item) => item.categoryName)
+				.map((item) => [item.categoryId, item.categoryName]);
+		return new Error(`unexpected query: ${sql}`);
 	};
 	return recordingDb(respond);
 }
@@ -112,11 +140,13 @@ describe("receipt.get", () => {
 
 		expect(queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
-			  "select "receipt"."id", "receipt"."status", "receipt"."channel", "receipt"."userId", "receipt"."blobUrl", "receipt"."blobPathname", "receipt"."contentType", "receipt"."contentHash", "receipt"."vendor", "receipt"."receiptDate", "receipt"."total", "receipt"."currency", "receipt"."rawJson", "receipt"."error", "receipt"."traceId", "receipt"."transactionId", "receipt"."duplicateOfId", "receipt"."createdAt", "receipt"."updatedAt", "transaction"."description" from "receipt" left join "transaction" on "receipt"."transactionId" = "transaction"."id" where "receipt"."id" = $1",
-			  "select "receipt_item"."id", "receipt_item"."receiptId", "receipt_item"."name", "receipt_item"."price", "receipt_item"."quantity", "receipt_item"."expenseId", "receipt_item"."categoryId", "receipt_item"."createdAt", "receipt_item"."updatedAt", "expense"."name", "category"."name" from "receipt_item" left join "expense" on "receipt_item"."expenseId" = "expense"."id" left join "category" on "receipt_item"."categoryId" = "category"."id" where "receipt_item"."receiptId" = $1 order by "receipt_item"."id" asc",
+			  "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" where "receipt"."id" = $1",
+			  "select "id", "receiptId", "name", "price", "quantity", "expenseId", "categoryId", "createdAt", "updatedAt" from "receipt_item" where "receipt_item"."receiptId" = $1 order by "receipt_item"."id" asc",
+			  "select "id", "description" from "transaction" where "transaction"."id" in ($1)",
+			  "select "id", "name" from "category" where "category"."id" in ($1)",
 			]
 		`);
-		expect(queries.map((q) => q.params)).toEqual([[3], [3]]);
+		expect(queries.map((q) => q.params)).toEqual([[3], [3], [77], [2]]);
 	});
 
 	it("returns an item's category name when it has one", async () => {

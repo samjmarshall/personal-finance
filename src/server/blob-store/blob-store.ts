@@ -1,4 +1,4 @@
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 export interface FetchedBlob {
 	bytes: Uint8Array;
@@ -21,6 +21,8 @@ export interface BlobStore {
 		body: string | Uint8Array,
 		contentType: string,
 	): Promise<StoredBlobLocation>;
+	/** Throws when the store refuses the delete. */
+	delete(pathname: string): Promise<void>;
 }
 
 /**
@@ -55,5 +57,9 @@ export class VercelBlobStore implements BlobStore {
 			{ access: "private", contentType, addRandomSuffix: false },
 		);
 		return { url: result.url, pathname: result.pathname };
+	}
+
+	delete(pathname: string): Promise<void> {
+		return del(pathname);
 	}
 }

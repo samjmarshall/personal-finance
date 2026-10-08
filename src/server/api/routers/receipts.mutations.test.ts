@@ -2,48 +2,26 @@ import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import { createTestCaller } from "~/server/api/test-caller";
+import { DrizzleMembersRepository } from "~/server/auth/members.repository";
+import { MembersService } from "~/server/auth/members.service";
+import { DrizzleCategoriesRepository } from "~/server/categories/categories.repository";
+import { CategoriesService } from "~/server/categories/categories.service";
 import {
 	type Respond,
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
+import { ExpensesService } from "~/server/expenses/expenses.service";
 import type { OutboxEventDescriptor } from "~/server/inngest/events";
-import type { OutboxEvents, OutboxWrites } from "~/server/outbox";
+import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
 import { receipts } from "~/server/receipts/receipts.schema";
-
-// Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
-// (and through them ~/env). Stub those so this stays a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-
-// Stand-in write door: runs the writes in the test db's transaction and records the
-// derived events, so the update SQL and its begin/commit/rollback land in the
-// snapshot. The real door is exercised in outbox/outbox.service.test.ts.
-const door = vi.hoisted(() => ({
-	db: undefined as
-		| {
-				transaction: (run: (tx: never) => Promise<unknown>) => Promise<unknown>;
-		  }
-		| undefined,
-	events: [] as OutboxEventDescriptor[],
-}));
-vi.mock("~/server/outbox", () => ({
-	commitWithOutbox: async <T>(
-		writes: OutboxWrites<T>,
-		events: OutboxEvents<T>,
-	): Promise<T> => {
-		if (!door.db) throw new Error("door has no db");
-		return (await door.db.transaction(async (tx) => {
-			const result = await writes(tx);
-			door.events.push(...events(result));
-			return result;
-		})) as T;
-	},
-}));
-
-// del is the only external I/O in delete; assert it's called with the stored pathname.
-const { del } = vi.hoisted(() => ({ del: vi.fn() }));
-vi.mock("@vercel/blob", () => ({ del }));
+import { ReceiptsService } from "~/server/receipts/receipts.service";
+import { receiptRouter } from "~/server/receipts/receipts.trpc.controller";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
+import { TransactionsService } from "~/server/transactions/transactions.service";
+import { unstaged } from "~/test/fakes";
 
 // currentTraceId reads the ambient OTel span; stub it so retry's trace-id overwrite
 // is asserted directly rather than depending on a registered provider.
@@ -52,16 +30,49 @@ vi.mock("~/server/observability/tracing/current-trace-id", () => ({
 	currentTraceId,
 }));
 
-const { createCallerFactory } = await import("~/server/api/trpc");
-const { receiptRouter } = await import("./receipts");
+const door = { events: [] as OutboxEventDescriptor[] };
+// The blob delete is the only external I/O in delete; assert it gets the stored pathname.
+const del = vi.fn();
 
+// The real service stack on the recording db. Stand-in write door: runs the writes
+// in the test db's transaction and records the derived events, so the update SQL and
+// its begin/commit/rollback land in the snapshot. The real door is exercised in
+// outbox/outbox.service.test.ts.
 function caller(db: ReturnType<typeof recordingDb>["db"]) {
-	door.db = db as never;
-	return createCallerFactory(receiptRouter)({
-		db,
-		session: { user: { id: "user-1" } },
-		headers: new Headers(),
-	} as never);
+	const on = { db: db as never };
+	const expenses = new ExpensesService({
+		repository: new DrizzleExpensesRepository(on),
+	});
+	const categories = new CategoriesService({
+		repository: new DrizzleCategoriesRepository(on),
+	});
+	const receipts = new ReceiptsService({
+		repository: new DrizzleReceiptsRepository({
+			...on,
+			outbox: {
+				commit: (writes, events) =>
+					db.transaction(async (tx) => {
+						const result = await writes(tx as never);
+						door.events.push(...events(result));
+						return result;
+					}),
+				publish: unstaged,
+			},
+		}),
+		members: new MembersService({
+			repository: new DrizzleMembersRepository(on),
+		}),
+		transactions: new TransactionsService({
+			repository: new DrizzleTransactionsRepository(on),
+			expenses,
+			categories,
+		}),
+		expenses,
+		categories,
+		blobStore: { delete: del },
+		posthogUi: { uiHost: "https://us.posthog.com" },
+	});
+	return createTestCaller(receiptRouter, { services: { receipts } });
 }
 
 const RECEIPT_FIELDS = Object.keys(getTableColumns(receipts));
@@ -147,14 +158,14 @@ describe("receipt.retry", () => {
 		});
 	});
 
-	it("refuses a non-failed receipt with the exact message, rolls back and mints nothing", async () => {
+	it("refuses a non-failed receipt with the exact message and mints nothing", async () => {
 		const { db, queries } = retryDb(false);
 
 		await expect(caller(db).retry({ id: 9 })).rejects.toMatchObject({
 			code: "NOT_FOUND",
 			message: "Receipt not found or not in a failed state.",
 		});
-		expect(queries.map((q) => q.sql).slice(-1)).toEqual(["rollback"]);
+		expect(queries.map((q) => q.sql).slice(-1)).toEqual(["commit"]);
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
@@ -177,7 +188,7 @@ describe("receipt.retry", () => {
 			  {
 			    "method": "execute",
 			    "params": [],
-			    "sql": "rollback",
+			    "sql": "commit",
 			  },
 			]
 		`);
@@ -217,11 +228,16 @@ describe("receipt.delete", () => {
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "begin",
+			  },
+			  {
 			    "method": "all",
 			    "params": [
 			      3,
 			    ],
-			    "sql": "select "blobPathname" from "receipt" where "receipt"."id" = $1",
+			    "sql": "select "blobPathname" from "receipt" where "receipt"."id" = $1 for update",
 			  },
 			  {
 			    "method": "all",
@@ -237,6 +253,11 @@ describe("receipt.delete", () => {
 			      3,
 			    ],
 			    "sql": "delete from "receipt" where "receipt"."id" = $1",
+			  },
+			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "commit",
 			  },
 			]
 		`);
@@ -274,7 +295,7 @@ describe("receipt.delete", () => {
 			code: "NOT_FOUND",
 			message: "Receipt not found.",
 		});
-		expect(queries).toHaveLength(1);
+		expect(queries).toHaveLength(3);
 		expect(del).not.toHaveBeenCalled();
 	});
 });

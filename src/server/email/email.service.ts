@@ -71,7 +71,7 @@ export type IngestResult =
 interface EmailServiceDeps {
 	repository: EmailRepository;
 	mailbox: InboundMailbox;
-	blobStore: BlobStore;
+	blobStore: Pick<BlobStore, "write">;
 	logger: Logger;
 }
 
@@ -79,7 +79,7 @@ interface EmailServiceDeps {
 export class EmailService {
 	private readonly repository: EmailRepository;
 	private readonly mailbox: InboundMailbox;
-	private readonly blobStore: BlobStore;
+	private readonly blobStore: Pick<BlobStore, "write">;
 	private readonly logger: Logger;
 
 	constructor({ repository, mailbox, blobStore, logger }: EmailServiceDeps) {

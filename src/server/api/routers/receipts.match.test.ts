@@ -4,34 +4,59 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { matchScanWindow } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import { createTestCaller } from "~/server/api/test-caller";
+import { DrizzleMembersRepository } from "~/server/auth/members.repository";
+import { MembersService } from "~/server/auth/members.service";
+import { DrizzleCategoriesRepository } from "~/server/categories/categories.repository";
+import { CategoriesService } from "~/server/categories/categories.service";
 import {
 	pgError,
 	type Respond,
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
+import { ExpensesService } from "~/server/expenses/expenses.service";
+import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
 import { receiptItems, receipts } from "~/server/receipts/receipts.schema";
-
-// Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
-// (and through them ~/env). Stub those so this stays a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-vi.mock("~/server/outbox", () => ({ commitWithOutbox: vi.fn() }));
-vi.mock("@vercel/blob", () => ({ del: vi.fn() }));
-
-const { createCallerFactory } = await import("~/server/api/trpc");
-const { receiptRouter } = await import("./receipts");
+import { ReceiptsService } from "~/server/receipts/receipts.service";
+import { receiptRouter } from "~/server/receipts/receipts.trpc.controller";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
+import { TransactionsService } from "~/server/transactions/transactions.service";
+import { unstaged } from "~/test/fakes";
 
 // The runner's own zone, so the local-midnight fixtures below resolve to the day
 // they read as. Zone-shift behaviour itself is pinned in match.test.ts.
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-function caller(db: unknown) {
-	return createCallerFactory(receiptRouter)({
-		db,
-		session: { user: { id: "user-1" } },
-		headers: new Headers(),
-	} as never);
+// The real service stack on the recording db.
+function caller(db: ReturnType<typeof recordingDb>["db"]) {
+	const on = { db: db as never };
+	const expenses = new ExpensesService({
+		repository: new DrizzleExpensesRepository(on),
+	});
+	const categories = new CategoriesService({
+		repository: new DrizzleCategoriesRepository(on),
+	});
+	const receipts = new ReceiptsService({
+		repository: new DrizzleReceiptsRepository({
+			...on,
+			outbox: { commit: unstaged, publish: unstaged },
+		}),
+		members: new MembersService({
+			repository: new DrizzleMembersRepository(on),
+		}),
+		transactions: new TransactionsService({
+			repository: new DrizzleTransactionsRepository(on),
+			expenses,
+			categories,
+		}),
+		expenses,
+		categories,
+		blobStore: { delete: unstaged },
+		posthogUi: { uiHost: "https://us.posthog.com" },
+	});
+	return createTestCaller(receiptRouter, { services: { receipts } });
 }
 
 const RECEIPT_FIELDS = Object.keys(getTableColumns(receipts));
@@ -268,19 +293,23 @@ describe("receipt.setItemCategory", () => {
 	});
 });
 
-// The last column flags a transaction that already has a receipt.
-const TX_FIELDS = ["id", "description", "amount", "date", "linkedReceiptId"];
+const TX_FIELDS = ["id", "description", "amount", "date"];
 
+// A row's `linkedReceiptId` marks a transaction that already has a receipt.
 function matchDb(
 	receipt: { total: number | null; receiptDate: string | null } | null,
-	txRows: Record<string, unknown>[],
+	txRows: { id: number; linkedReceiptId: number | null }[],
 ) {
-	const respond: Respond = (query) => {
-		if (query.sql.includes('from "transaction"'))
+	const respond: Respond = ({ sql }) => {
+		if (sql.includes('from "transaction"'))
 			return txRows.map((row) => rowOf(TX_FIELDS, row));
-		if (query.sql.includes('from "receipt"'))
+		if (sql.startsWith('select "transactionId" from "receipt"'))
+			return txRows
+				.filter((row) => row.linkedReceiptId !== null)
+				.map((row) => [row.id]);
+		if (sql.includes('from "receipt"'))
 			return receipt ? [rowOf(["total", "receiptDate"], receipt)] : [];
-		return new Error(`unexpected query: ${query.sql}`);
+		return new Error(`unexpected query: ${sql}`);
 	};
 	return recordingDb(respond);
 }
@@ -323,7 +352,8 @@ describe("receipt.matchCandidates", () => {
 		expect(queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
 			  "select "total", "receiptDate" from "receipt" where "receipt"."id" = $1",
-			  "select "transaction"."id", "transaction"."description", "transaction"."amount", "transaction"."date", "receipt"."id" from "transaction" left join "receipt" on "receipt"."transactionId" = "transaction"."id" where ("transaction"."date" >= $1 and "transaction"."date" < $2)",
+			  "select "id", "description", "amount", "date" from "transaction" where ("transaction"."date" >= $1 and "transaction"."date" < $2)",
+			  "select "transactionId" from "receipt" where "receipt"."transactionId" in ($1, $2, $3)",
 			]
 		`);
 		expect(queries[0]?.params).toEqual([3]);

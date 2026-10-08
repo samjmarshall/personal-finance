@@ -9,6 +9,7 @@ import { AllowedSenderService } from "~/server/email/allowed-sender.service";
 import { expensesService } from "~/server/expenses/expenses.module";
 import { DrizzleIncomeRepository } from "~/server/income/income.repository";
 import { IncomeService } from "~/server/income/income.service";
+import { receiptsService } from "~/server/receipts/receipts.module";
 import { DrizzleSettingsRepository } from "~/server/settings/settings.repository";
 import { SettingsService } from "~/server/settings/settings.service";
 import { transactionsService } from "~/server/transactions/transactions.module";
@@ -43,6 +44,7 @@ export const services = {
 	categories: categoriesService,
 	expenses: expensesService,
 	income,
+	receipts: receiptsService,
 	settings,
 	transactions: transactionsService,
 };

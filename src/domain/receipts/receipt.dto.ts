@@ -17,6 +17,7 @@ const receiptFields = {
 };
 
 const receiptCreateDto = z.object({ ...receiptFields });
+export type ReceiptCreateInput = z.infer<typeof receiptCreateDto>;
 
 const receiptRefDto = z.object({ receiptId: z.number().int() });
 

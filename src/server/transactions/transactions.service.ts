@@ -16,6 +16,8 @@ import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
 import type {
+	DatedTransaction,
+	DateWindow,
 	TransactionLink,
 	TransactionsRepository,
 } from "./transactions.repository";
@@ -117,6 +119,17 @@ export class TransactionsService {
 
 	unplanned(window: UnplannedWindow): Promise<Transaction[]> {
 		return this.repository.findUnplanned(window);
+	}
+
+	inDateWindow(window: DateWindow): Promise<DatedTransaction[]> {
+		return this.repository.findInDateWindow(window);
+	}
+
+	// The batched lookup that replaces a cross-domain join (adr022): one call per
+	// request, never per row. An id with no row has no entry.
+	async descriptionsByIds(ids: number[]): Promise<ReadonlyMap<number, string>> {
+		const rows = ids.length ? await this.repository.findDescriptions(ids) : [];
+		return new Map(rows.map(({ id, description }) => [id, description]));
 	}
 
 	async linkExpense({ id, expenseId }: LinkExpenseInput): Promise<Transaction> {

@@ -6,6 +6,7 @@ import {
 	gt,
 	gte,
 	ilike,
+	inArray,
 	isNotNull,
 	isNull,
 	lt,
@@ -30,6 +31,17 @@ import type { db as realDb } from "~/server/db";
 import { transactions } from "./transactions.schema";
 
 export type TransactionLink = Pick<Transaction, "expenseId" | "categoryId">;
+export type TransactionDescription = Pick<Transaction, "id" | "description">;
+/** Half-open `[from, to)`. */
+export interface DateWindow {
+	from: Date;
+	to: Date;
+}
+/** What a receipt match ranks a row on. */
+export type DatedTransaction = Pick<
+	Transaction,
+	"id" | "description" | "amount" | "date"
+>;
 
 // One page of rows; total counts every match, not just this page
 export interface TransactionPage {
@@ -48,6 +60,8 @@ export interface TransactionsRepository {
 	): Promise<Transaction | undefined>;
 	/** Unlinked Spend in the half-open `[from, to)` window. */
 	findUnplanned(window: UnplannedWindow): Promise<Transaction[]>;
+	findDescriptions(ids: number[]): Promise<TransactionDescription[]>;
+	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]>;
 	/** `undefined` when no row has the id. */
 	findLink(id: number): Promise<TransactionLink | undefined>;
 	/** `undefined` when no row has the id. */
@@ -226,6 +240,30 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					desc(transactions.id),
 				)
 		);
+	}
+
+	findDescriptions(ids: number[]): Promise<TransactionDescription[]> {
+		return this.db
+			.select({ id: transactions.id, description: transactions.description })
+			.from(transactions)
+			.where(inArray(transactions.id, ids));
+	}
+
+	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]> {
+		return this.db
+			.select({
+				id: transactions.id,
+				description: transactions.description,
+				amount: transactions.amount,
+				date: transactions.date,
+			})
+			.from(transactions)
+			.where(
+				and(
+					gte(transactions.date, window.from),
+					lt(transactions.date, window.to),
+				),
+			);
 	}
 
 	async findLink(id: number): Promise<TransactionLink | undefined> {

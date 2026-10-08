@@ -1,25 +1,24 @@
 import { getTableColumns } from "drizzle-orm";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import { createTestCaller } from "~/server/api/test-caller";
+import { DrizzleMembersRepository } from "~/server/auth/members.repository";
+import { MembersService } from "~/server/auth/members.service";
+import { DrizzleCategoriesRepository } from "~/server/categories/categories.repository";
+import { CategoriesService } from "~/server/categories/categories.service";
 import { recordingDb, rowOf } from "~/server/db/recording-db.fake";
+import { DrizzleExpensesRepository } from "~/server/expenses/expenses.repository";
+import { ExpensesService } from "~/server/expenses/expenses.service";
+import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
 import { receipts } from "~/server/receipts/receipts.schema";
+import { ReceiptsService } from "~/server/receipts/receipts.service";
+import { receiptRouter } from "~/server/receipts/receipts.trpc.controller";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
+import { TransactionsService } from "~/server/transactions/transactions.service";
+import { unstaged } from "~/test/fakes";
 
-// Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
-// (and through them ~/env). Stub those so this stays a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
-vi.mock("~/server/outbox", () => ({ commitWithOutbox: vi.fn() }));
-vi.mock("@vercel/blob", () => ({ del: vi.fn() }));
-
-const { createCallerFactory } = await import("~/server/api/trpc");
-const { receiptRouter } = await import("./receipts");
-
-const LIST_FIELDS = [
-	...Object.keys(getTableColumns(receipts)),
-	"userName",
-	"transactionDescription",
-];
+const RECEIPT_FIELDS = Object.keys(getTableColumns(receipts));
 
 const ROW = {
 	id: 3,
@@ -42,19 +41,43 @@ const ROW = {
 // The WHERE the query is rendered with *is* the filter contract, and the bug this
 // guards was an arm silently added to it — so the SQL text is the assertion.
 function listDb() {
-	return recordingDb((query) =>
-		query.sql.startsWith("select")
-			? [rowOf(LIST_FIELDS, ROW)]
-			: new Error(`unexpected query: ${query.sql}`),
-	);
+	return recordingDb(({ sql }) => {
+		if (sql.includes('from "receipt"')) return [rowOf(RECEIPT_FIELDS, ROW)];
+		if (sql.includes('from "user"')) return [[ROW.userId, ROW.userName]];
+		if (sql.includes('from "transaction"'))
+			return [[ROW.transactionId, ROW.transactionDescription]];
+		return new Error(`unexpected query: ${sql}`);
+	});
 }
 
-function caller(db: unknown) {
-	return createCallerFactory(receiptRouter)({
-		db,
-		session: { user: { id: "user-1" } },
-		headers: new Headers(),
-	} as never);
+// The real service stack on the recording db.
+function caller(db: ReturnType<typeof recordingDb>["db"]) {
+	const on = { db: db as never };
+	const expenses = new ExpensesService({
+		repository: new DrizzleExpensesRepository(on),
+	});
+	const categories = new CategoriesService({
+		repository: new DrizzleCategoriesRepository(on),
+	});
+	const receipts = new ReceiptsService({
+		repository: new DrizzleReceiptsRepository({
+			...on,
+			outbox: { commit: unstaged, publish: unstaged },
+		}),
+		members: new MembersService({
+			repository: new DrizzleMembersRepository(on),
+		}),
+		transactions: new TransactionsService({
+			repository: new DrizzleTransactionsRepository(on),
+			expenses,
+			categories,
+		}),
+		expenses,
+		categories,
+		blobStore: { delete: unstaged },
+		posthogUi: { uiHost: "https://us.posthog.com" },
+	});
+	return createTestCaller(receiptRouter, { services: { receipts } });
 }
 
 describe("receipt.list filters", () => {
@@ -65,7 +88,9 @@ describe("receipt.list filters", () => {
 
 		expect(queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
-			  "select "receipt"."id", "receipt"."status", "receipt"."channel", "receipt"."userId", "receipt"."blobUrl", "receipt"."blobPathname", "receipt"."contentType", "receipt"."contentHash", "receipt"."vendor", "receipt"."receiptDate", "receipt"."total", "receipt"."currency", "receipt"."rawJson", "receipt"."error", "receipt"."traceId", "receipt"."transactionId", "receipt"."duplicateOfId", "receipt"."createdAt", "receipt"."updatedAt", "user"."name", "transaction"."description" from "receipt" left join "user" on "receipt"."userId" = "user"."id" left join "transaction" on "receipt"."transactionId" = "transaction"."id" order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "name" from "user" where "user"."id" in ($1)",
+			  "select "id", "description" from "transaction" where "transaction"."id" in ($1)",
 			]
 		`);
 		expect(queries[0]?.sql).not.toContain(" where ");
@@ -80,7 +105,9 @@ describe("receipt.list filters", () => {
 
 		expect(queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
-			  "select "receipt"."id", "receipt"."status", "receipt"."channel", "receipt"."userId", "receipt"."blobUrl", "receipt"."blobPathname", "receipt"."contentType", "receipt"."contentHash", "receipt"."vendor", "receipt"."receiptDate", "receipt"."total", "receipt"."currency", "receipt"."rawJson", "receipt"."error", "receipt"."traceId", "receipt"."transactionId", "receipt"."duplicateOfId", "receipt"."createdAt", "receipt"."updatedAt", "user"."name", "transaction"."description" from "receipt" left join "user" on "receipt"."userId" = "user"."id" left join "transaction" on "receipt"."transactionId" = "transaction"."id" where "receipt"."status" = $1 order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" where "receipt"."status" = $1 order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "name" from "user" where "user"."id" in ($1)",
+			  "select "id", "description" from "transaction" where "transaction"."id" in ($1)",
 			]
 		`);
 		expect(queries[0]?.params).toEqual([ReceiptStatus.Processed]);
@@ -93,7 +120,9 @@ describe("receipt.list filters", () => {
 
 		expect(queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
-			  "select "receipt"."id", "receipt"."status", "receipt"."channel", "receipt"."userId", "receipt"."blobUrl", "receipt"."blobPathname", "receipt"."contentType", "receipt"."contentHash", "receipt"."vendor", "receipt"."receiptDate", "receipt"."total", "receipt"."currency", "receipt"."rawJson", "receipt"."error", "receipt"."traceId", "receipt"."transactionId", "receipt"."duplicateOfId", "receipt"."createdAt", "receipt"."updatedAt", "user"."name", "transaction"."description" from "receipt" left join "user" on "receipt"."userId" = "user"."id" left join "transaction" on "receipt"."transactionId" = "transaction"."id" where "receipt"."transactionId" is null order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" where "receipt"."transactionId" is null order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "name" from "user" where "user"."id" in ($1)",
+			  "select "id", "description" from "transaction" where "transaction"."id" in ($1)",
 			]
 		`);
 		expect(queries[0]?.params).toEqual([]);
@@ -109,7 +138,9 @@ describe("receipt.list filters", () => {
 
 		expect(queries.map((q) => q.sql)).toMatchInlineSnapshot(`
 			[
-			  "select "receipt"."id", "receipt"."status", "receipt"."channel", "receipt"."userId", "receipt"."blobUrl", "receipt"."blobPathname", "receipt"."contentType", "receipt"."contentHash", "receipt"."vendor", "receipt"."receiptDate", "receipt"."total", "receipt"."currency", "receipt"."rawJson", "receipt"."error", "receipt"."traceId", "receipt"."transactionId", "receipt"."duplicateOfId", "receipt"."createdAt", "receipt"."updatedAt", "user"."name", "transaction"."description" from "receipt" left join "user" on "receipt"."userId" = "user"."id" left join "transaction" on "receipt"."transactionId" = "transaction"."id" where ("receipt"."status" = $1 and "receipt"."transactionId" is null) order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt" from "receipt" where ("receipt"."status" = $1 and "receipt"."transactionId" is null) order by "receipt"."createdAt" desc, "receipt"."id" desc",
+			  "select "id", "name" from "user" where "user"."id" in ($1)",
+			  "select "id", "description" from "transaction" where "transaction"."id" in ($1)",
 			]
 		`);
 		expect(queries[0]?.params).toEqual([ReceiptStatus.Processed]);
