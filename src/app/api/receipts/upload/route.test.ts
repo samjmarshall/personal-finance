@@ -1,297 +1,75 @@
-import { context, SpanStatusCode, trace } from "@opentelemetry/api";
-import {
-	InMemorySpanExporter,
-	SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import type { HandleUploadOptions } from "@vercel/blob/client";
-import {
-	afterAll,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
-import { RECEIPT_FILE_TYPES } from "~/domain/receipts";
-import type { Logger } from "~/server/observability/logging/logger";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushAfterResponse } from "~/server/observability/sdk/flush.fake";
-import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
-// The route opens a span over Blob's handleUpload: it gates on the session,
-// stamps the member on its span, logs the refusals and echoes the trace id. Blob,
-// auth, the flush and the logger are stubbed so this stays a unit over that job.
-vi.mock("~/env", () => ({
-	env: { PROJECT_NAME: "personal-finance", LOG_LEVEL: "info" },
-	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
-}));
-
+// The route is a composition root: it builds the controller once, delegates, and
+// schedules the telemetry flush. Everything it wires is stubbed so this stays a
+// unit over that job; the handshake itself is covered by
+// receipts.http.controller.test.ts.
 vi.mock(
 	"~/server/observability/sdk/flush",
 	() => import("~/server/observability/sdk/flush.fake"),
 );
-
-const { getSession } = vi.hoisted(() => ({
-	getSession: vi.fn<() => Promise<{ user: { id: string } } | null>>(),
+vi.mock("~/server/receipts/receipts.module", () => ({
+	receiptsService: { name: "receiptsService" },
 }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession } } }));
-
-const { logs } = vi.hoisted(() => ({
-	logs: [] as Array<{
-		level: string;
-		msg: string;
-		attrs?: Record<string, unknown>;
-	}>,
+vi.mock("~/server/auth/session-reader", () => ({
+	BetterAuthSessionReader: class {
+		readonly name = "sessionReader";
+	},
 }));
-vi.mock("~/server/observability/logging/logger", () => {
-	const fake: Logger = {
-		debug: (msg, attrs) => void logs.push({ level: "debug", msg, attrs }),
-		info: (msg, attrs) => void logs.push({ level: "info", msg, attrs }),
-		warn: (msg, attrs) => void logs.push({ level: "warn", msg, attrs }),
-		error: (msg, attrs) => void logs.push({ level: "error", msg, attrs }),
-		with: () => fake,
-	};
-	return { createRootLogger: () => fake };
-});
+const { loggerWith } = vi.hoisted(() => ({
+	loggerWith: vi.fn(() => ({ name: "logger" })),
+}));
+vi.mock("~/server/observability/logging/logger", () => ({
+	createRootLogger: () => ({ with: loggerWith }),
+}));
 
-// Real handleUpload awaits onBeforeGenerateToken inside, so a throw there (the
-// session gate) surfaces as a rejection — the fake keeps that contract.
-const { handleUpload } = vi.hoisted(() => ({
-	handleUpload: vi.fn(async (opts: HandleUploadOptions) => {
-		if (opts.body.type === "blob.upload-completed") {
-			await opts.onUploadCompleted?.(opts.body.payload);
-			return { type: opts.body.type, response: "ok" as const };
+const { upload, constructed } = vi.hoisted(() => ({
+	upload: vi.fn<(request: Request) => Promise<Response>>(
+		async () => new Response("ok"),
+	),
+	constructed: vi.fn(),
+}));
+vi.mock("~/server/receipts/receipts.http.controller", () => ({
+	ReceiptsHttpController: class {
+		constructor(deps: unknown) {
+			constructed(deps);
 		}
-		const token = await opts.onBeforeGenerateToken(
-			opts.body.payload.pathname,
-			null,
-			false,
-		);
-		return { type: opts.body.type, clientToken: `tok:${token.tokenPayload}` };
-	}),
+		upload = upload;
+	},
 }));
-vi.mock("@vercel/blob/client", () => ({ handleUpload }));
 
 const { POST } = await import("./route");
 
-// A registered provider makes the ambient tracer record, so the span the route
-// opens lands in the exporter and currentTraceId() sees it. The real
-// SpanAttributeProcessor rides along: the member reaches the span only via baggage.
-const exporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider({
-	spanProcessors: [
-		new SpanAttributeProcessor(),
-		new SimpleSpanProcessor(exporter),
-	],
-});
-beforeAll(() => provider.register());
-afterAll(() => provider.shutdown());
-beforeEach(() => {
-	vi.clearAllMocks();
-	exporter.reset();
-	logs.length = 0;
-	getSession.mockResolvedValue({ user: { id: "m1" } });
-});
-
-const tokenEvent = {
-	type: "blob.generate-client-token",
-	payload: {
-		pathname: "receipt.jpg",
-		callbackUrl: "https://ledger.test/api/receipts/upload",
-		clientPayload: null,
-		multipart: false,
-	},
-};
-const post = (body: string = JSON.stringify(tokenEvent)) =>
+const post = () =>
 	POST(
 		new Request("https://ledger.test/api/receipts/upload", {
 			method: "POST",
-			body,
+			body: "{}",
 		}),
 	);
 
+beforeEach(() => vi.clearAllMocks());
+
 describe("POST /api/receipts/upload", () => {
-	it("400s a malformed body before minting, with the flush still scheduled", async () => {
-		const response = await post("{not json");
-
-		expect(response.status).toBe(400);
-		expect(handleUpload).not.toHaveBeenCalled();
-		expect(flushAfterResponse).toHaveBeenCalled();
-		expect(exporter.getFinishedSpans()).toEqual([]);
-	});
-
-	// In prod Next's HTTP span wraps the whole handler, so even the early 400 has a
-	// trace to name (adr020). Stand in for that span here and check the echo.
-	it("echoes the ambient trace id on the malformed-body 400", async () => {
-		const http = provider
-			.getTracer("test")
-			.startSpan("POST /api/receipts/upload");
-		try {
-			const response = await context.with(
-				trace.setSpan(context.active(), http),
-				() => post("{not json"),
-			);
-
-			expect(response.status).toBe(400);
-			expect(response.headers.get("x-trace-id")).toBe(
-				http.spanContext().traceId,
-			);
-		} finally {
-			http.end();
-		}
-	});
-
-	it("400s a JSON null body before minting, without opening a span", async () => {
-		const response = await post("null");
-
-		expect(response.status).toBe(400);
-		expect(handleUpload).not.toHaveBeenCalled();
-		expect(exporter.getFinishedSpans()).toEqual([]);
-	});
-
-	it("mints under a blob.token.mint span stamped with the member, and echoes its trace id", async () => {
-		const response = await post();
-
-		expect(response.status).toBe(200);
-		await expect(response.json()).resolves.toEqual({
-			type: "blob.generate-client-token",
-			clientToken: 'tok:{"userId":"m1"}',
-		});
-
-		const [span] = exporter.getFinishedSpans();
-		expect(span?.name).toBe("blob.token.mint");
-		expect(span?.attributes).toMatchObject({
-			"blob.event_type": "blob.generate-client-token",
-			"blob.pathname": "receipt.jpg",
-			"member.id": "m1",
-			"posthog.distinct_id": "m1",
-		});
-		expect(response.headers.get("x-trace-id")).toBe(
-			span?.spanContext().traceId,
-		);
-		expect(logs).toEqual([]);
-	});
-
-	// The fake handleUpload above never reads the policy, so capture the options the
-	// route hands Blob and call the token hook the way Blob does.
-	it("mints with the receipt upload policy", async () => {
+	// One controller for the life of the module, built on the first request.
+	it("builds the controller once over the shared service, delegates every request, and flushes after each", async () => {
+		const first = await post();
 		await post();
 
-		const [options] = handleUpload.mock.calls[0] ?? [];
-		expect(options?.onUploadCompleted).toBeTypeOf("function");
-		await expect(
-			options?.onBeforeGenerateToken("receipts/a.jpg", null, false),
-		).resolves.toEqual({
-			allowedContentTypes: [...RECEIPT_FILE_TYPES],
-			maximumSizeInBytes: 10 * 1024 * 1024,
-			addRandomSuffix: true,
-			tokenPayload: JSON.stringify({ userId: "m1" }),
+		expect(constructed).toHaveBeenCalledTimes(1);
+		expect(constructed).toHaveBeenCalledWith({
+			service: { name: "receiptsService" },
+			sessions: expect.objectContaining({ name: "sessionReader" }),
+			logger: { name: "logger" },
 		});
-	});
-
-	// In production Blob calls back with upload-completed: no browser, no session.
-	it("names the completion webhook span blob.upload.completed and skips the session gate", async () => {
-		const response = await post(
-			JSON.stringify({
-				type: "blob.upload-completed",
-				payload: {
-					blob: {
-						url: "https://blob.test/receipt.jpg",
-						pathname: "receipt.jpg",
-					},
-					tokenPayload: null,
-				},
-			}),
-		);
-
-		expect(response.status).toBe(200);
-		expect(getSession).not.toHaveBeenCalled();
-		const [span] = exporter.getFinishedSpans();
-		expect(span?.name).toBe("blob.upload.completed");
-		expect(span?.attributes).toMatchObject({
-			"blob.event_type": "blob.upload-completed",
+		expect(loggerWith).toHaveBeenCalledWith({
+			domain: "receipts",
+			component: "upload-route",
 		});
-	});
-
-	// A signed-out tab is routine: warn on the trace so the id is searchable, but
-	// leave the span un-errored so Error Tracking only sees real mint failures.
-	it("401s a signed-out request with a warn log and a clean span", async () => {
-		getSession.mockResolvedValue(null);
-
-		const response = await post();
-
-		expect(response.status).toBe(401);
-		await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
-		expect(logs).toEqual([
-			{
-				level: "warn",
-				msg: "blob token mint refused",
-				attrs: { "blob.event_type": "blob.generate-client-token" },
-			},
-		]);
-		const [span] = exporter.getFinishedSpans();
-		expect(span?.status.code).toBe(SpanStatusCode.UNSET);
-		expect(span?.attributes["http.response.status_code"]).toBe(401);
-		expect(response.headers.get("x-trace-id")).toBe(
-			span?.spanContext().traceId,
-		);
-	});
-
-	it.each([
-		["an unknown event type", { type: "blob.nope", payload: {} }],
-		[
-			"a token request with no pathname",
-			{ type: "blob.generate-client-token" },
-		],
-	])("400s %s before minting, without opening a span", async (_, body) => {
-		const response = await post(JSON.stringify(body));
-
-		expect(response.status).toBe(400);
-		expect(handleUpload).not.toHaveBeenCalled();
-		expect(exporter.getFinishedSpans()).toEqual([]);
-	});
-
-	// Past the body check, the completion callback only fails Blob's signature check.
-	it("400s a rejected completion callback with a warn log and an errored span", async () => {
-		handleUpload.mockRejectedValueOnce(new Error("Invalid callback signature"));
-
-		const response = await post(
-			JSON.stringify({ type: "blob.upload-completed", payload: {} }),
-		);
-
-		expect(response.status).toBe(400);
-		await expect(response.json()).resolves.toEqual({
-			error: "Invalid callback signature",
-		});
-		const [span] = exporter.getFinishedSpans();
-		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
-		expect(span?.attributes["http.response.status_code"]).toBe(400);
-		expect(logs).toHaveLength(1);
-		expect(logs[0]).toMatchObject({
-			level: "warn",
-			msg: "blob callback rejected",
-		});
-	});
-
-	it("500s any other mint failure, recording it on the span and logging at error", async () => {
-		handleUpload.mockRejectedValueOnce(new Error("boom"));
-
-		const response = await post();
-
-		expect(response.status).toBe(500);
-		// Our own failure text (a missing store token, say) never reaches the caller.
-		await expect(response.json()).resolves.toEqual({ error: "Upload failed" });
-		const [span] = exporter.getFinishedSpans();
-		// The raw message may carry the member's filename; it stays on the exception only.
-		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
-		expect(span?.attributes["http.response.status_code"]).toBe(500);
-		expect(span?.events.map((e) => e.name)).toEqual(["exception"]);
-		expect(logs).toHaveLength(1);
-		expect(logs[0]).toMatchObject({
-			level: "error",
-			msg: "blob event failed",
-		});
-		expect(logs[0]?.attrs?.error).toBeInstanceOf(Error);
+		expect(upload).toHaveBeenCalledTimes(2);
+		expect(upload.mock.calls[0]?.[0]).toBeInstanceOf(Request);
+		expect(flushAfterResponse).toHaveBeenCalledTimes(2);
+		await expect(first.text()).resolves.toBe("ok");
 	});
 });

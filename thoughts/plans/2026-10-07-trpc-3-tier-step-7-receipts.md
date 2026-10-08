@@ -524,15 +524,15 @@ One commit: `refactor(receipts): http controller for image and upload routes`, b
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] At https://personal-finance.localhost/receipts:
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes
+- [x] At https://personal-finance.localhost/receipts:
   - an upload mints, creates the row and extracts
   - the detail image renders
   - signed out, `/api/receipts/1/image` gives 401
   - in DevTools, the image response carries `nosniff` and `private, no-store`
-- [ ] `/security-review`: `src/server/auth/session-reader.ts`, both routes, the upload policy
+- [x] `/security-review`: `src/server/auth/session-reader.ts`, both routes, the upload policy
 
 ## Phase 6: The email write goes through `ReceiptsService`
 

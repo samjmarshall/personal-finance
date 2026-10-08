@@ -39,6 +39,44 @@ describe("VercelBlobStore.read", () => {
 	);
 });
 
+describe("VercelBlobStore.stream", () => {
+	it("opens a private read by pathname and hands back the stream with its stored type", async () => {
+		const stream = new Blob([new Uint8Array([1, 2, 3])]).stream();
+		getMock.mockResolvedValue({
+			statusCode: 200,
+			stream,
+			blob: { contentType: "image/png" },
+		} as never);
+
+		const result = await new VercelBlobStore().stream("receipts/r1.png");
+
+		expect(getMock).toHaveBeenCalledWith("receipts/r1.png", {
+			access: "private",
+		});
+		expect(result).toEqual({ stream, contentType: "image/png" });
+	});
+
+	it.each([[null], [{ statusCode: 404 }]])(
+		"answers null when the store answers %j",
+		async (answer) => {
+			getMock.mockResolvedValue(answer as never);
+
+			await expect(
+				new VercelBlobStore().stream("receipts/missing.png"),
+			).resolves.toBeNull();
+		},
+	);
+
+	it("lets a store refusal propagate", async () => {
+		const refusal = new Error("store down");
+		getMock.mockRejectedValue(refusal);
+
+		await expect(new VercelBlobStore().stream("receipts/r1.png")).rejects.toBe(
+			refusal,
+		);
+	});
+});
+
 describe("VercelBlobStore.write", () => {
 	// addRandomSuffix would rewrite the key we generated, so the pathname stored on
 	// the row would no longer resolve for either read sink.

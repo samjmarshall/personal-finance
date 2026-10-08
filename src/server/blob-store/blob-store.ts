@@ -5,6 +5,12 @@ export interface FetchedBlob {
 	mediaType: string;
 }
 
+/** A blob still on the wire, for piping to a response without buffering. */
+export interface StreamedBlob {
+	stream: ReadableStream<Uint8Array>;
+	contentType: string;
+}
+
 /** Where the store put a blob; both are what a caller records. */
 export interface StoredBlobLocation {
 	url: string;
@@ -15,6 +21,8 @@ export interface StoredBlobLocation {
 export interface BlobStore {
 	/** Throws when the blob is missing or the store refuses the read. */
 	read(pathname: string): Promise<FetchedBlob>;
+	/** `null` when the store has no such blob; throws when it refuses the read. */
+	stream(pathname: string): Promise<StreamedBlob | null>;
 	/** Private write keyed exactly by `pathname` (no random suffix). Throws on refusal. */
 	write(
 		pathname: string,
@@ -40,6 +48,12 @@ export class VercelBlobStore implements BlobStore {
 			await new Response(result.stream).arrayBuffer(),
 		);
 		return { bytes, mediaType: result.blob.contentType };
+	}
+
+	async stream(pathname: string): Promise<StreamedBlob | null> {
+		const result = await get(pathname, { access: "private" });
+		if (result?.statusCode !== 200) return null;
+		return { stream: result.stream, contentType: result.blob.contentType };
 	}
 
 	// addRandomSuffix off: the pathname the caller minted is the key the row records,

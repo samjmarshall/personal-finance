@@ -1,152 +1,66 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type RecordedQuery, recordingDb } from "~/server/db/recording-db.fake";
-
-// The route gates on the session, looks up the blob pathname and streams the blob
-// back with inert headers. Auth, the db and Blob are stubbed so this stays a unit
-// over that job.
-const { getSession } = vi.hoisted(() => ({
-	getSession:
-		vi.fn<
-			(opts: { headers: Headers }) => Promise<{ user: { id: string } } | null>
-		>(),
+// The route is a composition root: it builds the controller once and delegates.
+// Everything it wires is stubbed so this stays a unit over that job; the gates
+// themselves are covered by receipts.http.controller.test.ts.
+vi.mock("~/server/receipts/receipts.module", () => ({
+	receiptsService: { name: "receiptsService" },
 }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession } } }));
-
-// Mocks run before top-level consts, so the db sits in a hoisted holder each test resets.
-const store = vi.hoisted(() => ({
-	row: undefined as string | undefined,
-	db: undefined as unknown,
-	queries: [] as RecordedQuery[],
+vi.mock("~/server/auth/session-reader", () => ({
+	BetterAuthSessionReader: class {
+		readonly name = "sessionReader";
+	},
 }));
-vi.mock("~/server/db", () => ({
-	get db() {
-		return store.db;
+const { loggerWith } = vi.hoisted(() => ({
+	loggerWith: vi.fn(() => ({ name: "logger" })),
+}));
+vi.mock("~/server/observability/logging/logger", () => ({
+	createRootLogger: () => ({ with: loggerWith }),
+}));
+
+const { image, constructed } = vi.hoisted(() => ({
+	image: vi.fn<(request: Request, id: string) => Promise<Response>>(
+		async () => new Response("ok"),
+	),
+	constructed: vi.fn(),
+}));
+vi.mock("~/server/receipts/receipts.http.controller", () => ({
+	ReceiptsHttpController: class {
+		constructor(deps: unknown) {
+			constructed(deps);
+		}
+		image = image;
 	},
 }));
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }));
-vi.mock("@vercel/blob", () => ({ get }));
-
 const { GET } = await import("./route");
 
-const request = () =>
-	new Request("https://ledger.test/api/receipts/3/image", {
-		headers: { cookie: "session=abc" },
-	});
 const call = (id: string) =>
-	GET(request(), { params: Promise.resolve({ id }) });
-
-const BYTES = new Uint8Array([137, 80, 78, 71]);
-const blobStream = () =>
-	new ReadableStream<Uint8Array>({
-		start(controller) {
-			controller.enqueue(BYTES);
-			controller.close();
-		},
+	GET(new Request(`https://ledger.test/api/receipts/${id}/image`), {
+		params: Promise.resolve({ id }),
 	});
 
-beforeEach(() => {
-	vi.clearAllMocks();
-	getSession.mockResolvedValue({ user: { id: "member-1" } });
-	store.row = "receipts/r.png";
-	const { db, queries } = recordingDb((query) =>
-		store.row === undefined
-			? []
-			: query.sql.startsWith("select")
-				? [[store.row]]
-				: [],
-	);
-	store.db = db;
-	store.queries = queries;
-	get.mockResolvedValue({
-		statusCode: 200,
-		stream: blobStream(),
-		blob: { contentType: "image/png" },
-	});
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe("GET /api/receipts/[id]/image", () => {
-	it("401s a signed-out request without touching the db", async () => {
-		getSession.mockResolvedValue(null);
+	// One controller for the life of the module, built on the first request.
+	it("builds the controller once over the shared service, and delegates each request with its id", async () => {
+		const first = await call("3");
+		await call("4");
 
-		const response = await call("3");
-
-		expect(response.status).toBe(401);
-		await expect(response.text()).resolves.toBe("Unauthorized");
-		expect(store.queries).toEqual([]);
-		expect(get).not.toHaveBeenCalled();
-	});
-
-	it("reads the session from the request's own cookies", async () => {
-		await call("3");
-
-		expect(getSession.mock.calls[0]?.[0].headers.get("cookie")).toBe(
-			"session=abc",
-		);
-	});
-
-	it("404s a non-numeric id without touching the db", async () => {
-		const response = await call("abc");
-
-		expect(response.status).toBe(404);
-		await expect(response.text()).resolves.toBe("Not found");
-		expect(store.queries).toEqual([]);
-		expect(get).not.toHaveBeenCalled();
-	});
-
-	it("404s a missing row, after selecting its pathname by id", async () => {
-		store.row = undefined;
-
-		const response = await call("3");
-
-		expect(response.status).toBe(404);
-		await expect(response.text()).resolves.toBe("Not found");
-		expect(store.queries.map((q) => q.sql)).toMatchInlineSnapshot(`
-			[
-			  "select "blobPathname" from "receipt" where "receipt"."id" = $1",
-			]
-		`);
-		expect(store.queries[0]?.params).toEqual([3]);
-		expect(get).not.toHaveBeenCalled();
-	});
-
-	it.each([
-		["null", null],
-		["a 404", { statusCode: 404 }],
-	])("404s when Blob answers %s", async (_, answer) => {
-		get.mockResolvedValue(answer);
-
-		const response = await call("3");
-
-		expect(response.status).toBe(404);
-		await expect(response.text()).resolves.toBe("Not found");
-	});
-
-	it("streams the private blob under its type with inert, uncacheable headers", async () => {
-		const response = await call("3");
-
-		expect(response.status).toBe(200);
-		expect(get).toHaveBeenCalledWith("receipts/r.png", { access: "private" });
-		expect(new Uint8Array(await response.arrayBuffer())).toEqual(BYTES);
-		expect(response.headers.get("Content-Type")).toBe("image/png");
-		expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-		expect(response.headers.get("Cache-Control")).toBe("private, no-store");
-	});
-
-	it("downgrades a type outside the renderable list to octet-stream", async () => {
-		get.mockResolvedValue({
-			statusCode: 200,
-			stream: blobStream(),
-			blob: { contentType: "text/html" },
+		expect(constructed).toHaveBeenCalledTimes(1);
+		expect(constructed).toHaveBeenCalledWith({
+			service: { name: "receiptsService" },
+			sessions: expect.objectContaining({ name: "sessionReader" }),
+			logger: { name: "logger" },
 		});
-
-		const response = await call("3");
-
-		expect(response.status).toBe(200);
-		expect(response.headers.get("Content-Type")).toBe(
-			"application/octet-stream",
-		);
-		expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+		expect(loggerWith).toHaveBeenCalledWith({
+			domain: "receipts",
+			component: "image-route",
+		});
+		expect(image).toHaveBeenCalledTimes(2);
+		expect(image.mock.calls[0]?.[0]).toBeInstanceOf(Request);
+		expect(image.mock.calls.map(([, id]) => id)).toEqual(["3", "4"]);
+		await expect(first.text()).resolves.toBe("ok");
 	});
 });

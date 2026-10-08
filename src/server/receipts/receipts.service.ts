@@ -1,7 +1,9 @@
+import type { HandleUploadBody } from "@vercel/blob/client";
 import {
 	type MatchCandidate,
 	matchCandidates,
 	matchScanWindow,
+	RECEIPT_FILE_TYPES,
 	type Receipt,
 	type ReceiptCreateInput,
 	type ReceiptDetail,
@@ -11,7 +13,8 @@ import {
 import { ReceiptChannel } from "~/lib/constants";
 import { type PosthogUiConfig, posthogTraceUrl } from "~/lib/posthog-trace-url";
 import type { MembersService } from "~/server/auth/members.service";
-import type { BlobStore } from "~/server/blob-store/blob-store";
+import type { BlobStore, StreamedBlob } from "~/server/blob-store/blob-store";
+import type { ClientUploads } from "~/server/blob-store/client-uploads";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { assertRow } from "~/server/errors/assert-row";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
@@ -22,11 +25,35 @@ import { currentTraceId } from "~/server/observability/tracing/current-trace-id"
 import type { TransactionsService } from "~/server/transactions/transactions.service";
 import type { ReceiptFilter, ReceiptsRepository } from "./receipts.repository";
 
+// Receipts are photos or single-page PDFs; cap the upload so a minted token can't
+// write an unbounded blob. Widen if real receipts exceed it.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+// Only ever hand the browser a type it renders inertly. Blob metadata is set at
+// upload time by the member, so a `text/html` value would otherwise stream back
+// same-origin as executable markup — anything off this list downgrades to a
+// non-sniffable octet-stream (paired with X-Content-Type-Options at the route).
+const RENDERABLE_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"application/pdf",
+]);
+
+// Blob passes a throw from the token hook straight through, so a class survives
+// to the catch where a matched message string could silently stop matching.
+export class UploadUnauthorizedError extends Error {
+	constructor() {
+		super("Unauthorized");
+	}
+}
+
 const NOT_FOUND_MESSAGE = "Receipt not found.";
 const ITEM_NOT_FOUND_MESSAGE = "Receipt item not found.";
 // Picking an Expense or Category can fail if another tab just deleted it.
 const ITEM_FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
+
+export type ReceiptImage = StreamedBlob;
 
 const distinctIds = <T>(ids: (T | null)[]) => [
 	...new Set(ids.filter((id): id is T => id !== null)),
@@ -43,7 +70,8 @@ interface ReceiptsServiceDeps {
 	transactions: Pick<TransactionsService, "descriptionsByIds" | "inDateWindow">;
 	expenses: Pick<ExpensesService, "namesByIds">;
 	categories: Pick<CategoriesService, "namesByIds">;
-	blobStore: Pick<BlobStore, "delete">;
+	blobStore: Pick<BlobStore, "delete" | "stream">;
+	uploads: ClientUploads;
 	posthogUi: PosthogUiConfig;
 }
 
@@ -56,7 +84,8 @@ export class ReceiptsService {
 	>;
 	private readonly expenses: Pick<ExpensesService, "namesByIds">;
 	private readonly categories: Pick<CategoriesService, "namesByIds">;
-	private readonly blobStore: Pick<BlobStore, "delete">;
+	private readonly blobStore: Pick<BlobStore, "delete" | "stream">;
+	private readonly uploads: ClientUploads;
 	private readonly posthogUi: PosthogUiConfig;
 
 	constructor({
@@ -66,6 +95,7 @@ export class ReceiptsService {
 		expenses,
 		categories,
 		blobStore,
+		uploads,
 		posthogUi,
 	}: ReceiptsServiceDeps) {
 		this.repository = repository;
@@ -74,6 +104,7 @@ export class ReceiptsService {
 		this.expenses = expenses;
 		this.categories = categories;
 		this.blobStore = blobStore;
+		this.uploads = uploads;
 		this.posthogUi = posthogUi;
 	}
 
@@ -163,6 +194,42 @@ export class ReceiptsService {
 		} catch {
 			// A leftover file is harmless; the row (the thing that matters) is gone.
 		}
+	}
+
+	// Reads by `blobPathname`, never the member-supplied `blobUrl`: the SDK resolves
+	// a pathname against *our* store token, so a URL pointing at a foreign public
+	// store can't be streamed back same-origin as `text/html`.
+	async openImage(id: number): Promise<ReceiptImage> {
+		const pathname = await this.repository.findBlobPathname(id);
+		if (pathname === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
+		const blob = await this.blobStore.stream(pathname);
+		if (!blob) throw new NotFoundError("Receipt image not found.");
+		return {
+			stream: blob.stream,
+			contentType: RENDERABLE_TYPES.has(blob.contentType)
+				? blob.contentType
+				: "application/octet-stream",
+		};
+	}
+
+	// The only server step in the client-upload flow: mint a short-lived Blob token
+	// scoped to the signed-in member. The row is created separately by `create`.
+	// The gate sits inside the grant, so Blob resolves its token first and a
+	// completion webhook (no member, no grant) is never refused here.
+	answerUpload(
+		request: Request,
+		event: HandleUploadBody,
+		memberId: string | undefined,
+	): Promise<unknown> {
+		return this.uploads.answer(request, event, async () => {
+			if (memberId === undefined) throw new UploadUnauthorizedError();
+			return {
+				allowedContentTypes: [...RECEIPT_FILE_TYPES],
+				maximumSizeInBytes: MAX_UPLOAD_BYTES,
+				addRandomSuffix: true,
+				tokenPayload: JSON.stringify({ userId: memberId }),
+			};
+		});
 	}
 
 	// Read-time, never cached: a transaction another receipt confirmed meanwhile

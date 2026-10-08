@@ -3,12 +3,14 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	matchScanWindow,
+	RECEIPT_FILE_TYPES,
 	type Receipt,
 	type ReceiptItem,
 } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import type { MembersService } from "~/server/auth/members.service";
 import type { BlobStore } from "~/server/blob-store/blob-store";
+import type { ClientUploads } from "~/server/blob-store/client-uploads";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
@@ -21,7 +23,7 @@ import {
 	unstaged,
 } from "~/test/fakes";
 import type { ReceiptsRepository } from "./receipts.repository";
-import { ReceiptsService } from "./receipts.service";
+import { ReceiptsService, UploadUnauthorizedError } from "./receipts.service";
 
 // No tracer set up means no trace id. Register one to prove it reaches the row.
 const provider = new NodeTracerProvider();
@@ -44,7 +46,8 @@ interface Staged {
 	>;
 	expenses?: Partial<Pick<ExpensesService, "namesByIds">>;
 	categories?: Partial<Pick<CategoriesService, "namesByIds">>;
-	blobStore?: Partial<Pick<BlobStore, "delete">>;
+	blobStore?: Partial<Pick<BlobStore, "delete" | "stream">>;
+	uploads?: Partial<ClientUploads>;
 	projectId?: string;
 }
 
@@ -73,7 +76,8 @@ function serviceWith(staged: Staged = {}) {
 		},
 		expenses: { namesByIds: unstaged, ...staged.expenses },
 		categories: { namesByIds: unstaged, ...staged.categories },
-		blobStore: { delete: unstaged, ...staged.blobStore },
+		blobStore: { delete: unstaged, stream: unstaged, ...staged.blobStore },
+		uploads: { answer: unstaged, ...staged.uploads },
 		posthogUi: {
 			uiHost: "https://us.posthog.com",
 			projectId: "projectId" in staged ? staged.projectId : "123",
@@ -565,5 +569,134 @@ describe.each([
 
 		expect(thrown).toBeInstanceOf(NotFoundError);
 		expect(thrown).toMatchObject({ message: "Receipt item not found." });
+	});
+});
+
+describe("openImage", () => {
+	const stream = new Blob([new Uint8Array([1])]).stream();
+
+	it("streams the blob the row points at, under its stored type", async () => {
+		const pathnames = recorder("receipts/r.png");
+		const streams = recorder({ stream, contentType: "image/png" });
+		const service = serviceWith({
+			repository: { findBlobPathname: pathnames.method },
+			blobStore: { stream: streams.method },
+		});
+
+		await expect(service.openImage(42)).resolves.toEqual({
+			stream,
+			contentType: "image/png",
+		});
+		expect(pathnames.calls).toEqual([[42]]);
+		expect(streams.calls).toEqual([["receipts/r.png"]]);
+	});
+
+	it("404s a missing row without opening the store", async () => {
+		const service = serviceWith({
+			repository: { findBlobPathname: async () => undefined },
+		});
+
+		const thrown = await service.openImage(42).catch((error) => error);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Receipt not found." });
+	});
+
+	it("404s a blob the store no longer has", async () => {
+		const service = serviceWith({
+			repository: { findBlobPathname: async () => "receipts/r.png" },
+			blobStore: { stream: async () => null },
+		});
+
+		const thrown = await service.openImage(42).catch((error) => error);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Receipt image not found." });
+	});
+
+	// A member sets the blob's type at upload, so `text/html` would otherwise stream
+	// back same-origin as executable markup.
+	it.each([
+		["image/jpeg", "image/jpeg"],
+		["image/png", "image/png"],
+		["application/pdf", "application/pdf"],
+		["text/html", "application/octet-stream"],
+		["image/svg+xml", "application/octet-stream"],
+	])("serves %s as %s", async (stored, served) => {
+		const service = serviceWith({
+			repository: { findBlobPathname: async () => "receipts/r.png" },
+			blobStore: { stream: async () => ({ stream, contentType: stored }) },
+		});
+
+		await expect(service.openImage(42)).resolves.toEqual({
+			stream,
+			contentType: served,
+		});
+	});
+});
+
+describe("answerUpload", () => {
+	const event = {
+		type: "blob.generate-client-token",
+		payload: {
+			pathname: "receipts/a.jpg",
+			callbackUrl: "https://ledger.test/api/receipts/upload",
+			clientPayload: null,
+			multipart: false,
+		},
+	} as const;
+	const request = new Request("https://ledger.test/api/receipts/upload");
+
+	// The fake runs the grant the way Blob does, so the policy is observable.
+	const grantRunner =
+		(answered: unknown[]): ClientUploads["answer"] =>
+		async (_request, _event, grant) => {
+			answered.push(await grant("receipts/a.jpg"));
+			return { type: "blob.generate-client-token", clientToken: "tok" };
+		};
+
+	it("hands Blob the request and event, and returns its answer", async () => {
+		const seen: unknown[][] = [];
+		const service = serviceWith({
+			uploads: {
+				answer: async (...args) => {
+					seen.push(args);
+					return "answer";
+				},
+			},
+		});
+
+		await expect(
+			service.answerUpload(request, event, "member-1"),
+		).resolves.toBe("answer");
+		expect(seen[0]?.slice(0, 2)).toEqual([request, event]);
+	});
+
+	it("grants the receipt upload policy to a signed-in member", async () => {
+		const grants: unknown[] = [];
+		const service = serviceWith({ uploads: { answer: grantRunner(grants) } });
+
+		await service.answerUpload(request, event, "member-1");
+
+		expect(grants).toEqual([
+			{
+				allowedContentTypes: [...RECEIPT_FILE_TYPES],
+				maximumSizeInBytes: 10 * 1024 * 1024,
+				addRandomSuffix: true,
+				tokenPayload: JSON.stringify({ userId: "member-1" }),
+			},
+		]);
+	});
+
+	// The gate lives in the grant, not before the call: Blob resolves its own token
+	// first, and a completion webhook (no member) never reaches the grant at all.
+	it("refuses the grant when nobody is signed in", async () => {
+		const service = serviceWith({
+			uploads: { answer: grantRunner([]) },
+		});
+
+		await expect(
+			service.answerUpload(request, event, undefined),
+		).rejects.toThrow(UploadUnauthorizedError);
 	});
 });
