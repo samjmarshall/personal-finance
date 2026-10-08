@@ -1,17 +1,45 @@
-import { TRPCError } from "@trpc/server";
+import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ReceiptStatus } from "~/lib/constants";
+import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
+import {
+	type Respond,
+	recordingDb,
+	rowOf,
+} from "~/server/db/recording-db.fake";
+import type { OutboxEventDescriptor } from "~/server/inngest/events";
+import type { OutboxEvents, OutboxWrites } from "~/server/outbox";
+import { receipts } from "~/server/receipts/receipts.schema";
 
 // Importing the router pulls in ~/server/api/trpc, which loads the real db + auth
 // (and through them ~/env). Stub those so this stays a pure unit test.
 vi.mock("~/server/db", () => ({ db: {} }));
 vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 
-// The write door is exercised in outbox/outbox.service.test.ts; here we only assert what
-// retry hands it (the conditional update + the derived receipt/retry event).
-const { commitWithOutbox } = vi.hoisted(() => ({ commitWithOutbox: vi.fn() }));
-vi.mock("~/server/outbox", () => ({ commitWithOutbox }));
+// Stand-in write door: runs the writes in the test db's transaction and records the
+// derived events, so the update SQL and its begin/commit/rollback land in the
+// snapshot. The real door is exercised in outbox/outbox.service.test.ts.
+const door = vi.hoisted(() => ({
+	db: undefined as
+		| {
+				transaction: (run: (tx: never) => Promise<unknown>) => Promise<unknown>;
+		  }
+		| undefined,
+	events: [] as OutboxEventDescriptor[],
+}));
+vi.mock("~/server/outbox", () => ({
+	commitWithOutbox: async <T>(
+		writes: OutboxWrites<T>,
+		events: OutboxEvents<T>,
+	): Promise<T> => {
+		if (!door.db) throw new Error("door has no db");
+		return (await door.db.transaction(async (tx) => {
+			const result = await writes(tx);
+			door.events.push(...events(result));
+			return result;
+		})) as T;
+	},
+}));
 
 // del is the only external I/O in delete; assert it's called with the stored pathname.
 const { del } = vi.hoisted(() => ({ del: vi.fn() }));
@@ -27,7 +55,8 @@ vi.mock("~/server/observability/tracing/current-trace-id", () => ({
 const { createCallerFactory } = await import("~/server/api/trpc");
 const { receiptRouter } = await import("./receipts");
 
-function caller(db: unknown) {
+function caller(db: ReturnType<typeof recordingDb>["db"]) {
+	door.db = db as never;
 	return createCallerFactory(receiptRouter)({
 		db,
 		session: { user: { id: "user-1" } },
@@ -35,145 +64,211 @@ function caller(db: unknown) {
 	} as never);
 }
 
-// Fake tx whose update().set().where().returning() yields the given rows — [] when
-// the conditional (id AND status=failed) matches nothing. Captures the set() payload
-// so a test can assert what the update wrote.
-// biome-ignore lint/suspicious/noExplicitAny: hand-rolled tx stands in for drizzle.
-function updateTx(returning: any[], capture?: (values: any) => void) {
-	return {
-		update: () => ({
-			// biome-ignore lint/suspicious/noExplicitAny: values are the row under test.
-			set: (values: any) => {
-				capture?.(values);
-				return { where: () => ({ returning: async () => returning }) };
-			},
-		}),
-	};
-}
+const RECEIPT_FIELDS = Object.keys(getTableColumns(receipts));
+
+const FAILED = {
+	id: 9,
+	status: ReceiptStatus.Pending,
+	channel: ReceiptChannel.Upload,
+	userId: "user-1",
+	blobUrl: "https://blob/r.jpg",
+	blobPathname: "r.jpg",
+	contentType: "image/jpeg",
+	traceId: "trace-retry",
+	createdAt: new Date("2026-09-10T01:00:00.000Z"),
+};
 
 beforeEach(() => {
-	vi.spyOn(console, "log").mockImplementation(() => {});
-	commitWithOutbox.mockReset();
+	// retry stamps updatedAt with `new Date()`; pin it so the snapshot's params
+	// don't drift.
+	vi.useFakeTimers({ toFake: ["Date"] });
+	vi.setSystemTime(new Date("2026-09-10T02:00:00.000Z"));
+	door.events = [];
 	del.mockReset();
 	currentTraceId.mockReset().mockReturnValue("trace-retry");
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => vi.useRealTimers());
 
 describe("receipt.retry", () => {
-	it("flips a failed receipt to pending, overwrites the trace id, clears the error, and mints one receipt/retry event", async () => {
-		// biome-ignore lint/suspicious/noExplicitAny: captured derived events.
-		let outboxEvents: any;
-		// biome-ignore lint/suspicious/noExplicitAny: captured set() payload.
-		let setValues: any;
-		commitWithOutbox.mockImplementation(async (writes, events) => {
-			const row = await writes(updateTx([{ id: 9 }], (v) => (setValues = v)));
-			outboxEvents = events(row);
-			return row;
-		});
+	// The guarded update returns the row only while it is still `failed`.
+	function retryDb(updated: boolean) {
+		return recordingDb((query) =>
+			query.sql.startsWith("update")
+				? updated
+					? [rowOf(RECEIPT_FIELDS, FAILED)]
+					: []
+				: new Error(`unexpected query: ${query.sql}`),
+		);
+	}
 
-		await caller({}).retry({ id: 9 });
+	it("flips a failed receipt to pending, overwrites the trace id and clears the error, in one transaction", async () => {
+		const { db, queries } = retryDb(true);
 
-		expect(setValues).toEqual({
-			status: ReceiptStatus.Pending,
-			traceId: "trace-retry",
-			error: null,
-		});
-		expect(outboxEvents).toHaveLength(1);
-		expect(outboxEvents[0].name).toBe("receipt/retry");
-		expect(outboxEvents[0].data).toEqual({
+		await caller(db).retry({ id: 9 });
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "begin",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      "pending",
+			      null,
+			      "trace-retry",
+			      "2026-09-10T02:00:00.000Z",
+			      9,
+			      "failed",
+			    ],
+			    "sql": "update "receipt" set "status" = $1, "error" = $2, "traceId" = $3, "updatedAt" = $4 where ("receipt"."id" = $5 and "receipt"."status" = $6) returning "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt"",
+			  },
+			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "commit",
+			  },
+			]
+		`);
+	});
+
+	it("mints exactly one receipt/retry event carrying the row id as a number", async () => {
+		const { db } = retryDb(true);
+
+		await caller(db).retry({ id: 9 });
+
+		expect(door.events).toHaveLength(1);
+		expect(door.events[0]?.name).toBe("receipt/retry");
+		expect(door.events[0]?.data).toEqual({
 			receiptId: 9,
 			_trace: expect.any(Object),
 		});
-		expect(typeof outboxEvents[0].data.receiptId).toBe("number");
 	});
 
-	it("refuses a non-failed receipt (conditional update matches nothing) and mints nothing", async () => {
-		// biome-ignore lint/suspicious/noExplicitAny: captured derived events.
-		let outboxEvents: any;
-		commitWithOutbox.mockImplementation(async (writes, events) => {
-			const row = await writes(updateTx([]));
-			outboxEvents = events(row);
-			return row;
-		});
+	it("refuses a non-failed receipt with the exact message, rolls back and mints nothing", async () => {
+		const { db, queries } = retryDb(false);
 
-		await expect(caller({}).retry({ id: 9 })).rejects.toMatchObject({
+		await expect(caller(db).retry({ id: 9 })).rejects.toMatchObject({
 			code: "NOT_FOUND",
+			message: "Receipt not found or not in a failed state.",
 		});
-		expect(outboxEvents).toBeUndefined();
+		expect(queries.map((q) => q.sql).slice(-1)).toEqual(["rollback"]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "begin",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      "pending",
+			      null,
+			      "trace-retry",
+			      "2026-09-10T02:00:00.000Z",
+			      9,
+			      "failed",
+			    ],
+			    "sql": "update "receipt" set "status" = $1, "error" = $2, "traceId" = $3, "updatedAt" = $4 where ("receipt"."id" = $5 and "receipt"."status" = $6) returning "id", "status", "channel", "userId", "blobUrl", "blobPathname", "contentType", "contentHash", "vendor", "receiptDate", "total", "currency", "rawJson", "error", "traceId", "transactionId", "duplicateOfId", "createdAt", "updatedAt"",
+			  },
+			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "rollback",
+			  },
+			]
+		`);
+		expect(door.events).toEqual([]);
 	});
 });
 
-// delete runs two selects — the blobPathname lookup, then the duplicate-copy probe.
-// select() consumes one queued batch per call; .where() yields an awaitable that also
-// chains .limit, so both `await …where()` and `await …where().limit(1)` resolve.
-function selectQueue(...batches: unknown[][]) {
-	let i = 0;
-	return () => {
-		const rows = batches[i++] ?? [];
-		const result = Object.assign(Promise.resolve(rows), {
-			limit: () => Promise.resolve(rows),
-		});
-		return { from: () => ({ where: () => result }) };
-	};
-}
-
 describe("receipt.delete", () => {
-	it("removes the row then best-effort deletes the stored blob pathname", async () => {
-		let deletedId: number | undefined;
-		const db = {
-			select: selectQueue([{ blobPathname: "receipt-abc.jpg" }], []),
-			delete: () => ({
-				where: async (clause: unknown) => {
-					// eq(receipts.id, 3) — presence is enough; assert delete ran.
-					deletedId = 3;
-					void clause;
-				},
-			}),
+	// The three statements delete runs, told apart by their text.
+	function deleteDb({
+		pathname,
+		duplicateId,
+	}: {
+		pathname?: string;
+		duplicateId?: number;
+	}) {
+		const respond: Respond = (query) => {
+			if (query.sql.startsWith("select") && query.sql.includes("blobPathname"))
+				return pathname === undefined ? [] : [[pathname]];
+			if (query.sql.startsWith("select") && query.sql.includes("duplicateOfId"))
+				return duplicateId === undefined ? [] : [[duplicateId]];
+			if (query.sql.startsWith("delete")) return [];
+			return new Error(`unexpected query: ${query.sql}`);
 		};
+		return recordingDb(respond);
+	}
+
+	it("removes the row then best-effort deletes the stored blob pathname", async () => {
+		const { db, queries } = deleteDb({ pathname: "receipt-abc.jpg" });
 
 		const result = await caller(db).delete({ id: 3 });
 
-		expect(deletedId).toBe(3);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      3,
+			    ],
+			    "sql": "select "blobPathname" from "receipt" where "receipt"."id" = $1",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      3,
+			      1,
+			    ],
+			    "sql": "select "id" from "receipt" where "receipt"."duplicateOfId" = $1 limit $2",
+			  },
+			  {
+			    "method": "execute",
+			    "params": [
+			      3,
+			    ],
+			    "sql": "delete from "receipt" where "receipt"."id" = $1",
+			  },
+			]
+		`);
 		expect(del).toHaveBeenCalledWith("receipt-abc.jpg");
 		expect(result).toEqual({ success: true });
 	});
 
 	it("swallows a blob del failure — the row delete already committed", async () => {
 		del.mockRejectedValueOnce(new Error("blob gone"));
-		const db = {
-			select: selectQueue([{ blobPathname: "x.jpg" }], []),
-			delete: () => ({ where: async () => {} }),
-		};
+		const { db, queries } = deleteDb({ pathname: "x.jpg" });
 
 		await expect(caller(db).delete({ id: 1 })).resolves.toEqual({
 			success: true,
 		});
+		expect(queries.some((q) => q.sql.startsWith("delete"))).toBe(true);
 	});
 
 	it("blocks with CONFLICT (row kept) when duplicate copies still reference it", async () => {
-		let deleted = false;
-		const db = {
-			select: selectQueue([{ blobPathname: "x.jpg" }], [{ id: 99 }]),
-			delete: () => ({
-				where: async () => {
-					deleted = true;
-				},
-			}),
-		};
+		const { db, queries } = deleteDb({ pathname: "x.jpg", duplicateId: 99 });
 
 		await expect(caller(db).delete({ id: 5 })).rejects.toMatchObject({
 			code: "CONFLICT",
+			message: "Delete the duplicate copies of this receipt first.",
 		});
-		expect(deleted).toBe(false);
+		expect(queries.some((q) => q.sql.startsWith("delete"))).toBe(false);
 		expect(del).not.toHaveBeenCalled();
 	});
 
-	it("404s when the receipt is gone", async () => {
-		const db = { select: selectQueue([]) };
+	it("404s with the exact message when the receipt is gone", async () => {
+		const { db, queries } = deleteDb({});
 
-		await expect(caller(db).delete({ id: 404 })).rejects.toBeInstanceOf(
-			TRPCError,
-		);
+		await expect(caller(db).delete({ id: 404 })).rejects.toMatchObject({
+			code: "NOT_FOUND",
+			message: "Receipt not found.",
+		});
+		expect(queries).toHaveLength(1);
 		expect(del).not.toHaveBeenCalled();
 	});
 });

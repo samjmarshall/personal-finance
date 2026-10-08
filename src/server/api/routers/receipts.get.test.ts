@@ -1,5 +1,5 @@
 import { getTableColumns } from "drizzle-orm";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import {
@@ -15,14 +15,16 @@ vi.mock("~/server/db", () => ({ db: {} }));
 vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock("~/server/outbox", () => ({ commitWithOutbox: vi.fn() }));
 vi.mock("@vercel/blob", () => ({ del: vi.fn() }));
-// No project id, so no trace link. The logger re-exports a log-level enum from
-// env, so the mock needs it too.
+// No project id by default, so no trace link; a case sets one. The logger
+// re-exports a log-level enum from env, so the mock needs it too.
+const env = vi.hoisted(() => ({
+	POSTHOG_UI_HOST: "https://us.posthog.com",
+	POSTHOG_PROJECT_ID: undefined as string | undefined,
+	PROJECT_NAME: "personal-finance",
+	LOG_LEVEL: "info",
+}));
 vi.mock("~/env", () => ({
-	env: {
-		POSTHOG_UI_HOST: "https://us.posthog.com",
-		PROJECT_NAME: "personal-finance",
-		LOG_LEVEL: "info",
-	},
+	env,
 	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 
@@ -62,7 +64,7 @@ const RECEIPT = {
 	currency: "AUD",
 	rawJson: null,
 	error: null,
-	traceId: null,
+	traceId: null as string | null,
 	transactionId: 77,
 	duplicateOfId: null,
 	createdAt: new Date("2026-09-10T01:00:00.000Z"),
@@ -97,6 +99,10 @@ function getDb(
 	};
 	return recordingDb(respond);
 }
+
+beforeEach(() => {
+	env.POSTHOG_PROJECT_ID = undefined;
+});
 
 describe("receipt.get", () => {
 	it("selects the receipt, then its items with their resolved labels", async () => {
@@ -138,11 +144,31 @@ describe("receipt.get", () => {
 		});
 	});
 
-	it("404s when the receipt is gone", async () => {
+	it("builds the PostHog trace link when a project id and trace id are set", async () => {
+		env.POSTHOG_PROJECT_ID = "42";
+		const { db } = getDb({ ...RECEIPT, traceId: "trace-abc" }, []);
+
+		const detail = await caller(db).get({ id: 3 });
+
+		expect(detail.traceUrl).toBe(
+			"https://us.posthog.com/project/42/tracing?trace=trace-abc",
+		);
+	});
+
+	it("gives no trace link without a project id", async () => {
+		const { db } = getDb({ ...RECEIPT, traceId: "trace-abc" }, []);
+
+		const detail = await caller(db).get({ id: 3 });
+
+		expect(detail.traceUrl).toBeNull();
+	});
+
+	it("404s when the receipt is gone, without reading its items", async () => {
 		const { db, queries } = getDb(null, []);
 
 		await expect(caller(db).get({ id: 3 })).rejects.toMatchObject({
 			code: "NOT_FOUND",
+			message: "Receipt not found.",
 		});
 		expect(queries).toHaveLength(1);
 	});

@@ -14,6 +14,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { RECEIPT_FILE_TYPES } from "~/domain/receipts";
 import type { Logger } from "~/server/observability/logging/logger";
 import { flushAfterResponse } from "~/server/observability/sdk/flush.fake";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
@@ -170,6 +171,23 @@ describe("POST /api/receipts/upload", () => {
 			span?.spanContext().traceId,
 		);
 		expect(logs).toEqual([]);
+	});
+
+	// The fake handleUpload above never reads the policy, so capture the options the
+	// route hands Blob and call the token hook the way Blob does.
+	it("mints with the receipt upload policy", async () => {
+		await post();
+
+		const [options] = handleUpload.mock.calls[0] ?? [];
+		expect(options?.onUploadCompleted).toBeTypeOf("function");
+		await expect(
+			options?.onBeforeGenerateToken("receipts/a.jpg", null, false),
+		).resolves.toEqual({
+			allowedContentTypes: [...RECEIPT_FILE_TYPES],
+			maximumSizeInBytes: 10 * 1024 * 1024,
+			addRandomSuffix: true,
+			tokenPayload: JSON.stringify({ userId: "m1" }),
+		});
 	});
 
 	// In production Blob calls back with upload-completed: no browser, no session.
