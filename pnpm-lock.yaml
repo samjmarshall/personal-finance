@@ -200,7 +200,7 @@ importers:
         version: 1.44.0
       portless:
         specifier: ^0.15.6
-        version: 0.15.6
+        version: 0.15.7
       postcss:
         specifier: ^8.5.28
         version: 8.5.28
@@ -4058,8 +4058,8 @@ packages:
     resolution: {integrity: sha512-nDywThFk1i4BQK4twPQ6TA4RT8bDY96yeuCVBWL3ePARCiEKDRSrNGbFIgUJpLp+XeIR65v8ra7WuJOFUBtkMA==}
     engines: {node: '>=8'}
 
-  portless@0.15.6:
-    resolution: {integrity: sha512-uOAwWLF32rmyEGFASzSO0VOaqb/AQxFCCzyZbPGd82UNNOfIEvc09zy92nroNibE5HNfzV4oVB0ObKbPXgkM9A==}
+  portless@0.15.7:
+    resolution: {integrity: sha512-fffMnzfwU/0chJmOMmeAOjFouRsZUmdJagxdqE4DATLw83ssAnHX4BzvNqOI5vBgsuvWLX5ZLg63bzs7zdVFNw==}
     engines: {node: '>=24'}
     os: [darwin, linux, win32]
     hasBin: true
@@ -8287,7 +8287,7 @@ snapshots:
     dependencies:
       find-up: 3.0.0
 
-  portless@0.15.6: {}
+  portless@0.15.7: {}
 
   postal-mime@2.7.5: {}
 
