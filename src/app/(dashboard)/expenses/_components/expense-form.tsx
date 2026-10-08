@@ -98,6 +98,8 @@ export function ExpenseForm({
 			utils.expense.countsByCategory.invalidate(undefined, {
 				refetchType: "all",
 			}),
+			// Linked Transactions show this Expense's name and Category.
+			utils.transaction.list.invalidate(),
 		]);
 		onClose();
 	};

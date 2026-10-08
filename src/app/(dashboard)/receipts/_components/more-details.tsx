@@ -285,7 +285,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			<Collapsible onOpenChange={setOpen} open={open}>
 				<CollapsibleTrigger
 					className={cn(
-						"flex w-full rounded-lg outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50",
+						"flex w-full rounded-lg border border-transparent outline-none transition-colors hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
 						open && "rounded-b-none",
 					)}
 				>

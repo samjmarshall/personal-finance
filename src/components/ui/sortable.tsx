@@ -3,6 +3,7 @@
 
 import { useRender } from "@base-ui/react/use-render";
 import type {
+	DndContextProps,
 	DragEndEvent,
 	DraggableAttributes,
 	DraggableSyntheticListeners,
@@ -131,6 +132,7 @@ export interface SortableRootProps<T>
 	onDragStart?: (event: DragStartEvent) => void;
 	onDragEnd?: (event: DragEndEvent) => void;
 	modifiers?: Modifiers;
+	accessibility?: DndContextProps["accessibility"];
 	asChild?: boolean;
 }
 
@@ -145,6 +147,7 @@ function Sortable<T>({
 	onDragStart,
 	onDragEnd,
 	modifiers,
+	accessibility,
 	children,
 	...props
 }: SortableRootProps<T>) {
@@ -253,6 +256,7 @@ function Sortable<T>({
 	return (
 		<SortableInternalContext.Provider value={contextValue}>
 			<DndContext
+				accessibility={accessibility}
 				id={dndId}
 				measuring={{
 					droppable: {

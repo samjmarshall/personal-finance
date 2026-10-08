@@ -210,16 +210,16 @@ export function UnplannedView() {
 							    column as the amounts it sums (col 3); the picker column
 							    (col 4) stays empty. */}
 								<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
-									<span className="flex items-center gap-2 sm:col-span-2">
-										<span className="font-semibold text-foreground text-sm">
+									<span className="flex min-w-0 items-center gap-2 sm:col-span-2">
+										<span className="truncate font-semibold text-foreground text-sm">
 											{label}
 										</span>
-										<span className="text-muted-foreground text-xs">
+										<span className="shrink-0 text-muted-foreground text-xs">
 											({rowsInGroup.length})
 										</span>
 									</span>
 									<Money
-										className="font-medium text-sm sm:text-right"
+										className="shrink-0 whitespace-nowrap font-medium text-sm sm:text-right"
 										signed
 										tone="ledger"
 										value={groupTotal}

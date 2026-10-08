@@ -33,7 +33,11 @@ export function CategoryForm({
 	const [error, setError] = useState<string | null>(null);
 
 	const onSuccess = async () => {
-		await utils.category.list.invalidate();
+		await Promise.all([
+			utils.category.list.invalidate(),
+			// Transactions show the Category name.
+			utils.transaction.list.invalidate(),
+		]);
 		onClose();
 	};
 	// Server/mutation failures surface via the global MutationCache toast

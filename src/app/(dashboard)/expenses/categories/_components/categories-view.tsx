@@ -1,5 +1,6 @@
 "use client";
 
+import type { Announcements, UniqueIdentifier } from "@dnd-kit/core";
 import { GripVerticalIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -28,6 +29,8 @@ export function CategoriesView() {
 			await Promise.all([
 				utils.category.list.invalidate(),
 				utils.expense.countsByCategory.invalidate(),
+				// Deleting a Category clears it from the Transactions that used it.
+				utils.transaction.list.invalidate(),
 			]);
 		},
 	});
@@ -56,6 +59,25 @@ export function CategoriesView() {
 
 	const getItemValue = (category: Category) => String(category.id);
 
+	// Screen readers hear the Category name and place, not its id. The first
+	// "is at" replaces the pick-up message at once, so it must read as one too.
+	const indexOf = (id: UniqueIdentifier) =>
+		categories.findIndex((category) => getItemValue(category) === id);
+	const nameOf = (id: UniqueIdentifier) => categories[indexOf(id)]?.name;
+	const placeOf = (id: UniqueIdentifier) =>
+		`position ${indexOf(id) + 1} of ${categories.length}`;
+	const announcements: Announcements = {
+		onDragStart: ({ active }) => `Picked up ${nameOf(active.id)}.`,
+		onDragOver: ({ active, over }) =>
+			over ? `${nameOf(active.id)} is at ${placeOf(over.id)}.` : undefined,
+		onDragEnd: ({ active, over }) =>
+			over
+				? `${nameOf(active.id)} dropped at ${placeOf(over.id)}.`
+				: `${nameOf(active.id)} dropped.`,
+		onDragCancel: ({ active }) =>
+			`Cancelled. ${nameOf(active.id)} is back where it was.`,
+	};
+
 	function openAdd() {
 		setEditing(null);
 		setFormKey((key) => key + 1);
@@ -82,6 +104,7 @@ export function CategoriesView() {
 
 			<div className="mt-6 flex flex-col gap-3">
 				<Sortable
+					accessibility={{ announcements }}
 					className="space-y-2"
 					getItemValue={getItemValue}
 					onValueChange={handleSortOrderChange}
@@ -96,24 +119,26 @@ export function CategoriesView() {
 									<CardContent className="flex items-center justify-between gap-4">
 										<SortableItemHandle
 											aria-label={`Reorder ${category.name}`}
-											className="rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+											className="rounded-md border border-transparent text-muted-foreground outline-none hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 										>
 											<GripVerticalIcon className="size-4" />
 										</SortableItemHandle>
-										<div className="flex min-w-0 flex-1 items-center gap-2">
-											<span className="truncate font-semibold text-foreground text-sm">
-												{category.name}
-											</span>
-											<Badge className="border-border bg-muted text-muted-foreground">
-												{expenseCount} item
-												{expenseCount === 1 ? "" : "s"}
-											</Badge>
+										<div className="min-w-0 flex-1">
+											<div className="flex items-center gap-2">
+												<span className="truncate font-semibold text-foreground text-sm">
+													{category.name}
+												</span>
+												<Badge className="border-border bg-muted text-muted-foreground">
+													{expenseCount} item
+													{expenseCount === 1 ? "" : "s"}
+												</Badge>
+											</div>
+											{category.description && (
+												<p className="mt-1 truncate text-muted-foreground text-sm">
+													{category.description}
+												</p>
+											)}
 										</div>
-										{category.description && (
-											<p className="mt-1 truncate text-muted-foreground text-sm">
-												{category.description}
-											</p>
-										)}
 										<div className="flex shrink-0 gap-0.5">
 											<button
 												aria-label={`Edit ${category.name}`}

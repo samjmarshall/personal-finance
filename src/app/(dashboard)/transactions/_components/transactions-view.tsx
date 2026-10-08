@@ -274,6 +274,7 @@ export function TransactionsView() {
 											{tx.group}
 											{tx.categoryName && (
 												<span className="mt-0.5 block text-muted-foreground text-xs">
+													<span className="sr-only">Category: </span>
 													{tx.categoryName}
 												</span>
 											)}
