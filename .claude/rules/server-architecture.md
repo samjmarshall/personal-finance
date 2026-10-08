@@ -12,7 +12,7 @@ paths:
 [adr004](../../docs/adr/adr004-domain-oriented-3-tier-server-architecture.md)
 is executed as a **class-based** controller / service / repository 3-tier, one
 domain per change (strangler). Reference implementations: `src/server/outbox/`
-(cron workers + the write door), `src/server/receipts/receipts.*` (event worker +
+(cron workers + the write door), `src/server/receipts/receipt-extraction.*` (event worker +
 external adapters) and `src/server/email/email.*` (HTTP webhook
 controller behind `src/app/api/receipts/inbound/route.ts`),
 `src/server/transactions/` (the reference tRPC domain) and `src/server/categories/`
@@ -27,7 +27,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 | `<domain>.<transport>.controller.ts` | presentation | Transport is `inngest`, `http` or `trpc` (`outbox.inngest.controller.ts`, `email.http.controller.ts`, `transactions.trpc.controller.ts`). Inngest `createFunction` declarations (id, triggers, retries, concurrency), an HTTP `handle(request: Request): Promise<Response>`, or a tRPC router object whose procedures do `.input()` + procedure auth + one `ctx.services.<svc>.<method>()` call, with no Drizzle and no try/catch. A procedure may call any domain's service. Filters, auth checks, then calls **one** service method. No rules. | the service class (tRPC: `ctx.services`); `logger: Logger` |
 | `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
-| `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptsService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
+| `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptExtractionService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
 | `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. `outbox.module.ts` exports `outboxService`. | —                                  |
 | `src/server/observability/`         | shared adapter | Shared observability provider, split OTel API vs SDK. API side (tiers may import): `logging/` (`Logger` port + `OtelLogger`), `tracing/` (`withSpan`, baggage, trace id, trace carrier), `errors/` (`captureException`, `reportError`, thrown-value helpers). SDK side: `sdk/` (boot `otel.ts`, sampler, `SpanAttributeProcessor`, prompt redaction, flush) — imported only by `instrumentation.ts`, route roots (`withFlush`) and test harnesses, never a tier. Framework adapters live with their consumer (`TracingMiddleware` in `src/server/inngest/middleware.ts`). Like `blob-store/` — lives outside any domain. | OTel SDK + PostHog SDKs            |
 
@@ -92,7 +92,7 @@ only once every link to it is an id.
   `captureException`. Exceptions are captured only at the four choke points:
   `onRequestError` (`src/instrumentation.ts`), the tRPC `observabilityMiddleware`,
   the tRPC route's `onError` (pre-procedure 5xx failures only — context build,
-  request read — which never reach the middleware), and the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptsService` calls
+  request read — which never reach the middleware), and the Inngest `TracingMiddleware.onRunError`. Exception: `ReceiptExtractionService` calls
   `captureException` on the park path because `onRunError` only fires on throws —
   parked terminal failures never throw, so the domain tier owns that capture.
   Tiers log through their injected `logger.error`; spans `recordException`.

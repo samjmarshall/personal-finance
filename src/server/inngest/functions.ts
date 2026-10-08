@@ -6,9 +6,9 @@ import { captureException } from "~/server/observability/errors/posthog";
 import { createRootLogger } from "~/server/observability/logging/logger";
 import { OutboxInngestController } from "~/server/outbox/outbox.inngest.controller";
 import { outboxService } from "~/server/outbox/outbox.module";
+import { DrizzleReceiptExtractionRepository } from "~/server/receipts/receipt-extraction.repository";
+import { ReceiptExtractionService } from "~/server/receipts/receipt-extraction.service";
 import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
-import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
-import { ReceiptsService } from "~/server/receipts/receipts.service";
 
 import { inngest } from "./client";
 
@@ -21,8 +21,8 @@ const outboxController = new OutboxInngestController({
 	service: outboxService,
 });
 
-const receiptsService = new ReceiptsService({
-	repository: new DrizzleReceiptsRepository({ db }),
+const receiptExtractionService = new ReceiptExtractionService({
+	repository: new DrizzleReceiptExtractionRepository({ db }),
 	blobStore: new VercelBlobStore(),
 	// The only place the receipts tier is bound to Bedrock; the service stays
 	// provider-agnostic behind `languageModel` (bedrock-invocation.md).
@@ -32,7 +32,7 @@ const receiptsService = new ReceiptsService({
 });
 const receiptsController = new ReceiptsInngestController({
 	inngest,
-	service: receiptsService,
+	service: receiptExtractionService,
 });
 
 export const functions = [

@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import { categories } from "~/server/categories/categories.schema";
 import {
-	DrizzleReceiptsRepository,
+	DrizzleReceiptExtractionRepository,
 	type ReceiptRow,
-} from "./receipts.repository";
+} from "./receipt-extraction.repository";
 import { receiptItems, receipts } from "./receipts.schema";
 
 const dialect = new PgDialect();
@@ -71,7 +71,7 @@ function harness({
 
 	return {
 		// biome-ignore lint/suspicious/noExplicitAny: hand-rolled fake stands in for the drizzle db.
-		repository: new DrizzleReceiptsRepository({ db: db as any }),
+		repository: new DrizzleReceiptExtractionRepository({ db: db as any }),
 		updates,
 		inserts,
 		getSelectWhere: () => selectWhere,
@@ -101,7 +101,7 @@ const receipt: ReceiptRow = {
 	updatedAt: null,
 };
 
-describe("DrizzleReceiptsRepository", () => {
+describe("DrizzleReceiptExtractionRepository", () => {
 	describe("findById", () => {
 		it("returns the one row by id, or undefined", async () => {
 			const h = harness({ rows: [receipt] });

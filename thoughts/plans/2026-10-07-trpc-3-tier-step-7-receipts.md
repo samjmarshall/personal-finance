@@ -297,9 +297,9 @@ One pure-rename commit: `refactor(receipts): rename worker to ReceiptExtractionS
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes. `registry-golden.test.ts` is unchanged and green.
-- [ ] `git show --stat` shows the renames as `R` with no logic hunks
+- [x] `make check` passes
+- [x] `make test` passes. `registry-golden.test.ts` is unchanged and green.
+- [x] `git show --stat` shows the renames as `R` with no logic hunks
 
 ## Phase 3: Module files; the worker reads Categories through the service
 

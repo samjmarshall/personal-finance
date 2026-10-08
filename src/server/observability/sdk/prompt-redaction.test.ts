@@ -120,7 +120,7 @@ describe("redactPromptJson", () => {
 	});
 
 	it("redacts an image part carrying raw Uint8Array bytes (receipts shape)", () => {
-		// receipts.service.ts emits { type: "image", image: <Uint8Array> }, which
+		// receipt-extraction.service.ts emits { type: "image", image: <Uint8Array> }, which
 		// serializes to a numeric-keyed object — not a base64 string.
 		const bytes = new Uint8Array(Buffer.from("raw-receipt-jpeg-bytes"));
 		const sha = createHash("sha256").update(bytes).digest("hex");

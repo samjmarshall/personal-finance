@@ -32,16 +32,16 @@ import type {
 } from "~/server/observability/logging/logger";
 import type {
 	ExtractionValues,
+	ReceiptExtractionRepository,
 	ReceiptItemInsert,
 	ReceiptRow,
-	ReceiptsRepository,
-} from "./receipts.repository";
+} from "./receipt-extraction.repository";
 import {
 	buildExtractionContent,
 	buildExtractionPrompt,
 	type ErrorReporter,
-	ReceiptsService,
-} from "./receipts.service";
+	ReceiptExtractionService,
+} from "./receipt-extraction.service";
 
 type LogEntry = { level: string; msg: string; attrs: LogAttributes };
 type Capture = { error: unknown; props?: Record<string, unknown> };
@@ -133,7 +133,7 @@ function harness(
 		markFailed: [] as { id: number; error: string }[],
 	};
 
-	const repository: ReceiptsRepository = {
+	const repository: ReceiptExtractionRepository = {
 		findById: async () => opts.receipt,
 		setContentHash: async (id, contentHash) => {
 			log.push("setContentHash");
@@ -176,7 +176,7 @@ function harness(
 			captures.push({ error, props });
 		},
 	};
-	const service = new ReceiptsService({
+	const service = new ReceiptExtractionService({
 		repository,
 		blobStore,
 		languageModel: opts.languageModel ?? ({} as LanguageModel),
@@ -215,7 +215,7 @@ function harness(
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("ReceiptsService.process", () => {
+describe("ReceiptExtractionService.process", () => {
 	it("extracts, then saves the receipt processed with its items", async () => {
 		const h = harness({
 			receipt: baseReceipt(),

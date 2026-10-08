@@ -1,6 +1,6 @@
 import type { Inngest, InngestFunction } from "inngest";
 
-import type { ReceiptsService } from "./receipts.service";
+import type { ReceiptExtractionService } from "./receipt-extraction.service";
 
 // Inngest retry budget for transient provider errors (529 overloaded, 429, network).
 // The AI SDK already retries twice over ~6s; these back off over minutes to ride out
@@ -9,7 +9,7 @@ const RETRIES = 3;
 
 interface ReceiptsInngestControllerDeps {
 	inngest: Pick<Inngest, "createFunction">;
-	service: ReceiptsService;
+	service: ReceiptExtractionService;
 }
 
 /**
@@ -17,7 +17,7 @@ interface ReceiptsInngestControllerDeps {
  * service. Function id + triggers are FROZEN (`registry-golden.test.ts`).
  */
 export class ReceiptsInngestController {
-	private readonly service: ReceiptsService;
+	private readonly service: ReceiptExtractionService;
 
 	/** Extraction on upload, explicit retry, and inbound email. */
 	readonly process: InngestFunction.Any;

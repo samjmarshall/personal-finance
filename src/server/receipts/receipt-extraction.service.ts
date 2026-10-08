@@ -28,10 +28,10 @@ import { BaggageKey } from "~/server/observability/tracing/baggage";
 import { REDACT_IN_TELEMETRY } from "~/server/observability/tracing/redact-tag";
 import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
 import type {
+	ReceiptExtractionRepository,
 	ReceiptItemInsert,
 	ReceiptRow,
-	ReceiptsRepository,
-} from "./receipts.repository";
+} from "./receipt-extraction.repository";
 
 // Terminal states: a re-delivered event (Inngest is at-least-once) for one of these
 // must return without a second AI call.
@@ -216,8 +216,8 @@ export interface ErrorReporter {
 	captureException(error: unknown, props?: Record<string, unknown>): void;
 }
 
-interface ReceiptsServiceDeps {
-	repository: ReceiptsRepository;
+interface ReceiptExtractionServiceDeps {
+	repository: ReceiptExtractionRepository;
 	blobStore: BlobStore;
 	// The provider is bound once in the composition root (functions.ts), so this tier
 	// never touches `~/env` or `~/server/aws/bedrock` — see bedrock-invocation.md.
@@ -230,8 +230,8 @@ interface ReceiptsServiceDeps {
  * Application tier for receipt extraction. All I/O (bytes, model, rows) is behind
  * injected ports so tests run offline.
  */
-export class ReceiptsService {
-	private readonly repository: ReceiptsRepository;
+export class ReceiptExtractionService {
+	private readonly repository: ReceiptExtractionRepository;
 	private readonly blobStore: BlobStore;
 	private readonly languageModel: LanguageModel;
 	private readonly logger: Logger;
@@ -243,7 +243,7 @@ export class ReceiptsService {
 		languageModel,
 		logger,
 		errorReporter,
-	}: ReceiptsServiceDeps) {
+	}: ReceiptExtractionServiceDeps) {
 		this.repository = repository;
 		this.blobStore = blobStore;
 		this.languageModel = languageModel;

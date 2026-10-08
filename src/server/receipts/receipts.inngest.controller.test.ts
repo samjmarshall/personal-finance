@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ReceiptExtractionService } from "./receipt-extraction.service";
 import { ReceiptsInngestController } from "./receipts.inngest.controller";
-import type { ReceiptsService } from "./receipts.service";
 
 type Declared = {
 	opts: {
@@ -30,7 +30,7 @@ function harness() {
 	const controller = new ReceiptsInngestController({
 		// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
 		inngest: inngest as any,
-		service: service as unknown as ReceiptsService,
+		service: service as unknown as ReceiptExtractionService,
 	});
 
 	return { controller, declared, service };

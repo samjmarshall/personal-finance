@@ -21,7 +21,7 @@ export type ReceiptItemInsert = Omit<
  * Data tier for `receipt` + `receipt_item`. Pure storage: throws on a driver
  * failure, logs nothing. Status transitions are named, never passed in.
  */
-export interface ReceiptsRepository {
+export interface ReceiptExtractionRepository {
 	findById(id: number): Promise<ReceiptRow | undefined>;
 	setContentHash(id: number, contentHash: string): Promise<void>;
 	/** A *processed* receipt with the same bytes, other than `excludeId`. */
@@ -43,14 +43,16 @@ export interface ReceiptsRepository {
 	markFailed(id: number, error: string): Promise<void>;
 }
 
-interface DrizzleReceiptsRepositoryDeps {
+interface DrizzleReceiptExtractionRepositoryDeps {
 	db: typeof realDb;
 }
 
-export class DrizzleReceiptsRepository implements ReceiptsRepository {
+export class DrizzleReceiptExtractionRepository
+	implements ReceiptExtractionRepository
+{
 	private readonly db: typeof realDb;
 
-	constructor({ db }: DrizzleReceiptsRepositoryDeps) {
+	constructor({ db }: DrizzleReceiptExtractionRepositoryDeps) {
 		this.db = db;
 	}
 
