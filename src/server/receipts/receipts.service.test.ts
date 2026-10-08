@@ -23,8 +23,7 @@ import {
 import type { ReceiptsRepository } from "./receipts.repository";
 import { ReceiptsService } from "./receipts.service";
 
-// currentTraceId() is null with no SDK registered, so register one to prove the
-// ambient trace id reaches the row.
+// No tracer set up means no trace id. Register one to prove it reaches the row.
 const provider = new NodeTracerProvider();
 beforeAll(() => provider.register());
 afterAll(() => provider.shutdown());

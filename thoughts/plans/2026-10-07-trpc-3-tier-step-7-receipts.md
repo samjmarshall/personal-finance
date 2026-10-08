@@ -458,9 +458,10 @@ Implements adr021 (controller naming, `:76`) and adr022 (batched lookups, `:50`;
 - [x] `make check` passes
 - [x] `make test` passes. After 4a, the re-pointed tests differ from Phase 1 only in the expected SQL.
 - [x] `make build` passes (ran `pnpm run build`; `make build` wipes the running dev server's `.next`)
-- [ ] At https://personal-finance.localhost/receipts:
+- [x] At https://personal-finance.localhost/receipts:
   - the list, filters, detail, retry, delete, match banner, confirm and item pickers behave as before
   - each receipt shows the Member and transaction names
+  - (validated on seeded branch rows; all tRPC error codes and messages match the old router, incl. the delete-copies-first 409)
 
 ## Phase 5: HTTP controller for the image and upload routes
 

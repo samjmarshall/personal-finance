@@ -103,7 +103,7 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.select()
 			.from(receipts)
 			.where(
-				// `and()` drops undefined arms, so no filter selected means no WHERE.
+				// Unset filters drop out. None set means no WHERE.
 				and(
 					status ? eq(receipts.status, status) : undefined,
 					unmatchedOnly ? isNull(receipts.transactionId) : undefined,
@@ -128,8 +128,8 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.orderBy(asc(receiptItems.id));
 	}
 
-	// The status guard is what stops a re-spend on a receipt already processed:
-	// any other row matches nothing, so no event is named.
+	// Only failed rows match, so a processed receipt can't be re-run (and
+	// re-billed). No match, no retry.
 	requeueFailed(
 		id: number,
 		traceId: string | null,
@@ -138,9 +138,8 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			async (tx) => {
 				const [row] = await tx
 					.update(receipts)
-					// The retry runs under a new trace, so the deep-link must point at it.
-					// The old error belongs to the failed run; left in place, the
-					// diagnostics overlay would show it on a pending receipt.
+					// New run, new trace link. Clear the old error so a pending receipt
+					// doesn't show it.
 					.set({ status: ReceiptStatus.Pending, traceId, error: null })
 					.where(
 						and(eq(receipts.id, id), eq(receipts.status, ReceiptStatus.Failed)),
@@ -161,10 +160,8 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 		return row?.blobPathname;
 	}
 
-	// duplicateOfId is `set null` on delete, so deleting the original would leave
-	// its copies as duplicates of nothing: no extracted data, and retry takes only
-	// failed rows. The row lock makes a copy being marked meanwhile wait, since
-	// its foreign-key check needs this row.
+	// Deleting an original would orphan its copies: no data, and retry skips them.
+	// Lock the row so a copy being marked waits.
 	deleteUnlessDuplicated(id: number): Promise<ReceiptDeletion> {
 		return this.db.transaction(async (tx) => {
 			const [row] = await tx
