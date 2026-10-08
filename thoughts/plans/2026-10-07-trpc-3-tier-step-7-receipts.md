@@ -102,7 +102,7 @@ The tRPC paths (`api.receipt.*`), the HTTP routes and the frozen event names do 
   - `DrizzleAllowedSenderRepository` (`allowed-sender.repository.ts:18`, port `:7-12`)
   - the router exports `allowedSenderRouter` (`allowed-sender.trpc.controller.ts:4`)
   - the kernel is `src/domain/email/allowed-sender.{dto,interface}.ts` plus `allowed-sender.dto.test.ts`, re-exported with the email types by `src/domain/email/index.ts`
-  - importers: `services.ts:9-10,54-57`, `root.ts:6,14`, `src/server/db/index.ts:8,18`, `schema-interface-contract.test.ts:7,14` and `src/app/(dashboard)/settings/_components/allowed-senders-section.tsx:10-13`
+  - importers: `services.ts:7-8,31-34`, `root.ts:6,14`, `src/server/db/index.ts:8,18`, `schema-interface-contract.test.ts:7,14` and `src/app/(dashboard)/settings/_components/allowed-senders-section.tsx:10-13`
   - Email reads the table itself: `DrizzleEmailRepository.findAllowedSender` (`email.repository.ts:47-56`), called at `email.service.ts:98`. Fake: `email.service.test.ts:131-132`. Test: `email.repository.test.ts:76-95`.
   - The architecture test's own-domain example is `email.repository.ts` importing `./allowed-sender.schema` (`architecture.test.ts:177-185`).
 - **The shim.** `src/server/outbox/index.ts`:
@@ -445,9 +445,10 @@ Implements adr021 (controller naming, `:76`) and adr022 (batched lookups, `:50`;
 ### Changes (4b)
 
 - Delete `src/server/api/routers/receipts.ts` and its five tests.
-- `src/server/architecture.test.ts:41-46` — delete the six entries.
+- `src/server/architecture.test.ts:40-45` — delete the six entries.
 - Docs:
   - `.claude/rules/server-architecture.md`:
+    - `:31` (module row) — add `receipts.module.ts`
     - `:130-138` — the worker fake-db note names "receipt extraction". `ReceiptsRepository` uses `recordingDb`.
     - `:163` — `receipt` comes from `src/server/receipts/`
   - `docs/adr/adr004-*.md:81` — "Next: the image, upload and email paths, then the shim, all in step 7."
@@ -517,7 +518,7 @@ One commit: `refactor(receipts): http controller for image and upload routes`, b
     - no `db`, `drizzle-orm` or schema import
   - **`upload/route.ts`** — logger `component: "upload-route"` (unchanged). `POST = withFlush((request) => compose().upload(request))`.
   - **Both `route.test.ts`** mock `receipts.module` and the controller module, and assert only the root's job: built once, then delegates. Upload also asserts that the flush is scheduled.
-- **`src/server/architecture.test.ts:47-48`** — delete the entries.
+- **`src/server/architecture.test.ts:46-47`** — delete the entries.
 - **`.claude/rules/bedrock-invocation.md:13`** — the 10 MB upload cap lives in `receipts.service.ts` (`MAX_UPLOAD_BYTES`). The guard is in `receipt-extraction.service.ts`.
 
 ### Success
@@ -563,14 +564,14 @@ One commit: `refactor(email): mint receipts through ReceiptsService`, built by t
   - add `receipts: receiptsService` from `receipts.module`
   - replace the `outbox.module` import
 - **Its `route.test.ts:21`** — mock `receipts.module` instead of `outbox.module`.
-- **`src/server/architecture.test.ts:39`** — delete the last entry. Type the list as `const TODO: string[] = []`.
+- **`src/server/architecture.test.ts:39`** — delete the entry. Only the rule-5 shim entry is left.
 
 ### Success
 
 - [ ] `make check` passes
 - [ ] `make test` passes
 - [ ] `make build` passes
-- [ ] `src/server/architecture.test.ts` passes with an empty to-do list
+- [ ] `src/server/architecture.test.ts` passes. Its to-do list holds only the rule-5 shim entry.
 - [ ] An email from an allowed sender with a PDF creates one pending receipt that extracts. Use the existing inbound flow from `docs/feature/` on the preview, or a signed fixture POST locally.
 
 ## Phase 7: Allowed senders become their own domain
@@ -604,7 +605,7 @@ One commit: `refactor(allowed-senders): own domain, email checks the allowlist t
 - **`email.service.test.ts`** — the `repository` fake (`:131-132`) becomes `allowedSenders: { memberFor: async () => allowlist[0]?.userId }`. Drop the `EmailRepository` import (`:23`).
 - **Delete** `src/server/email/email.repository.ts` and `email.repository.test.ts`. Nothing is left in them.
 - **Importers**:
-  - `src/server/api/services.ts:9-10,54-57` — `allowedSenders: allowedSendersService`. Drop the repository and class imports.
+  - `src/server/api/services.ts:7-8,31-34` — `allowedSenders: allowedSendersService`. Drop the repository and class imports.
   - `src/server/api/root.ts:6` — `~/server/allowed-senders/allowed-senders.trpc.controller`
   - `src/server/db/index.ts:8` — `~/server/allowed-senders/allowed-senders.schema`. `drizzle.config.ts` already globs `src/server/**/*.schema.ts`.
   - `src/server/db/schema-interface-contract.test.ts:7,14` — the new kernel and schema paths
@@ -616,6 +617,7 @@ One commit: `refactor(allowed-senders): own domain, email checks the allowlist t
 - **`src/server/architecture.test.ts:177-185`** — the own-domain example becomes `src/server/allowed-senders/allowed-senders.repository.ts` importing `./allowed-senders.schema`. The receipts-schema import still flags rule 1.
 - **Docs**:
   - `.claude/rules/server-architecture.md`:
+    - `:31` (module row) — add `allowed-senders/allowed-senders.module.ts`
     - `:48-49` — drop "`email/allowed-sender.*` is the last prefixed child; it moves to `allowed-senders/` in step 7."
     - `:159` — `allowedSender` comes from `src/server/allowed-senders/`
   - `docs/adr/adr004-*.md:80`, the Done list:
@@ -648,6 +650,7 @@ One commit: `refactor: retire commitWithOutbox shim and api/lib`. Implements adr
 
 - Delete `src/server/outbox/index.ts`. It has no importers left. `OutboxWriteDoor` is imported from `outbox.service`.
 - Delete `src/server/api/lib/assert-row.ts` and `parse-error.ts`.
+- `src/server/architecture.test.ts` — delete the last to-do entry, `"5 src/server/outbox/index.ts → ./outbox.module"`. Type the list as `const TODO: string[] = []`.
 - `src/server/outbox/outbox.module.ts:8-10` — the comment names its consumers: `receipts.module.ts` and the cron controller in `functions.ts`.
 - Docs:
   - `.claude/rules/server-architecture.md`:
@@ -669,6 +672,7 @@ One commit: `refactor: retire commitWithOutbox shim and api/lib`. Implements adr
 - [ ] `make test` passes
 - [ ] `make build` passes
 - [ ] `grep -rn "commitWithOutbox\|server/api/lib" src .claude docs/adr` finds nothing outside ADR history lines
+- [ ] `src/server/architecture.test.ts` passes with an empty to-do list
 
 ## Phase 9: A linked Expense sets a line item's Category
 
