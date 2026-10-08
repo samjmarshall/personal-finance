@@ -127,6 +127,13 @@
 			"when": 1791372609317,
 			"tag": "0017_expense_delete_keeps_category",
 			"breakpoints": true
+		},
+		{
+			"idx": 18,
+			"version": "7",
+			"when": 1791421306063,
+			"tag": "0018_rename_category_pkey",
+			"breakpoints": true
 		}
 	]
 }
