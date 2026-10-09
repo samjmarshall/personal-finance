@@ -197,7 +197,7 @@ importers:
         version: 9.1.7
       inngest-cli:
         specifier: ^1.44.0
-        version: 1.44.0
+        version: 1.46.0
       portless:
         specifier: ^0.15.6
         version: 0.15.7
@@ -3408,8 +3408,8 @@ packages:
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
 
-  inngest-cli@1.44.0:
-    resolution: {integrity: sha512-Z21HkFQlrfCXKiu+uWncrBg3Mn/NwzicFwVPcDfMe4N0bkBblVzbXpfGndIxfHAnR9+FdCw807TCWw9vQ0JeLQ==}
+  inngest-cli@1.46.0:
+    resolution: {integrity: sha512-1m8kiPEq0CTqrz5/kdQ75pgLu6dNmpPWbL8fwX+mTGKoVPfljaNMxoVcLIc+yCA1I/jLST04i0EADFeRmRHmwA==}
     hasBin: true
 
   inngest@4.22.0:
@@ -7785,7 +7785,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  inngest-cli@1.44.0:
+  inngest-cli@1.46.0:
     dependencies:
       adm-zip: 0.5.18
       debug: 4.4.3
