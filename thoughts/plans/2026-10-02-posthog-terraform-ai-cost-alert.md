@@ -80,8 +80,8 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 - [x] `make fmt-check` passes
 - [x] `make validate` passes (after `assume`) — checked as `terraform validate` after a backend-less `init`; no AWS creds in session
-- [ ] `make plan env=preview`, run with `POSTHOG_API_KEY` and `VERCEL_API_TOKEN` exported, shows no PostHog changes
-- [ ] Branch push: the preview `terraform-apply` job is green
+- [x] `make plan env=preview`, run with `POSTHOG_API_KEY` and `VERCEL_API_TOKEN` exported, shows no PostHog changes — verified via CI preview apply on `94b1bc9` (run 37937100888): "No changes", 0 added/changed/destroyed
+- [x] Branch push: the preview `terraform-apply` job is green — run 37937100888
 
 ## Phase 2: AI cost per day insight and alert
 
@@ -127,10 +127,10 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 - [x] `make fmt-check` passes
 - [x] `make validate` passes — backend-less, as Phase 1
-- [ ] `make plan env=production` shows `+2` (insight, alert). The only other diff is the usual deployment diff.
-- [ ] `make plan env=preview` still shows no PostHog changes
-- [ ] After merge to `main`, PostHog MCP `alerts-list` shows 1 alert on the new insight
-- [ ] `alert-simulate` on that alert over the last 30 days does not fire
+- [ ] `make plan env=production` shows `+2` (insight, alert). The only other diff is the usual deployment diff. — needs AWS creds + `POSTHOG_API_KEY`; not run
+- [x] `make plan env=preview` still shows no PostHog changes — CI run 37937100888, as Phase 1
+- [ ] After merge to `main`, PostHog MCP `alerts-list` shows 1 alert on the new insight — post-merge; 2026-10-09 baseline is 0 alerts
+- [ ] `alert-simulate` on that alert over the last 30 days does not fire — post-merge (needs the saved insight). Pre-merge stand-in: the same TrendsQuery over `-30d` (2026-10-09) peaks at $0.0548/day, far under $1
 
 ## Phase 3: Import the test-users cohort
 
@@ -171,8 +171,8 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 - [x] `make fmt-check` passes
 - [x] `make validate` passes — backend-less, as Phase 1
-- [ ] `make plan env=production` shows `1 to import` for the cohort with **no in-place changes**. Adjust the attributes until it does.
-- [ ] After merge, cohort `570363` is unchanged in PostHog: same id, same filter, same member count
+- [ ] `make plan env=production` shows `1 to import` for the cohort with **no in-place changes**. Adjust the attributes until it does. — needs AWS creds + `POSTHOG_API_KEY`; not run. Static check (2026-10-09): live cohort name, description, `is_static` and filters match the code exactly; provider v1.0.21 compares `filters` semantically (`jsontypes.Normalized`), and a bare id imports when `project_id` is set on the provider
+- [ ] After merge, cohort `570363` is unchanged in PostHog: same id, same filter, same member count — post-merge; 2026-10-09 baseline: version 27, count 0, `is_static` false
 
 ## Phase 4: Docs
 
