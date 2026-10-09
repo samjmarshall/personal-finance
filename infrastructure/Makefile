@@ -31,8 +31,14 @@ validate: init
 refresh: init validate
 	terraform $(TF_CHDIR) refresh $(TF_LOCK)
 
+# pr=<number> posts the plan diff on that PR via tfcmt (deploy.yml's Production
+# Plan job); -patch edits the previous comment instead of adding one per push.
 plan: init validate
+ifneq ($(pr),)
+	tfcmt -pr $(pr) -var "target:$(env)" plan -patch -- terraform $(TF_CHDIR) plan $(TF_LOCK)
+else
 	terraform $(TF_CHDIR) plan $(TF_LOCK)
+endif
 
 apply: init validate
 	terraform $(TF_CHDIR) apply -auto-approve $(TF_LOCK)
