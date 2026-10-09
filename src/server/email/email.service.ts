@@ -1,4 +1,5 @@
 import { context } from "@opentelemetry/api";
+import { allowedSenderCreateDto } from "~/domain/allowed-senders";
 import type { InboundAttachmentMeta, InboundEmailEvent } from "~/domain/email";
 import { isReceiptFileType } from "~/domain/receipts";
 import { bareMediaType } from "~/lib/utils";
@@ -16,19 +17,19 @@ const ADDRESS_LIKE = /[^\s<>()",;]+@[^\s<>()",;]+/g;
 // The pattern's cost grows with the square of the length. RFC 5322's line limit;
 // a real From is far shorter.
 const MAX_FROM_LENGTH = 998;
-// A name that repeats the address may wrap it ('…', […], mailto:, a full stop).
-// Stripping them never moves an address to another domain.
+// A name that repeats the address may wrap it in quotes, brackets or a link
+// prefix, or end it with punctuation. A domain only loses a tail no one else owns.
 const ADDRESS_WRAPPER = /^(?:mailto:|['[])+|[\]'.:]+$/g;
 
 /**
- * Bare lower-cased address, matching the shape the allowlist stores. `""` unless
- * exactly one distinct address appears anywhere in the header.
+ * Bare lower-cased address, matching the shape the allowlist stores. `""` when the
+ * header is over 998 chars, holds an `@` outside any readable address, or doesn't
+ * come down to exactly one valid address once wrappers are stripped.
  */
 export function parseFromAddress(from: string): string {
 	if (from.length > MAX_FROM_LENGTH) return "";
-	// The name can arrive decoded, so its quotes and brackets may be sender text.
-	// Count every address anywhere instead: a planted second one fails closed.
-	// An `@` left over is an address the pattern can't read, maybe the real one.
+	// A decoded name's quotes and brackets may be sender text, so count every address
+	// and fail closed on two. A stray `@` is an unreadable address, maybe the real one.
 	if (from.replace(ADDRESS_LIKE, "").includes("@")) return "";
 	const addresses = new Set(
 		(from.match(ADDRESS_LIKE) ?? []).map((address) =>
@@ -36,7 +37,11 @@ export function parseFromAddress(from: string): string {
 		),
 	);
 	const [only] = addresses;
-	return addresses.size === 1 && only ? only : "";
+	return addresses.size === 1 &&
+		only &&
+		allowedSenderCreateDto.shape.email.safeParse(only).success
+		? only
+		: "";
 }
 
 // Log the domain, never the address: the full from is a Member identifier, the

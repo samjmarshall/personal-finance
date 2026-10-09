@@ -57,6 +57,9 @@ describe("parseFromAddress", () => {
 		["sam@x.com <mailto:sam@x.com>", "sam@x.com"],
 		["Sam (sam@x.com.) <sam@x.com>", "sam@x.com"],
 		["'victim@allowed.com' <attacker@evil.com>", ""],
+		// Stripping can leave something the allowlist could never hold.
+		["'@'", ""],
+		["<x@.>", ""],
 		["", ""],
 		["Sam", ""],
 		[`${"a".repeat(990)} <a@b.com>`, ""],
