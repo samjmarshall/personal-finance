@@ -78,8 +78,8 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 ### Success
 
-- [ ] `make fmt-check` passes
-- [ ] `make validate` passes (after `assume`)
+- [x] `make fmt-check` passes
+- [x] `make validate` passes (after `assume`) — checked as `terraform validate` after a backend-less `init`; no AWS creds in session
 - [ ] `make plan env=preview`, run with `POSTHOG_API_KEY` and `VERCEL_API_TOKEN` exported, shows no PostHog changes
 - [ ] Branch push: the preview `terraform-apply` job is green
 
@@ -121,11 +121,12 @@ Add the provider to both states, but put every PostHog resource behind `local.is
     - `condition_type = "absolute_value"`, `threshold_type = "absolute"`, `threshold_upper = local.ai_daily_cost_alert_usd`, `series_index = 0`
     - `calculation_interval = "hourly"`, `check_ongoing_interval = true`
     - `subscribed_users = local.posthog_alert_user_ids`, `enabled = true`
+  - **As built:** the query also pins `filterTestAccounts = false`. If omitted, it follows the project default, and turning that default on would hide test users' spend. The alert name comes from `format("AI cost today over $%v", local.ai_daily_cost_alert_usd)`, so the name tracks the threshold. A 2026-10-09 dry run of the query peaked at $0.055/day.
 
 ### Success
 
-- [ ] `make fmt-check` passes
-- [ ] `make validate` passes
+- [x] `make fmt-check` passes
+- [x] `make validate` passes — backend-less, as Phase 1
 - [ ] `make plan env=production` shows `+2` (insight, alert). The only other diff is the usual deployment diff.
 - [ ] `make plan env=preview` still shows no PostHog changes
 - [ ] After merge to `main`, PostHog MCP `alerts-list` shows 1 alert on the new insight
@@ -168,8 +169,8 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 ### Success
 
-- [ ] `make fmt-check` passes
-- [ ] `make validate` passes
+- [x] `make fmt-check` passes
+- [x] `make validate` passes — backend-less, as Phase 1
 - [ ] `make plan env=production` shows `1 to import` for the cohort with **no in-place changes**. Adjust the attributes until it does.
 - [ ] After merge, cohort `570363` is unchanged in PostHog: same id, same filter, same member count
 
@@ -185,8 +186,8 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] The docs list every new secret, env var and managed object
+- [x] `make check` passes
+- [x] The docs list every new secret, env var and managed object
 
 ## References
 

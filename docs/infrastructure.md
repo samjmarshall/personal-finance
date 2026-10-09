@@ -1,6 +1,6 @@
 # Infrastructure
 
-Terraform in `infrastructure/` owns infrastructure only: the Vercel project, per-environment AWS IAM role (Bedrock via Vercel OIDC), the three Bedrock env vars and the production protection-bypass secret. `.github/workflows/deploy.yml` runs the whole deploy on every push as one staged flow: terraform apply → `vercel deploy` (CLI, un-aliased) → resolve the Neon DB branch → migrate (unpooled). For `main` it then gates the staged deployment on `/api/health` behind the bypass header and only then `vercel promote`s it onto the domain, so the alias never lands on an un-migrated build. A failed migrate fails the job before promote; the previous deployment stays `Current` (no automated rollback — migrations are expand-only). Decisions: [adr013](adr/adr013-terraform-owned-vercel-deployments.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md).
+Terraform in `infrastructure/` owns infrastructure only: the Vercel project, per-environment AWS IAM role (Bedrock via Vercel OIDC), the app env vars it sets on Vercel (`local.vercel_env` in `vercel.tf`: Bedrock, token prices, PostHog), the production protection-bypass secret and PostHog alerting config (the AI cost insight and alert, and the test-users cohort; production state only). `.github/workflows/deploy.yml` runs the whole deploy on every push as one staged flow: terraform apply → `vercel deploy` (CLI, un-aliased) → resolve the Neon DB branch → migrate (unpooled). For `main` it then gates the staged deployment on `/api/health` behind the bypass header and only then `vercel promote`s it onto the domain, so the alias never lands on an un-migrated build. A failed migrate fails the job before promote; the previous deployment stays `Current` (no automated rollback — migrations are expand-only). Decisions: [adr013](adr/adr013-terraform-owned-vercel-deployments.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md).
 
 ## Layout
 
@@ -11,6 +11,7 @@ Terraform in `infrastructure/` owns infrastructure only: the Vercel project, per
 | IAM role | `personal-finance-production` | `personal-finance-preview` |
 | Env vars (`target`) | `["production"]` | `["preview"]` |
 | Deployment | `ref = main`, `production = true` | `ref = <branch>`, last apply wins |
+| PostHog | owns `posthog_insight` + `posthog_alert` + `posthog_cohort` (imported) | none; the provider is still configured, so the key is still needed |
 
 State bucket `139035987018-terraform-state` (S3 lockfile locking). Both IdPs (`oidc.vercel.com/rekurve`, `token.actions.githubusercontent.com`) already exist in the account and are read, never created.
 
@@ -19,6 +20,7 @@ State bucket `139035987018-terraform-state` (S3 lockfile locking). Both IdPs (`o
 ```sh
 assume <profile>                      # exports AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN
 export VERCEL_API_TOKEN=<token>       # same value as the VERCEL_TOKEN GitHub secret
+export POSTHOG_API_KEY=<key>          # same value as the POSTHOG_PERSONAL_API_KEY GitHub secret; personal key, project 609915 only
 make plan env=preview                 # or env=production
 make apply env=preview TF_VAR_deploy_ref=<branch> TF_VAR_deploy_sha=$(git rev-parse HEAD)
 make fmt-check                        # CI gate (quality-control.yml)
@@ -34,6 +36,12 @@ make force-unlock env=preview ID=<id> # only after a killed apply left the lock
 3. Set `bedrock_pricing_model_name` in the same file to the model's AWS Price List display name (e.g. `Claude Sonnet 4.6`). List the names with `aws pricing get-attribute-values --region us-east-1 --service-code AmazonBedrockFoundationModels --attribute-name model`. `pricing.tf` reads the `au.` geographic-tier price (about 10% over Global). If the name doesn't match exactly one row, `make plan` fails rather than shipping a wrong price.
 4. Push. `deploy.yml` applies the IAM policy and the `BEDROCK_RECEIPT_MODEL` and `BEDROCK_*_TOKEN_PRICE_USD` env vars, then redeploys. Nothing in `src/` changes; `src/env.ts` only carries a default for local runs.
 
+## PostHog config
+
+`infrastructure/posthog.tf` owns the "AI cost per day (USD)" insight, the alert that emails the owner once today's AI cost passes `ai_daily_cost_alert_usd` (checked hourly), and the "Internal / Test users" cohort (`570363`, imported; the project's test-account filters point at it). Days are UTC (the project timezone).
+
+A PostHog UI edit to any of these is reverted by the next `main` apply. Change it in `infrastructure/posthog.tf` or `infrastructure/locals.tf` instead. Everything else in the project (starter dashboard, project settings, GeoIP transformation) stays hand-managed.
+
 ## Bootstrap (once, manual, in order)
 
 0. **Verify assumptions.** `assume <profile>` then:
@@ -43,7 +51,7 @@ make force-unlock env=preview ID=<id> # only after a killed apply left the lock
    - `aws bedrock list-inference-profiles --region ap-southeast-2` → `au.anthropic.claude-sonnet-4-6`.
    - Vercel project → Settings → Security → OIDC issuer mode is *Team*. If not, step 4 sets it.
 1. **Deployer role.** `aws cloudformation deploy --stack-name personal-finance-github-actions --template-file docs/cloudformation-templates/github-actions.yaml --capabilities CAPABILITY_IAM --parameter-overrides GitHubOidcProviderArn=arn:aws:iam::139035987018:oidc-provider/token.actions.githubusercontent.com`. Copy the `Role` output. (Done differently: the account's existing `github-actions` stack role, whose trust `sub` is `repo:samjmarshall/*`, was reused instead. Deploy the per-repo stack above when that trust should narrow to this repo.)
-2. **GitHub.** Secret `DEPLOYER_ROLE_ARN` = that output. Vars `AWS_ACCOUNT_ID=139035987018`, `AWS_REGION=ap-southeast-2`. (`VERCEL_TOKEN`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` already exist.)
+2. **GitHub.** Secret `DEPLOYER_ROLE_ARN` = that output. Vars `AWS_ACCOUNT_ID=139035987018`, `AWS_REGION=ap-southeast-2`. (`VERCEL_TOKEN`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` already exist.) Secret `POSTHOG_PERSONAL_API_KEY`: a PostHog personal API key limited to project 609915, with write access to insights, alerts and cohorts.
 3. **Import production state** from this branch:
    ```sh
    make init env=production
