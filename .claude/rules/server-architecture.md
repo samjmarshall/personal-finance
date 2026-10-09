@@ -12,7 +12,9 @@ paths:
 [adr004](../../docs/adr/adr004-domain-oriented-3-tier-server-architecture.md)
 is executed as a **class-based** controller / service / repository 3-tier, one
 domain per change (strangler). Reference implementations: `src/server/outbox/`
-(cron workers + the write door), `src/server/receipts/receipt-extraction.*` (event worker +
+(cron workers + the write door), `src/server/receipts/receipts.*` (one domain,
+two services: the member-facing `ReceiptsService` over tRPC, HTTP and email),
+`src/server/receipts/receipt-extraction.*` (event worker +
 external adapters) and `src/server/email/email.*` (HTTP webhook
 controller behind `src/app/api/receipts/inbound/route.ts`),
 `src/server/transactions/` (the reference tRPC domain) and `src/server/categories/`
@@ -170,8 +172,7 @@ Split on real pain, not in advance.
   tagged union — branch on `kind === "pg"` + a named `PgViolation`, never a bare
   SQLSTATE; `parse-error.ts`), `assertRow(row, "op")` (`.returning()` presence,
   `assert-row.ts`) and `rethrowFkConflict(error, message)` (`fk-conflict.ts`).
-  `src/server/api/lib/` only re-exports `parse-error` and `assert-row` until
-  step 7 of the migration deletes it. Step 8 rewrites this section.
+  Step 8 rewrites this section.
 - When a router domain migrates, the router becomes the controller tier over a
   `<domain>.service.ts`; same construction rules apply.
 
@@ -224,8 +225,7 @@ repository that is `this.db.transaction(...)` (`saveExtraction`,
   `outboxService` typed as `OutboxWriteDoor` and calls `commit(writes, events)`
   (or `publish` for emit-only): `OutboxRepository.commit` runs the canonical rows
   + outbox rows in one `db.transaction()`, `OutboxService.commit` then does the
-  best-effort post-commit send. Unmigrated routers use the bound `commitWithOutbox`
-  export from `~/server/outbox`. `OutboxInngestController` declares `outbox-sweep`
+  best-effort post-commit send. `OutboxInngestController` declares `outbox-sweep`
   (re-delivers unacked rows, the durable backstop) and `outbox-prune` (drops acked
   rows past retention) over the same service. Never a bare `inngest.send` from a
   handler.

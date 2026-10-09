@@ -672,11 +672,12 @@ One commit: `refactor: retire commitWithOutbox shim and api/lib`. Implements adr
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] `grep -rn "commitWithOutbox\|server/api/lib" src .claude docs/adr` finds nothing outside ADR history lines
-- [ ] `src/server/architecture.test.ts` passes with an empty to-do list
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes (ran `pnpm run build`; `make build` wipes the running dev server's `.next`)
+- [x] `grep -rn "commitWithOutbox\|server/api/lib" src .claude docs/adr` finds nothing outside ADR history lines
+- [x] `src/server/architecture.test.ts` passes with an empty to-do list
+- adr021 and adr022 → Accepted (all their phases in this plan have landed)
 
 ## Phase 9: A linked Expense sets a line item's Category
 

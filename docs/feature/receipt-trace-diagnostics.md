@@ -26,8 +26,7 @@ related-prs: [#20]
 - `src/lib/posthog-trace-url.ts` — pure `posthogTraceUrl()` builds the PostHog tracing deep-link; null without a project id or trace id.
 - `src/domain/receipts/receipt-pipeline.ts` — pure `receiptPipeline()` maps a receipt to Upload → AI extraction → Transaction match timeline stages.
 - `src/server/receipts/receipts.schema.ts` — nullable `traceId` text column (migration `0011`).
-- `src/server/api/routers/receipts.ts` — `create` + `retry` stamp `currentTraceId()`; `get` builds `traceUrl`.
-- `src/server/email/email.service.ts` — email ingest stamps the trace id through `createPendingReceipts`.
+- `src/server/receipts/receipts.service.ts` — `ReceiptsService.create` / `retry` / `createFromEmail` stamp `currentTraceId()`; `get` builds `traceUrl`.
 - `src/app/(dashboard)/receipts/_components/more-details.tsx` — the `MoreDetails` diagnostics panel (trace header + tabs).
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx` — renders `<MoreDetails>`.
 - `src/env.ts` — `POSTHOG_UI_HOST` + `POSTHOG_PROJECT_ID`.

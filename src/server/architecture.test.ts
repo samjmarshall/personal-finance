@@ -36,7 +36,7 @@ const EXEMPT = [
 ];
 
 // Shrink-only: each migration step deletes the entries it clears.
-const TODO = ["5 src/server/outbox/index.ts → ./outbox.module"];
+const TODO: string[] = [];
 
 // Also catches `from "…"` inside comments; a false hit fails loudly, a strict
 // parse could miss a real one.

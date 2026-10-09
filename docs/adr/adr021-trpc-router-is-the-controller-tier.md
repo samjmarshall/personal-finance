@@ -1,7 +1,7 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-09-29'
+Date: '2026-10-09'
 # prettier-ignore
 ---
 
@@ -74,7 +74,7 @@ Specifics that bind:
 - **Build-time safety.** A service built at module load must not throw when an env var is unset at build time. Any service that would gets a lazy memo, as the inbound route does for `new Resend(undefined)`.
 - **`ctx.db` goes last.** It stays until the last router migrates, then `context.ts` stops importing `db`.
 - **Controller names: `<domain>.<transport>.controller.ts`, class names to match.** Today's controllers are renamed: `receipts.inngest.controller.ts` (`ReceiptsInngestController`), `outbox.inngest.controller.ts` (`OutboxInngestController`), `email.http.controller.ts` (`EmailHttpController`). The receipts image and upload routes share one `receipts.http.controller.ts`. Inngest keys on function ids, never file or class names, so no wire string changes.
-- **Migration order: transactions first.** It is the reference router domain. Receipts goes last, when the bound `commitWithOutbox` shim retires. This settles the contradiction in adr004, whose migration shape named transactions and whose implementation status named receipts.
+- **Migration order: transactions first.** It is the reference router domain. Receipts goes last, when the bound `commitWithOutbox` shim retires. This settles the contradiction in adr004, whose migration shape named transactions and whose implementation status named receipts. The shim retired in step 7.
 
 ### Positive Consequences
 
