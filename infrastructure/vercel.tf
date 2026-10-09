@@ -68,8 +68,8 @@ locals {
       value     = local.bedrock_receipt_model
       sensitive = false
     }
-    # Read from terraform_data, not the data source, so only a checked price is
-    # published. Fixed-point because the raw quotient prints as 0.00000329999…98.
+    # Read through terraform_data so these depend on its price checks (pricing.tf).
+    # Fixed-point because the raw quotient prints as 0.00000329999…98.
     BEDROCK_INPUT_TOKEN_PRICE_USD = {
       value     = format("%.10f", terraform_data.bedrock_token_prices.output.input)
       sensitive = false

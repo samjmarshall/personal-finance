@@ -3,6 +3,16 @@
 # PostHog cannot reliably price an inference-profile id, so the app stamps these
 # onto ai.* spans as the custom price (adr015). The data source fails the plan on
 # zero or several matching rows, so a stale model identity can't ship a price.
+locals {
+  # `au.` bills at the geographic tier: the usagetypes without the `_Global`
+  # suffix. Indexing (no default) fails the plan in an unmapped region.
+  bedrock_pricing_region_prefix = { "ap-southeast-2" = "APS2" }[data.aws_region.current.region]
+  bedrock_pricing_usagetype = {
+    for k in ["input", "output"] :
+    k => "${local.bedrock_pricing_region_prefix}-MP:${local.bedrock_pricing_region_prefix}_${title(k)}TokenCount-Units"
+  }
+}
+
 data "aws_pricing_product" "bedrock_token" {
   for_each = local.bedrock_pricing_usagetype
   provider = aws.pricing
@@ -37,10 +47,15 @@ data "aws_pricing_product" "bedrock_token" {
 }
 
 locals {
-  # One OnDemand term with one price dimension, both keyed by opaque SKU ids.
-  bedrock_price_dimension = {
+  # Terms and price dimensions are keyed by opaque SKU ids; the precondition
+  # below requires exactly one of each, so no price tier is silently dropped.
+  bedrock_on_demand_terms = {
     for k, product in data.aws_pricing_product.bedrock_token :
-    k => values(values(jsondecode(product.result).terms.OnDemand)[0].priceDimensions)[0]
+    k => values(jsondecode(product.result).terms.OnDemand)
+  }
+  bedrock_price_dimension = {
+    for k, terms in local.bedrock_on_demand_terms :
+    k => values(terms[0].priceDimensions)[0]
   }
   bedrock_usd_per_token = {
     for k, dimension in local.bedrock_price_dimension :
@@ -54,6 +69,10 @@ resource "terraform_data" "bedrock_token_prices" {
   input = local.bedrock_usd_per_token
 
   lifecycle {
+    precondition {
+      condition     = alltrue([for terms in values(local.bedrock_on_demand_terms) : length(terms) == 1 && length(terms[0].priceDimensions) == 1])
+      error_message = "Bedrock Price List row no longer has exactly one OnDemand term with one price dimension; pricing.tf would read only the first."
+    }
     precondition {
       condition     = alltrue([for d in values(local.bedrock_price_dimension) : d.unit == "1M tokens"])
       error_message = "Bedrock Price List unit is no longer \"1M tokens\"; the per-token conversion in pricing.tf is wrong."
