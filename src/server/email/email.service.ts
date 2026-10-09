@@ -12,17 +12,28 @@ import type {
 } from "~/server/receipts/receipts.service";
 import type { InboundMailbox } from "./email.mailbox";
 
-const ADDRESS_RUN = /[^\s<>()",;]+@[^\s<>()",;]+/g;
+const ADDRESS_LIKE = /[^\s<>()",;]+@[^\s<>()",;]+/g;
+// The pattern's cost grows with the square of the length. RFC 5322's line limit;
+// a real From is far shorter.
+const MAX_FROM_LENGTH = 998;
+// A name that repeats the address may wrap it ('…', […], mailto:, a full stop).
+// Stripping them never moves an address to another domain.
+const ADDRESS_WRAPPER = /^(?:mailto:|['[])+|[\]'.:]+$/g;
 
 /**
  * Bare lower-cased address, matching the shape the allowlist stores. `""` unless
  * exactly one distinct address appears anywhere in the header.
  */
 export function parseFromAddress(from: string): string {
+	if (from.length > MAX_FROM_LENGTH) return "";
 	// The name can arrive decoded, so its quotes and brackets may be sender text.
 	// Count every address anywhere instead: a planted second one fails closed.
+	// An `@` left over is an address the pattern can't read, maybe the real one.
+	if (from.replace(ADDRESS_LIKE, "").includes("@")) return "";
 	const addresses = new Set(
-		(from.match(ADDRESS_RUN) ?? []).map((address) => address.toLowerCase()),
+		(from.match(ADDRESS_LIKE) ?? []).map((address) =>
+			address.toLowerCase().replace(ADDRESS_WRAPPER, ""),
+		),
 	);
 	const [only] = addresses;
 	return addresses.size === 1 && only ? only : "";

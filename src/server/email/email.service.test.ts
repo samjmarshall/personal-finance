@@ -29,12 +29,18 @@ describe("parseFromAddress", () => {
 		['"Marshall, Sam" <Sam.M@Example.COM>', "sam.m@example.com"],
 		["Sam < a@b.com >", "a@b.com"],
 		// A sender can plant an allowlisted address in their name, a comment or a
-		// second mailbox. Two addresses anywhere means no sender to trust.
+		// second mailbox. Two different addresses means no sender to trust.
 		['"<victim@allowed.com>" <attacker@evil.com>', ""],
 		["Attacker <attacker@evil.com> (<victim@allowed.com>)", ""],
 		["<attacker@evil.com>, <victim@allowed.com>", ""],
 		["attacker@evil.com, victim@allowed.com", ""],
 		["<a@b.com> <victim@allowed.com>", ""],
+		// The real address can hide from the pattern behind quotes, a comment or a
+		// space, leaving the planted one as the only address seen.
+		['"victim@allowed.com"@evil.com', ""],
+		['victim@allowed.com <"a b"@evil.com>', ""],
+		["victim@allowed.com <x(c)@evil.com>", ""],
+		["victim@allowed.com <x @evil.com>", ""],
 		// Decoded, the quotes may be the sender's own text and hide nothing.
 		['" <attacker@evil.com> ("<victim@allowed.com>)', ""],
 		// A decoded name can be unquoted and hold commas, quotes, brackets or the
@@ -45,8 +51,15 @@ describe("parseFromAddress", () => {
 		['O"Brien <sam@x.com>', "sam@x.com"],
 		["Sam :( <sam@x.com>", "sam@x.com"],
 		["Sam <3 <sam@x.com>", "sam@x.com"],
+		// Outlook and some forwarders wrap the repeated address.
+		["'sam@x.com' <sam@x.com>", "sam@x.com"],
+		["Sam [sam@x.com] <sam@x.com>", "sam@x.com"],
+		["sam@x.com <mailto:sam@x.com>", "sam@x.com"],
+		["Sam (sam@x.com.) <sam@x.com>", "sam@x.com"],
+		["'victim@allowed.com' <attacker@evil.com>", ""],
 		["", ""],
 		["Sam", ""],
+		[`${"a".repeat(990)} <a@b.com>`, ""],
 	])("parses %j to %j", (from, expected) => {
 		expect(parseFromAddress(from)).toBe(expected);
 	});
