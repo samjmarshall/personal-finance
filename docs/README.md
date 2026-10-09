@@ -56,7 +56,7 @@ Everything is gated on `POSTHOG_KEY`: unset, nothing registers, the logger write
 
 The first server span is the trace root; the browser sends no `traceparent` (a browser-minted parent is never exported, which left every trace rootless and hidden from PostHog's trace lists). When telemetry is on (i.e. `POSTHOG_KEY` set, so a span is recording), the tRPC route and `POST /api/receipts/upload` echo the trace id back as an `x-trace-id` response header — read it from the Network tab to search PostHog; keyless local runs record no span, so no header is sent. One receipt upload is two traces: the Blob token mint (`blob.token.mint`) and the `receipt.create` ingest run; the receipt row stores the second. Inngest's own `inngest.execution` root is dropped by `NameDropSampler` so the function span sits under the producer. See [adr020](adr/adr020-server-rooted-traces.md) and [adr016](adr/adr016-trace-context-in-outbox-payload.md).
 
-An hourly PostHog alert emails the owner once a day's AI cost passes $1. It, its insight and the test-users cohort live in Terraform (`infrastructure/posthog.tf`); see [infrastructure](infrastructure.md#posthog-config).
+An hourly PostHog alert emails the owner once a day's AI cost passes `ai_daily_cost_alert_usd` (`infrastructure/locals.tf`). It, its insight and the test-users cohort live in Terraform (`infrastructure/posthog.tf`); see [infrastructure](infrastructure.md#posthog-config).
 
 ## Async platform (outbox + Inngest)
 

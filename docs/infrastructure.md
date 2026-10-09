@@ -40,7 +40,7 @@ make force-unlock env=preview ID=<id> # only after a killed apply left the lock
 
 `infrastructure/posthog.tf` owns the "AI cost per day (USD)" insight, the alert that emails the owner once today's AI cost passes `ai_daily_cost_alert_usd` (checked hourly), and the "Internal / Test users" cohort (`570363`, imported; the project's test-account filters point at it). Days are UTC (the project timezone).
 
-A PostHog UI edit to any of these is reverted by the next `main` apply. Change it in `infrastructure/posthog.tf` or `infrastructure/locals.tf` instead. Everything else in the project (starter dashboard, project settings, GeoIP transformation) stays hand-managed.
+A PostHog UI edit to a field Terraform sets is reverted by the next `main` apply; UI-only extras (e.g. chart options, dashboard pins) can stick. Change it in `infrastructure/posthog.tf` or `infrastructure/locals.tf` instead. Everything else in the project (starter dashboard, project settings, GeoIP transformation) stays hand-managed.
 
 ## Bootstrap (once, manual, in order)
 
