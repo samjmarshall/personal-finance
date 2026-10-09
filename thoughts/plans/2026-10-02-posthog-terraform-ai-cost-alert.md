@@ -46,7 +46,7 @@ Receipt AI calls are now capped per call (`maxOutputTokens`, timeout, retries; c
   - Production state owns `posthog_insight.ai_daily_cost[0]`, `posthog_alert.ai_daily_cost[0]` and `posthog_cohort.internal_test_users[0]` (imported, so its id stays `570363`).
   - Preview state owns no PostHog resources.
 - An alert checks today's running AI cost every hour and emails user `432149` once it passes **$1**.
-- `docs/infrastructure.md` says what Terraform owns in PostHog, how to run it locally, and that UI edits to managed objects get reverted by the next `main` apply.
+- `docs/infrastructure.md` says what Terraform owns in PostHog, how to run it locally, and that a UI edit to a field Terraform sets gets reverted by the next `main` apply.
 
 ## Out of Scope
 
@@ -80,8 +80,8 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 - [x] `make fmt-check` passes
 - [x] `make validate` passes (after `assume`) — checked as `terraform validate` after a backend-less `init`; no AWS creds in session
-- [x] `make plan env=preview`, run with `POSTHOG_API_KEY` and `VERCEL_API_TOKEN` exported, shows no PostHog changes — verified via CI preview apply on `94b1bc9` (run 37937100888): "No changes", 0 added/changed/destroyed
-- [x] Branch push: the preview `terraform-apply` job is green — run 37937100888
+- [x] `make plan env=preview`, run with `POSTHOG_API_KEY` and `VERCEL_API_TOKEN` exported, shows no PostHog changes — verified via CI preview apply on `94b1bc9` (run 37937100888) and again on `034b64d` after the `7a4c20c` hardening (run 37939729454): "No changes", 0 added/changed/destroyed
+- [x] Branch push: the preview `terraform-apply` job is green — runs 37937100888, 37939729454
 
 ## Phase 2: AI cost per day insight and alert
 
@@ -89,11 +89,11 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 - `infrastructure/locals.tf`: add two locals, each with a short "why" comment:
   - `posthog_alert_user_ids = [432149]`: the PostHog user id of the owner.
-  - `ai_daily_cost_alert_usd = 1`. Sizing: about 70 normal receipts at about $0.014 each. Normal use is under $0.30/day. Worst case is about 2 capped HTML calls.
+  - `ai_daily_cost_alert_usd = 1`. Sizing: about 70 normal receipts at about $0.014 each. Normal use is under $0.30/day. Worst case is 3 capped HTML calls (2 × $0.47 stays under).
 - New `infrastructure/posthog.tf`. Start with a short header comment covering:
   - why everything here is production-only (one PostHog project, and the preview state is shared)
   - what is deliberately unmanaged, and why (see Out of Scope)
-  - that UI edits get reverted on the next `main` apply
+  - that a UI edit to a field set here gets reverted on the next `main` apply
 
   Resources:
   - `posthog_insight.ai_daily_cost`:
@@ -121,14 +121,14 @@ Add the provider to both states, but put every PostHog resource behind `local.is
     - `condition_type = "absolute_value"`, `threshold_type = "absolute"`, `threshold_upper = local.ai_daily_cost_alert_usd`, `series_index = 0`
     - `calculation_interval = "hourly"`, `check_ongoing_interval = true`
     - `subscribed_users = local.posthog_alert_user_ids`, `enabled = true`
-  - **As built:** the query also pins `filterTestAccounts = false`. If omitted, it follows the project default, and turning that default on would hide test users' spend. The alert name comes from `format("AI cost today over $%v", local.ai_daily_cost_alert_usd)`, so the name tracks the threshold. A 2026-10-09 dry run of the query peaked at $0.055/day.
+  - **As built:** the query also pins `filterTestAccounts = false`. If omitted, it follows the project default, and turning that default on would hide test users' spend. The alert name comes from `format("AI cost today over $%v", local.ai_daily_cost_alert_usd)`, so the name tracks the threshold. A 2026-10-09 dry run of the query peaked at $0.055/day. The insight has `lifecycle { ignore_changes = [dashboard_ids, tags] }`: the provider can't clear a UI pin or tag, so without it the `main` apply fails. So pins and tags made in the UI stick. The alert pins `skip_weekend = false`, so a UI toggle gets reverted.
 
 ### Success
 
 - [x] `make fmt-check` passes
 - [x] `make validate` passes — backend-less, as Phase 1
-- [ ] `make plan env=production` shows `+2` (insight, alert). The only other diff is the usual deployment diff. — needs AWS creds + `POSTHOG_API_KEY`; not run
-- [x] `make plan env=preview` still shows no PostHog changes — CI run 37937100888, as Phase 1
+- [ ] `make plan env=production` shows exactly `2 to add` (insight, alert), `1 to import` (cohort, Phase 3), `0 to change`, `0 to destroy`. Terraform has no deployment resource (`deploy.yml:38`), so any other diff is unexpected. — needs AWS creds + `POSTHOG_API_KEY`; not run
+- [x] `make plan env=preview` still shows no PostHog changes — CI runs 37937100888, 37939729454, as Phase 1
 - [ ] After merge to `main`, PostHog MCP `alerts-list` shows 1 alert on the new insight — post-merge; 2026-10-09 baseline is 0 alerts
 - [ ] `alert-simulate` on that alert over the last 30 days does not fire — post-merge (needs the saved insight). Pre-merge stand-in: the same TrendsQuery over `-30d` (2026-10-09) peaks at $0.0548/day, far under $1
 
@@ -182,7 +182,7 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 - `docs/infrastructure.md:7-13`: add a PostHog row to the layout table. Production: owns insight, alert and cohort. Preview: none, but the provider is still configured.
 - `docs/infrastructure.md:19-26`: add `export POSTHOG_API_KEY=<key>` to "Local use". Comment: same value as the `POSTHOG_PERSONAL_API_KEY` GitHub secret; personal key, limited to project 609915.
 - `docs/infrastructure.md:46`: add GitHub secret `POSTHOG_PERSONAL_API_KEY` to the list of secrets.
-- `docs/infrastructure.md`: add a short note that a PostHog UI edit to a managed object is reverted by the next `main` apply. Change the object in `infrastructure/posthog.tf` instead.
+- `docs/infrastructure.md`: add a short note that a PostHog UI edit to a field Terraform sets is reverted by the next `main` apply (UI-only extras like pins can stick). Change the object in `infrastructure/posthog.tf` instead.
 
 ### Success
 
