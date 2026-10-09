@@ -1,6 +1,6 @@
 ---
 status: living
-last-updated: 2026-09-24
+last-updated: 2026-10-09
 related-adrs: [adr015, adr016, adr020]
 related-design: none
 related-epic: none

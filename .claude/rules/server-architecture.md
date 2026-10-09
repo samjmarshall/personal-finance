@@ -12,10 +12,10 @@ paths:
 [adr004](../../docs/adr/adr004-domain-oriented-3-tier-server-architecture.md)
 is executed as a **class-based** controller / service / repository 3-tier, one
 domain per change (strangler). Reference implementations: `src/server/outbox/`
-(cron workers + the write door), `src/server/receipts/receipts.*` (one domain,
-two services: the member-facing `ReceiptsService` over tRPC, HTTP and email),
-`src/server/receipts/receipt-extraction.*` (event worker +
-external adapters) and `src/server/email/email.*` (HTTP webhook
+(cron workers + the write door), `src/server/receipts/` (one domain, two
+services: `receipts.*` is the member-facing `ReceiptsService` over tRPC, HTTP and
+email; `receipt-extraction.*` is the event worker + external adapters),
+`src/server/email/email.*` (HTTP webhook
 controller behind `src/app/api/receipts/inbound/route.ts`),
 `src/server/transactions/` (the reference tRPC domain) and `src/server/categories/`
 (a top-level domain other domains link to by id).
