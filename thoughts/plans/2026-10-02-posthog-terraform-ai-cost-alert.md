@@ -127,7 +127,7 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 - [x] `make fmt-check` passes
 - [x] `make validate` passes — backend-less, as Phase 1
-- [ ] `make plan env=production` shows exactly `2 to add` (insight, alert), `1 to import` (cohort, Phase 3), `0 to change`, `0 to destroy`. Terraform has no deployment resource (`deploy.yml:38`), so any other diff is unexpected. — needs AWS creds + `POSTHOG_API_KEY`; not run
+- [x] `make plan env=production` shows exactly `2 to add` (insight, alert), `1 to import` (cohort, Phase 3), `0 to change`, `0 to destroy`. Terraform has no deployment resource (`deploy.yml:38`), so any other diff is unexpected. — CI Production Plan on `23660ca` (run 37942186770, posted on PR #44): `Plan: 1 to import, 2 to add, 0 to change, 0 to destroy.`
 - [x] `make plan env=preview` still shows no PostHog changes — CI runs 37937100888, 37939729454, as Phase 1
 - [ ] After merge to `main`, PostHog MCP `alerts-list` shows 1 alert on the new insight — post-merge; 2026-10-09 baseline is 0 alerts
 - [ ] `alert-simulate` on that alert over the last 30 days does not fire — post-merge (needs the saved insight). Pre-merge stand-in: the same TrendsQuery over `-30d` (2026-10-09) peaks at $0.0548/day, far under $1
@@ -171,7 +171,7 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 - [x] `make fmt-check` passes
 - [x] `make validate` passes — backend-less, as Phase 1
-- [ ] `make plan env=production` shows `1 to import` for the cohort with **no in-place changes**. Adjust the attributes until it does. — needs AWS creds + `POSTHOG_API_KEY`; not run. Static check (2026-10-09): live cohort name, description, `is_static` and filters match the code exactly; provider v1.0.21 compares `filters` semantically (`jsontypes.Normalized`), and a bare id imports when `project_id` is set on the provider
+- [x] `make plan env=production` shows `1 to import` for the cohort with **no in-place changes**. Adjust the attributes until it does. — CI Production Plan on `23660ca` (run 37942186770, PR #44): import only, 0 to change. Earlier static check (2026-10-09): live cohort name, description, `is_static` and filters match the code exactly; provider v1.0.21 compares `filters` semantically (`jsontypes.Normalized`), and a bare id imports when `project_id` is set on the provider
 - [ ] After merge, cohort `570363` is unchanged in PostHog: same id, same filter, same member count — post-merge; 2026-10-09 baseline: version 27, count 0, `is_static` false
 
 ## Phase 4: Docs
