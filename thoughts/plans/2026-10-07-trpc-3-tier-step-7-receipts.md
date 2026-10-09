@@ -765,16 +765,16 @@ One feature commit: `feat(receipts): linked Expense sets a line item's Category`
 
 ### Success
 
-- [ ] `make check` passes. `make db_generate` after `0020` produces no file.
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] On the branch, `make db_migrate` applies `0019` and `0020`, and the Phase 9 migration checks hold
+- [x] `make check` passes. `make db_generate` after `0020` produces no file.
+- [x] `make test` passes
+- [x] `make build` passes
+- [x] On the branch, `make db_migrate` applies `0019` and `0020`, and the Phase 9 migration checks hold
 - [ ] At https://personal-finance.localhost/receipts, on a matched receipt:
   - linking an item to an Expense locks its Category picker to that Expense's Category, with the hint
   - choosing "No expense" keeps that Category, and it can then be changed
   - moving the Expense to another Category changes the item's shown Category
   - no line-item text says "attribute"
-- [ ] `/design-review`: the receipt detail item table, linked and unlinked rows, at desktop and mobile widths
+- [x] `/design-review`: the receipt detail item table, linked and unlinked rows, at desktop and mobile widths
 
 ## References
 

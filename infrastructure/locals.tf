@@ -16,4 +16,8 @@ locals {
   # policy so the two cannot drift.
   bedrock_receipt_model    = "au.anthropic.claude-sonnet-4-6"
   bedrock_foundation_model = "anthropic.claude-sonnet-4-6"
+
+  # The same model's display name in the AWS Price List (pricing.tf). The Price
+  # List keys on it, not the profile id, so edit it with the two above.
+  bedrock_pricing_model_name = "Claude Sonnet 4.6"
 }

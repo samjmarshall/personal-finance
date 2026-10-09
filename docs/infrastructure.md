@@ -31,7 +31,8 @@ make force-unlock env=preview ID=<id> # only after a killed apply left the lock
 
 1. Confirm the new model has an `au.` inference profile and access is granted: `aws bedrock list-inference-profiles --region ap-southeast-2`.
 2. Edit **both** locals in `infrastructure/locals.tf`: `bedrock_receipt_model` (the `au.` profile id the app calls) and `bedrock_foundation_model` (the bare id the IAM wildcard covers).
-3. Push. `deploy.yml` applies the IAM policy and the `BEDROCK_RECEIPT_MODEL` env var, then redeploys. Nothing in `src/` changes; `src/env.ts` only carries a default for local runs.
+3. Set `bedrock_pricing_model_name` in the same file to the model's AWS Price List display name (e.g. `Claude Sonnet 4.6`). List the names with `aws pricing get-attribute-values --region us-east-1 --service-code AmazonBedrockFoundationModels --attribute-name model`. `pricing.tf` reads the `au.` geographic-tier price (about 10% over Global). If the name doesn't match exactly one row, `make plan` fails rather than shipping a wrong price.
+4. Push. `deploy.yml` applies the IAM policy and the `BEDROCK_RECEIPT_MODEL` and `BEDROCK_*_TOKEN_PRICE_USD` env vars, then redeploys. Nothing in `src/` changes; `src/env.ts` only carries a default for local runs.
 
 ## Bootstrap (once, manual, in order)
 

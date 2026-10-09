@@ -12,7 +12,7 @@ Receipt AI calls are now capped per call (`maxOutputTokens`, timeout, retries; c
 ## Current State
 
 - **PostHog appears in Terraform only as Vercel env vars.**
-  - `POSTHOG_KEY` and `POSTHOG_PROJECT_ID` are set at `infrastructure/vercel.tf:71-78`, from `var.posthog_key` and `var.posthog_project_id` (`infrastructure/variables.tf:11-34`).
+  - `POSTHOG_KEY` and `POSTHOG_PROJECT_ID` are set at `infrastructure/vercel.tf:81-88`, from `var.posthog_key` and `var.posthog_project_id` (`infrastructure/variables.tf:11-34`).
   - Nothing inside the PostHog project is managed in code.
 - **Providers.**
   - `required_providers` lists only aws `6.25.0` and vercel `~> 5.0` (`infrastructure/terraform.tf:2-11`). Lock entries are at `infrastructure/.terraform.lock.hcl:4,28`.
@@ -20,16 +20,16 @@ Receipt AI calls are now capped per call (`maxOutputTokens`, timeout, retries; c
 - **Two states, one PostHog project.**
   - `ENVIRONMENT` is `production` on `main` and `preview` on any other branch (`.github/workflows/deploy.yml:32`). The preview state is shared by every branch (`docs/infrastructure.md:9`).
   - Production and preview send to the same PostHog project (`609915`).
-  - Objects that should exist once use `count = local.is_prod ? 1 : 0` (`infrastructure/vercel.tf:2,49,98`, `is_prod` at `infrastructure/locals.tf:4`).
+  - Objects that should exist once use `count = local.is_prod ? 1 : 0` (`infrastructure/vercel.tf:2,49,108`, `is_prod` at `infrastructure/locals.tf:4`).
 - **CI.**
   - The `terraform-apply` job env holds `VERCEL_API_TOKEN` and the `TF_VAR_posthog_*` values (`deploy.yml:51-58`), then runs `make apply env="$ENVIRONMENT"` (`:83`).
-  - The health-gate job only runs `make init` plus `terraform output` (`deploy.yml:249-255`). It configures no providers, so it needs no new env.
+  - The `health-check` job only runs `make init` plus `terraform output` (`deploy.yml:249-255`). It configures no providers, so it needs no new env.
   - The `fmt-check` gate runs in `.github/workflows/quality-control.yml:86-96`.
   - `make validate`/`plan` depend on `init`, which needs the S3 backend (`infrastructure/Makefile:22-35`). So locally, run `assume <profile>` first.
 - **Where the cost data comes from.**
   - `PostHogSpanProcessor` (`src/server/observability/sdk/otel.ts:47-50`) emits `$ai_generation` events that carry `$ai_total_cost_usd`.
   - Only 4 calls so far, $0.055 total, about $0.014 per receipt.
-  - With the per-call caps (`src/server/receipts/receipts.service.ts:65,70,72,443`), the worst case is about $0.15 per image call and about $0.47 per 300 KB HTML call.
+  - With the per-call caps (`src/server/receipts/receipt-extraction.service.ts:66,71,73,448`), the worst case is about $0.15 per image call and about $0.47 per 300 KB HTML call.
 - **What exists in PostHog today.**
   - PostHog starter boilerplate: dashboard `2097324`, 8 default insights (`11891056`–`11891063`) and the GeoIP transformation.
   - One real config object: cohort `570363` "Internal / Test users". Its filter is person prop `$internal_or_test_user` exact `[true]`, inside an OR→AND group. It is dynamic. The project test-account filters point at it.
@@ -177,10 +177,10 @@ Add the provider to both states, but put every PostHog resource behind `local.is
 
 ### Changes
 
-- `docs/infrastructure.md:3`: the intro now says Terraform also owns PostHog alerting config: the AI cost insight and alert, and the test-users cohort. Production state only.
+- `docs/infrastructure.md:3`: the intro now says Terraform also owns PostHog alerting config: the AI cost insight and alert, and the test-users cohort. Production state only. In the same sentence, change "the three Bedrock env vars" to "the five Bedrock env vars" (`AWS_REGION`, `AWS_ROLE_ARN`, `BEDROCK_RECEIPT_MODEL`, `BEDROCK_{INPUT,OUTPUT}_TOKEN_PRICE_USD`, `infrastructure/vercel.tf:59-80`).
 - `docs/infrastructure.md:7-13`: add a PostHog row to the layout table. Production: owns insight, alert and cohort. Preview: none, but the provider is still configured.
 - `docs/infrastructure.md:19-26`: add `export POSTHOG_API_KEY=<key>` to "Local use". Comment: same value as the `POSTHOG_PERSONAL_API_KEY` GitHub secret; personal key, limited to project 609915.
-- `docs/infrastructure.md:45`: add GitHub secret `POSTHOG_PERSONAL_API_KEY` to the list of secrets.
+- `docs/infrastructure.md:46`: add GitHub secret `POSTHOG_PERSONAL_API_KEY` to the list of secrets.
 - `docs/infrastructure.md`: add a short note that a PostHog UI edit to a managed object is reverted by the next `main` apply. Change the object in `infrastructure/posthog.tf` instead.
 
 ### Success
