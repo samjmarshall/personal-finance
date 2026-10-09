@@ -53,7 +53,7 @@
 		"@trpc/client": "11.18.0",
 		"@trpc/react-query": "11.18.0",
 		"@trpc/server": "11.18.0",
-		"@upstash/redis": "1.38.2",
+		"@upstash/redis": "1.38.4",
 		"@vercel/blob": "2.8.0",
 		"@vercel/oidc-aws-credentials-provider": "3.3.11",
 		"ai": "7.0.101",
