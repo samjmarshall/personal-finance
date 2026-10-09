@@ -36,6 +36,8 @@ in `infrastructure/locals.tf`, and hard-fails the plan when the lookup returns n
 
 ### Live Price List facts (probed 2026-09-23, account 139035987018, us-east-1 endpoint)
 
+> **2026-10-09:** AWS moved Claude to service code `AmazonBedrockFoundationModels`; `AmazonBedrockMarketplace` no longer exists. Same attrs, usagetypes and prices. Code and docs use the new code.
+
 - Service code `AmazonBedrock` holds only legacy Claude; `AmazonBedrockService` returned 0 rows
   for AU geo. **`AmazonBedrockMarketplace`** carries Claude Sonnet 4.6 for `ap-southeast-2` with
   structured attrs (`model`, `regionCode`, `feature`, `inferenceType`, `usagetype`).

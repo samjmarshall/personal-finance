@@ -7,8 +7,11 @@ data "aws_pricing_product" "bedrock_token" {
   for_each = local.bedrock_pricing_usagetype
   provider = aws.pricing
 
-  # Current Claude models are listed here; `AmazonBedrock` holds only legacy ones.
-  service_code = "AmazonBedrockMarketplace"
+  # AWS moves Claude between service codes (AmazonBedrockMarketplace until
+  # 2026-10); `AmazonBedrock` holds only legacy models. A move fails the plan
+  # with "did not return any elements" — find the new code with
+  # `aws pricing describe-services --region us-east-1`.
+  service_code = "AmazonBedrockFoundationModels"
 
   filters {
     field = "model"
