@@ -32,7 +32,7 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 // Only ever hand the browser a type it renders inertly. Blob metadata is set at
 // upload time by the member, so a `text/html` value would otherwise stream back
 // same-origin as executable markup — anything off this list downgrades to a
-// non-sniffable octet-stream (paired with X-Content-Type-Options at the route).
+// non-sniffable octet-stream (paired with X-Content-Type-Options in the controller).
 const RENDERABLE_TYPES = new Set([
 	"image/jpeg",
 	"image/png",
@@ -136,7 +136,7 @@ export class ReceiptsService {
 
 	// The frozen payload carries only a receiptId, so the row must exist before the
 	// event fires — which is what makes the event a function of the write's result.
-	// Blobs were written before this transaction, so a rolled-back commit leaves an
+	// Blobs were written before the insert, so a rolled-back commit leaves an
 	// orphan blob: the same trade the receipt delete path already makes.
 	async createFromEmail(
 		memberId: string,
@@ -146,7 +146,9 @@ export class ReceiptsService {
 			blobs.map((blob) => ({
 				userId: memberId,
 				channel: ReceiptChannel.Email,
-				...blob,
+				blobUrl: blob.blobUrl,
+				blobPathname: blob.blobPathname,
+				contentType: blob.contentType,
 				traceId: currentTraceId(),
 			})),
 			"receipt/email.received",
