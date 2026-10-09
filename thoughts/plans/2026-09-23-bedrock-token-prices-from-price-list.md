@@ -1,6 +1,6 @@
 ---
 date: 2026-09-23
-adrs: []
+adrs: [adr015]
 status: Ready to implement
 ---
 # Bedrock Token Prices from the AWS Price List Implementation Plan
@@ -17,10 +17,10 @@ in `infrastructure/locals.tf`, and hard-fails the plan when the lookup returns n
 
 ## Current State
 
-- Both vars: optional positive numbers, `src/env.ts:125-126`; mirrored `src/env.ts:166-167`.
-- Read once, `src/server/observability/otel.ts:54-57` → `ContextSpanProcessor` deps
-  (`src/server/observability/span-processor.ts:10-13`), stamped only on `ai.*` spans and only
-  when defined (`src/server/observability/span-processor.ts:52-57`). **No app-side
+- Both vars: optional positive numbers, `src/env.ts:122-123`; mirrored `src/env.ts:163-164`.
+- Read once, `src/server/observability/sdk/otel.ts:65-66` → `SpanAttributeProcessor` deps
+  (`src/server/observability/sdk/span-processor.ts:13-15`), stamped only on `ai.*` spans and only
+  when defined (`src/server/observability/sdk/span-processor.ts:67-72`). **No app-side
   multiplication** — PostHog computes `$ai_total_cost_usd`. PostHog's `$ai_*_token_price` is
   **per single token**.
 - Model `au.anthropic.claude-sonnet-4-6` — a geographic inference profile — set in
@@ -50,7 +50,7 @@ in `infrastructure/locals.tf`, and hard-fails the plan when the lookup returns n
   | output | `APS2-MP:APS2_OutputTokenCount-Units` | `Output tokens` | 1M tokens | 16.50  |
 
   (Global tier = 3.00 / 15.00.) Per-token: `0.0000033` / `0.0000165`.
-- The 6-filter set in Phase 1 returns **exactly 1 row** each (verified). Dropping `usagetype`
+- The 5-filter set in Phase 1 returns **exactly 1 row** each (verified). Dropping `usagetype`
   returns 2 → `aws_pricing_product` errors "not precise enough. Returned 2 elements"; a wrong
   `model` returns 0 → "did not return any elements". Both fail the plan (provider 6.25.0
   `internal/service/pricing/product_data_source.go`).
@@ -100,7 +100,7 @@ gain the new co-edited knob.
   keys on display name + usagetype, not the profile id, so this is edited with the model.
 - `infrastructure/pricing.tf` (new):
   - `data "aws_pricing_product" "bedrock_token"` with `for_each = local.bedrock_pricing_usagetype`,
-    `provider = aws.pricing`, `service_code = "AmazonBedrockMarketplace"`, and the six
+    `provider = aws.pricing`, `service_code = "AmazonBedrockMarketplace"`, and the five
     `filters` blocks: `model`, `regionCode` (= `data.aws_region.current.region`), `feature`
     (`"On-demand Inference"`), `inferenceType` (`"${title(each.key)} tokens"`), `usagetype`
     (`each.value`).
@@ -128,7 +128,7 @@ gain the new co-edited knob.
 - `infrastructure/vercel.tf` — add two entries to `local.vercel_env` (`infrastructure/vercel.tf:57-79`),
   both `sensitive = false`, values
   `format("%.10f", terraform_data.bedrock_token_prices.output.input)` and `...output.output`
-  (fixed-decimal avoids `3.3e-06`; `z.coerce.number()` in `src/env.ts:125-126` accepts it).
+  (fixed-decimal avoids `3.3e-06`; `z.coerce.number()` in `src/env.ts:122-123` accepts it).
   Reading from `terraform_data…output` (not the data source) is what ties the env var to the
   remembered value.
 
@@ -173,10 +173,10 @@ gain the new co-edited knob.
 - Ticket: none — derived from this session's research + adr015 "Decision 11"
 - Related plan: `thoughts/plans/2026-09-15-posthog-observability.md` (Phase 11 / Risk 3 named
   this fallback)
-- ADRs: `docs/adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md` (Accepted) — line 73
+- ADRs: `docs/adr/adr015-posthog-over-opentelemetry-via-vercel-otel.md` (In Progress; price open question removed 2026-10-09) — line 73
   is the recorded decision this implements; its consequence note is updated in Phase 3
-- Code: `src/env.ts:125-126`, `src/server/observability/otel.ts:54-57`,
-  `src/server/observability/span-processor.ts:52-57`, `infrastructure/locals.tf:17-18`,
+- Code: `src/env.ts:122-123`, `src/server/observability/sdk/otel.ts:65-66`,
+  `src/server/observability/sdk/span-processor.ts:67-72`, `infrastructure/locals.tf:17-18`,
   `infrastructure/vercel.tf:57-90`, `infrastructure/providers.tf:1-11`,
   `infrastructure/data.tf:1-3`, `infrastructure/terraform.tf`,
   `docs/cloudformation-templates/github-actions.yaml:62-63`

@@ -118,10 +118,7 @@ export const env = createEnv({
 		POSTHOG_UI_HOST: z.url().default("https://us.posthog.com"),
 		POSTHOG_PROJECT_ID: z.string().optional(),
 		LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),
-		/**
-		 * Bedrock token prices for cost stamping on AI spans (Decision 11 — unset
-		 * until Phase 11 confirms native cost is emitted or missing).
-		 */
+		/** Bedrock USD price per single token (not per 1M), stamped on AI spans. Terraform sets it on Vercel. */
 		BEDROCK_INPUT_TOKEN_PRICE_USD: z.coerce.number().positive().optional(),
 		BEDROCK_OUTPUT_TOKEN_PRICE_USD: z.coerce.number().positive().optional(),
 	},
