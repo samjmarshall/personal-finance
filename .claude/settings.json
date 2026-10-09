@@ -1,6 +1,11 @@
 {
 	"model": "opus",
 	"tui": "default",
+	"autoMemoryEnabled": false,
+	"disableWorkflows": false,
+	"disableRemoteControl": true,
+	"disableClaudeAiConnectors": true,
+	"disableArtifact": true,
 	"enableAllProjectMcpServers": false,
 	"enabledMcpjsonServers": [
 		"chrome-devtools",
@@ -14,7 +19,7 @@
 	],
 	"env": {
 		"ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
 		"ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
 		"CLAUDE_CODE_DISABLE_MOUSE": "1",
 		"CLAUDE_CODE_DISABLE_MOUSE_CLICKS": "1",
@@ -35,13 +40,12 @@
 			"AskUserQuestion",
 			"CronCreate",
 			"CronDelete",
-			"CronList"
+			"CronList",
+			"Read(.env)",
+			"Read(.env.*)",
+			"Read(!.env.example)"
 		]
 	},
-	"disableWorkflows": false,
-	"disableRemoteControl": true,
-	"disableClaudeAiConnectors": true,
-	"disableArtifact": true,
 	"hooks": {
 		"PreToolUse": [
 			{
@@ -80,15 +84,6 @@
 					{
 						"type": "command",
 						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/block-drizzle-push.sh"
-					}
-				]
-			},
-			{
-				"matcher": "Read",
-				"hooks": [
-					{
-						"type": "command",
-						"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/block-env-file-read.sh"
 					}
 				]
 			}

@@ -1,17 +1,16 @@
 import { readdirSync } from "node:fs";
 import { basename } from "node:path";
 import { describe, expect, it } from "vitest";
-
+import type { AllowedSender } from "~/domain/allowed-senders/allowed-sender.interface";
 import type { BalanceSnapshot } from "~/domain/balances/balance.interface";
 import type { Category } from "~/domain/categories/category.interface";
-import type { AllowedSender } from "~/domain/email/allowed-sender.interface";
 import type { Expense } from "~/domain/expenses/expense.interface";
 import type { Income } from "~/domain/income/income.interface";
 import type { Receipt, ReceiptItem } from "~/domain/receipts/receipt.interface";
 import type { Transaction } from "~/domain/transactions/transaction.interface";
+import type { allowedSenders } from "~/server/allowed-senders/allowed-senders.schema";
 import type { balanceSnapshots } from "~/server/balances/balances.schema";
-import type { allowedSenders } from "~/server/email/allowed-sender.schema";
-import type { expenseCategories } from "~/server/expenses/categories.schema";
+import type { categories } from "~/server/categories/categories.schema";
 import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
 import type { receiptItems, receipts } from "~/server/receipts/receipts.schema";
@@ -21,16 +20,13 @@ import type { Equal, Expect } from "~/test/type-contracts";
 // One `true` per aligned pair. A schema change that breaks an interface — or an
 // interface change that would need a column/migration — makes an element
 // `Expect<false>`, which errors at this alias under `make check` typecheck.
-// `Category` omits `expenseCount` (a count() aggregate on list, not a column);
 // TransactionListItem/TransactionSummary are table-less read-models, out of scope.
 type Contracts = [
 	Expect<Equal<typeof balanceSnapshots.$inferSelect, BalanceSnapshot>>,
 	Expect<Equal<typeof income.$inferSelect, Income>>,
 	Expect<Equal<typeof expenses.$inferSelect, Expense>>,
 	Expect<Equal<typeof transactions.$inferSelect, Transaction>>,
-	Expect<
-		Equal<typeof expenseCategories.$inferSelect, Omit<Category, "expenseCount">>
-	>,
+	Expect<Equal<typeof categories.$inferSelect, Category>>,
 	Expect<Equal<typeof receipts.$inferSelect, Receipt>>,
 	Expect<Equal<typeof allowedSenders.$inferSelect, AllowedSender>>,
 ];

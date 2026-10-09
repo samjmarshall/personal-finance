@@ -20,43 +20,26 @@ import { CommitmentKind } from "~/lib/constants";
 import { cn, formatCurrency, formatDate, isPast } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ExpenseForm } from "./expense-form";
+import { groupByCategory } from "./group-by-category";
 
 type Expense = RouterOutputs["expense"]["list"][number];
-type Category = RouterOutputs["category"]["list"][number];
-
-// Rank categories by their managed sortOrder; unmanaged names fall to the end,
-// broken by name. `i` keeps the sort stable across equal sortOrders.
-function makeRank(categories: Category[] | undefined) {
-	const order = new Map(
-		(categories ?? []).map((c, i) => [c.name, c.sortOrder * 1000 + i]),
-	);
-	return (name: string) => order.get(name) ?? Number.MAX_SAFE_INTEGER;
-}
-
-function groupByCategory(items: Expense[], rank: (name: string) => number) {
-	const map = new Map<string, Expense[]>();
-	for (const item of items) {
-		const arr = map.get(item.category) ?? [];
-		arr.push(item);
-		map.set(item.category, arr);
-	}
-	return [...map.entries()].sort(
-		(a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]),
-	);
-}
 
 export function ExpensesView() {
 	const [list] = api.expense.list.useSuspenseQuery();
 	const [consumption] = api.expense.consumption.useSuspenseQuery();
-	const { data: categories } = api.category.list.useQuery();
+	const [categories] = api.category.list.useSuspenseQuery();
 	const utils = api.useUtils();
 	const remove = api.expense.delete.useMutation({
 		onSuccess: async () => {
-			// Deleting an expense SET NULLs its linked transactions: they drop out of
-			// the consumed total and reappear on the Unplanned/transaction lists.
+			// Deleting an Expense unlinks its Transactions (they keep its Category):
+			// they leave the consumed total and reappear on Unplanned.
 			await Promise.all([
 				utils.expense.list.invalidate(),
 				utils.expense.consumption.invalidate(),
+				// Only the Categories page shows counts; refetch now so it opens fresh.
+				utils.expense.countsByCategory.invalidate(undefined, {
+					refetchType: "all",
+				}),
 				utils.transaction.unplanned.invalidate(),
 				utils.transaction.list.invalidate(),
 			]);
@@ -67,8 +50,8 @@ export function ExpensesView() {
 	const [editing, setEditing] = useState<Expense | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
-	// Category cards start expanded; the Set tracks which are collapsed. Keys are
-	// namespaced ("r:"/"o:") since a category can hold both recurring and one-time.
+	// Cards start open; this tracks closed ones. A Category can hold recurring and
+	// one-time, so each kind gets its own key.
 	const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
 	function toggle(key: string) {
@@ -80,15 +63,13 @@ export function ExpensesView() {
 		});
 	}
 
-	const rank = useMemo(() => makeRank(categories), [categories]);
-
 	const recurringGroups = useMemo(
 		() =>
 			groupByCategory(
 				list.filter((e) => e.kind === CommitmentKind.Recurring),
-				rank,
+				categories,
 			),
-		[list, rank],
+		[list, categories],
 	);
 
 	const oneTime = useMemo(
@@ -96,8 +77,8 @@ export function ExpensesView() {
 		[list],
 	);
 	const oneTimeGroups = useMemo(
-		() => groupByCategory(oneTime, rank),
-		[oneTime, rank],
+		() => groupByCategory(oneTime, categories),
+		[oneTime, categories],
 	);
 
 	// Summary totals are recurring-only — one-time figures aren't a cadence.
@@ -233,7 +214,7 @@ export function ExpensesView() {
 						"recurring",
 						<Repeat className="h-4 w-4" />,
 						"Recurring",
-						recurringGroups.reduce((s, [, items]) => s + items.length, 0),
+						recurringGroups.reduce((s, { items }) => s + items.length, 0),
 					)}
 					{tab(
 						"onetime",
@@ -267,17 +248,18 @@ export function ExpensesView() {
 					</div>
 
 					<div className="mt-6 flex flex-col gap-4">
-						{recurringGroups.map(([category, items]) => {
+						{recurringGroups.map(({ key: groupKey, label, items }) => {
 							const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
-							const isCollapsed = collapsed.has(`r:${category}`);
-							const panelId = `expense-recurring-${category.replace(/\s+/g, "-")}`;
+							const key = `r:${groupKey}`;
+							const isCollapsed = collapsed.has(key);
+							const panelId = `expense-recurring-${groupKey}`;
 							return (
-								<Card className="[--card-spacing:0px]" key={category}>
+								<Card className="[--card-spacing:0px]" key={key}>
 									<button
 										aria-controls={panelId}
 										aria-expanded={!isCollapsed}
 										className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
-										onClick={() => toggle(`r:${category}`)}
+										onClick={() => toggle(key)}
 										type="button"
 									>
 										<span className="flex items-center gap-2">
@@ -288,7 +270,7 @@ export function ExpensesView() {
 												)}
 											/>
 											<span className="font-semibold text-foreground text-sm">
-												{category}
+												{label}
 											</span>
 											<span className="text-muted-foreground text-xs">
 												({items.length})
@@ -357,7 +339,7 @@ export function ExpensesView() {
 
 				<Tabs.Panel value="onetime">
 					<div className="mt-6 flex flex-col gap-4">
-						{oneTimeGroups.map(([category, itemsRaw]) => {
+						{oneTimeGroups.map(({ key: groupKey, label, items: itemsRaw }) => {
 							// Upcoming first (soonest → latest), then past (most recent → oldest).
 							const items = [...itemsRaw].sort((a, b) => {
 								const pa = isPastItem(a);
@@ -368,15 +350,16 @@ export function ExpensesView() {
 								return pa ? db - da : da - db;
 							});
 							const total = items.reduce((s, e) => s + (e.amount ?? 0), 0);
-							const isCollapsed = collapsed.has(`o:${category}`);
-							const panelId = `expense-onetime-${category.replace(/\s+/g, "-")}`;
+							const key = `o:${groupKey}`;
+							const isCollapsed = collapsed.has(key);
+							const panelId = `expense-onetime-${groupKey}`;
 							return (
-								<Card className="[--card-spacing:0px]" key={category}>
+								<Card className="[--card-spacing:0px]" key={key}>
 									<button
 										aria-controls={panelId}
 										aria-expanded={!isCollapsed}
 										className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
-										onClick={() => toggle(`o:${category}`)}
+										onClick={() => toggle(key)}
 										type="button"
 									>
 										<span className="flex items-center gap-2">
@@ -387,7 +370,7 @@ export function ExpensesView() {
 												)}
 											/>
 											<span className="font-semibold text-foreground text-sm">
-												{category}
+												{label}
 											</span>
 											<span className="text-muted-foreground text-xs">
 												({items.length})

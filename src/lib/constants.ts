@@ -59,14 +59,6 @@ export function toPriority(value: string | null | undefined): Priority {
 		: Priority.NiceToHave;
 }
 
-export const EXPENSE_CATEGORIES = [
-	"Home Loan",
-	"Bills & Subscriptions",
-	"Utilities",
-	"Vehicle",
-	"Everyday & Personal",
-] as const;
-
 type PriorityStyle = {
 	label: string;
 	badge: string;

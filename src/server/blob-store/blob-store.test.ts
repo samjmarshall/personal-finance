@@ -1,9 +1,10 @@
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VercelBlobStore } from "./blob-store";
 
-vi.mock("@vercel/blob", () => ({ get: vi.fn(), put: vi.fn() }));
+vi.mock("@vercel/blob", () => ({ del: vi.fn(), get: vi.fn(), put: vi.fn() }));
 
+const delMock = vi.mocked(del);
 const getMock = vi.mocked(get);
 const putMock = vi.mocked(put);
 
@@ -36,6 +37,44 @@ describe("VercelBlobStore.read", () => {
 			).rejects.toThrow("blob fetch failed for receipts/missing.png");
 		},
 	);
+});
+
+describe("VercelBlobStore.stream", () => {
+	it("opens a private read by pathname and hands back the stream with its stored type", async () => {
+		const stream = new Blob([new Uint8Array([1, 2, 3])]).stream();
+		getMock.mockResolvedValue({
+			statusCode: 200,
+			stream,
+			blob: { contentType: "image/png" },
+		} as never);
+
+		const result = await new VercelBlobStore().stream("receipts/r1.png");
+
+		expect(getMock).toHaveBeenCalledWith("receipts/r1.png", {
+			access: "private",
+		});
+		expect(result).toEqual({ stream, contentType: "image/png" });
+	});
+
+	it.each([[null], [{ statusCode: 404 }]])(
+		"answers null when the store answers %j",
+		async (answer) => {
+			getMock.mockResolvedValue(answer as never);
+
+			await expect(
+				new VercelBlobStore().stream("receipts/missing.png"),
+			).resolves.toBeNull();
+		},
+	);
+
+	it("lets a store refusal propagate", async () => {
+		const refusal = new Error("store down");
+		getMock.mockRejectedValue(refusal);
+
+		await expect(new VercelBlobStore().stream("receipts/r1.png")).rejects.toBe(
+			refusal,
+		);
+	});
 });
 
 describe("VercelBlobStore.write", () => {
@@ -76,5 +115,24 @@ describe("VercelBlobStore.write", () => {
 		const [, body] = putMock.mock.calls[0] ?? [];
 		expect(Buffer.isBuffer(body)).toBe(true);
 		expect(Array.from(body as Buffer)).toEqual([1, 2, 3]);
+	});
+});
+
+describe("VercelBlobStore.delete", () => {
+	it("deletes by pathname", async () => {
+		delMock.mockResolvedValue(undefined);
+
+		await new VercelBlobStore().delete("receipts/r1.png");
+
+		expect(delMock).toHaveBeenCalledWith("receipts/r1.png");
+	});
+
+	it("lets a store refusal propagate", async () => {
+		const refusal = new Error("store down");
+		delMock.mockRejectedValue(refusal);
+
+		await expect(new VercelBlobStore().delete("receipts/r1.png")).rejects.toBe(
+			refusal,
+		);
 	});
 });

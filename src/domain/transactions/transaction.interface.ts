@@ -3,24 +3,36 @@ import type { Frequency, Priority } from "~/lib/constants";
 export interface Transaction {
 	id: number;
 	amount: number;
-	category: string;
+	categoryId: number | null;
 	createdAt: Date;
 	date: Date;
 	description: string;
 	expenseId: number | null;
-	expenseCategoryId: number | null;
 	frequency: Frequency;
+	group: string;
 	notes: string | null;
 	priority: Priority;
 	receiptDescription: string | null;
 	updatedAt: Date | null;
 }
 
-// list rows leftJoin the linked expense and managed category; null when unlinked
-// or the referenced row is gone
+// One Expense's Consumed: linked Spend net of refunds
+export interface ExpenseConsumption {
+	expenseId: number;
+	consumed: number;
+}
+
+// Names of the linked Expense and of the Category the row shows (the Expense's
+// if linked). Null when there is none or it's gone.
 export interface TransactionListItem extends Transaction {
 	expenseName: string | null;
-	expenseCategoryName: string | null;
+	categoryName: string | null;
+}
+
+// One page of list rows; total counts every match, not just this page
+export interface TransactionListResult {
+	items: TransactionListItem[];
+	total: number;
 }
 
 export interface TransactionSummary {
@@ -44,8 +56,8 @@ export interface TransactionSummary {
 		month: string;
 		total: number;
 	}[];
-	topCategories: {
-		category: string;
+	topGroups: {
+		group: string;
 		total: number;
 		count: number;
 	}[];

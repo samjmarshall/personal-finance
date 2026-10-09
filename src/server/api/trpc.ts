@@ -1,10 +1,12 @@
 /**
- * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
- * 1. You want to modify request context (see Part 1).
- * 2. You want to create a new middleware or type of procedure (see Part 3).
+ * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS you want a new middleware or type of
+ * procedure (see Part 2). Request context lives in `context.ts`.
  *
  * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
  * need to use are documented accordingly near the end.
+ *
+ * The context is imported as a type only, so loading this file (and so any router) never loads
+ * db or auth — router tests need no stubs.
  */
 
 import { initTRPC, TRPCError } from "@trpc/server";
@@ -12,8 +14,8 @@ import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
 
-import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+import type { Context } from "~/server/api/context";
+import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { reportError } from "~/server/observability/errors/report-error";
 import { createRootLogger } from "~/server/observability/logging/logger";
 import { BaggageKey } from "~/server/observability/tracing/baggage";
@@ -25,36 +27,13 @@ import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
 export const trpcLogger = createRootLogger().with({ domain: "trpc" });
 
 /**
- * 1. CONTEXT
- *
- * This section defines the "contexts" that are available in the backend API.
- *
- * These allow you to access things when processing a request, like the database, the session, etc.
- *
- * This helper generates the "internals" for a tRPC context. The API handler and RSC clients each
- * wrap this and provides the required context.
- *
- * @see https://trpc.io/docs/server/context
- */
-export const createTRPCContext = async (opts: { headers: Headers }) => {
-	const session = await auth.api.getSession({
-		headers: opts.headers,
-	});
-	return {
-		db,
-		session,
-		...opts,
-	};
-};
-
-/**
- * 2. INITIALIZATION
+ * 1. INITIALIZATION
  *
  * This is where the tRPC API is initialized, connecting the context and transformer. We also parse
  * ZodErrors so that you get typesafety on the frontend if your procedure fails due to validation
  * errors on the backend.
  */
-const t = initTRPC.context<typeof createTRPCContext>().create({
+const t = initTRPC.context<Context>().create({
 	transformer: superjson,
 	errorFormatter({ shape, error }) {
 		return {
@@ -76,7 +55,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
 export const createCallerFactory = t.createCallerFactory;
 
 /**
- * 3. ROUTER & PROCEDURE (THE IMPORTANT BIT)
+ * 2. ROUTER & PROCEDURE (THE IMPORTANT BIT)
  *
  * These are the pieces you use to build your tRPC API. You should import these a lot in the
  * "/src/server/api/routers" directory.
@@ -161,6 +140,28 @@ const observabilityMiddleware = t.middleware(
 );
 
 /**
+ * Services throw transport-free domain errors; this is the one place they become
+ * codes. Sits inside observability so spans and logs see the mapped code.
+ * Only a raw throw (tRPC wraps it as a 500) is mapped; a deliberate TRPCError
+ * keeps its code even if its cause is a domain error.
+ */
+const errorMappingMiddleware = t.middleware(async ({ next }) => {
+	const result = await next();
+	if (result.ok || result.error.code !== "INTERNAL_SERVER_ERROR") return result;
+	const { cause } = result.error;
+	if (cause instanceof NotFoundError) throw mappedError("NOT_FOUND", cause);
+	if (cause instanceof ConflictError) throw mappedError("CONFLICT", cause);
+	return result;
+});
+
+function mappedError(code: TRPCError["code"], cause: Error): TRPCError {
+	const error = new TRPCError({ code, message: cause.message, cause });
+	// Keep the real throw site, as tRPC's own wrap does, or traces point here.
+	if (cause.stack) error.stack = cause.stack;
+	return error;
+}
+
+/**
  * Public (unauthenticated) procedure
  *
  * This is the base piece you use to build new queries and mutations on your tRPC API. It does not
@@ -169,7 +170,8 @@ const observabilityMiddleware = t.middleware(
  */
 export const publicProcedure = t.procedure
 	.use(devLatencyMiddleware)
-	.use(observabilityMiddleware);
+	.use(observabilityMiddleware)
+	.use(errorMappingMiddleware);
 
 /**
  * Protected (authenticated) procedure
@@ -182,6 +184,7 @@ export const publicProcedure = t.procedure
 export const protectedProcedure = t.procedure
 	.use(devLatencyMiddleware)
 	.use(observabilityMiddleware)
+	.use(errorMappingMiddleware)
 	.use(({ ctx, next }) => {
 		if (!ctx.session?.user) {
 			throw new TRPCError({ code: "UNAUTHORIZED" });

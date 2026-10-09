@@ -7,3 +7,5 @@ export const balanceSetDto = z.object({
 	amount: z.number(),
 	asOf: z.date(),
 });
+
+export type BalanceSetInput = z.infer<typeof balanceSetDto>;

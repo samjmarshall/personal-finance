@@ -1,22 +1,47 @@
 import { context } from "@opentelemetry/api";
+import { allowedSenderCreateDto } from "~/domain/allowed-senders";
 import type { InboundAttachmentMeta, InboundEmailEvent } from "~/domain/email";
 import { isReceiptFileType } from "~/domain/receipts";
 import { bareMediaType } from "~/lib/utils";
+import type { AllowedSendersService } from "~/server/allowed-senders/allowed-senders.service";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import type { Logger } from "~/server/observability/logging/logger";
 import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
-import { currentTraceId } from "~/server/observability/tracing/current-trace-id";
+import type {
+	ReceiptsService,
+	StoredBlob,
+} from "~/server/receipts/receipts.service";
 import type { InboundMailbox } from "./email.mailbox";
-import type { EmailRepository, StoredBlob } from "./email.repository";
 
-/** Bare lower-cased address, matching the shape the allowlist stores. */
+const ADDRESS_LIKE = /[^\s<>()",;]+@[^\s<>()",;]+/g;
+// The pattern's cost grows with the square of the length. RFC 5322's line limit;
+// a real From is far shorter.
+const MAX_FROM_LENGTH = 998;
+// A name that repeats the address may wrap it in quotes, brackets or a link
+// prefix, or end it with punctuation. A domain only loses a tail no one else owns.
+const ADDRESS_WRAPPER = /^(?:mailto:|['[])+|[\]'.:]+$/g;
+
+/**
+ * Bare lower-cased address, matching the shape the allowlist stores. `""` when the
+ * header is over 998 chars, holds an `@` outside any readable address, or doesn't
+ * come down to exactly one valid address once wrappers are stripped.
+ */
 export function parseFromAddress(from: string): string {
-	// The LAST angle pair, never the first: RFC 5322 puts the addr-spec at the end
-	// of a mailbox, and a quoted display name may legally contain angle brackets.
-	// Taking the first pair lets `"<sam@allowed.com>" <attacker@evil.com>` file an
-	// attacker's mail against an allowlisted member.
-	const angled = [...from.matchAll(/<([^>]*)>/g)].at(-1);
-	return (angled?.[1] ?? from).trim().toLowerCase();
+	if (from.length > MAX_FROM_LENGTH) return "";
+	// A decoded name's quotes and brackets may be sender text, so count every address
+	// and fail closed on two. A stray `@` is an unreadable address, maybe the real one.
+	if (from.replace(ADDRESS_LIKE, "").includes("@")) return "";
+	const addresses = new Set(
+		(from.match(ADDRESS_LIKE) ?? []).map((address) =>
+			address.toLowerCase().replace(ADDRESS_WRAPPER, ""),
+		),
+	);
+	const [only] = addresses;
+	return addresses.size === 1 &&
+		only &&
+		allowedSenderCreateDto.shape.email.safeParse(only).success
+		? only
+		: "";
 }
 
 // Log the domain, never the address: the full from is a Member identifier, the
@@ -69,38 +94,50 @@ export type IngestResult =
 	| { status: "ingested"; receiptIds: number[] };
 
 interface EmailServiceDeps {
-	repository: EmailRepository;
+	allowedSenders: Pick<AllowedSendersService, "memberFor">;
+	receipts: Pick<ReceiptsService, "createFromEmail">;
 	mailbox: InboundMailbox;
-	blobStore: BlobStore;
+	blobStore: Pick<BlobStore, "write">;
 	logger: Logger;
 }
 
 /** Application tier for the Resend inbound webhook: allowlist gate, blob, mint. */
 export class EmailService {
-	private readonly repository: EmailRepository;
+	private readonly allowedSenders: Pick<AllowedSendersService, "memberFor">;
+	private readonly receipts: Pick<ReceiptsService, "createFromEmail">;
 	private readonly mailbox: InboundMailbox;
-	private readonly blobStore: BlobStore;
+	private readonly blobStore: Pick<BlobStore, "write">;
 	private readonly logger: Logger;
 
-	constructor({ repository, mailbox, blobStore, logger }: EmailServiceDeps) {
-		this.repository = repository;
+	constructor({
+		allowedSenders,
+		receipts,
+		mailbox,
+		blobStore,
+		logger,
+	}: EmailServiceDeps) {
+		this.allowedSenders = allowedSenders;
+		this.receipts = receipts;
 		this.mailbox = mailbox;
 		this.blobStore = blobStore;
 		this.logger = logger;
 	}
 
 	/**
-	 * `dropped` = unknown sender, `empty` = nothing to extract from; both are verdicts
+	 * `dropped` = unknown or unreadable sender, `empty` = nothing to extract from; both are verdicts
 	 * the controller answers 200 to. A throw (fetch, blob, commit) is left to surface.
 	 */
 	async ingest(event: InboundEmailEvent): Promise<IngestResult> {
 		const from = parseFromAddress(event.data.from);
-		const sender = await this.repository.findAllowedSender(from);
+		const memberId = from
+			? await this.allowedSenders.memberFor(from)
+			: undefined;
 
 		// Design decision 8: dropped, not quarantined — and dropped here, before any
 		// fetch, blob write or model call, so unknown mail costs nothing.
-		if (!sender) {
-			this.logger.info("inbound email dropped: unknown sender", {
+		if (!memberId) {
+			const reason = from ? "unknown sender" : "unreadable sender";
+			this.logger.info(`inbound email dropped: ${reason}`, {
 				"email.id": event.data.email_id,
 				"email.from_domain": fromDomain(from),
 			});
@@ -110,7 +147,7 @@ export class EmailService {
 		// Member on baggage so the blob writes, the mint and their logs carry who the
 		// receipt is for. The inbound span opened earlier, so it never gets it.
 		return context.with(
-			setBaggage({ [BaggageKey.MemberId]: sender.userId }),
+			setBaggage({ [BaggageKey.MemberId]: memberId }),
 			async (): Promise<IngestResult> => {
 				const qualifying = event.data.attachments
 					.filter(isReceiptAttachment)
@@ -130,10 +167,9 @@ export class EmailService {
 					return { status: "empty" };
 				}
 
-				const receiptIds = await this.repository.createPendingReceipts(
-					sender.userId,
+				const receiptIds = await this.receipts.createFromEmail(
+					memberId,
 					stored,
-					currentTraceId(),
 				);
 				this.logger.info("inbound email ingested", {
 					"email.id": event.data.email_id,

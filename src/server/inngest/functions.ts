@@ -1,28 +1,31 @@
 import { env } from "~/env";
 import { bedrock } from "~/server/aws/bedrock";
 import { VercelBlobStore } from "~/server/blob-store/blob-store";
+import { categoriesService } from "~/server/categories/categories.module";
 import { db } from "~/server/db";
 import { captureException } from "~/server/observability/errors/posthog";
 import { createRootLogger } from "~/server/observability/logging/logger";
-import { OutboxController } from "~/server/outbox/outbox.controller";
+import { OutboxInngestController } from "~/server/outbox/outbox.inngest.controller";
 import { outboxService } from "~/server/outbox/outbox.module";
-import { ReceiptsController } from "~/server/receipts/receipts.controller";
-import { DrizzleReceiptsRepository } from "~/server/receipts/receipts.repository";
-import { ReceiptsService } from "~/server/receipts/receipts.service";
+import { DrizzleReceiptExtractionRepository } from "~/server/receipts/receipt-extraction.repository";
+import { ReceiptExtractionService } from "~/server/receipts/receipt-extraction.service";
+import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
 
 import { inngest } from "./client";
 
 // Composition root: every tier built once with the real db + client. The route
 // handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
-// function's cron/event triggers from it. The outbox service is shared with the
-// write-door callers, so it comes from outbox.module.ts rather than being built here.
-const outboxController = new OutboxController({
+// function's cron/event triggers from it. The outbox and categories services are
+// shared with other roots, so they come from their *.module.ts files rather than
+// being built here.
+const outboxController = new OutboxInngestController({
 	inngest,
 	service: outboxService,
 });
 
-const receiptsService = new ReceiptsService({
-	repository: new DrizzleReceiptsRepository({ db }),
+const receiptExtractionService = new ReceiptExtractionService({
+	repository: new DrizzleReceiptExtractionRepository({ db }),
+	categories: categoriesService,
 	blobStore: new VercelBlobStore(),
 	// The only place the receipts tier is bound to Bedrock; the service stays
 	// provider-agnostic behind `languageModel` (bedrock-invocation.md).
@@ -30,9 +33,9 @@ const receiptsService = new ReceiptsService({
 	logger: createRootLogger().with({ domain: "receipts", component: "service" }),
 	errorReporter: { captureException },
 });
-const receiptsController = new ReceiptsController({
+const receiptsController = new ReceiptsInngestController({
 	inngest,
-	service: receiptsService,
+	service: receiptExtractionService,
 });
 
 export const functions = [

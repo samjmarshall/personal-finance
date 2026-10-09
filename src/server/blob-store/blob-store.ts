@@ -1,8 +1,14 @@
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 export interface FetchedBlob {
 	bytes: Uint8Array;
 	mediaType: string;
+}
+
+/** A blob still on the wire, for piping to a response without buffering. */
+export interface StreamedBlob {
+	stream: ReadableStream<Uint8Array>;
+	contentType: string;
 }
 
 /** Where the store put a blob; both are what a caller records. */
@@ -15,12 +21,16 @@ export interface StoredBlobLocation {
 export interface BlobStore {
 	/** Throws when the blob is missing or the store refuses the read. */
 	read(pathname: string): Promise<FetchedBlob>;
+	/** `null` when the store has no such blob; throws when it refuses the read. */
+	stream(pathname: string): Promise<StreamedBlob | null>;
 	/** Private write keyed exactly by `pathname` (no random suffix). Throws on refusal. */
 	write(
 		pathname: string,
 		body: string | Uint8Array,
 		contentType: string,
 	): Promise<StoredBlobLocation>;
+	/** Throws when the store refuses the delete. */
+	delete(pathname: string): Promise<void>;
 }
 
 /**
@@ -40,6 +50,12 @@ export class VercelBlobStore implements BlobStore {
 		return { bytes, mediaType: result.blob.contentType };
 	}
 
+	async stream(pathname: string): Promise<StreamedBlob | null> {
+		const result = await get(pathname, { access: "private" });
+		if (result?.statusCode !== 200) return null;
+		return { stream: result.stream, contentType: result.blob.contentType };
+	}
+
 	// addRandomSuffix off: the pathname the caller minted is the key the row records,
 	// and both read sinks (the worker, the image proxy) resolve by it.
 	async write(
@@ -55,5 +71,9 @@ export class VercelBlobStore implements BlobStore {
 			{ access: "private", contentType, addRandomSuffix: false },
 		);
 		return { url: result.url, pathname: result.pathname };
+	}
+
+	delete(pathname: string): Promise<void> {
+		return del(pathname);
 	}
 }

@@ -76,6 +76,8 @@ class Prices(unittest.TestCase):
             return next(k for k in ms.PRICES if model.startswith(k))
         self.assertEqual(key("claude-opus-4-8"), "claude-opus-4-8")
         self.assertEqual(key("claude-opus-5-5"), "claude-opus-5-5")
+        self.assertEqual(key("claude-sonnet-5-5"), "claude-sonnet-5-5")
+        self.assertEqual(key("claude-sonnet-5-5-20260928"), "claude-sonnet-5-5")
         self.assertEqual(key("claude-sonnet-5"), "claude-sonnet-5")
         self.assertEqual(key("claude-haiku-4-5-20251001"), "claude-haiku-4-5")
         self.assertEqual(key("claude-opus-4-1"), "claude-opus-4")

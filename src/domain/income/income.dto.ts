@@ -49,9 +49,13 @@ export const incomeCreateDto = z
 	.object({ ...incomeFields })
 	.superRefine(requireOneTimeFigures);
 
+export type IncomeCreateInput = z.infer<typeof incomeCreateDto>;
+
 // kind is required on update (create leaves it optional for the DB default): update
 // is a full replace, and the one-time invariant above can only hold when it knows the
 // row's kind — an omitted kind would let a partial body null a required figure (adr011).
 export const incomeUpdateDto = z
 	.object({ ...incomeFields, id: z.number(), kind: z.enum(CommitmentKind) })
 	.superRefine(requireOneTimeFigures);
+
+export type IncomeUpdateInput = z.infer<typeof incomeUpdateDto>;

@@ -1,6 +1,7 @@
 import type { MatchCandidate, MatchTransaction } from "./match";
 import { matchCandidates, matchScanWindow } from "./match";
 import {
+	type ReceiptCreateInput,
 	receiptConfirmMatchDto,
 	receiptCreateDto,
 	receiptItemCategoryDto,
@@ -32,6 +33,7 @@ export type {
 	MatchCandidate,
 	MatchTransaction,
 	Receipt,
+	ReceiptCreateInput,
 	ReceiptDetail,
 	ReceiptExtraction,
 	ReceiptItem,

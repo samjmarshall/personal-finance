@@ -9,7 +9,7 @@ export const transactionSortBy = z.enum([
 	"date",
 	"description",
 	"amount",
-	"category",
+	"group",
 	"priority",
 ] satisfies readonly (keyof Transaction)[]);
 
@@ -17,7 +17,7 @@ export const transactionListQueryDto = z.object({
 	search: z.string().optional(),
 	priority: z.enum(Priority).optional(),
 	frequency: z.enum(Frequency).optional(),
-	category: z.string().optional(),
+	group: z.string().optional(),
 	from: z.date().optional(),
 	to: z.date().optional(),
 	sortBy: transactionSortBy.default("date"),
@@ -26,26 +26,32 @@ export const transactionListQueryDto = z.object({
 	offset: z.number().min(0).default(0),
 });
 
+export type TransactionListQuery = z.infer<typeof transactionListQueryDto>;
+
 const transactionFields = {
 	date: z.date(),
 	description: z.string().min(1, "Description is required"),
 	amount: z.number(),
-	category: z.string().trim().min(1, "Category is required").optional(),
+	group: z.string().trim().min(1, "Group is required").optional(),
 	frequency: z.enum(Frequency).optional(),
 	priority: z.enum(Priority).optional(),
 	notes: z.string().nullable().optional(),
 	expenseId: z.number().int().positive().nullable().optional(),
-	expenseCategoryId: z.number().int().positive().nullable().optional(),
+	categoryId: z.number().int().positive().nullable().optional(),
 };
 
 export const transactionCreateDto = z.object({
 	...transactionFields,
 });
 
+export type TransactionCreateInput = z.infer<typeof transactionCreateDto>;
+
 export const transactionUpdateDto = z.object({
 	...transactionFields,
 	id: z.number(),
 });
+
+export type TransactionUpdateInput = z.infer<typeof transactionUpdateDto>;
 
 // Unplanned = unlinked Spend in a half-open [from, to) window (adr010). Reject an
 // inverted window up front so a bad range surfaces instead of silently matching
@@ -59,6 +65,8 @@ export const unplannedDto = z
 		message: "`from` must be on or before `to`.",
 	});
 
+export type UnplannedWindow = z.infer<typeof unplannedDto>;
+
 // expenseId required, not optional: linking sets an int, clearing passes null
 // explicitly — an omitted value would be an ambiguous no-op. Positive ints only,
 // matching every other transaction FK.
@@ -66,3 +74,5 @@ export const linkExpenseDto = z.object({
 	id: z.number().int().positive(),
 	expenseId: z.number().int().positive().nullable(),
 });
+
+export type LinkExpenseInput = z.infer<typeof linkExpenseDto>;

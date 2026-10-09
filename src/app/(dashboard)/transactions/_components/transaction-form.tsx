@@ -1,20 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	SelectField,
 	type SelectFieldOption,
 	toOptions,
 } from "~/components/select-field";
 import { Button } from "~/components/ui/button";
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxEmpty,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxList,
-} from "~/components/ui/combobox";
 import {
 	Dialog,
 	DialogContent,
@@ -48,60 +40,45 @@ export function TransactionForm({
 	onClose,
 	transaction,
 	categories,
-	managedCategories,
 	expenses,
 }: {
 	open: boolean;
 	onClose: () => void;
 	transaction: Transaction | null;
-	categories: string[];
-	// Managed rows with ids for the FK picker; `categories` above is name-only
-	// (the free-text combobox's options), so it can't feed the id-valued picker.
-	managedCategories: RouterOutputs["category"]["list"];
+	categories: RouterOutputs["category"]["list"];
 	expenses: RouterOutputs["expense"]["list"];
 }) {
 	const utils = api.useUtils();
 	const [date, setDate] = useState(toDateInput(new Date()));
 	const [description, setDescription] = useState("");
 	const [amount, setAmount] = useState("");
-	const [category, setCategory] = useState("");
-	// Combobox input text is controlled: cleared on open so the full list shows,
-	// restored to the committed label on close so abandoned filter text can't linger.
-	const [categoryInput, setCategoryInput] = useState("");
-	// Mirrors `category` synchronously so the close handler restores the label
-	// without reading a stale closure of the state value.
-	const categoryRef = useRef("");
-	const commitCategory = useCallback((value: string) => {
-		setCategory(value);
-		setCategoryInput(value);
-		categoryRef.current = value;
-	}, []);
+	const [group, setGroup] = useState("");
 	const [frequency, setFrequency] = useState<Frequency>(Frequency.OneOff);
 	const [priority, setPriority] = useState<Priority>(Priority.NiceToHave);
 	const [notes, setNotes] = useState("");
 	// Empty string is the "— None —" option; converted to null on submit.
 	const [expenseId, setExpenseId] = useState<number | null>(null);
-	const [expenseCategoryId, setExpenseCategoryId] = useState<number | null>(
-		null,
-	);
+	// undefined: unlinked from the saved Expense, no Category picked since.
+	const [categoryId, setCategoryId] = useState<number | null | undefined>(null);
 
 	useEffect(() => {
 		if (!open) return;
 		setDate(toDateInput(transaction?.date ?? new Date()));
 		setDescription(transaction?.description ?? "");
 		setAmount(transaction ? String(transaction.amount) : "");
-		commitCategory(transaction?.category ?? "");
+		setGroup(transaction?.group ?? "");
 		setFrequency(toFrequency(transaction?.frequency));
 		setPriority(toPriority(transaction?.priority));
 		setNotes(transaction?.notes ?? "");
 		setExpenseId(transaction?.expenseId ?? null);
-		setExpenseCategoryId(transaction?.expenseCategoryId ?? null);
-	}, [open, transaction, commitCategory]);
+		setCategoryId(transaction?.categoryId ?? null);
+	}, [open, transaction]);
 
 	const onSuccess = async () => {
 		await Promise.all([
 			utils.transaction.list.invalidate(),
 			utils.transaction.summary.invalidate(),
+			utils.transaction.unplanned.invalidate(),
 			// A transaction's amount/expenseId feeds the Planned consumed/remaining
 			// read-model — refresh it so those figures don't go stale.
 			utils.expense.consumption.invalidate(),
@@ -112,22 +89,42 @@ export function TransactionForm({
 	const update = api.transaction.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
 
-	// A saved transaction can hold a category since deleted from the managed list
-	// (or the "Uncategorised" default); inject it so the picker can display it.
-	const categoryOptions =
-		category && !categories.includes(category)
-			? [category, ...categories]
-			: categories;
-
 	const expenseOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
 		...expenses.map((e) => ({ value: String(e.id), label: e.name })),
 	];
 
+	// adr025: a linked Expense sets the Category, so the picker shows the
+	// Expense's and locks.
+	const linkedExpense = expenses.find((e) => e.id === expenseId);
+	const savedExpense = expenses.find((e) => e.id === transaction?.expenseId);
+	const shownCategoryId =
+		linkedExpense?.categoryId ??
+		(categoryId === undefined ? savedExpense?.categoryId : categoryId);
+	// One line in both states, so the swap never resizes the centred dialog.
+	const categoryHint =
+		expenseId === null
+			? "Linking an Expense sets this."
+			: "Set by the Expense. Choose None to edit.";
+
+	// Clearing the Expense keeps its Category, still editable before saving. For
+	// the saved Expense the server copies it, so a stale Expense list can't lose it.
+	function pickExpense(value: string | null) {
+		const next = value ? Number(value) : null;
+		if (next === null && expenseId !== null) {
+			setCategoryId(
+				expenseId === transaction?.expenseId
+					? undefined
+					: (linkedExpense?.categoryId ?? null),
+			);
+		}
+		setExpenseId(next);
+	}
+
 	// Categories are chosen from the managed list, never invented mid-entry.
-	const expenseCategoryOptions: SelectFieldOption<string>[] = [
+	const categoryOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
-		...managedCategories.map((c) => ({
+		...categories.map((c) => ({
 			value: String(c.id),
 			label: c.name,
 		})),
@@ -139,12 +136,12 @@ export function TransactionForm({
 			date: new Date(`${date}T00:00:00`),
 			description: description.trim(),
 			amount: Number(amount) || 0,
-			category: category.trim() || "Uncategorised",
+			group: group.trim() || "Uncategorised",
 			frequency,
 			priority,
 			notes: notes.trim() || null,
 			expenseId,
-			expenseCategoryId,
+			categoryId: expenseId === null ? categoryId : null,
 		};
 		if (transaction) update.mutate({ id: transaction.id, ...payload });
 		else create.mutate(payload);
@@ -199,49 +196,15 @@ export function TransactionForm({
 						/>
 					</Field>
 					<Field>
-						<FieldLabel htmlFor="tx-category">Category</FieldLabel>
-						<Combobox
-							inputValue={categoryInput}
-							items={categoryOptions}
-							onInputValueChange={setCategoryInput}
-							onOpenChange={(isOpen) => {
-								// Base UI filters items by the input text, so open with an
-								// empty query to show the full list; on close restore the
-								// committed label (from the ref, to dodge a stale closure).
-								setCategoryInput(isOpen ? "" : categoryRef.current);
-							}}
-							onValueChange={(next) => commitCategory(next ?? "")}
-							value={category || null}
-						>
-							<ComboboxInput
-								className="w-full"
-								id="tx-category"
-								placeholder="e.g. Groceries"
-								showClear
-							/>
-							<ComboboxContent>
-								<ComboboxEmpty>No matching categories</ComboboxEmpty>
-								<ComboboxList>
-									{(item: string) => (
-										<ComboboxItem key={item} value={item}>
-											{item}
-										</ComboboxItem>
-									)}
-								</ComboboxList>
-							</ComboboxContent>
-						</Combobox>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="tx-expense-category">
-							Expense category
+						<FieldLabel htmlFor="tx-group">
+							Group
 							<FieldOptional />
 						</FieldLabel>
-						<SelectField
-							className="w-full"
-							id="tx-expense-category"
-							items={expenseCategoryOptions}
-							onValueChange={(v) => setExpenseCategoryId(v ? Number(v) : null)}
-							value={expenseCategoryId ? String(expenseCategoryId) : ""}
+						<Input
+							id="tx-group"
+							onChange={(e) => setGroup(e.target.value)}
+							placeholder="e.g. Groceries"
+							value={group}
 						/>
 					</Field>
 					<Field>
@@ -253,9 +216,28 @@ export function TransactionForm({
 							className="w-full"
 							id="tx-expense"
 							items={expenseOptions}
-							onValueChange={(v) => setExpenseId(v ? Number(v) : null)}
+							onValueChange={pickExpense}
 							value={expenseId ? String(expenseId) : ""}
 						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="tx-category">
+							Category
+							<FieldOptional />
+						</FieldLabel>
+						{/* Locked reads muted, not faded: its value is still the answer. */}
+						<SelectField
+							aria-describedby="tx-category-hint"
+							className="w-full data-readonly:cursor-default data-readonly:bg-muted data-readonly:text-muted-foreground dark:data-readonly:bg-muted"
+							id="tx-category"
+							items={categoryOptions}
+							onValueChange={(v) => setCategoryId(v ? Number(v) : null)}
+							readOnly={expenseId !== null}
+							value={shownCategoryId ? String(shownCategoryId) : ""}
+						/>
+						<FieldDescription aria-live="polite" id="tx-category-hint">
+							{categoryHint}
+						</FieldDescription>
 					</Field>
 					<div className="grid grid-cols-2 gap-4">
 						<Field>
@@ -285,6 +267,7 @@ export function TransactionForm({
 							<FieldOptional />
 						</FieldLabel>
 						<Textarea
+							className="wrap-anywhere"
 							id="tx-notes"
 							onChange={(e) => setNotes(e.target.value)}
 							placeholder="Optional context"

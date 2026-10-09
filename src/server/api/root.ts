@@ -1,19 +1,15 @@
-import { allowedSenderRouter } from "~/server/api/routers/allowed-sender";
-import { balanceRouter } from "~/server/api/routers/balance";
-import { cashflowRouter } from "~/server/api/routers/cashflow";
-import { categoryRouter } from "~/server/api/routers/category";
-import { expenseRouter } from "~/server/api/routers/expense";
-import { incomeRouter } from "~/server/api/routers/income";
-import { receiptRouter } from "~/server/api/routers/receipts";
-import { settingRouter } from "~/server/api/routers/setting";
-import { transactionRouter } from "~/server/api/routers/transaction";
+import { allowedSenderRouter } from "~/server/allowed-senders/allowed-senders.trpc.controller";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { balanceRouter } from "~/server/balances/balances.trpc.controller";
+import { cashflowRouter } from "~/server/cashflow/cashflow.trpc.controller";
+import { categoryRouter } from "~/server/categories/categories.trpc.controller";
+import { expenseRouter } from "~/server/expenses/expenses.trpc.controller";
+import { incomeRouter } from "~/server/income/income.trpc.controller";
+import { receiptRouter } from "~/server/receipts/receipts.trpc.controller";
+import { settingRouter } from "~/server/settings/settings.trpc.controller";
+import { transactionRouter } from "~/server/transactions/transactions.trpc.controller";
 
-/**
- * This is the primary router for your server.
- *
- * All routers added in /api/routers should be manually added here.
- */
+/** Every tRPC controller, keyed by client path (`api.<key>.*`); renaming a key breaks callers. */
 export const appRouter = createTRPCRouter({
 	allowedSender: allowedSenderRouter,
 	balance: balanceRouter,

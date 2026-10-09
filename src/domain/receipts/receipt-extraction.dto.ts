@@ -13,7 +13,7 @@ export const receiptExtractionDto = z.object({
 				quantity: z
 					.number()
 					.describe("Quantity bought; 1 when the receipt omits it"),
-				expenseCategoryId: z
+				categoryId: z
 					.number()
 					.nullable()
 					.describe(

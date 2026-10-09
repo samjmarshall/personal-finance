@@ -16,12 +16,17 @@ import {
 	vi,
 } from "vitest";
 
+import {
+	createTestCaller,
+	type TestCallerOptions,
+} from "~/server/api/test-caller";
+import {
+	createTRPCRouter,
+	protectedProcedure,
+	publicProcedure,
+} from "~/server/api/trpc";
+import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
-
-// Importing trpc pulls in the real db + auth (and through them ~/env). Stub them
-// so this stays a pure unit test.
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({
@@ -38,28 +43,46 @@ beforeEach(() => exporter.reset());
 // stdout is spied in the failure tests; restore it even if an assertion throws.
 afterEach(() => vi.restoreAllMocks());
 
-const { createTRPCRouter, publicProcedure, createCallerFactory } = await import(
-	"~/server/api/trpc"
-);
+const notFound = new NotFoundError("gone");
+const conflict = new ConflictError("taken");
 
-function caller(session: unknown = { user: { id: "member-1" } }) {
-	const router = createTRPCRouter({
-		ok: publicProcedure.query(() => "result"),
-		boom: publicProcedure.query(() => {
-			throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-		}),
-		bad: publicProcedure.query(() => {
-			throw new TRPCError({ code: "BAD_REQUEST" });
-		}),
-		unauth: publicProcedure.query(() => {
-			throw new TRPCError({ code: "UNAUTHORIZED" });
-		}),
-	});
-	return createCallerFactory(router)({
-		db: {},
-		session,
-		headers: new Headers(),
-	} as never);
+const router = createTRPCRouter({
+	ok: publicProcedure.query(() => "result"),
+	boom: publicProcedure.query(() => {
+		throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+	}),
+	bad: publicProcedure.query(() => {
+		throw new TRPCError({ code: "BAD_REQUEST" });
+	}),
+	badWithMessage: publicProcedure.query(() => {
+		throw new TRPCError({ code: "BAD_REQUEST", message: "nope" });
+	}),
+	badWithDomainCause: publicProcedure.query(() => {
+		throw new TRPCError({
+			code: "BAD_REQUEST",
+			message: "nope",
+			cause: notFound,
+		});
+	}),
+	unauth: publicProcedure.query(() => {
+		throw new TRPCError({ code: "UNAUTHORIZED" });
+	}),
+	notFound: publicProcedure.query(() => {
+		throw notFound;
+	}),
+	conflict: publicProcedure.query(() => {
+		throw conflict;
+	}),
+	plain: publicProcedure.query(() => {
+		throw new Error("plain");
+	}),
+	protectedNotFound: protectedProcedure.query(() => {
+		throw notFound;
+	}),
+});
+
+function caller(options?: TestCallerOptions) {
+	return createTestCaller(router, options);
 }
 
 describe("dev latency (default test env is dev)", () => {
@@ -76,14 +99,13 @@ describe("production has no artificial delay", () => {
 		vi.resetModules();
 		vi.stubEnv("NODE_ENV", "production");
 		const trpc = await import("~/server/api/trpc");
-		const router = trpc.createTRPCRouter({
+		const testCaller = await import("~/server/api/test-caller");
+		const prodRouter = trpc.createTRPCRouter({
 			ok: trpc.publicProcedure.query(() => "result"),
 		});
-		const prodCaller = trpc.createCallerFactory(router)({
-			db: {},
+		const prodCaller = testCaller.createTestCaller(prodRouter, {
 			session: null,
-			headers: new Headers(),
-		} as never);
+		});
 
 		const start = Date.now();
 		await expect(prodCaller.ok()).resolves.toBe("result");
@@ -129,7 +151,7 @@ describe("tracing span", () => {
 	});
 
 	it("stamps member.id + posthog.distinct_id from baggage set before the span", async () => {
-		await caller({ user: { id: "member-1" } }).ok();
+		await caller({ session: { user: { id: "member-1" } } }).ok();
 
 		const span = exporter.getFinishedSpans().find((s) => s.name === "trpc.ok");
 		expect(span).toBeDefined();
@@ -175,5 +197,108 @@ describe("tracing span", () => {
 		expect(consoleError).toHaveBeenCalledWith(
 			expect.stringContaining("logging_failed"),
 		);
+	});
+});
+
+function captureStdout(): string[] {
+	const lines: string[] = [];
+	vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+		if (typeof chunk === "string") lines.push(chunk);
+		return true;
+	});
+	return lines;
+}
+
+function spanNamed(name: string) {
+	const span = exporter.getFinishedSpans().find((s) => s.name === name);
+	expect(span).toBeDefined();
+	// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
+	return span!;
+}
+
+describe("error mapping", () => {
+	it("maps a NotFoundError to NOT_FOUND, keeping its message and cause", async () => {
+		await expect(caller().notFound()).rejects.toMatchObject({
+			code: "NOT_FOUND",
+			message: "gone",
+			cause: notFound,
+		});
+	});
+
+	it("maps a ConflictError to CONFLICT, keeping its message and cause", async () => {
+		captureStdout();
+		await expect(caller().conflict()).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "taken",
+			cause: conflict,
+		});
+	});
+
+	it("keeps the domain error's stack so traces show where it was thrown", async () => {
+		captureStdout();
+		const error = await caller()
+			.conflict()
+			.catch((e: unknown) => e);
+		expect((error as Error).stack).toBe(conflict.stack);
+	});
+
+	it("leaves an unknown Error as INTERNAL_SERVER_ERROR", async () => {
+		captureStdout();
+		await expect(caller().plain()).rejects.toMatchObject({
+			code: "INTERNAL_SERVER_ERROR",
+		});
+	});
+
+	it("passes a deliberate TRPCError through unchanged", async () => {
+		captureStdout();
+		await expect(caller().badWithMessage()).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+			message: "nope",
+		});
+	});
+
+	it("keeps a deliberate TRPCError's code even when its cause is a domain error", async () => {
+		captureStdout();
+		await expect(caller().badWithDomainCause()).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+			message: "nope",
+		});
+	});
+
+	it("observability sees NOT_FOUND as expected: span UNSET, no stdout", async () => {
+		const lines = captureStdout();
+		await expect(caller().notFound()).rejects.toThrow();
+
+		const span = spanNamed("trpc.notFound");
+		expect(span.status.code).toBe(SpanStatusCode.UNSET);
+		expect(span.attributes["trpc.error_code"]).toBe("NOT_FOUND");
+		expect(lines).toHaveLength(0);
+	});
+
+	it("observability fails the span on CONFLICT and warns, but doesn't report a crash", async () => {
+		const lines = captureStdout();
+		await expect(caller().conflict()).rejects.toThrow();
+
+		const span = spanNamed("trpc.conflict");
+		expect(span.status.code).toBe(SpanStatusCode.ERROR);
+		expect(span.attributes["trpc.error_code"]).toBe("CONFLICT");
+		const output = lines.join("");
+		expect(output).toContain("trpc request failed");
+		expect(output).not.toContain("trpc internal error");
+	});
+
+	it("protectedProcedure maps a NotFoundError too", async () => {
+		await expect(caller().protectedNotFound()).rejects.toMatchObject({
+			code: "NOT_FOUND",
+			message: "gone",
+		});
+	});
+
+	it("protectedProcedure still rejects a signed-out call with UNAUTHORIZED", async () => {
+		await expect(
+			caller({ session: null }).protectedNotFound(),
+		).rejects.toMatchObject({
+			code: "UNAUTHORIZED",
+		});
 	});
 });

@@ -1,6 +1,6 @@
 ---
 skills: tdd, code-comment
-model: opus
+model: sonnet
 effort: high
 ---
 # Implement Plan

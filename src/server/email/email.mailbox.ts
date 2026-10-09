@@ -24,7 +24,7 @@ export interface InboundMailbox {
 	download(url: string): Promise<Uint8Array>;
 }
 
-// Matches the client-upload ceiling in `api/receipts/upload/route.ts`: a receipt
+// Matches the client-upload ceiling (`MAX_UPLOAD_BYTES` in `receipts.service.ts`): a receipt
 // arriving by mail is the same artefact, so it gets the same allowance.
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // Ten attachments each allowed to hang would eat the route's whole 60s budget, so

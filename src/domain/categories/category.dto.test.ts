@@ -26,6 +26,12 @@ describe("categoryCreateDto", () => {
 		);
 	});
 
+	it("rejects a whitespace-only name", () => {
+		expect(categoryCreateDto.safeParse({ ...base, name: "   " }).success).toBe(
+			false,
+		);
+	});
+
 	it("accepts an omitted description", () => {
 		expect(categoryCreateDto.safeParse(base).success).toBe(true);
 	});

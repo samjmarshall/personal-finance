@@ -24,8 +24,8 @@ export interface Receipt {
 	updatedAt: Date | null;
 }
 
-// The vocabulary the extractor maps each line item to: the household's categories
-// by id, so the model prefills `expenseCategoryId` from this list or returns null.
+// The Categories the extractor may pick from, by id. Each line item gets one of
+// these or none.
 export interface ExtractionCategory {
 	id: number;
 	name: string;
@@ -38,7 +38,7 @@ export interface ReceiptItem {
 	price: number;
 	quantity: number;
 	expenseId: number | null;
-	expenseCategoryId: number | null;
+	categoryId: number | null;
 	createdAt: Date;
 	updatedAt: Date | null;
 }
@@ -53,7 +53,7 @@ export interface ReceiptListItem extends Receipt {
 // A line item carrying its resolved expense/category labels for the detail view.
 export interface ReceiptItemDetail extends ReceiptItem {
 	expenseName: string | null;
-	expenseCategoryName: string | null;
+	categoryName: string | null;
 }
 
 // One receipt with its line items — the detail overlay's payload. The description

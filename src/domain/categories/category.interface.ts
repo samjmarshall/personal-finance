@@ -5,5 +5,4 @@ export interface Category {
 	sortOrder: number;
 	createdAt: Date;
 	updatedAt: Date | null;
-	expenseCount?: number;
 }

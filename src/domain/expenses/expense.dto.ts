@@ -4,8 +4,8 @@ import { CommitmentKind } from "~/lib/constants";
 // Amounts optional (no .default): create falls through to the DB column's
 // .notNull().default(0); update omits them so .set() preserves stored values.
 const expenseFields = {
-	name: z.string().min(1, "Name is required"),
-	category: z.string().min(1, "Category is required"),
+	name: z.string().trim().min(1, "Name is required"),
+	categoryId: z.number().int().positive(),
 	kind: z.enum(CommitmentKind).optional(),
 	fortnight: z.number().nonnegative().optional(),
 	month: z.number().nonnegative().optional(),
@@ -49,11 +49,15 @@ const expenseCreateDto = z
 	.object({ ...expenseFields })
 	.superRefine(requireOneTimeFigures);
 
+export type ExpenseCreateInput = z.infer<typeof expenseCreateDto>;
+
 // kind is required on update (create leaves it optional for the DB default): update
 // is a full replace, and the one-time invariant above can only hold when it knows the
 // row's kind — an omitted kind would let a partial body null a required figure (adr011).
 const expenseUpdateDto = z
 	.object({ ...expenseFields, id: z.number(), kind: z.enum(CommitmentKind) })
 	.superRefine(requireOneTimeFigures);
+
+export type ExpenseUpdateInput = z.infer<typeof expenseUpdateDto>;
 
 export { expenseCreateDto, expenseUpdateDto };

@@ -1,26 +1,11 @@
-import { context, trace } from "@opentelemetry/api";
-import {
-	InMemorySpanExporter,
-	SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { InboundEmailEvent } from "~/domain/email";
 import type {
 	LogAttributes,
 	Logger,
 } from "~/server/observability/logging/logger";
+import type { StoredBlob } from "~/server/receipts/receipts.service";
 import type { AttachmentDownload, EmailBody } from "./email.mailbox";
-import type { EmailRepository, StoredBlob } from "./email.repository";
 import {
 	EmailService,
 	emailBlobPathname,
@@ -33,18 +18,6 @@ const SENDER_USER_ID = "user-1";
 
 type LogEntry = { level: string; msg: string; attrs: LogAttributes };
 
-// The service tags the minted ids onto whatever span is active and runs the mint
-// inside member.id baggage; both are no-ops with no SDK registered, so register one
-// to prove the wiring is live.
-const exporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider({
-	spanProcessors: [new SimpleSpanProcessor(exporter)],
-});
-
-beforeAll(() => provider.register());
-afterAll(() => provider.shutdown());
-beforeEach(() => exporter.reset());
-
 describe("parseFromAddress", () => {
 	// The stored allowlist is lower-cased and bare, so the parsed sender has to land
 	// in exactly that shape or every lookup misses and every mail is dropped.
@@ -55,10 +28,41 @@ describe("parseFromAddress", () => {
 		["<A@B.com>", "a@b.com"],
 		['"Marshall, Sam" <Sam.M@Example.COM>', "sam.m@example.com"],
 		["Sam < a@b.com >", "a@b.com"],
-		// A quoted display name may legally contain angle brackets. Taking the first
-		// pair lets a sender put an allowlisted address in their display name and have
-		// their receipts filed to that member — the real addr-spec is the last pair.
-		['"<victim@allowed.com>" <attacker@evil.com>', "attacker@evil.com"],
+		// A sender can plant an allowlisted address in their name, a comment or a
+		// second mailbox. Two different addresses means no sender to trust.
+		['"<victim@allowed.com>" <attacker@evil.com>', ""],
+		["Attacker <attacker@evil.com> (<victim@allowed.com>)", ""],
+		["<attacker@evil.com>, <victim@allowed.com>", ""],
+		["attacker@evil.com, victim@allowed.com", ""],
+		["<a@b.com> <victim@allowed.com>", ""],
+		// The real address can hide from the pattern behind quotes, a comment or a
+		// space, leaving the planted one as the only address seen.
+		['"victim@allowed.com"@evil.com', ""],
+		['victim@allowed.com <"a b"@evil.com>', ""],
+		["victim@allowed.com <x(c)@evil.com>", ""],
+		["victim@allowed.com <x @evil.com>", ""],
+		// Decoded, the quotes may be the sender's own text and hide nothing.
+		['" <attacker@evil.com> ("<victim@allowed.com>)', ""],
+		// A decoded name can be unquoted and hold commas, quotes, brackets or the
+		// address itself; it is still one sender.
+		["Doe, John <J@X.com>", "j@x.com"],
+		["a@b.com (Sam)", "a@b.com"],
+		["sam@x.com <Sam@X.com>", "sam@x.com"],
+		['O"Brien <sam@x.com>', "sam@x.com"],
+		["Sam :( <sam@x.com>", "sam@x.com"],
+		["Sam <3 <sam@x.com>", "sam@x.com"],
+		// Outlook and some forwarders wrap the repeated address.
+		["'sam@x.com' <sam@x.com>", "sam@x.com"],
+		["Sam [sam@x.com] <sam@x.com>", "sam@x.com"],
+		["sam@x.com <mailto:sam@x.com>", "sam@x.com"],
+		["Sam (sam@x.com.) <sam@x.com>", "sam@x.com"],
+		["'victim@allowed.com' <attacker@evil.com>", ""],
+		// Stripping can leave something the allowlist could never hold.
+		["'@'", ""],
+		["<x@.>", ""],
+		["", ""],
+		["Sam", ""],
+		[`${"a".repeat(990)} <a@b.com>`, ""],
 	])("parses %j to %j", (from, expected) => {
 		expect(parseFromAddress(from)).toBe(expected);
 	});
@@ -111,8 +115,6 @@ describe("emailBlobPathname", () => {
 	});
 });
 
-// Every port is a plain object literal against its interface, so the service runs
-// with no network and no DB. The repository records what it was asked to mint.
 function harness({
 	allowlist = [{ userId: SENDER_USER_ID }],
 	attachments = [],
@@ -122,16 +124,18 @@ function harness({
 	attachments?: AttachmentDownload[];
 	email?: EmailBody;
 } = {}) {
-	const created: {
-		userId: string;
-		blobs: StoredBlob[];
-		traceId: string | null;
-	}[] = [];
+	const created: { userId: string; blobs: StoredBlob[] }[] = [];
+	const looked: string[] = [];
 
-	const repository: EmailRepository = {
-		findAllowedSender: async () => allowlist[0],
-		createPendingReceipts: async (userId, blobs, traceId) => {
-			created.push({ userId, blobs, traceId });
+	const allowedSenders = {
+		memberFor: async (email: string) => {
+			looked.push(email);
+			return allowlist[0]?.userId;
+		},
+	};
+	const receipts = {
+		createFromEmail: async (userId: string, blobs: StoredBlob[]) => {
+			created.push({ userId, blobs });
 			return blobs.map((_, i) => i + 1);
 		},
 	};
@@ -162,10 +166,17 @@ function harness({
 	};
 
 	return {
-		service: new EmailService({ repository, mailbox, blobStore, logger }),
+		service: new EmailService({
+			allowedSenders,
+			receipts,
+			mailbox,
+			blobStore,
+			logger,
+		}),
 		mailbox,
 		blobStore,
 		created,
+		looked,
 		logs,
 	};
 }
@@ -215,6 +226,30 @@ describe("EmailService.ingest", () => {
 		expect(JSON.stringify(drop?.attrs)).not.toContain("sam@example.com");
 	});
 
+	it("looks up the bare, lower-cased sender address", async () => {
+		const h = harness({ allowlist: [] });
+
+		await h.service.ingest(
+			event({ from: "Sam@Example.com <Sam@Example.com>" }),
+		);
+
+		expect(h.looked).toEqual(["sam@example.com"]);
+	});
+
+	it("drops a header with no single address before any lookup", async () => {
+		const h = harness();
+
+		const result = await h.service.ingest(
+			event({ from: '"<sam@example.com>" <a@example.com>' }),
+		);
+
+		expect(result).toEqual({ status: "dropped" });
+		expect(h.looked).toEqual([]);
+		expect(h.logs.map((l) => l.msg)).toEqual([
+			"inbound email dropped: unreadable sender",
+		]);
+	});
+
 	it("touches no fetch, blob or write door for an unknown sender", async () => {
 		const h = harness({ allowlist: [] });
 
@@ -239,8 +274,6 @@ describe("EmailService.ingest", () => {
 		expect(h.created).toEqual([
 			{
 				userId: SENDER_USER_ID,
-				// No span active in this test, so the persisted id is null.
-				traceId: null,
 				blobs: [
 					{
 						blobUrl: expect.stringContaining("receipts/email/"),
@@ -394,19 +427,6 @@ describe("EmailService.ingest", () => {
 		const ingested = h.logs.find((l) => l.msg === "inbound email ingested");
 		expect(ingested?.level).toBe("info");
 		expect(ingested?.attrs["receipt.ids"]).toEqual([1]);
-	});
-
-	// The worker continues this trace (adr016), so the row must store the live one.
-	it("stores the active span's trace id on the minted receipt", async () => {
-		const h = harness({ email: { html: "<p>Total $9</p>", text: null } });
-		const span = trace.getTracer("test").startSpan("email.inbound");
-
-		await context.with(trace.setSpan(context.active(), span), () =>
-			h.service.ingest(event()),
-		);
-		span.end();
-
-		expect(h.created[0]?.traceId).toBe(span.spanContext().traceId);
 	});
 
 	// html carries the line-item table; text is the flattened fallback the sender's

@@ -3,7 +3,7 @@ import { flushAfterResponse } from "~/server/observability/sdk/flush.fake";
 
 // The route is a composition root: it reads the env, builds the tiers once, and
 // delegates. Everything it wires is stubbed so this stays a unit over that job;
-// the gate order itself is covered by email.controller.test.ts.
+// the gate order itself is covered by email.http.controller.test.ts.
 const { env } = vi.hoisted(() => ({
 	env: {
 		RESEND_API_KEY: "re_test" as string | undefined,
@@ -17,8 +17,10 @@ vi.mock("~/env", () => ({
 	env,
 	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
-vi.mock("~/server/db", () => ({ db: {} }));
-vi.mock("~/server/outbox/outbox.module", () => ({ outboxService: {} }));
+vi.mock("~/server/allowed-senders/allowed-senders.module", () => ({
+	allowedSendersService: {},
+}));
+vi.mock("~/server/receipts/receipts.module", () => ({ receiptsService: {} }));
 vi.mock("resend", () => ({
 	Resend: class {
 		readonly apiKey: string;
@@ -41,8 +43,8 @@ const { handle, constructed } = vi.hoisted(() => ({
 	),
 	constructed: vi.fn(),
 }));
-vi.mock("~/server/email/email.controller", () => ({
-	EmailController: class {
+vi.mock("~/server/email/email.http.controller", () => ({
+	EmailHttpController: class {
 		constructor(deps: unknown) {
 			constructed(deps);
 		}

@@ -33,8 +33,11 @@ export function CategoryForm({
 	const [error, setError] = useState<string | null>(null);
 
 	const onSuccess = async () => {
-		await utils.category.list.invalidate();
-		await utils.expense.list.invalidate();
+		await Promise.all([
+			utils.category.list.invalidate(),
+			// Transactions show the Category name.
+			utils.transaction.list.invalidate(),
+		]);
 		onClose();
 	};
 	// Server/mutation failures surface via the global MutationCache toast
@@ -65,7 +68,7 @@ export function CategoryForm({
 						{category ? "Edit category" : "Add category"}
 					</DialogTitle>
 					<DialogDescription>
-						Categories group your budgeted expenses.
+						A Category files Expenses, Transactions and receipt items.
 					</DialogDescription>
 				</DialogHeader>
 				<form className="flex flex-col gap-4" onSubmit={onSubmit}>
@@ -84,6 +87,7 @@ export function CategoryForm({
 							<FieldOptional />
 						</FieldLabel>
 						<Textarea
+							className="wrap-anywhere"
 							id="cat-desc"
 							onChange={(e) => setDescription(e.target.value)}
 							placeholder="What belongs in this category?"
@@ -92,7 +96,10 @@ export function CategoryForm({
 					</Field>
 
 					{error && (
-						<p className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm">
+						<p
+							className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm"
+							role="alert"
+						>
 							{error}
 						</p>
 					)}

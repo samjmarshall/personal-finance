@@ -13,7 +13,7 @@ Be extremely concise and sacrifice grammar for the sake of concision. Write the 
 This is a solo personal project, not an enterprise repo. PR bodies are flat bullet lists — no headings, no checklists, no ceremony. Reference shape:
 
 ```
-- Added the `expense_category` database table to support structured expense management.
+- Added the `category` database table to support structured expense management.
 - Included snapshot metadata files for database schema versioning.
 - Implemented category-based sorting functionality within the expenses view component.
 ```
