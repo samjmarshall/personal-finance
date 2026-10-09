@@ -8,6 +8,10 @@ terraform {
       source  = "vercel/vercel"
       version = "~> 5.0"
     }
+    posthog = {
+      source  = "PostHog/posthog"
+      version = "1.0.21"
+    }
   }
 
   backend "s3" {

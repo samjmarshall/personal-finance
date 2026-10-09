@@ -17,41 +17,46 @@ During the step-7 Phase 4 browser check, we found that deleting a Receipt on a b
 
 ## Current State
 
-- **One store for all environments.** The Vercel project has `BLOB_READ_WRITE_TOKEN` and `BLOB_STORE_ID` targeted at `production`, `preview` and `development` alike (checked via the Vercel API on 2026-10-08). `docs/README.md:24` still says "production" only. Terraform declares no store (`infrastructure/vercel.tf:55-56`). `worktree.sh:148` copies the main `.env`, and with it the token, into every worktree.
+- **One store for all environments.** The Vercel project has `BLOB_READ_WRITE_TOKEN` and `BLOB_STORE_ID` targeted at `production`, `preview` and `development` alike (checked via the Vercel API on 2026-10-08). `docs/README.md:24` still says "production" only. Terraform declares no store (`infrastructure/vercel.tf:55-56`). `.claude/skills/worktree/worktree.sh:148` copies the main `.env`, and with it the token, into every worktree.
 - **What Vercel Blob offers** (docs, Aug–Sep 2026):
   - no environment or branch on a store, and the advice is "use separate stores to isolate environments"
   - no read-only tokens, and no copying between stores
   - `copy()` works only inside one store and is an Advanced Operation
   - blobs should be treated as immutable
 - **The adapter.** `src/server/blob-store/blob-store.ts`:
-  - interface `:15-26`
-  - `VercelBlobStore` `:33-65`: `read` → `get` `:34-44`, `write` → `put(…, addRandomSuffix: false)` `:47-60`, `delete` → `del` `:62-64`
+  - interface `:21-34`
+  - `VercelBlobStore` `:41-79`: `read` → `get` `:42-51`, `stream` → `get` `:53-57`, `write` → `put(…, addRandomSuffix: false)` `:61-74`, `delete` → `del` `:76-78`
   - It takes no constructor args. The SDK reads the token from `process.env`.
-  - It is built in three places: `src/server/receipts/receipts.module.ts:20`, `src/server/inngest/functions.ts:29` and `src/app/api/receipts/inbound/route.ts:38`.
-  - Tests mock the SDK at `blob-store.test.ts:5`. The delete cases are at `:83-100`.
+  - It is built in three places: `src/server/receipts/receipts.module.ts:21`, `src/server/inngest/functions.ts:29` and `src/app/api/receipts/inbound/route.ts:35`.
+  - Tests mock the SDK at `blob-store.test.ts:5`. The delete cases are at `:121-138`.
+  - A second adapter, `VercelClientUploads` (`src/server/blob-store/client-uploads.ts`), wraps `handleUpload` from `@vercel/blob/client`. It is built at `receipts.module.ts:22`.
 - **Pathnames have no environment prefix.**
-  - Email: `receipts/email/<uuid>.<ext>`, built at `src/server/email/email.service.ts:61-64`. Its regex tests are at `email.service.test.ts:96-111`.
-  - Browser upload: the user's file name, at `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:61-65`, with Blob's random suffix (`src/app/api/receipts/upload/route.ts:107-117`).
+  - Email: `receipts/email/<uuid>.<ext>`, built by `emailBlobPathname` at `src/server/email/email.service.ts:85-89`. Its regex tests are at `email.service.test.ts:100-116`.
+  - Browser upload: the user's file name, at `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:61-65`, with Blob's random suffix (`addRandomSuffix: true` in the grant, `src/server/receipts/receipts.service.ts:258`).
   - `onBeforeGenerateToken` can't rewrite the pathname (`node_modules/@vercel/blob/dist/client.d.ts:346`), so the browser must build it.
-- **Delete.** `ReceiptsService.delete` deletes the row, then `blobStore.delete(blobPathname)` (`src/server/receipts/receipts.service.ts:153-166`).
+- **Delete.** `ReceiptsService.delete` deletes the row, then `blobStore.delete(blobPathname)`, and swallows a store error (`src/server/receipts/receipts.service.ts:211-226`).
 - **Reads go by `blobPathname`.**
   - the worker: `receipt-extraction.service.ts:300-302`
-  - the image route: calls `get` directly at `src/app/api/receipts/[id]/image/route.ts:44`. Step-7 Phase 5 moves this behind `BlobStore.stream`.
+  - the image route: `ReceiptsHttpController.image` (`receipts.http.controller.ts:91-116`) calls `ReceiptsService.openImage`, which reads through `BlobStore.stream` (`receipts.service.ts:228-242`). Nothing outside the adapter calls `get`.
   - `blobUrl` is stored but never used for access.
-- **Upload grant.** Today it lives in `upload/route.ts:107-117`. Step-7 Phase 5 moves the policy into `ReceiptsService.answerUpload`, and the routes into `receipts.http.controller.ts` (`thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md:465-535`).
+- **Upload grant.**
+  - `ReceiptsService.answerUpload` (`receipts.service.ts:244-262`) returns the policy from the grant callback it hands to `ClientUploads.answer` (`:253-261`).
+  - The callback ignores the `pathname` that `client-uploads.ts:14` passes it.
+  - `ReceiptsHttpController.upload` (`receipts.http.controller.ts:122-194`) maps `UploadUnauthorizedError` to 401 in `failureStatus` (`:34-40`).
+  - `src/app/api/receipts/upload/route.ts` is only the composition root.
 - **Env.**
   - `src/env.ts` validates at build, because `next.config.ts:2` imports it, and has `emptyStringAsUndefined: true` at `:177`.
-  - Vercel-derived values use `z.preprocess` on raw `process.env.VERCEL_*` (`:44-49`, `:67-70`).
-  - Precedent for namespacing state by environment: `src/server/auth/config.ts:17-27` (Redis key prefix).
+  - Vercel-derived values use `z.preprocess` on raw `process.env.VERCEL_*` (`:42-52`, `:65-73`).
+  - Precedent for namespacing state by environment: `src/server/auth/config.ts:14-26` (Redis key prefix).
 - **Where the DB URL is chosen.**
   - Locally: `neon-branch.sh` `apply_branch_urls` `:130-139`, called for a branch at `:217`, for `main` at `:171-180`, and on delete restore at `:273-274`.
   - Preview: the Neon integration, keyed by `--meta githubCommitRef` in `deploy.yml:123-135`. `ENVIRONMENT` is set at `:32`.
   - The Vercel CLI has `--env` (runtime) and `--build-env` (build). `VERCEL_GIT_COMMIT_REF` isn't documented for CLI deploys, so we don't rely on it.
 - **Teardown.**
-  - `teardown.yml:43-71` deletes `preview/<branch>` and `local/<branch>` Neon branches, but no blobs.
+  - `teardown.yml:43-67` deletes `preview/<branch>` and `local/<branch>` Neon branches, but no blobs.
   - Each step needs the skip guard (`.claude/rules/preview-teardown.md:16`).
   - `neon-branch.sh delete` is at `:225-276`.
-- **Guardrails.** `src/server/architecture.test.ts` has rules 1–5 (`:9-15`), a shrink-only `TODO` (`:38-43`) and `ruleBroken` (`:71+`).
+- **Guardrails.** `src/server/architecture.test.ts` has rules 1–5 (`:9-15`), a shrink-only `TODO` that is now empty (`:38-39`) and `ruleBroken` (`:67+`).
 - **Scripts.**
   - `scripts/` holds bash only. Node is 24.x (`package.json:7-8`), which runs `.ts` directly.
   - `tsconfig.json` includes `**/*.ts` with `noEmit: true` but not `allowImportingTsExtensions`.
@@ -82,7 +87,7 @@ During the step-7 Phase 4 browser check, we found that deleting a Receipt on a b
 
 One store, with a pathname prefix per Neon branch, enforced in the adapter, which is the one place that writes and deletes. Services keep passing unprefixed keys (`receipts/email/…`) and store the prefixed pathname the adapter returns, so they never learn the environment. The prefix is set wherever `DATABASE_URL` is chosen (`neon-branch.sh`, `deploy.yml`), so the two can't drift.
 
-**Precondition:** step 7 (`thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md`) is merged. Phase 2 builds on its `ReceiptsService.answerUpload` and `receipts.http.controller.ts`.
+**Precondition (met):** step 7 (`thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md`) shipped in PR #21 (`c462ff0`). Phase 2 builds on its `ReceiptsService.answerUpload` and `receipts.http.controller.ts`.
 
 ## Phase 1: Prefixed writes and own-only deletes
 
@@ -104,27 +109,27 @@ One commit: `feat(blob): prefix writes and own-only deletes per branch`, built b
   - `owns`: own pathname yes; inherited production pathname no; another branch's no; production refuses `local/` and `preview/` pathnames
   - `isBranchPrefix`: rejects `""`, `local/`, `production/`, and a prefix with no trailing slash
 - **`src/env.ts`:** add `BLOB_PATH_PREFIX` next to `:58`, plus `runtimeEnv` at `:148`.
-  - Use `z.preprocess` like `:44-49`. `VERCEL_ENV === "production"` → `""`; otherwise the value or `""`.
+  - Use `z.preprocess` like `:42-52`. `VERCEL_ENV === "production"` → `""`; otherwise the value or `""`.
   - Then `z.string().refine(p => p === "" || isBranchPrefix(p))`.
   - Then refine that `VERCEL_ENV === "preview"` needs a `preview/` prefix.
   - A JSDoc line says it names the same branch as `DATABASE_URL`.
 - **`src/server/blob-store/blob-store.ts`:**
   - `constructor({ prefix }: { prefix: string })`
   - `write` puts at `prefix + pathname` and returns the store's (prefixed) pathname
-  - `read` is unchanged
+  - `read` and `stream` are unchanged
   - `delete` returns without calling `del` unless `owns(prefix, pathname)`
-  - Update the `BlobStore.write` and `delete` JSDoc at `:18-25`: write keys under this environment's prefix; delete is a no-op for a file this environment doesn't own.
+  - Update the `BlobStore.write` and `delete` JSDoc at `:26` and `:32`: write keys under this environment's prefix; delete is a no-op for a file this environment doesn't own.
 - **`src/server/blob-store/blob-store.test.ts`:**
   - existing cases use `{ prefix: "" }`
   - new: `write` with `local/b/` puts `local/b/receipts/x.png` and returns it
   - new: `delete` of an inherited `receipts/x.png` under `local/b/` never calls `del`
   - new: `delete` of `local/b/receipts/x.png` calls `del`
-- **Wiring:** pass `new VercelBlobStore({ prefix: env.BLOB_PATH_PREFIX })` at `receipts.module.ts:20`, `functions.ts:29` and `inbound/route.ts:38`, or wherever step 7 left the inbound composition.
+- **Wiring:** pass `new VercelBlobStore({ prefix: env.BLOB_PATH_PREFIX })` at `receipts.module.ts:21`, `functions.ts:29` and `inbound/route.ts:35`.
 - **`src/server/architecture.test.ts`:**
   - rule 6, "a file outside `src/server/blob-store/` imports `@vercel/blob`"
-  - exact specifier only, so `@vercel/blob/client` in `receipt-upload.tsx` stays allowed
-  - one `it` case for it, in the style of `:173-247`
-  - no `TODO` entry, because step-7 Phase 5 already removed the image route's `get`
+  - exact specifier only, so `@vercel/blob/client` stays allowed in `receipt-upload.tsx:3` and in the type imports at `receipts.service.ts:1` and `receipts.http.controller.ts:1`
+  - one `it` case for it, in the style of `:168-248`
+  - no `TODO` entry: the list (`:39`) is empty, and the image route already reads through `BlobStore.stream`
 
 ### Success
 
@@ -141,11 +146,11 @@ One commit: `feat(receipts): browser uploads land under the branch prefix`, buil
 
 - **`ReceiptsService`** (`src/server/receipts/receipts.service.ts`):
   - new dep `uploadPathPrefix: string`
-  - the `answerUpload` grant (added by step-7 Phase 5) throws a new `UploadPathRejectedError` unless `pathname.startsWith(uploadPathPrefix)`
+  - the `answerUpload` grant callback (`:253-261`) takes the `pathname` arg, and throws a new `UploadPathRejectedError` (next to `UploadUnauthorizedError` at `:44-48`) unless `pathname.startsWith(uploadPathPrefix)`
   - the check runs after the member check, so signed-out still gives 401
 - **`receipts.service.test.ts`:** grant with an in-prefix path returns the policy; an out-of-prefix path throws `UploadPathRejectedError`.
 - **`receipts.module.ts`:** wire `uploadPathPrefix: \`${env.BLOB_PATH_PREFIX}receipts/upload/\``.
-- **`src/server/receipts/receipts.http.controller.ts`:** `upload` maps `UploadPathRejectedError` to 400 with a warn log, next to the 401 mapping (today's `upload/route.ts:38-44`).
+- **`src/server/receipts/receipts.http.controller.ts`:** `failureStatus` (`:34-40`) maps `UploadPathRejectedError` to 400, next to the 401 mapping. The 400 branch (`:169-174`) already logs a warn.
 - **`receipts.http.controller.test.ts`:** a 400 case for the out-of-prefix token request.
 - **`src/app/(dashboard)/receipts/page.tsx:4-11`:** pass `uploadPrefix={\`${env.BLOB_PATH_PREFIX}receipts/upload/\`}` to `ReceiptsView`.
 - **`receipts-view.tsx:78,112`:** take `uploadPrefix` and pass it to `ReceiptUpload`.
@@ -202,7 +207,7 @@ One commit: `chore(blob): delete branch blobs on teardown`.
   - after the Neon delete, run `BLOB_READ_WRITE_TOKEN="$(read_env_var BLOB_READ_WRITE_TOKEN)" node scripts/blob-prefix-delete.ts "local/<branch>/"` (or `"local/"` for `--all`)
   - skip with a log line when the token is empty
 - **`.github/workflows/teardown.yml`:**
-  - after `:71`, add a step "Delete branch blobs" with `if: steps.skip.outputs.skip != 'true'`
+  - after the local Neon step (ends `:67`), add a step "Delete branch blobs" with `if: steps.skip.outputs.skip != 'true'`
   - it does checkout, pnpm, setup-node and `make install` (mirror `deploy.yml:111-120`)
   - then `node scripts/blob-prefix-delete.ts "preview/<branch>/" "local/<branch>/"`
   - `env: BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}`
@@ -228,7 +233,7 @@ One commit: `chore(blob): delete branch blobs on teardown`.
 
 - Ticket: none. This came from the step-7 Phase 4 browser check (2026-10-08).
 - ADRs: `docs/adr/adr028-blob-files-branch-by-pathname-prefix.md` (Proposed, written in Phase 1), implemented by Phases 1–4.
-- Composes with: adr004 (adapter tier, `.claude/rules/server-architecture.md:30`), adr021 and adr022 via step 7.
-- Prior plan: `thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md`. This plan depends on its Phase 5 (`:465-535`).
+- Composes with: adr004 (adapter tier, `.claude/rules/server-architecture.md:32`), adr021 and adr022 via step 7.
+- Prior plan: `thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md`. This plan depends on its Phase 5 (`:466-536`), now shipped.
 - Vercel docs: https://vercel.com/docs/vercel-blob, https://vercel.com/docs/vercel-blob/using-blob-sdk, https://vercel.com/docs/vercel-blob/usage-and-pricing, https://vercel.com/docs/cli/deploy
-- Related: `scripts/neon-branch.sh:17` (`PREFIX="local"`), `.github/workflows/teardown.yml:43-71`, `src/server/auth/config.ts:17-27`
+- Related: `scripts/neon-branch.sh:17` (`PREFIX="local"`), `.github/workflows/teardown.yml:43-67`, `src/server/auth/config.ts:14-26`

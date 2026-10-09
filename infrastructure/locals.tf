@@ -20,4 +20,11 @@ locals {
   # The same model's display name in the AWS Price List (pricing.tf). The Price
   # List keys on it, not the profile id, so edit it with the two above.
   bedrock_pricing_model_name = "Claude Sonnet 4.6"
+
+  # PostHog user ids, not emails: the alert API subscribes users by id. The owner.
+  posthog_alert_user_ids = [432149]
+
+  # ~70 normal receipts at ~$0.014. Normal use stays under $0.30/day; three
+  # worst-case capped HTML calls (~$0.47 each) cross it.
+  ai_daily_cost_alert_usd = 1
 }

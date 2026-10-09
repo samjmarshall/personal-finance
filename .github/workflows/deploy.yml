@@ -7,6 +7,8 @@ name: Deployment
 #   terraform-apply ──▶ deploy ──▶ db-migration ──▶ health-check ──▶ promote
 #      (all refs)       (all)        (all)          (main only)      (main only)
 #
+#   terraform-plan  (branches only, alongside; plans PRODUCTION, comments on the PR)
+#
 # Preview just deploys + migrates. For `main` (production) the staged, un-aliased
 # deployment is gated on /api/health (behind the protection-bypass header) and only
 # then `vercel promote`d onto the domain — so the alias never lands on an
@@ -54,6 +56,8 @@ jobs:
       # Terraform's vercel provider reads VERCEL_API_TOKEN (team + project ids are
       # non-secret and live in vars). The CLI vars are not needed here.
       VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # The posthog provider reads it in both envs, even where preview owns no PostHog resources.
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
       TF_VAR_posthog_key: ${{ secrets.POSTHOG_KEY }}
       TF_VAR_posthog_project_id: ${{ vars.POSTHOG_PROJECT_ID }}
     outputs:
@@ -84,6 +88,64 @@ jobs:
           if [ "$ENVIRONMENT" = "production" ]; then
             echo "app_url=$(terraform -chdir=infrastructure output -raw app_url)" >> "$GITHUB_OUTPUT"
           fi
+
+  # Branches only. Plans this branch against PRODUCTION state and posts the diff on
+  # its PR, so the production change is reviewed before main applies it. Read-only
+  # and off the critical path: no needs, nothing needs it.
+  terraform-plan:
+    name: Production Plan
+    if: github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+      # tfcmt posts the comment and sets its plan-result labels on the PR.
+      pull-requests: write
+      issues: write
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      GITHUB_TOKEN: ${{ github.token }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+      TF_VAR_posthog_key: ${{ secrets.POSTHOG_KEY }}
+      TF_VAR_posthog_project_id: ${{ vars.POSTHOG_PROJECT_ID }}
+      # Terraform already redacts it, but tfcmt posts plan output verbatim and
+      # Actions log masking doesn't reach PR comments.
+      TFCMT_MASKS: env:TF_VAR_posthog_key
+    steps:
+      - uses: actions/checkout@v6
+
+      # Push events carry no PR number. No open PR: the plan still runs but posts
+      # nothing. PR opened after the last push? Re-run this job.
+      - name: Find PR
+        id: pr
+        run: echo "number=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number // empty')" >> "$GITHUB_OUTPUT"
+
+      # The wrapper echoes extra output that tfcmt would parse as plan output.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: shmokmt/actions-setup-tfcmt@v2
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Restore-only: terraform-apply, running alongside, is the cache writer.
+      - name: Terraform cache
+        uses: actions/cache/restore@v4
+        with:
+          path: infrastructure/.terraform/providers
+          key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
+
+      - name: Production plan diff
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: make plan env=production pr="$PR"
 
   deploy:
     name: Deploy
