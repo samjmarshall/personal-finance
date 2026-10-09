@@ -3,15 +3,16 @@
 # them or let an unmerged branch change them.
 #
 # Unmanaged on purpose: `posthog_project` (name + timezone only, and a destroy
-# deletes all telemetry), the starter dashboard/insights, the GeoIP transformation
-# and project settings (no provider support).
+# deletes all telemetry). Hand-managed for now (out of scope, not unsupported): the
+# starter dashboard/insights, the GeoIP transformation and project settings.
 #
-# A UI edit to anything here is reverted by the next `main` apply. Edit it here.
+# A UI edit to a field set here is reverted by the next `main` apply; UI-only
+# extras (e.g. chart options) can stick. Edit it here.
 
 resource "posthog_insight" "ai_daily_cost" {
   count       = local.is_prod ? 1 : 0
   name        = "AI cost per day (USD)"
-  description = "Sum of $ai_total_cost_usd per day, all environments. Backs the daily AI cost alert. Managed in Terraform (infrastructure/posthog.tf): UI edits are reverted."
+  description = "Sum of $ai_total_cost_usd per day, all environments. Backs the daily AI cost alert. Managed in Terraform (infrastructure/posthog.tf): edit it there, not here."
   query_json = jsonencode({
     kind = "InsightVizNode"
     source = {
@@ -28,6 +29,11 @@ resource "posthog_insight" "ai_daily_cost" {
       }]
     }
   })
+  # Pinning or tagging it in the UI is fine. Unset, the provider can't clear them
+  # and the `main` apply fails.
+  lifecycle {
+    ignore_changes = [dashboard_ids, tags]
+  }
 }
 
 resource "posthog_alert" "ai_daily_cost" {
@@ -42,8 +48,10 @@ resource "posthog_alert" "ai_daily_cost" {
   # after midnight.
   calculation_interval   = "hourly"
   check_ongoing_interval = true
-  subscribed_users       = local.posthog_alert_user_ids
-  enabled                = true
+  # Pinned so a UI toggle is reverted: spend doesn't stop at weekends.
+  skip_weekend     = false
+  subscribed_users = local.posthog_alert_user_ids
+  enabled          = true
 }
 
 resource "posthog_cohort" "internal_test_users" {
