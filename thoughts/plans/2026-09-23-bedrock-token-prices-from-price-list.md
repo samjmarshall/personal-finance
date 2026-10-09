@@ -160,10 +160,10 @@ gain the new co-edited knob.
   not per 1M" comment.
 
 ### Success
-- [ ] `docs/README.md` and `.env.example` list both vars with per-token values
-- [ ] `docs/infrastructure.md` switch runbook names `bedrock_pricing_model_name`
-- [ ] `/security-review` (touches `.env.example`, matched by `**/*.env*`)
-- [ ] `make check` passes (no `src/` change; run for safety)
+- [x] `docs/README.md` and `.env.example` list both vars with per-token values
+- [x] `docs/infrastructure.md` switch runbook names `bedrock_pricing_model_name`
+- [x] `/security-review` (touches `.env.example`, matched by `**/*.env*`)
+- [x] `make check` passes (no `src/` change; run for safety)
 
 ## References
 - Ticket: none — derived from this session's research + adr015 "Decision 11"

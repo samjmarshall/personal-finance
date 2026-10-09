@@ -33,8 +33,8 @@ Validated in `src/env.ts`. Pull them locally with `vercel env pull`; set them pe
 | `POSTHOG_UI_HOST` | optional | PostHog **UI** host (distinct from the ingest endpoint above), default `https://us.posthog.com`. Sole source of the receipt "Open trace" deep-link; with `POSTHOG_PROJECT_ID` it builds `…/project/<id>/tracing?trace=<traceId>`. |
 | `POSTHOG_PROJECT_ID` | optional | PostHog project id for the "Open trace" deep-link. Unset: no link is built and the button never renders (the trace id is still shown). |
 | `LOG_LEVEL` | optional | Minimum severity the logger emits (`debug`/`info`/`warn`/`error`), default `info`. |
-| `BEDROCK_INPUT_TOKEN_PRICE_USD` | optional | Per-token input price stamped onto `ai.*` spans so PostHog can compute AI cost. Leave unset while PostHog reports cost natively. |
-| `BEDROCK_OUTPUT_TOKEN_PRICE_USD` | optional | Per-token output price, as above. |
+| `BEDROCK_INPUT_TOKEN_PRICE_USD` | optional | USD price per input **token** (not per 1M), e.g. `0.0000033000`. Stamped onto `ai.*` spans; PostHog uses it as the custom price for AI cost. Set by Terraform from the live AWS Price List for the model in `infrastructure/locals.tf` (`infrastructure/pricing.tf`). Unset locally: PostHog falls back to its own model matching. |
+| `BEDROCK_OUTPUT_TOKEN_PRICE_USD` | optional | USD price per output token, e.g. `0.0000165000`, as above. |
 
 `next build` runs with `NODE_ENV=production`, so `make build` and `pnpm run preview` fail locally unless the production-required variables are in `.env`.
 
