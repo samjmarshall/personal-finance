@@ -113,14 +113,14 @@ gain the new co-edited knob.
     derived locals cleanly.
 
 ### Success
-- [ ] `make validate env=preview` passes
-- [ ] `make plan env=preview` shows `terraform_data.bedrock_token_prices` created with
+- [x] `make validate env=preview` passes (CI run 37931219326)
+- [x] `make plan env=preview` shows `terraform_data.bedrock_token_prices` created with
       `output = { input = 0.0000033, output = 0.0000165 }` and two `data.aws_pricing_product`
-      reads
-- [ ] Negative: temporarily set `bedrock_pricing_model_name = "Claude Sonnet 4.7"` → plan fails
-      "did not return any elements"; revert
+      reads — `output` shows "(known after apply)" on create; `input` = 0.0000032999…98 / 0.0000165
+- [x] Negative: temporarily set `bedrock_pricing_model_name = "Claude Sonnet 4.7"` → plan fails
+      "did not return any elements"; revert — observed for real in CI run 37929986928 (stale service code, same 0-row path)
 - [ ] Negative: temporarily drop the `usagetype` filter → plan fails "not precise enough.
-      Returned 2 elements"; revert
+      Returned 2 elements"; revert — skipped (user decision 2026-10-09; provider hard-fails >1 row by design)
 
 ## Phase 2: Publish to Vercel env vars
 
@@ -133,9 +133,9 @@ gain the new co-edited knob.
   remembered value.
 
 ### Success
-- [ ] `make plan env=preview` shows two new `vercel_project_environment_variable` resources
+- [x] `make plan env=preview` shows two new `vercel_project_environment_variable` resources
       keyed `BEDROCK_INPUT_TOKEN_PRICE_USD` = `0.0000033000` and
-      `BEDROCK_OUTPUT_TOKEN_PRICE_USD` = `0.0000165000`
+      `BEDROCK_OUTPUT_TOKEN_PRICE_USD` = `0.0000165000` — created in CI run 37931219326; provider masks `value`, string verified offline via `format`
 - [ ] Idempotence: a second `make plan` after apply reports no changes (unchanged price →
       `terraform_data` untouched → env vars untouched)
 - [ ] After deploy + one receipt: PostHog `$ai_generation` shows `$ai_cost_model_source = custom`,
