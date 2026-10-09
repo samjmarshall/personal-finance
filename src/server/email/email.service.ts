@@ -21,28 +21,31 @@ export function parseFromAddress(from: string): string {
 	// allowlisted address there. Skip them; only one real address may be left.
 	const angled: string[] = [];
 	let bare = "";
-	let angle: string | undefined;
+	let angleText: string | undefined;
 	let quoted = false;
-	let comment = 0;
-	let mailboxes = 1;
+	let commentDepth = 0;
 	for (let i = 0; i < from.length; i++) {
 		const c = from[i];
-		if ((quoted || comment) && c === "\\") i++;
+		if ((quoted || commentDepth) && c === "\\") i++;
 		else if (quoted) quoted = c !== '"';
-		else if (comment) comment += c === "(" ? 1 : c === ")" ? -1 : 0;
-		else if (angle !== undefined) {
+		else if (commentDepth) commentDepth += c === "(" ? 1 : c === ")" ? -1 : 0;
+		else if (angleText !== undefined) {
 			if (c === ">") {
-				angled.push(angle);
-				angle = undefined;
-			} else angle += c;
+				angled.push(angleText);
+				angleText = undefined;
+			} else angleText += c;
 		} else if (c === '"') quoted = true;
-		else if (c === "(") comment = 1;
-		else if (c === "<") angle = "";
-		else if (c === ",") mailboxes++;
+		else if (c === "(") commentDepth = 1;
+		else if (c === "<") angleText = "";
 		else bare += c;
 	}
-	const unclosed = quoted || comment > 0 || angle !== undefined;
-	if (unclosed || mailboxes > 1 || angled.length > 1) return "";
+	const unclosed = quoted || commentDepth > 0 || angleText !== undefined;
+	// A comma beside one <…> is part of an unquoted name; a second address is an `@`
+	// outside the brackets, or a comma between bare addresses.
+	const second =
+		angled.length > 1 ||
+		(angled.length ? bare.includes("@") : bare.includes(","));
+	if (unclosed || second) return "";
 	return (angled[0] ?? bare).trim().toLowerCase();
 }
 
@@ -131,12 +134,15 @@ export class EmailService {
 	 */
 	async ingest(event: InboundEmailEvent): Promise<IngestResult> {
 		const from = parseFromAddress(event.data.from);
-		const memberId = await this.allowedSenders.memberFor(from);
+		const memberId = from
+			? await this.allowedSenders.memberFor(from)
+			: undefined;
 
 		// Design decision 8: dropped, not quarantined — and dropped here, before any
 		// fetch, blob write or model call, so unknown mail costs nothing.
 		if (!memberId) {
-			this.logger.info("inbound email dropped: unknown sender", {
+			const reason = from ? "unknown sender" : "unreadable sender";
+			this.logger.info(`inbound email dropped: ${reason}`, {
 				"email.id": event.data.email_id,
 				"email.from_domain": fromDomain(from),
 			});

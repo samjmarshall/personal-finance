@@ -39,6 +39,9 @@ describe("parseFromAddress", () => {
 		],
 		["<attacker@evil.com>, <victim@allowed.com>", ""],
 		["attacker@evil.com, victim@allowed.com", ""],
+		["<victim@allowed.com>, attacker@evil.com", ""],
+		// A decoded "Last, First" name can arrive unquoted; it is still one mailbox.
+		["Doe, John <J@X.com>", "j@x.com"],
 		["a@b.com (Sam)", "a@b.com"],
 		['"Sam \\" <victim@allowed.com>" <a@b.com>', "a@b.com"],
 		// Unclosed or doubled: no single address to trust.
@@ -97,7 +100,6 @@ describe("emailBlobPathname", () => {
 	});
 });
 
-// Every port is a plain object, so the service runs with no network and no DB.
 function harness({
 	allowlist = [{ userId: SENDER_USER_ID }],
 	attachments = [],
@@ -218,6 +220,20 @@ describe("EmailService.ingest", () => {
 		);
 
 		expect(h.looked).toEqual(["sam@example.com"]);
+	});
+
+	it("drops a header with no single address before any lookup", async () => {
+		const h = harness();
+
+		const result = await h.service.ingest(
+			event({ from: "<a@example.com>, <sam@example.com>" }),
+		);
+
+		expect(result).toEqual({ status: "dropped" });
+		expect(h.looked).toEqual([]);
+		expect(h.logs.map((l) => l.msg)).toEqual([
+			"inbound email dropped: unreadable sender",
+		]);
 	});
 
 	it("touches no fetch, blob or write door for an unknown sender", async () => {
