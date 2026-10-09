@@ -13,8 +13,8 @@ paths:
 is executed as a **class-based** controller / service / repository 3-tier, one
 domain per change (strangler). Reference implementations: `src/server/outbox/`
 (cron workers + the write door), `src/server/receipts/` (one domain, two
-services: `receipts.*` is the member-facing `ReceiptsService` over tRPC, HTTP and
-email; `receipt-extraction.*` is the event worker + external adapters),
+services: `ReceiptsService` serves tRPC, HTTP and email; `ReceiptExtractionService`
+is the event worker behind `receipts.inngest.controller.ts`),
 `src/server/email/email.*` (HTTP webhook
 controller behind `src/app/api/receipts/inbound/route.ts`),
 `src/server/transactions/` (the reference tRPC domain) and `src/server/categories/`
