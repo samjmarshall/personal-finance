@@ -54,6 +54,8 @@ jobs:
       # Terraform's vercel provider reads VERCEL_API_TOKEN (team + project ids are
       # non-secret and live in vars). The CLI vars are not needed here.
       VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # The posthog provider reads it in both envs, even where preview owns no PostHog resources.
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
       TF_VAR_posthog_key: ${{ secrets.POSTHOG_KEY }}
       TF_VAR_posthog_project_id: ${{ vars.POSTHOG_PROJECT_ID }}
     outputs:
