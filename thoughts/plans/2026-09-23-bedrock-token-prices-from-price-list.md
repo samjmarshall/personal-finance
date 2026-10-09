@@ -137,10 +137,12 @@ gain the new co-edited knob.
       keyed `BEDROCK_INPUT_TOKEN_PRICE_USD` = `0.0000033000` and
       `BEDROCK_OUTPUT_TOKEN_PRICE_USD` = `0.0000165000` — created in CI run 37931219326; provider masks `value`, string verified offline via `format`
 - [ ] Idempotence: a second `make plan` after apply reports no changes (unchanged price →
-      `terraform_data` untouched → env vars untouched)
-- [ ] After deploy + one receipt: PostHog `$ai_generation` shows `$ai_cost_model_source = custom`,
+      `terraform_data` untouched → env vars untouched) — deferred to production after merge;
+      shared preview state was reset by Renovate run 37931263055 (run 37931670914 re-added 3)
+- [x] After deploy + one receipt: PostHog `$ai_generation` shows `$ai_cost_model_source = custom`,
       `$ai_input_token_price = 0.0000033`, and `$ai_total_cost_usd ≈ 3.3e-6·$ai_input_tokens +
-      1.65e-5·$ai_output_tokens`
+      1.65e-5·$ai_output_tokens` — preview 2026-10-09 12:48 UTC, trace
+      6a1495f073cdbb2ca287e97665720568: 1457 in × 3.3e-6 + 253 out × 1.65e-5 = 0.0089826 (exact)
 
 ## Phase 3: Docs, rules, and local example
 
