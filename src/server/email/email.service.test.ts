@@ -32,6 +32,19 @@ describe("parseFromAddress", () => {
 		// pair lets a sender put an allowlisted address in their display name and have
 		// their receipts filed to that member — the real addr-spec is the last pair.
 		['"<victim@allowed.com>" <attacker@evil.com>', "attacker@evil.com"],
+		// The same plant in a comment, or a second mailbox, must not win either.
+		[
+			"Attacker <attacker@evil.com> (<victim@allowed.com>)",
+			"attacker@evil.com",
+		],
+		["<attacker@evil.com>, <victim@allowed.com>", ""],
+		["attacker@evil.com, victim@allowed.com", ""],
+		["a@b.com (Sam)", "a@b.com"],
+		['"Sam \\" <victim@allowed.com>" <a@b.com>', "a@b.com"],
+		// Unclosed or doubled: no single address to trust.
+		['"Sam <a@b.com>', ""],
+		["Sam <a@b.com", ""],
+		["<a@b.com> <victim@allowed.com>", ""],
 	])("parses %j to %j", (from, expected) => {
 		expect(parseFromAddress(from)).toBe(expected);
 	});

@@ -12,14 +12,38 @@ import type {
 } from "~/server/receipts/receipts.service";
 import type { InboundMailbox } from "./email.mailbox";
 
-/** Bare lower-cased address, matching the shape the allowlist stores. */
+/**
+ * Bare lower-cased address, matching the shape the allowlist stores. `""` when the
+ * header is not exactly one mailbox, so it matches no allowlist entry.
+ */
 export function parseFromAddress(from: string): string {
-	// The LAST angle pair, never the first: RFC 5322 puts the addr-spec at the end
-	// of a mailbox, and a quoted display name may legally contain angle brackets.
-	// Taking the first pair lets `"<sam@allowed.com>" <attacker@evil.com>` file an
-	// attacker's mail against an allowlisted member.
-	const angled = [...from.matchAll(/<([^>]*)>/g)].at(-1);
-	return (angled?.[1] ?? from).trim().toLowerCase();
+	// Quoted names and (comments) may legally hold `<…>`, so a sender could plant an
+	// allowlisted address there. Skip them; only one real address may be left.
+	const angled: string[] = [];
+	let bare = "";
+	let angle: string | undefined;
+	let quoted = false;
+	let comment = 0;
+	let mailboxes = 1;
+	for (let i = 0; i < from.length; i++) {
+		const c = from[i];
+		if ((quoted || comment) && c === "\\") i++;
+		else if (quoted) quoted = c !== '"';
+		else if (comment) comment += c === "(" ? 1 : c === ")" ? -1 : 0;
+		else if (angle !== undefined) {
+			if (c === ">") {
+				angled.push(angle);
+				angle = undefined;
+			} else angle += c;
+		} else if (c === '"') quoted = true;
+		else if (c === "(") comment = 1;
+		else if (c === "<") angle = "";
+		else if (c === ",") mailboxes++;
+		else bare += c;
+	}
+	const unclosed = quoted || comment > 0 || angle !== undefined;
+	if (unclosed || mailboxes > 1 || angled.length > 1) return "";
+	return (angled[0] ?? bare).trim().toLowerCase();
 }
 
 // Log the domain, never the address: the full from is a Member identifier, the
