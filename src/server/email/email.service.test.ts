@@ -84,8 +84,7 @@ describe("emailBlobPathname", () => {
 	});
 });
 
-// Every port is a plain object literal against its interface, so the service runs
-// with no network and no DB. The receipts fake records what it was asked to mint.
+// Every port is a plain object, so the service runs with no network and no DB.
 function harness({
 	allowlist = [{ userId: SENDER_USER_ID }],
 	attachments = [],
@@ -96,9 +95,13 @@ function harness({
 	email?: EmailBody;
 } = {}) {
 	const created: { userId: string; blobs: StoredBlob[] }[] = [];
+	const looked: string[] = [];
 
 	const allowedSenders = {
-		memberFor: async () => allowlist[0]?.userId,
+		memberFor: async (email: string) => {
+			looked.push(email);
+			return allowlist[0]?.userId;
+		},
 	};
 	const receipts = {
 		createFromEmail: async (userId: string, blobs: StoredBlob[]) => {
@@ -143,6 +146,7 @@ function harness({
 		mailbox,
 		blobStore,
 		created,
+		looked,
 		logs,
 	};
 }
@@ -190,6 +194,17 @@ describe("EmailService.ingest", () => {
 		expect(drop?.level).toBe("info");
 		expect(drop?.attrs["email.from_domain"]).toBe("example.com");
 		expect(JSON.stringify(drop?.attrs)).not.toContain("sam@example.com");
+	});
+
+	// The display name can hold an allowlisted address; only the real one is looked up.
+	it("looks up the bare, lower-cased sender address", async () => {
+		const h = harness({ allowlist: [] });
+
+		await h.service.ingest(
+			event({ from: '"<boss@example.com>" <Sam@Example.com>' }),
+		);
+
+		expect(h.looked).toEqual(["sam@example.com"]);
 	});
 
 	it("touches no fetch, blob or write door for an unknown sender", async () => {
