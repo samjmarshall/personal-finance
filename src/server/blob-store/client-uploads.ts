@@ -26,8 +26,8 @@ export class VercelClientUploads implements ClientUploads {
 			body: event,
 			onBeforeGenerateToken: grant,
 			onUploadCompleted: async () => {
-				// Intentionally empty: receipt.create owns the row. Blob's webhook can't
-				// reach localhost, so it must never be the producer.
+				// Kept so Blob still sets a callback URL on the token. Empty: receipt.create
+				// owns the row, since Blob's webhook can't reach localhost.
 			},
 		});
 	}

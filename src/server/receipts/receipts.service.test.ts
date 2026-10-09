@@ -184,6 +184,7 @@ describe("createFromEmail", () => {
 		},
 	];
 
+	// The worker continues this trace (adr016), so each row must store the live one.
 	it("mints one pending email row per blob, firing receipt/email.received, and returns the ids in order", async () => {
 		const { method, calls } = recorder([
 			{ ...RECEIPT, id: 11 },
@@ -206,22 +207,6 @@ describe("createFromEmail", () => {
 				})),
 				"receipt/email.received",
 			],
-		]);
-	});
-
-	// The worker continues this trace (adr016), so the row must store the live one.
-	it("stores the active span's trace id on the minted receipt", async () => {
-		const { method, calls } = recorder([RECEIPT]);
-		const service = serviceWith({ repository: { insertPending: method } });
-		const span = trace.getTracer("test").startSpan("email.inbound");
-
-		await context.with(trace.setSpan(context.active(), span), () =>
-			service.createFromEmail("member-1", BLOBS.slice(0, 1)),
-		);
-		span.end();
-
-		expect(calls[0]?.[0]).toMatchObject([
-			{ traceId: span.spanContext().traceId },
 		]);
 	});
 });
@@ -748,8 +733,6 @@ describe("answerUpload", () => {
 		]);
 	});
 
-	// The gate lives in the grant, not before the call: Blob resolves its own token
-	// first, and a completion webhook (no member) never reaches the grant at all.
 	it("refuses the grant when nobody is signed in", async () => {
 		const service = serviceWith({
 			uploads: { answer: grantRunner([]) },

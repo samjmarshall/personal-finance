@@ -4,8 +4,8 @@ import { withFlush } from "~/server/observability/sdk/flush";
 import { ReceiptsHttpController } from "~/server/receipts/receipts.http.controller";
 import { receiptsService } from "~/server/receipts/receipts.module";
 
-// Composition root for the client-upload handshake. Built on first request so the
-// build's page-data collection loads this file without constructing anything.
+// Composition root for the client-upload handshake. The controller is built on
+// first request, like the other route roots; the shared service comes from its module.
 let controller: ReceiptsHttpController | null = null;
 
 function compose(): ReceiptsHttpController {

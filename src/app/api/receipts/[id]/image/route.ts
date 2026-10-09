@@ -3,8 +3,8 @@ import { createRootLogger } from "~/server/observability/logging/logger";
 import { ReceiptsHttpController } from "~/server/receipts/receipts.http.controller";
 import { receiptsService } from "~/server/receipts/receipts.module";
 
-// Composition root for the receipt image proxy. Built on first request so the
-// build's page-data collection loads this file without constructing anything.
+// Composition root for the receipt image proxy. The controller is built on first
+// request, like the other route roots; the shared service comes from its module.
 let controller: ReceiptsHttpController | null = null;
 
 function compose(): ReceiptsHttpController {

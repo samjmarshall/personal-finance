@@ -24,7 +24,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 
 | File                                | Tier         | Owns                                                                                                                                                                | Depends on                         |
 | ----------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `<domain>.<transport>.controller.ts` | presentation | Transport is `inngest`, `http` or `trpc` (`outbox.inngest.controller.ts`, `email.http.controller.ts`, `transactions.trpc.controller.ts`). Inngest `createFunction` declarations (id, triggers, retries, concurrency), an HTTP `handle(request: Request): Promise<Response>`, or a tRPC router object whose procedures do `.input()` + procedure auth + one `ctx.services.<svc>.<method>()` call, with no Drizzle and no try/catch. A procedure may call any domain's service. Filters, auth checks, then calls **one** service method. No rules. | the service class (tRPC: `ctx.services`); `logger: Logger` |
+| `<domain>.<transport>.controller.ts` | presentation | Transport is `inngest`, `http` or `trpc` (`outbox.inngest.controller.ts`, `email.http.controller.ts`, `transactions.trpc.controller.ts`). Inngest `createFunction` declarations (id, triggers, retries, concurrency), an HTTP controller with one `(request: Request) => Promise<Response>` method per route (`handle` for one route; `image` / `upload` when one controller serves several, as `receipts.http.controller.ts` does), or a tRPC router object whose procedures do `.input()` + procedure auth + one `ctx.services.<svc>.<method>()` call, with no Drizzle and no try/catch. A procedure may call any domain's service. Filters, auth checks, then calls **one** service method. No rules. | the service class (tRPC: `ctx.services`); `logger: Logger` |
 | `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptExtractionService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
@@ -81,7 +81,8 @@ only once every link to it is an id.
   spreads them into the array served by `src/app/api/inngest/route.ts`.
 - **An HTTP route file is its own composition root.** `route.ts` reads the env
   (500 when unset), builds the tiers lazily on first request in a `compose()`
-  memo, and `POST` returns `controller.handle(request)`. The controller uses plain
+  memo, and each route method (`GET` / `POST`) returns one controller call
+  (`controller.handle(request)`). The controller uses plain
   `Request` / `Response`, never `NextResponse`, so it tests without Next.
 - **Handlers close over `this.service` lazily**, so the golden test can build a
   controller with `service: {} as never`.
@@ -141,7 +142,7 @@ Split on real pain, not in advance.
 - `*.controller.test.ts` — spy `createFunction` captures `{ opts, handler }`;
   assert the frozen opts and that each handler routes to the right service method
   with the right args. For an HTTP controller: fake verifier + fake service, call
-  `handle(new Request(…))`, assert status + body per gate.
+  each route method (`handle(new Request(…))`), assert status + body per gate.
 - `*.trpc.controller.test.ts` — `createTestCaller` (`src/server/api/test-caller.ts`)
   with `Partial<XService>` fakes. No `vi.mock`, no `ctx.db`. Assert each procedure
   calls its method with the parsed input, and that a thrown domain error maps to its
@@ -149,7 +150,7 @@ Split on real pain, not in advance.
 - `src/server/architecture.test.ts` — enforces the adr022 import rules. Its `TODO`
   list of known violations only shrinks: delete an entry when its migration lands.
 - `route.test.ts` — mock the tier modules; assert only the root's job (env gate,
-  built once, delegates to `handle`).
+  built once, delegates to its controller method).
 - `src/server/inngest/registry-golden.test.ts` builds every controller with the spy
   client and pins ids + triggers.
 

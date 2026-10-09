@@ -43,7 +43,6 @@ const call = (id: string) =>
 beforeEach(() => vi.clearAllMocks());
 
 describe("GET /api/receipts/[id]/image", () => {
-	// One controller for the life of the module, built on the first request.
 	it("builds the controller once over the shared service, and delegates each request with its id", async () => {
 		const first = await call("3");
 		await call("4");

@@ -52,7 +52,6 @@ const post = () =>
 beforeEach(() => vi.clearAllMocks());
 
 describe("POST /api/receipts/upload", () => {
-	// One controller for the life of the module, built on the first request.
 	it("builds the controller once over the shared service, delegates every request, and flushes after each", async () => {
 		const first = await post();
 		await post();
