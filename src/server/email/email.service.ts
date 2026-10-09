@@ -12,41 +12,20 @@ import type {
 } from "~/server/receipts/receipts.service";
 import type { InboundMailbox } from "./email.mailbox";
 
+const ADDRESS_RUN = /[^\s<>()",;]+@[^\s<>()",;]+/g;
+
 /**
- * Bare lower-cased address, matching the shape the allowlist stores. `""` when the
- * header is not exactly one mailbox, so it matches no allowlist entry.
+ * Bare lower-cased address, matching the shape the allowlist stores. `""` unless
+ * exactly one distinct address appears anywhere in the header.
  */
 export function parseFromAddress(from: string): string {
-	// Quoted names and (comments) may legally hold `<…>`, so a sender could plant an
-	// allowlisted address there. Skip them; only one real address may be left.
-	const angled: string[] = [];
-	let bare = "";
-	let angleText: string | undefined;
-	let quoted = false;
-	let commentDepth = 0;
-	for (let i = 0; i < from.length; i++) {
-		const c = from[i];
-		if ((quoted || commentDepth) && c === "\\") i++;
-		else if (quoted) quoted = c !== '"';
-		else if (commentDepth) commentDepth += c === "(" ? 1 : c === ")" ? -1 : 0;
-		else if (angleText !== undefined) {
-			if (c === ">") {
-				angled.push(angleText);
-				angleText = undefined;
-			} else angleText += c;
-		} else if (c === '"') quoted = true;
-		else if (c === "(") commentDepth = 1;
-		else if (c === "<") angleText = "";
-		else bare += c;
-	}
-	const unclosed = quoted || commentDepth > 0 || angleText !== undefined;
-	// A comma beside one <…> is part of an unquoted name; a second address is an `@`
-	// outside the brackets, or a comma between bare addresses.
-	const second =
-		angled.length > 1 ||
-		(angled.length ? bare.includes("@") : bare.includes(","));
-	if (unclosed || second) return "";
-	return (angled[0] ?? bare).trim().toLowerCase();
+	// The name can arrive decoded, so its quotes and brackets may be sender text.
+	// Count every address anywhere instead: a planted second one fails closed.
+	const addresses = new Set(
+		(from.match(ADDRESS_RUN) ?? []).map((address) => address.toLowerCase()),
+	);
+	const [only] = addresses;
+	return addresses.size === 1 && only ? only : "";
 }
 
 // Log the domain, never the address: the full from is a Member identifier, the
@@ -129,7 +108,7 @@ export class EmailService {
 	}
 
 	/**
-	 * `dropped` = unknown sender, `empty` = nothing to extract from; both are verdicts
+	 * `dropped` = unknown or unreadable sender, `empty` = nothing to extract from; both are verdicts
 	 * the controller answers 200 to. A throw (fetch, blob, commit) is left to surface.
 	 */
 	async ingest(event: InboundEmailEvent): Promise<IngestResult> {

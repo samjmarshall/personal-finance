@@ -28,26 +28,25 @@ describe("parseFromAddress", () => {
 		["<A@B.com>", "a@b.com"],
 		['"Marshall, Sam" <Sam.M@Example.COM>', "sam.m@example.com"],
 		["Sam < a@b.com >", "a@b.com"],
-		// A quoted display name may legally contain angle brackets. Taking the first
-		// pair lets a sender put an allowlisted address in their display name and have
-		// their receipts filed to that member — the real addr-spec is the last pair.
-		['"<victim@allowed.com>" <attacker@evil.com>', "attacker@evil.com"],
-		// The same plant in a comment, or a second mailbox, must not win either.
-		[
-			"Attacker <attacker@evil.com> (<victim@allowed.com>)",
-			"attacker@evil.com",
-		],
+		// A sender can plant an allowlisted address in their name, a comment or a
+		// second mailbox. Two addresses anywhere means no sender to trust.
+		['"<victim@allowed.com>" <attacker@evil.com>', ""],
+		["Attacker <attacker@evil.com> (<victim@allowed.com>)", ""],
 		["<attacker@evil.com>, <victim@allowed.com>", ""],
 		["attacker@evil.com, victim@allowed.com", ""],
-		["<victim@allowed.com>, attacker@evil.com", ""],
-		// A decoded "Last, First" name can arrive unquoted; it is still one mailbox.
+		["<a@b.com> <victim@allowed.com>", ""],
+		// Decoded, the quotes may be the sender's own text and hide nothing.
+		['" <attacker@evil.com> ("<victim@allowed.com>)', ""],
+		// A decoded name can be unquoted and hold commas, quotes, brackets or the
+		// address itself; it is still one sender.
 		["Doe, John <J@X.com>", "j@x.com"],
 		["a@b.com (Sam)", "a@b.com"],
-		['"Sam \\" <victim@allowed.com>" <a@b.com>', "a@b.com"],
-		// Unclosed or doubled: no single address to trust.
-		['"Sam <a@b.com>', ""],
-		["Sam <a@b.com", ""],
-		["<a@b.com> <victim@allowed.com>", ""],
+		["sam@x.com <Sam@X.com>", "sam@x.com"],
+		['O"Brien <sam@x.com>', "sam@x.com"],
+		["Sam :( <sam@x.com>", "sam@x.com"],
+		["Sam <3 <sam@x.com>", "sam@x.com"],
+		["", ""],
+		["Sam", ""],
 	])("parses %j to %j", (from, expected) => {
 		expect(parseFromAddress(from)).toBe(expected);
 	});
@@ -211,12 +210,11 @@ describe("EmailService.ingest", () => {
 		expect(JSON.stringify(drop?.attrs)).not.toContain("sam@example.com");
 	});
 
-	// The display name can hold an allowlisted address; only the real one is looked up.
 	it("looks up the bare, lower-cased sender address", async () => {
 		const h = harness({ allowlist: [] });
 
 		await h.service.ingest(
-			event({ from: '"<boss@example.com>" <Sam@Example.com>' }),
+			event({ from: "Sam@Example.com <Sam@Example.com>" }),
 		);
 
 		expect(h.looked).toEqual(["sam@example.com"]);
@@ -226,7 +224,7 @@ describe("EmailService.ingest", () => {
 		const h = harness();
 
 		const result = await h.service.ingest(
-			event({ from: "<a@example.com>, <sam@example.com>" }),
+			event({ from: '"<sam@example.com>" <a@example.com>' }),
 		);
 
 		expect(result).toEqual({ status: "dropped" });
