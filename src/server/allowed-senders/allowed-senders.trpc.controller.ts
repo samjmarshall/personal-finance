@@ -1,4 +1,7 @@
-import { allowedSenderCreateDto, allowedSenderRefDto } from "~/domain/email";
+import {
+	allowedSenderCreateDto,
+	allowedSenderRefDto,
+} from "~/domain/allowed-senders";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
 export const allowedSenderRouter = createTRPCRouter({

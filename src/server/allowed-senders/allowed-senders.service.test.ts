@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AllowedSender } from "~/domain/email";
+import type { AllowedSender } from "~/domain/allowed-senders";
 import type { MembersService } from "~/server/auth/members.service";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import {
@@ -9,22 +9,23 @@ import {
 	throwing,
 	unstaged,
 } from "~/test/fakes";
-import type { AllowedSenderRepository } from "./allowed-sender.repository";
-import { AllowedSenderService } from "./allowed-sender.service";
+import type { AllowedSendersRepository } from "./allowed-senders.repository";
+import { AllowedSendersService } from "./allowed-senders.service";
 
 type Members = Pick<MembersService, "namesByIds">;
 
 function serviceWith(
-	staged: Partial<AllowedSenderRepository>,
+	staged: Partial<AllowedSendersRepository>,
 	members: Partial<Members> = {},
 ) {
-	const repository: AllowedSenderRepository = {
+	const repository: AllowedSendersRepository = {
 		list: unstaged,
 		insert: unstaged,
 		deleteOwn: unstaged,
+		findMemberId: unstaged,
 		...staged,
 	};
-	return new AllowedSenderService({
+	return new AllowedSendersService({
 		repository,
 		members: { namesByIds: unstaged, ...members },
 	});
@@ -49,7 +50,7 @@ const NAMES = new Map([
 	["member-2", "Alex"],
 ]);
 
-describe("AllowedSenderService.list", () => {
+describe("AllowedSendersService.list", () => {
 	it("merges each owner's name and flags the caller's own rows", async () => {
 		const service = serviceWith(
 			{ list: async () => [SAM_SENDER, ALEX_SENDER] },
@@ -104,7 +105,7 @@ describe("AllowedSenderService.list", () => {
 	});
 });
 
-describe("AllowedSenderService.add", () => {
+describe("AllowedSendersService.add", () => {
 	it("inserts the address against the member and returns the stored row", async () => {
 		const { method, calls } = recorder(SAM_SENDER);
 		const service = serviceWith({ insert: method });
@@ -150,7 +151,7 @@ describe("AllowedSenderService.add", () => {
 	});
 });
 
-describe("AllowedSenderService.remove", () => {
+describe("AllowedSendersService.remove", () => {
 	it("deletes the member's own row", async () => {
 		const { method, calls } = recorder({ id: 1 });
 		const service = serviceWith({ deleteOwn: method });
@@ -170,5 +171,17 @@ describe("AllowedSenderService.remove", () => {
 		expect(thrown).toMatchObject({
 			message: "That address is not on your allowlist.",
 		});
+	});
+});
+
+describe("AllowedSendersService.memberFor", () => {
+	it("gives the member who owns the address", async () => {
+		const { method, calls } = recorder("member-1");
+		const service = serviceWith({ findMemberId: method });
+
+		await expect(service.memberFor("sam@example.com")).resolves.toBe(
+			"member-1",
+		);
+		expect(calls).toEqual([["sam@example.com"]]);
 	});
 });

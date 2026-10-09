@@ -55,7 +55,7 @@ Specifics that bind:
 - **Mirror the kernel.** Where both exist, `src/domain/<name>/` and `src/server/<name>/` share a name.
 - **Promote only over id links.** A child becomes its own domain once every link to it is an id. While another domain holds a copy of its name, a rename is a write across domains, so the link changes first.
 - **Category is the first promotion.** It has its own page and three domains link to it. Its move, and the switch of `expense.category` text to a `categoryId` link, is step 6 of the migration.
-- **Allowed Sender is the second.** A Member adds and removes them on their own Settings section, through their own router. They move from `email/allowed-sender.*` to `src/server/allowed-senders/` and `src/domain/allowed-senders/` in step 7. Email then checks the allowlist through the Allowed Senders service (adr022), not by reading the table. The table name and the `allowedSender` router key do not change.
+- **Allowed Sender is the second.** A Member adds and removes them on their own Settings section, through their own router. They moved from `email/allowed-sender.*` to `src/server/allowed-senders/` and `src/domain/allowed-senders/` in step 7. Email now checks the allowlist through the Allowed Senders service (adr022), not by reading the table. The table name and the `allowedSender` router key do not change.
 - **`auth/` holding the members service fits.** auth owns the `user` table, and members is its service under the glossary name.
 
 ### Positive Consequences

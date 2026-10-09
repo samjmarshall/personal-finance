@@ -1,19 +1,19 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AllowedSender } from "~/domain/email";
+import type { AllowedSender } from "~/domain/allowed-senders";
 import {
 	pgError,
 	type Respond,
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
-import { DrizzleAllowedSenderRepository } from "./allowed-sender.repository";
-import { allowedSenders } from "./allowed-sender.schema";
+import { DrizzleAllowedSendersRepository } from "./allowed-senders.repository";
+import { allowedSenders } from "./allowed-senders.schema";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
 	return {
-		repository: new DrizzleAllowedSenderRepository({ db: db as never }),
+		repository: new DrizzleAllowedSendersRepository({ db: db as never }),
 		queries,
 	};
 }
@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-describe("DrizzleAllowedSenderRepository", () => {
+describe("DrizzleAllowedSendersRepository", () => {
 	it("list selects every address by email", async () => {
 		const { repository, queries } = harness(() => [rowOf(COLUMNS, SENDER)]);
 
@@ -124,5 +124,33 @@ describe("DrizzleAllowedSenderRepository", () => {
 		const { repository } = harness();
 
 		await expect(repository.deleteOwn("member-1", 99)).resolves.toBeUndefined();
+	});
+
+	it("findMemberId gives the owner of a listed address", async () => {
+		const { repository, queries } = harness(() => [["member-1"]]);
+
+		await expect(repository.findMemberId("sam@example.com")).resolves.toBe(
+			"member-1",
+		);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "sam@example.com",
+			      1,
+			    ],
+			    "sql": "select "userId" from "allowed_sender" where "allowed_sender"."email" = $1 limit $2",
+			  },
+			]
+		`);
+	});
+
+	it("findMemberId gives undefined for an unlisted address", async () => {
+		const { repository } = harness();
+
+		await expect(
+			repository.findMemberId("nobody@example.com"),
+		).resolves.toBeUndefined();
 	});
 });

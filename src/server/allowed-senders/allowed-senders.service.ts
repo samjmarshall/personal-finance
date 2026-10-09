@@ -1,23 +1,26 @@
-import type { AllowedSender, AllowedSenderListItem } from "~/domain/email";
+import type {
+	AllowedSender,
+	AllowedSenderListItem,
+} from "~/domain/allowed-senders";
 import type { MembersService } from "~/server/auth/members.service";
 import { assertRow } from "~/server/errors/assert-row";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
-import type { AllowedSenderRepository } from "./allowed-sender.repository";
+import type { AllowedSendersRepository } from "./allowed-senders.repository";
 
 const ALREADY_ALLOWED_MESSAGE = "That address is already on the allowlist.";
 const NOT_YOURS_MESSAGE = "That address is not on your allowlist.";
 
-interface AllowedSenderServiceDeps {
-	repository: AllowedSenderRepository;
+interface AllowedSendersServiceDeps {
+	repository: AllowedSendersRepository;
 	members: Pick<MembersService, "namesByIds">;
 }
 
-export class AllowedSenderService {
-	private readonly repository: AllowedSenderRepository;
+export class AllowedSendersService {
+	private readonly repository: AllowedSendersRepository;
 	private readonly members: Pick<MembersService, "namesByIds">;
 
-	constructor({ repository, members }: AllowedSenderServiceDeps) {
+	constructor({ repository, members }: AllowedSendersServiceDeps) {
 		this.repository = repository;
 		this.members = members;
 	}
@@ -57,5 +60,10 @@ export class AllowedSenderService {
 	async remove(memberId: string, id: number): Promise<void> {
 		const row = await this.repository.deleteOwn(memberId, id);
 		if (!row) throw new NotFoundError(NOT_YOURS_MESSAGE);
+	}
+
+	/** `email` bare + lower-cased; `undefined` when not on the allowlist. */
+	memberFor(email: string): Promise<string | undefined> {
+		return this.repository.findMemberId(email);
 	}
 }

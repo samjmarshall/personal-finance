@@ -1,11 +1,10 @@
 import { Resend } from "resend";
 
 import { env } from "~/env";
+import { allowedSendersService } from "~/server/allowed-senders/allowed-senders.module";
 import { VercelBlobStore } from "~/server/blob-store/blob-store";
-import { db } from "~/server/db";
 import { EmailHttpController } from "~/server/email/email.http.controller";
 import { ResendInboundMailbox } from "~/server/email/email.mailbox";
-import { DrizzleEmailRepository } from "~/server/email/email.repository";
 import { EmailService } from "~/server/email/email.service";
 import { createRootLogger } from "~/server/observability/logging/logger";
 import { withFlush } from "~/server/observability/sdk/flush";
@@ -30,7 +29,7 @@ function compose(apiKey: string, webhookSecret: string): EmailHttpController {
 		resend,
 		webhookSecret,
 		service: new EmailService({
-			repository: new DrizzleEmailRepository({ db }),
+			allowedSenders: allowedSendersService,
 			receipts: receiptsService,
 			mailbox: new ResendInboundMailbox({ resend }),
 			blobStore: new VercelBlobStore(),

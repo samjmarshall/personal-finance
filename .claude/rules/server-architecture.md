@@ -28,7 +28,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 | `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptExtractionService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
-| `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. Each exports one instance: `outbox.module.ts`, `categories.module.ts`, `expenses.module.ts`, `transactions.module.ts`, `receipts.module.ts`, `auth/members.module.ts`. | —                                  |
+| `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. Each exports one instance: `outbox.module.ts`, `categories.module.ts`, `expenses.module.ts`, `transactions.module.ts`, `receipts.module.ts`, `auth/members.module.ts`, `allowed-senders/allowed-senders.module.ts`. | —                                  |
 | `src/server/observability/`         | shared adapter | Shared observability provider, split OTel API vs SDK. API side (tiers may import): `logging/` (`Logger` port + `OtelLogger`), `tracing/` (`withSpan`, baggage, trace id, trace carrier), `errors/` (`captureException`, `reportError`, thrown-value helpers). SDK side: `sdk/` (boot `otel.ts`, sampler, `SpanAttributeProcessor`, prompt redaction, flush) — imported only by `instrumentation.ts`, route roots (`withFlush`) and test harnesses, never a tier. Framework adapters live with their consumer (`TracingMiddleware` in `src/server/inngest/middleware.ts`). Like `blob-store/` — lives outside any domain. | OTel SDK + PostHog SDKs            |
 
 A domain with no tables, such as `cashflow/`, has no repository: its service
@@ -45,9 +45,8 @@ No middle kind: never prefixed child files in another domain's folder.
 | Part of parent | All three: made and deleted with the parent row; no other domain links to it by id; no page or router of its own. | The parent's files.                                              | `receipt_item` in `receipts.schema.ts`   |
 | Own domain     | Any part-of-parent check fails.                                                                   | Top-level `src/server/<name>/`, named like `src/domain/<name>/`. | `categories/` ↔ `src/domain/categories/` |
 
-`email/allowed-sender.*` is the last prefixed child; it moves to
-`allowed-senders/` in step 7. Folders stay flat. A child becomes its own domain
-only once every link to it is an id.
+Folders stay flat. A child becomes its own domain only once every link to it is
+an id.
 
 ## Construction rules
 
@@ -132,7 +131,7 @@ Split on real pain, not in advance.
   `db.transaction(cb)` and records `begin` / `commit` / `rollback`.
   `src/server/transactions/transactions.repository.test.ts` is the example, and
   `ReceiptsRepository` uses it too. The worker domains (`outbox`, receipt
-  extraction, `email`) use a hand-rolled chain-capturing fake `db` instead:
+  extraction) use a hand-rolled chain-capturing fake `db` instead:
   render a WHERE with `new PgDialect().sqlToQuery(cond).sql`, assert on the
   text, and assert `set()` payloads.
 - `*.service.test.ts` — fake repository + adapters as object literals typed
@@ -159,7 +158,7 @@ Split on real pain, not in advance.
 - One plain `createTRPCRouter({ … })` per file in `src/server/api/routers/<name>.ts`;
   procedures talk to Drizzle directly via `ctx.db`.
 - Compose the pre-built router objects in `src/server/api/root.ts`
-  (`allowedSender` comes from `src/server/email/`,
+  (`allowedSender` comes from `src/server/allowed-senders/`,
   `balance` from `src/server/balances/`, `cashflow` from
   `src/server/cashflow/`, `category` from `src/server/categories/`, `expense`
   from `src/server/expenses/`, `income` from `src/server/income/`, `receipt`

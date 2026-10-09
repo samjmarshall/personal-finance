@@ -1,17 +1,16 @@
 import { readdirSync } from "node:fs";
 import { basename } from "node:path";
 import { describe, expect, it } from "vitest";
-
+import type { AllowedSender } from "~/domain/allowed-senders/allowed-sender.interface";
 import type { BalanceSnapshot } from "~/domain/balances/balance.interface";
 import type { Category } from "~/domain/categories/category.interface";
-import type { AllowedSender } from "~/domain/email/allowed-sender.interface";
 import type { Expense } from "~/domain/expenses/expense.interface";
 import type { Income } from "~/domain/income/income.interface";
 import type { Receipt, ReceiptItem } from "~/domain/receipts/receipt.interface";
 import type { Transaction } from "~/domain/transactions/transaction.interface";
+import type { allowedSenders } from "~/server/allowed-senders/allowed-senders.schema";
 import type { balanceSnapshots } from "~/server/balances/balances.schema";
 import type { categories } from "~/server/categories/categories.schema";
-import type { allowedSenders } from "~/server/email/allowed-sender.schema";
 import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
 import type { receiptItems, receipts } from "~/server/receipts/receipts.schema";

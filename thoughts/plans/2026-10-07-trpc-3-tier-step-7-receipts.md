@@ -102,9 +102,9 @@ The tRPC paths (`api.receipt.*`), the HTTP routes and the frozen event names do 
   - `DrizzleAllowedSenderRepository` (`allowed-sender.repository.ts:18`, port `:7-12`)
   - the router exports `allowedSenderRouter` (`allowed-sender.trpc.controller.ts:4`)
   - the kernel is `src/domain/email/allowed-sender.{dto,interface}.ts` plus `allowed-sender.dto.test.ts`, re-exported with the email types by `src/domain/email/index.ts`
-  - importers: `services.ts:7-8,31-34`, `root.ts:6,14`, `src/server/db/index.ts:8,18`, `schema-interface-contract.test.ts:7,14` and `src/app/(dashboard)/settings/_components/allowed-senders-section.tsx:10-13`
-  - Email reads the table itself: `DrizzleEmailRepository.findAllowedSender` (`email.repository.ts:47-56`), called at `email.service.ts:98`. Fake: `email.service.test.ts:131-132`. Test: `email.repository.test.ts:76-95`.
-  - The architecture test's own-domain example is `email.repository.ts` importing `./allowed-sender.schema` (`architecture.test.ts:177-185`).
+  - importers: `services.ts:7-8,32-35`, `root.ts:5,14`, `src/server/db/index.ts:8,18`, `schema-interface-contract.test.ts:7,14` and `src/app/(dashboard)/settings/_components/allowed-senders-section.tsx:10-13`
+  - Email reads the table itself: `DrizzleEmailRepository.findAllowedSender` (`email.repository.ts:23-32`), called at `email.service.ts:110`. Fake: `email.service.test.ts:101-102`. Test: `email.repository.test.ts:41-57`.
+  - The architecture test's own-domain example is `email.repository.ts` importing `./allowed-sender.schema` (`architecture.test.ts:168-176`).
 - **The shim.** `src/server/outbox/index.ts`:
   - `commitWithOutbox` `:9-12` and `publish` `:14-15`
   - only the router and its tests import the barrel
@@ -597,31 +597,31 @@ One commit: `refactor(allowed-senders): own domain, email checks the allowlist t
   - `src/domain/email/index.ts` keeps only the email types
   - File names stay singular, as in `src/domain/categories/category.*`, so `COVERED` (`schema-interface-contract.test.ts:44`) does not change.
 - **The allowlist read moves to its owner** (TDD):
-  - `AllowedSendersRepository.findMemberId(email): Promise<string | undefined>` holds the query from `email.repository.ts:47-56`. Keep the port note: "`email` must already be bare + lower-cased — the shape the allowlist stores." Move its two cases from `email.repository.test.ts:76-95`.
+  - `AllowedSendersRepository.findMemberId(email): Promise<string | undefined>` holds the query from `email.repository.ts:23-32`. Keep the port note (`:8`): "`email` must already be bare + lower-cased — the shape the allowlist stores." Move its two cases from `email.repository.test.ts:41-57`.
   - `AllowedSendersService.memberFor(email)` passes it through (adr004 `:71`). One service case.
 - **`src/server/allowed-senders/allowed-senders.module.ts`** (new) → `allowedSendersService`, built from `db` and `membersService` (`members.module`, Phase 3). Two roots need it: `services.ts` and the inbound route.
 - **`src/server/email/email.service.ts`**:
-  - the deps (`:71-90`) swap `repository: EmailRepository` for `allowedSenders: Pick<AllowedSendersService, "memberFor">`
-  - `ingest` (`:98`) asks `this.allowedSenders.memberFor(from)`. The drop branch and its log do not change. The baggage and `createFromEmail` take the returned member id.
-  - drop the `email.repository` import (`:10`)
-- **`email.service.test.ts`** — the `repository` fake (`:131-132`) becomes `allowedSenders: { memberFor: async () => allowlist[0]?.userId }`. Drop the `EmailRepository` import (`:23`).
+  - the deps (`:74-102`) swap `repository: EmailRepository` for `allowedSenders: Pick<AllowedSendersService, "memberFor">`
+  - `ingest` (`:110`) asks `this.allowedSenders.memberFor(from)`. The drop branch and its log do not change. The baggage and `createFromEmail` take the returned member id.
+  - drop the `email.repository` import (`:13`)
+- **`email.service.test.ts`** — the `repository` fake (`:101-102`) becomes `allowedSenders: { memberFor: async () => allowlist[0]?.userId }`. Drop the `EmailRepository` import (`:9`). The harness comment (`:89`) says the `receipts` fake records what it was asked to mint (stale since Phase 6).
 - **Delete** `src/server/email/email.repository.ts` and `email.repository.test.ts`. Nothing is left in them.
 - **Importers**:
-  - `src/server/api/services.ts:7-8,31-34` — `allowedSenders: allowedSendersService`. Drop the repository and class imports.
-  - `src/server/api/root.ts:6` — `~/server/allowed-senders/allowed-senders.trpc.controller`
+  - `src/server/api/services.ts:7-8,32-35` — `allowedSenders: allowedSendersService`. Drop the repository and class imports.
+  - `src/server/api/root.ts:5` — `~/server/allowed-senders/allowed-senders.trpc.controller`
   - `src/server/db/index.ts:8` — `~/server/allowed-senders/allowed-senders.schema`. `drizzle.config.ts` already globs `src/server/**/*.schema.ts`.
   - `src/server/db/schema-interface-contract.test.ts:7,14` — the new kernel and schema paths
   - `allowed-senders-section.tsx:10-13`, the controller and the service — import from `~/domain/allowed-senders`
 - **`src/app/api/receipts/inbound/route.ts`**:
-  - drop `DrizzleEmailRepository` and the `db` import
+  - drop `DrizzleEmailRepository` (`:8`, `:33`) and the `db` import (`:5`)
   - pass `allowedSenders: allowedSendersService` from `allowed-senders.module`
   - its `route.test.ts` mocks `allowed-senders.module`, like `receipts.module`. Drop the `~/server/db` mock (`:20`) if nothing else loads it.
-- **`src/server/architecture.test.ts:177-185`** — the own-domain example becomes `src/server/allowed-senders/allowed-senders.repository.ts` importing `./allowed-senders.schema`. The receipts-schema import still flags rule 1.
+- **`src/server/architecture.test.ts:168-176`** — the own-domain example becomes `src/server/allowed-senders/allowed-senders.repository.ts` importing `./allowed-senders.schema`. The receipts-schema import still flags rule 1.
 - **Docs**:
   - `.claude/rules/server-architecture.md`:
     - `:31` (module row) — add `allowed-senders/allowed-senders.module.ts`
     - `:48-49` — drop "`email/allowed-sender.*` is the last prefixed child; it moves to `allowed-senders/` in step 7."
-    - `:159` — `allowedSender` comes from `src/server/allowed-senders/`
+    - `:162` — `allowedSender` comes from `src/server/allowed-senders/`
   - `docs/adr/adr004-*.md:80`, the Done list:
     - `src/server/email/` — `allowed-sender.trpc.controller.ts` → … becomes `src/server/allowed-senders/` — `allowed-senders.trpc.controller.ts` → `AllowedSendersService` → `AllowedSendersRepository` / `DrizzleAllowedSendersRepository`
     - `EmailService` → `EmailRepository` / `DrizzleEmailRepository` becomes `EmailService`, which checks senders through `AllowedSendersService` and mints through `ReceiptsService`
@@ -630,19 +630,21 @@ One commit: `refactor(allowed-senders): own domain, email checks the allowlist t
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] `make db_generate` produces no file. The `allowed_sender` table did not change.
-- [ ] `git show --stat` shows the moved files as renames (`R`)
-- [ ] `grep -rn "email/allowed-sender\|EmailRepository\|findAllowedSender" src .claude/rules` finds nothing
-- [ ] At https://personal-finance.localhost/settings:
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes (ran `pnpm run build`; `make build` wipes the running dev server's `.next`)
+- [x] `make db_generate` produces no file. The `allowed_sender` table did not change.
+- [x] `git show --stat` shows the moved files as renames (`R`) (checked on the staged diff with `-M`)
+- [x] `grep -rn "email/allowed-sender\|EmailRepository\|findAllowedSender" src .claude/rules` finds nothing
+- [x] At https://personal-finance.localhost/settings:
   - the allowlist shows each address with its owner's name
   - an add works
   - a duplicate add shows "That address is already on the allowlist."
   - a remove works
+  - (the server returns the exact CONFLICT message, but no toast renders on the page, success or error. This is a client issue outside this phase.)
 - [ ] An email from an allowed sender still mints a pending receipt. One from an unknown address is dropped, with the log "inbound email dropped: unknown sender". Use the same flow as Phase 6.
-- [ ] `/security-review`: the sender gate in `email.service.ts` and `allowed-senders.service.ts`
+  - not run locally: as in Phase 6, it needs a real inbound email on the preview. Unit tests cover the gate (`EmailService` → `memberFor` → `findMemberId`, and the drop branch).
+- [x] `/security-review`: the sender gate in `email.service.ts` and `allowed-senders.service.ts`. No findings.
 
 ## Phase 8: Retire the shim and `src/server/api/lib/`
 

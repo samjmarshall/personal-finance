@@ -17,7 +17,9 @@ vi.mock("~/env", () => ({
 	env,
 	LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
-vi.mock("~/server/db", () => ({ db: {} }));
+vi.mock("~/server/allowed-senders/allowed-senders.module", () => ({
+	allowedSendersService: {},
+}));
 vi.mock("~/server/receipts/receipts.module", () => ({ receiptsService: {} }));
 vi.mock("resend", () => ({
 	Resend: class {

@@ -6,7 +6,6 @@ import type {
 } from "~/server/observability/logging/logger";
 import type { StoredBlob } from "~/server/receipts/receipts.service";
 import type { AttachmentDownload, EmailBody } from "./email.mailbox";
-import type { EmailRepository } from "./email.repository";
 import {
 	EmailService,
 	emailBlobPathname,
@@ -86,7 +85,7 @@ describe("emailBlobPathname", () => {
 });
 
 // Every port is a plain object literal against its interface, so the service runs
-// with no network and no DB. The repository records what it was asked to mint.
+// with no network and no DB. The receipts fake records what it was asked to mint.
 function harness({
 	allowlist = [{ userId: SENDER_USER_ID }],
 	attachments = [],
@@ -98,8 +97,8 @@ function harness({
 } = {}) {
 	const created: { userId: string; blobs: StoredBlob[] }[] = [];
 
-	const repository: EmailRepository = {
-		findAllowedSender: async () => allowlist[0],
+	const allowedSenders = {
+		memberFor: async () => allowlist[0]?.userId,
 	};
 	const receipts = {
 		createFromEmail: async (userId: string, blobs: StoredBlob[]) => {
@@ -135,7 +134,7 @@ function harness({
 
 	return {
 		service: new EmailService({
-			repository,
+			allowedSenders,
 			receipts,
 			mailbox,
 			blobStore,

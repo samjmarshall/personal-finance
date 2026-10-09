@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { AllowedSender, AllowedSenderListItem } from "~/domain/email";
+import type {
+	AllowedSender,
+	AllowedSenderListItem,
+} from "~/domain/allowed-senders";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { recorder, throwing } from "~/test/fakes";
-import type { AllowedSenderService } from "./allowed-sender.service";
-import { allowedSenderRouter } from "./allowed-sender.trpc.controller";
+import type { AllowedSendersService } from "./allowed-senders.service";
+import { allowedSenderRouter } from "./allowed-senders.trpc.controller";
 
 const router = createTRPCRouter({ allowedSender: allowedSenderRouter });
 
 function callerWith(
-	allowedSenders: Partial<AllowedSenderService>,
+	allowedSenders: Partial<AllowedSendersService>,
 	session?: { user: { id: string } } | null,
 ) {
 	return createTestCaller(router, { services: { allowedSenders }, session });

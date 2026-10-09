@@ -2,6 +2,7 @@ import { context } from "@opentelemetry/api";
 import type { InboundAttachmentMeta, InboundEmailEvent } from "~/domain/email";
 import { isReceiptFileType } from "~/domain/receipts";
 import { bareMediaType } from "~/lib/utils";
+import type { AllowedSendersService } from "~/server/allowed-senders/allowed-senders.service";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import type { Logger } from "~/server/observability/logging/logger";
 import { BaggageKey, setBaggage } from "~/server/observability/tracing/baggage";
@@ -10,7 +11,6 @@ import type {
 	StoredBlob,
 } from "~/server/receipts/receipts.service";
 import type { InboundMailbox } from "./email.mailbox";
-import type { EmailRepository } from "./email.repository";
 
 /** Bare lower-cased address, matching the shape the allowlist stores. */
 export function parseFromAddress(from: string): string {
@@ -72,7 +72,7 @@ export type IngestResult =
 	| { status: "ingested"; receiptIds: number[] };
 
 interface EmailServiceDeps {
-	repository: EmailRepository;
+	allowedSenders: Pick<AllowedSendersService, "memberFor">;
 	receipts: Pick<ReceiptsService, "createFromEmail">;
 	mailbox: InboundMailbox;
 	blobStore: Pick<BlobStore, "write">;
@@ -81,20 +81,20 @@ interface EmailServiceDeps {
 
 /** Application tier for the Resend inbound webhook: allowlist gate, blob, mint. */
 export class EmailService {
-	private readonly repository: EmailRepository;
+	private readonly allowedSenders: Pick<AllowedSendersService, "memberFor">;
 	private readonly receipts: Pick<ReceiptsService, "createFromEmail">;
 	private readonly mailbox: InboundMailbox;
 	private readonly blobStore: Pick<BlobStore, "write">;
 	private readonly logger: Logger;
 
 	constructor({
-		repository,
+		allowedSenders,
 		receipts,
 		mailbox,
 		blobStore,
 		logger,
 	}: EmailServiceDeps) {
-		this.repository = repository;
+		this.allowedSenders = allowedSenders;
 		this.receipts = receipts;
 		this.mailbox = mailbox;
 		this.blobStore = blobStore;
@@ -107,11 +107,11 @@ export class EmailService {
 	 */
 	async ingest(event: InboundEmailEvent): Promise<IngestResult> {
 		const from = parseFromAddress(event.data.from);
-		const sender = await this.repository.findAllowedSender(from);
+		const memberId = await this.allowedSenders.memberFor(from);
 
 		// Design decision 8: dropped, not quarantined — and dropped here, before any
 		// fetch, blob write or model call, so unknown mail costs nothing.
-		if (!sender) {
+		if (!memberId) {
 			this.logger.info("inbound email dropped: unknown sender", {
 				"email.id": event.data.email_id,
 				"email.from_domain": fromDomain(from),
@@ -122,7 +122,7 @@ export class EmailService {
 		// Member on baggage so the blob writes, the mint and their logs carry who the
 		// receipt is for. The inbound span opened earlier, so it never gets it.
 		return context.with(
-			setBaggage({ [BaggageKey.MemberId]: sender.userId }),
+			setBaggage({ [BaggageKey.MemberId]: memberId }),
 			async (): Promise<IngestResult> => {
 				const qualifying = event.data.attachments
 					.filter(isReceiptAttachment)
@@ -143,7 +143,7 @@ export class EmailService {
 				}
 
 				const receiptIds = await this.receipts.createFromEmail(
-					sender.userId,
+					memberId,
 					stored,
 				);
 				this.logger.info("inbound email ingested", {

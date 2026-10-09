@@ -166,9 +166,9 @@ describe("architecture (adr022)", () => {
 			violationsIn(file, source).map((v) => v.rule);
 
 		it("allows an own-domain schema, flags another domain's", () => {
-			const file = "src/server/email/email.repository.ts";
+			const file = "src/server/allowed-senders/allowed-senders.repository.ts";
 			expect(
-				rulesIn(file, 'import { a } from "./allowed-sender.schema";'),
+				rulesIn(file, 'import { a } from "./allowed-senders.schema";'),
 			).toEqual([]);
 			expect(
 				rulesIn(file, 'import { r } from "~/server/receipts/receipts.schema";'),

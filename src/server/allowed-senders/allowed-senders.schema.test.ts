@@ -2,7 +2,7 @@ import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { allowedSenders } from "./allowed-sender.schema";
+import { allowedSenders } from "./allowed-senders.schema";
 
 const cols = getTableColumns(allowedSenders);
 const config = getTableConfig(allowedSenders);
