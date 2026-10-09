@@ -21,8 +21,10 @@ State bucket `139035987018-terraform-state` (S3 lockfile locking). Both IdPs (`o
 assume <profile>                      # exports AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN
 export VERCEL_API_TOKEN=<token>       # same value as the VERCEL_TOKEN GitHub secret
 export POSTHOG_API_KEY=<key>          # same value as the POSTHOG_PERSONAL_API_KEY GitHub secret; personal key, project 609915 only
+export TF_VAR_posthog_key=<phc_token> # same value as the POSTHOG_KEY GitHub secret
+export TF_VAR_posthog_project_id=609915 # the POSTHOG_PROJECT_ID GitHub var; also the provider's project
 make plan env=preview                 # or env=production
-make apply env=preview TF_VAR_deploy_ref=<branch> TF_VAR_deploy_sha=$(git rev-parse HEAD)
+make apply env=preview
 make fmt-check                        # CI gate (quality-control.yml)
 make force-unlock env=preview ID=<id> # only after a killed apply left the lock
 ```
