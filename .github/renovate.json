@@ -4,5 +4,14 @@
 	"schedule": ["* 9-16 * * 1-5"],
 	"timezone": "Australia/Sydney",
 	"prConcurrentLimit": 10,
-	"packageRules": []
+	"packageRules": [
+		{
+			"description": [
+				"Hold pnpm on v10: Vercel builds with package.json#packageManager, and Vercel only documents pnpm 6-10 (https://vercel.com/docs/package-managers).",
+				"pnpm 11+ is unsupported there (https://github.com/vercel/vercel/issues/17434). Remove this rule once Vercel lists pnpm 11+; migration steps are in the closing comment of https://github.com/samjmarshall/personal-finance/pull/30."
+			],
+			"matchPackageNames": ["pnpm"],
+			"allowedVersions": "<11.0.0"
+		}
+	]
 }
