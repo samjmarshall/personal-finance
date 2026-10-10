@@ -1,7 +1,7 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-10-02'
+Date: '2026-10-10'
 # prettier-ignore
 ---
 
@@ -15,7 +15,7 @@ Design: [2026-10-02 Loading states and Partial Prerendering](../../thoughts/desi
 
 The loading-states design turns on `cacheComponents` so each route ships a prerendered static shell (nav + skeletons) and streams data into it (PPR). Under `cacheComponents`, a runtime read such as `headers()` outside `<Suspense>` fails the build, and `loading.tsx` does not cover runtime reads in its own layout (`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/loading.md:88-93`). A session read at the top of the layout therefore either blocks the whole shell or must move.
 
-The data is already protected below the layout. `protectedProcedure` (`src/server/api/trpc.ts:190`) throws `UNAUTHORIZED` without a session, and the receipt route handlers under `src/app/api/receipts/` check the session themselves. The layout check decides what a signed-out visitor *sees*, not what data they can reach.
+The data is already protected below the layout. `protectedProcedure` (`src/server/api/trpc.ts:197`) throws `UNAUTHORIZED` without a session, and the receipt route handlers under `src/app/api/receipts/` check the session themselves. The layout check decides what a signed-out visitor *sees*, not what data they can reach.
 
 Where does the dashboard decide "signed out → `/sign-in`", so that the shell can prerender and a signed-out visitor never sees the app?
 
@@ -113,9 +113,13 @@ sequenceDiagram
 - Bad, because every matched request, prefetches included, pays a Redis read (Postgres on a miss), on top of the reads the render and tRPC already make.
 - Bad, because it duplicates `protectedProcedure`'s job in a place the Next docs call unreliable as the only check.
 
-## Open Questions
+## Resolved Questions
 
-- A pending prefetch that rejects streams to the client as a dehydrated error, which TanStack may redact. Does the `UNAUTHORIZED` → `/sign-in` mapping still fire on that path? If not, `NavMember`'s redirect is the only one, and option 1's stale-cookie flash comes back. Resolve during Stage A.
+- A pending prefetch that rejects streams to the client as a dehydrated error, which TanStack may redact. Does the `UNAUTHORIZED` → `/sign-in` mapping still fire on that path? **Yes, resolved in Stage A (loading-states plan, Phase 2):**
+  - Redaction is off (`dehydrate.shouldRedactErrors: () => false` in `src/trpc/query-client.ts`), so the rejected prefetch reaches the client with its `NEXT_REDIRECT` digest and `catchError` passes it to the router. Flight still strips error messages in production.
+  - Auth errors aren't retried. The query `retry` skips `UNAUTHORIZED` and `NEXT_REDIRECT` errors (`isAuthError`, `src/trpc/auth-errors.ts`), so the redirect doesn't wait out about 7s of backed-off retries.
+  - `NavMember`'s redirect stays as the backstop.
+  - Verified with a revoked session after the 60s `cookieCache`. Every dashboard route, on a hard load and on a client navigation into it, lands on `/sign-in` with no "Couldn't load" card. A click from `/` to `/expenses` soft-redirects with no full reload.
 
 ## Links
 

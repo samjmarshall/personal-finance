@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Ready for Review - Phase 1 of 7
+status: Ready for Review - Phase 2 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -233,15 +233,15 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] Signed out, `curl -I https://personal-finance.localhost/expenses` returns 307 to `/sign-in`, and `curl -I https://personal-finance.localhost/sign-in` returns 200
-- [ ] On the `local/<branch>` database, delete a session you created (its row and Redis key), then wait out the 60s `cookieCache`. Every dashboard route then lands on `/sign-in` with no "Couldn't load" card, on both a hard load and a client navigation.
-- [ ] A signed-in Member who opens `/sign-in` lands on `/`
-- [ ] The desktop nav paints at once; the member block shows its skeleton, then the name and Sign out
-- [ ] `/design-review`
-- [ ] `/security-review`
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes
+- [x] Signed out, `curl -I https://personal-finance.localhost/expenses` returns 307 to `/sign-in`, and `curl -I https://personal-finance.localhost/sign-in` returns 200
+- [x] On the `local/<branch>` database, delete a session you created (its row and Redis key), then wait out the 60s `cookieCache`. Every dashboard route then lands on `/sign-in` with no "Couldn't load" card, on both a hard load and a client navigation.
+- [x] A signed-in Member who opens `/sign-in` lands on `/`
+- [x] The desktop nav paints at once; the member block shows its skeleton, then the name and Sign out
+- [x] `/design-review`
+- [x] `/security-review`
 
 ## Phase 3: Dashboard home
 
@@ -339,6 +339,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - [ ] Changing search, sort, page or a filter on `/transactions` and `/receipts` dims the rows and never flashes a skeleton
 - [ ] Stepping the period on `/expenses/unplanned` dims the rows. The first load shows one `TableSkeleton` under the real header and period controls, with no full-page skeleton flash.
 - [ ] A first load of `/receipts` with receipts in the database shows rows, never "No receipts yet" (Bug 1)
+- [ ] A stale-session client nav to `/receipts` lands on `/sign-in` with no "No receipts yet" flash
 - [ ] With a pending receipt, `/receipts` still polls every 3s
 - [ ] Forcing `receipt.get` to throw shows the error state with Try again, not an endless spinner (Bug 2)
 - [ ] A failed confirm-match or item attribution shows exactly one toast (Bug 3)
@@ -433,8 +434,8 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 
 - Design doc: `thoughts/designs/2026-10-02-loading-states-and-ppr.md` (carries `## Related ADRs`)
 - ADRs:
-  - `docs/adr/adr027-async-boundary-for-loading-regions.md` (Proposed), implemented by Phase 1
-  - `docs/adr/adr026-optimistic-proxy-auth-gate.md` (Proposed), implemented by Phase 2, which also resolves its open question
+  - `docs/adr/adr027-async-boundary-for-loading-regions.md` (Accepted), implemented by Phase 1
+  - `docs/adr/adr026-optimistic-proxy-auth-gate.md` (Accepted), implemented by Phase 2, which also resolves its open question
 - Composes with: adr001 (`QueryClient` as a global client), adr006 (session cache), adr008 (shadcn on Base UI), adr020 (no browser SDK), adr021 (RSC caller)
 - Next 16.4 docs, under `node_modules/next/dist/docs/01-app/`:
   - `03-api-reference/04-functions/catchError.md`
