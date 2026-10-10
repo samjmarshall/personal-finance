@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReceiptViewer } from "./receipt-viewer";
@@ -26,7 +26,7 @@ function renderViewer({
 	return { ...view, onOpenChange, props };
 }
 
-// jsdom's own value isn't a browser's, so each PDF case picks one.
+// jsdom lacks this flag, so each PDF case sets one.
 function stubPdfViewer(value: boolean) {
 	Object.defineProperty(navigator, "pdfViewerEnabled", {
 		configurable: true,
@@ -113,6 +113,21 @@ describe("ReceiptViewer", () => {
 		expect(link).toHaveAttribute("href", "/api/receipts/7/image");
 		expect(link).toHaveAttribute("target", "_blank");
 	});
+
+	// Keys pressed inside a frame never reach the dialog, so Escape would do nothing.
+	it.each([
+		["pdf", "application/pdf", "Receipt PDF"],
+		["email", "text/html", "Emailed receipt"],
+	])(
+		"%s: opens with focus on the dialog, not inside the frame",
+		async (_kind, contentType, title) => {
+			stubPdfViewer(true);
+			renderViewer({ contentType });
+
+			await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
+			expect(screen.getByTitle(title)).not.toHaveFocus();
+		},
+	);
 
 	it("pdf: with no in-browser viewer, says why and offers the new-tab link", () => {
 		stubPdfViewer(false);

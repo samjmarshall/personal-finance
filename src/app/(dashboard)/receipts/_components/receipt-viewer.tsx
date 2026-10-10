@@ -6,7 +6,7 @@ import {
 	SquareArrowOutUpRight,
 	TriangleAlert,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import { buttonVariants } from "~/components/ui/button";
 import {
@@ -50,6 +50,10 @@ const PLACEHOLDER =
 const SURFACE =
 	"relative rounded-lg border border-border bg-muted/40 overflow-hidden";
 
+// Leaves room for the title, link and padding, so a short screen scrolls once, not twice.
+const FIT_HEIGHT = "h-[min(75dvh,calc(100dvh-12rem))]";
+const FIT_MAX_HEIGHT = "max-h-[min(75dvh,calc(100dvh-12rem))]";
+
 /**
  * The original receipt, full size. An iframe can't expose its HTTP status, so a
  * missing PDF or email body shows the route's plain "Not found" inside the frame;
@@ -70,10 +74,17 @@ export function ReceiptViewer({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const kind = receiptMediaKind(contentType);
+	const popupRef = useRef<HTMLDivElement>(null);
 
 	return (
 		<Dialog onOpenChange={onOpenChange} open={open}>
-			<DialogContent className="sm:max-w-5xl">
+			<DialogContent
+				className="sm:max-w-5xl"
+				// Keys pressed inside a frame never reach the dialog, so opening focus
+				// on the frame would leave Escape dead.
+				initialFocus={kind === "image" ? true : popupRef}
+				ref={popupRef}
+			>
 				<DialogHeader>
 					{/* pr-8 keeps a long vendor name clear of the corner Close button. */}
 					<DialogTitle className="pr-8">{receiptTitle(vendor)}</DialogTitle>
@@ -125,7 +136,7 @@ function ViewerSurface({
 					{/* Not sandboxed: Chrome's PDF viewer won't run in a sandboxed frame,
 					    and these are the same bytes the link opens top-level. */}
 					<iframe
-						className="block h-[75dvh] w-full"
+						className={cn("block w-full", FIT_HEIGHT)}
 						onLoad={onLoad}
 						src={src}
 						title="Receipt PDF"
@@ -142,9 +153,14 @@ function ViewerSurface({
 				<div className={cn(SURFACE, "w-full")}>
 					{!loaded && <LoadingOverlay />}
 					{/* Untrusted vendor markup (adr019): empty sandbox = opaque origin, no
-					    script, no top navigation. White: e-receipts assume it, even in dark. */}
+					    script, no top navigation. White: e-receipts assume it, even in dark,
+					    so it stays hidden while loading rather than flash a blank white box. */}
 					<iframe
-						className="block h-[75dvh] w-full bg-white"
+						className={cn(
+							"block w-full bg-white",
+							FIT_HEIGHT,
+							!loaded && "invisible",
+						)}
 						onLoad={onLoad}
 						referrerPolicy="no-referrer"
 						sandbox=""
@@ -163,7 +179,8 @@ function ViewerSurface({
 				aria-label="Receipt image"
 				className={cn(
 					SURFACE,
-					"max-h-[75dvh] min-h-48 w-full overflow-auto outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+					FIT_MAX_HEIGHT,
+					"min-h-48 w-full overflow-auto outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
 				)}
 				// biome-ignore lint/a11y/noNoninteractiveTabindex: WCAG 2.1.1 — arrow keys and PageDown can only scroll a tall receipt from focus, and the dialog's focus trap skips a scroller with no tabindex
 				tabIndex={0}
