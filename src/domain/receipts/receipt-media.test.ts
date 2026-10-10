@@ -4,6 +4,7 @@ import {
 	isReceiptFileType,
 	RECEIPT_FILE_TYPES,
 	receiptMediaKind,
+	receiptUploadPrefix,
 } from "./receipt-media";
 
 describe("receiptMediaKind", () => {
@@ -47,5 +48,14 @@ describe("isReceiptFileType", () => {
 		[null, false],
 	])("%s → %s", (type, ok) => {
 		expect(isReceiptFileType(type)).toBe(ok);
+	});
+});
+
+describe("receiptUploadPrefix", () => {
+	it.each([
+		["", "receipts/upload/"],
+		["local/b/", "local/b/receipts/upload/"],
+	])("puts uploads for %j under %j", (blobPathPrefix, expected) => {
+		expect(receiptUploadPrefix(blobPathPrefix)).toBe(expected);
 	});
 });

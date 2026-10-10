@@ -1,11 +1,13 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 import pkg from "../package.json" with { type: "json" };
+import { isBranchPrefix } from "./server/blob-store/blob-prefix";
 
 /**
  * Log severity levels (debug→error). Defined here as the single source: env.ts is
  * compiled by Next's config transpiler (next.config.ts imports it), which can't
- * resolve a deep `~`/TS import out of it — so env.ts imports nothing internal.
+ * resolve a deep `~` import out of it — so env.ts imports internal files only by
+ * relative path, and only ones with no imports of their own (`blob-prefix.ts`).
  * `logger.ts` re-exports this as the public logging name for logging code.
  */
 export enum LogLevel {
@@ -56,6 +58,26 @@ export const env = createEnv({
 		 * prod; set locally to exercise uploads.
 		 */
 		BLOB_READ_WRITE_TOKEN: requiredInProd(z.string()),
+		/**
+		 * Names the same Neon branch as DATABASE_URL (adr028): `local/<branch>/` or
+		 * `preview/<branch>/`, else `""`. Forced `""` on production. A preview without
+		 * one would delete production's files, so it fails the build.
+		 */
+		BLOB_PATH_PREFIX: z.preprocess(
+			(str) => (process.env.VERCEL_ENV === "production" ? "" : (str ?? "")),
+			z
+				.string()
+				.refine(
+					(prefix) => prefix === "" || isBranchPrefix(prefix),
+					"must be local/<branch>/ or preview/<branch>/",
+				)
+				.refine(
+					(prefix) =>
+						process.env.VERCEL_ENV !== "preview" ||
+						prefix.startsWith("preview/"),
+					"must be preview/<branch>/ on a preview deploy",
+				),
+		),
 		DATABASE_URL: z.url(),
 		/**
 		 * Direct (non-PgBouncer) connection, used by drizzle-kit for DDL.
@@ -143,6 +165,7 @@ export const env = createEnv({
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
 		BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+		BLOB_PATH_PREFIX: process.env.BLOB_PATH_PREFIX,
 		DATABASE_URL: process.env.DATABASE_URL,
 		DATABASE_URL_UNPOOLED: process.env.DATABASE_URL_UNPOOLED,
 		DEPLOYMENT_URL: process.env.DEPLOYMENT_URL,

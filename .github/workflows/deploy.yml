@@ -185,6 +185,9 @@ jobs:
       # --meta githubCommitRef is load-bearing: the Neon integration names the DB
       # branch preview/<ref> after it and teardown.yml deletes by it. Production
       # stages un-aliased (--prod --skip-domain); promote moves the domain later.
+      # A preview's Blob prefix names the same preview/<ref> as its DB (adr028), so
+      # its deletes skip production's files. --build-env too: src/env.ts validates
+      # it at build.
       - name: Vercel deploy
         id: deploy
         run: |
@@ -193,6 +196,10 @@ jobs:
             --meta "githubCommitSha=${GITHUB_SHA}")
           if [ "$ENVIRONMENT" = "production" ]; then
             args+=(--prod --skip-domain)
+          else
+            blob_prefix="preview/${GITHUB_REF_NAME}/"
+            args+=(--env "BLOB_PATH_PREFIX=${blob_prefix}" \
+              --build-env "BLOB_PATH_PREFIX=${blob_prefix}")
           fi
           url="$(pnpm dlx "$VERCEL_CLI" "${args[@]}" | tail -n1)"
           echo "deployment_url=$url" >> "$GITHUB_OUTPUT"

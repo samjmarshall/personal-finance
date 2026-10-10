@@ -18,7 +18,12 @@ const ACCEPT =
 // file goes straight to Blob (token minted by /api/receipts/upload), then
 // receipt.create persists the row + fires the worker. The row is created here, not
 // in Blob's completion webhook, which never reaches localhost.
-export function ReceiptUpload() {
+export function ReceiptUpload({
+	uploadPrefix,
+}: {
+	/** The server refuses any other pathname (adr028). */
+	uploadPrefix: string;
+}) {
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [status, setStatus] = useState<"idle" | "processing" | "uploading">(
 		"idle",
@@ -58,7 +63,7 @@ export function ReceiptUpload() {
 		setStatus("uploading");
 		let blob: Awaited<ReturnType<typeof upload>>;
 		try {
-			blob = await upload(ready.name, ready, {
+			blob = await upload(`${uploadPrefix}${ready.name}`, ready, {
 				access: "private",
 				handleUploadUrl: "/api/receipts/upload",
 				contentType: ready.type,

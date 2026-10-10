@@ -26,7 +26,7 @@ const outboxController = new OutboxInngestController({
 const receiptExtractionService = new ReceiptExtractionService({
 	repository: new DrizzleReceiptExtractionRepository({ db }),
 	categories: categoriesService,
-	blobStore: new VercelBlobStore(),
+	blobStore: new VercelBlobStore({ prefix: env.BLOB_PATH_PREFIX }),
 	// The only place the receipts tier is bound to Bedrock; the service stays
 	// provider-agnostic behind `languageModel` (bedrock-invocation.md).
 	languageModel: bedrock(env.BEDROCK_RECEIPT_MODEL),

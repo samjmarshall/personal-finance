@@ -105,14 +105,17 @@ an id.
 
 ## Errors
 
-- Services throw `NotFoundError` / `ConflictError` (`src/server/errors/`), never
-  `TRPCError`. Nothing under `src/server/errors/` imports tRPC.
+- Services throw `NotFoundError` / `ConflictError` / `InvalidInputError`
+  (`src/server/errors/`), never `TRPCError`. Nothing under `src/server/errors/`
+  imports tRPC. `InvalidInputError` is for input a DTO can't check alone (it
+  depends on server config, such as the upload pathname prefix).
 - A service turns a pg violation into `ConflictError` with `isPgViolation` /
   `rethrowFkConflict`. A missing row is `NotFoundError`; `assertRow` throws a plain
   `Error`, which stays `INTERNAL_SERVER_ERROR`.
 - Repositories let driver errors bubble.
 - The tRPC error-mapping middleware (`src/server/api/trpc.ts`) owns the code:
-  `NotFoundError` → `NOT_FOUND`, `ConflictError` → `CONFLICT`, message and cause kept.
+  `NotFoundError` → `NOT_FOUND`, `ConflictError` → `CONFLICT`,
+  `InvalidInputError` → `BAD_REQUEST`, message and cause kept.
   Anything else passes through unchanged.
 
 ## Service split rule

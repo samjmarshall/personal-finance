@@ -12,7 +12,11 @@ import type { MembersService } from "~/server/auth/members.service";
 import type { BlobStore } from "~/server/blob-store/blob-store";
 import type { ClientUploads } from "~/server/blob-store/client-uploads";
 import type { CategoriesService } from "~/server/categories/categories.service";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
 import type { TransactionsService } from "~/server/transactions/transactions.service";
 import {
@@ -55,6 +59,8 @@ interface Staged {
 	projectId?: string;
 }
 
+const UPLOAD_PREFIX = "local/b/receipts/upload/";
+
 function serviceWith(staged: Staged = {}) {
 	return new ReceiptsService({
 		repository: {
@@ -82,6 +88,7 @@ function serviceWith(staged: Staged = {}) {
 		categories: { namesByIds: unstaged, ...staged.categories },
 		blobStore: { delete: unstaged, stream: unstaged, ...staged.blobStore },
 		uploads: { answer: unstaged, ...staged.uploads },
+		uploadPathPrefix: UPLOAD_PREFIX,
 		posthogUi: {
 			uiHost: "https://us.posthog.com",
 			projectId: "projectId" in staged ? staged.projectId : "123",
@@ -124,8 +131,8 @@ const ITEM: ReceiptItem = {
 };
 
 const UPLOAD = {
-	blobUrl: RECEIPT.blobUrl,
-	blobPathname: RECEIPT.blobPathname,
+	blobUrl: `https://blob.vercel-storage.com/${UPLOAD_PREFIX}receipt-abc.jpg`,
+	blobPathname: `${UPLOAD_PREFIX}receipt-abc.jpg`,
 	contentType: "image/jpeg",
 };
 
@@ -168,6 +175,21 @@ describe("create", () => {
 
 		expectPlainError(thrown, "Failed to create receipt.");
 	});
+
+	// Deleting a row frees its file, so a row pointing at another Receipt's file
+	// (an email one, or another branch's) would delete that file with it.
+	it.each(["receipts/email/a.pdf", "local/other/receipts/upload/a.jpg"])(
+		"refuses a file outside the upload prefix (%j) and inserts nothing",
+		async (blobPathname) => {
+			const { method, calls } = recorder([RECEIPT]);
+			const service = serviceWith({ repository: { insertPending: method } });
+
+			await expect(
+				service.create("member-1", { ...UPLOAD, blobPathname }),
+			).rejects.toThrow(InvalidInputError);
+			expect(calls).toEqual([]);
+		},
+	);
 });
 
 describe("createFromEmail", () => {
@@ -684,7 +706,7 @@ describe("answerUpload", () => {
 	const event = {
 		type: "blob.generate-client-token",
 		payload: {
-			pathname: "receipts/a.jpg",
+			pathname: `${UPLOAD_PREFIX}a.jpg`,
 			callbackUrl: "https://ledger.test/api/receipts/upload",
 			clientPayload: null,
 			multipart: false,
@@ -694,9 +716,12 @@ describe("answerUpload", () => {
 
 	// The fake runs the grant the way Blob does, so the policy is observable.
 	const grantRunner =
-		(answered: unknown[]): ClientUploads["answer"] =>
+		(
+			answered: unknown[],
+			pathname = `${UPLOAD_PREFIX}a.jpg`,
+		): ClientUploads["answer"] =>
 		async (_request, _event, grant) => {
-			answered.push(await grant("receipts/a.jpg"));
+			answered.push(await grant(pathname));
 			return { type: "blob.generate-client-token", clientToken: "tok" };
 		};
 
@@ -733,13 +758,26 @@ describe("answerUpload", () => {
 		]);
 	});
 
-	it("refuses the grant when nobody is signed in", async () => {
+	// Signed-out must stay a 401 whatever the path, so the member check comes first.
+	it("refuses the grant when nobody is signed in, before checking the path", async () => {
 		const service = serviceWith({
-			uploads: { answer: grantRunner([]) },
+			uploads: { answer: grantRunner([], "receipts/a.jpg") },
 		});
 
 		await expect(
 			service.answerUpload(request, event, undefined),
 		).rejects.toThrow(UploadUnauthorizedError);
+	});
+
+	it("refuses a token for a path outside the upload prefix", async () => {
+		const grants: unknown[] = [];
+		const service = serviceWith({
+			uploads: { answer: grantRunner(grants, "receipts/email/a.pdf") },
+		});
+
+		await expect(
+			service.answerUpload(request, event, "member-1"),
+		).rejects.toThrow(InvalidInputError);
+		expect(grants).toEqual([]);
 	});
 });

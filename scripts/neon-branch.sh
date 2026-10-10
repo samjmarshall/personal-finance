@@ -6,8 +6,8 @@ set -euo pipefail
 #
 # Usage:
 #   scripts/neon-branch.sh create         Create/reuse branch, update .env, migrate
-#   scripts/neon-branch.sh delete         Delete current branch's Neon DB branch
-#   scripts/neon-branch.sh delete --all   Delete all local/* Neon branches
+#   scripts/neon-branch.sh delete         Delete current branch's Neon DB branch and Blob files
+#   scripts/neon-branch.sh delete --all   Delete all local/* Neon branches and Blob files
 #   scripts/neon-branch.sh status         List all local/* branches
 # ---------------------------------------------------------------------------
 
@@ -126,9 +126,24 @@ neon_api() {
   echo "$body_out"
 }
 
+# Empty a Blob prefix (adr028). The caller runs it before the Neon delete: a
+# failure aborts with the Neon branch still there, so a re-run retries both.
+delete_branch_blobs() {
+  local prefix="$1"
+  local token="${BLOB_READ_WRITE_TOKEN:-$(read_env_var BLOB_READ_WRITE_TOKEN)}"
+
+  if [[ -z "$token" ]]; then
+    log "Skipping blob cleanup for $prefix — BLOB_READ_WRITE_TOKEN not set"
+    return 0
+  fi
+  (cd "$REPO_ROOT" && BLOB_READ_WRITE_TOKEN="$token" node scripts/blob-prefix-delete.ts "$prefix")
+}
+
 # Resolve connection URIs for a branch ID, update .env
+# The Blob prefix travels with the DB URL (adr028): a branch DB with an empty
+# prefix would delete the production files its copied rows point at.
 apply_branch_urls() {
-  local branch_id="$1"
+  local branch_id="$1" blob_prefix="$2"
 
   local pooled_uri unpooled_uri
   pooled_uri=$(neon_api GET "/connection_uri?branch_id=${branch_id}&role_name=neondb_owner&database_name=neondb&pooled=true" | jq -r '.uri')
@@ -136,7 +151,8 @@ apply_branch_urls() {
 
   update_env_var "DATABASE_URL" "$pooled_uri"
   update_env_var "DATABASE_URL_UNPOOLED" "$unpooled_uri"
-  log ".env updated — DATABASE_URL=$(mask_url "$pooled_uri")"
+  update_env_var "BLOB_PATH_PREFIX" "$blob_prefix"
+  log ".env updated — DATABASE_URL=$(mask_url "$pooled_uri") BLOB_PATH_PREFIX=\"$blob_prefix\""
 }
 
 # ── Load credentials ──────────────────────────────────────────────────────
@@ -174,7 +190,7 @@ cmd_create() {
     branches=$(neon_api GET "/branches")
     primary_id=$(echo "$branches" | jq -r '.branches[] | select(.primary == true) | .id')
     if [[ -n "$primary_id" ]]; then
-      apply_branch_urls "$primary_id"
+      apply_branch_urls "$primary_id" ""
     fi
     exit 0
   fi
@@ -214,7 +230,9 @@ cmd_create() {
     fi
   fi
 
-  apply_branch_urls "$branch_id"
+  # The full git branch, not the 128-char Neon name: Blob has no length limit
+  # and teardown.yml deletes blobs by the full name.
+  apply_branch_urls "$branch_id" "${PREFIX}/${git_branch}/"
 
   # Run migrations
   log "Running migrations..."
@@ -232,6 +250,7 @@ cmd_delete() {
   branches=$(neon_api GET "/branches")
 
   if $delete_all; then
+    delete_branch_blobs "${PREFIX}/"
     local ids
     ids=$(echo "$branches" | jq -r --arg prefix "${PREFIX}/" \
       '.branches[] | select(.name | startswith($prefix)) | .id')
@@ -253,6 +272,8 @@ cmd_delete() {
     local git_branch
     git_branch=$(git branch --show-current)
     local neon_branch_name="${PREFIX}/${git_branch}"
+    # Before the not-found exit: files can outlive a Neon branch deleted elsewhere.
+    delete_branch_blobs "${PREFIX}/${git_branch}/"
     local branch_id
     branch_id=$(echo "$branches" | jq -r --arg name "$neon_branch_name" \
       '.branches[] | select(.name == $name) | .id')
@@ -270,7 +291,7 @@ cmd_delete() {
   local primary_id
   primary_id=$(echo "$branches" | jq -r '.branches[] | select(.primary == true) | .id')
   if [[ -n "$primary_id" ]]; then
-    apply_branch_urls "$primary_id"
+    apply_branch_urls "$primary_id" ""
     log "Restored .env to production DB"
   fi
 }
@@ -327,8 +348,8 @@ case "${1:-}" in
   *)
     echo "Usage: scripts/neon-branch.sh {create|delete|status}"
     echo "  create             Create/reuse Neon branch for current git branch and migrate"
-    echo "  delete             Delete current branch's Neon branch"
-    echo "  delete --all       Delete all ${PREFIX}/* Neon branches"
+    echo "  delete             Delete current branch's Neon branch and Blob files"
+    echo "  delete --all       Delete all ${PREFIX}/* Neon branches and Blob files"
     echo "  status             List all ${PREFIX}/* Neon branches"
     exit 1
     ;;

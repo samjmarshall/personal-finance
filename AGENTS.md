@@ -34,11 +34,11 @@ Never use `drizzle-kit push`. Always generate and run git tracked migration file
 On any branch except `main`, local dev uses a throwaway Neon branch `local/<git-branch>` (made by `scripts/neon-branch.sh` via the `post-checkout` hook). Create, update and delete freely there.
 
 - Check first: `make db_branch_status` must show `*` on `local/<branch>`. On `main`, `.env` points at production, so no writes.
-- Vercel Blob is not branched. Rows copied from production share production's files, so deleting a receipt there deletes production's file. Only delete rows you made on the branch.
+- Vercel Blob is one store for every environment. New files go under `local/<branch>/` (`BLOB_PATH_PREFIX`), and deletes skip files outside it, so deleting any receipt on a branch is safe: an inherited row's production file stays. `make db_branch_delete` empties the prefix.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 

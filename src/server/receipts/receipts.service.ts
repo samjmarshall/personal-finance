@@ -17,7 +17,11 @@ import type { BlobStore, StreamedBlob } from "~/server/blob-store/blob-store";
 import type { ClientUploads } from "~/server/blob-store/client-uploads";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { assertRow } from "~/server/errors/assert-row";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
@@ -48,6 +52,7 @@ export class UploadUnauthorizedError extends Error {
 }
 
 const NOT_FOUND_MESSAGE = "Receipt not found.";
+const UPLOAD_PATH_MESSAGE = "Receipt file is outside the upload folder.";
 const ITEM_NOT_FOUND_MESSAGE = "Receipt item not found.";
 // Picking an Expense or Category can fail if another tab just deleted it.
 const ITEM_FK_CONFLICT_MESSAGE =
@@ -79,6 +84,8 @@ interface ReceiptsServiceDeps {
 	categories: Pick<CategoriesService, "namesByIds">;
 	blobStore: Pick<BlobStore, "delete" | "stream">;
 	uploads: ClientUploads;
+	/** `<BLOB_PATH_PREFIX>receipts/upload/`: the only place a browser upload may land. */
+	uploadPathPrefix: string;
 	posthogUi: PosthogUiConfig;
 }
 
@@ -93,6 +100,7 @@ export class ReceiptsService {
 	private readonly categories: Pick<CategoriesService, "namesByIds">;
 	private readonly blobStore: Pick<BlobStore, "delete" | "stream">;
 	private readonly uploads: ClientUploads;
+	private readonly uploadPathPrefix: string;
 	private readonly posthogUi: PosthogUiConfig;
 
 	constructor({
@@ -103,6 +111,7 @@ export class ReceiptsService {
 		categories,
 		blobStore,
 		uploads,
+		uploadPathPrefix,
 		posthogUi,
 	}: ReceiptsServiceDeps) {
 		this.repository = repository;
@@ -112,12 +121,15 @@ export class ReceiptsService {
 		this.categories = categories;
 		this.blobStore = blobStore;
 		this.uploads = uploads;
+		this.uploadPathPrefix = uploadPathPrefix;
 		this.posthogUi = posthogUi;
 	}
 
 	// Client uploads the file first. Owner and channel come from the server, never
-	// the client.
+	// the client. Deleting the row deletes its file, so a client-picked pathname
+	// outside the upload prefix could take another Receipt's file down with it.
 	async create(memberId: string, input: ReceiptCreateInput): Promise<Receipt> {
+		this.assertUploadPath(input.blobPathname);
 		const [row] = await this.repository.insertPending(
 			[
 				{
@@ -250,8 +262,9 @@ export class ReceiptsService {
 		event: HandleUploadBody,
 		memberId: string | undefined,
 	): Promise<unknown> {
-		return this.uploads.answer(request, event, async () => {
+		return this.uploads.answer(request, event, async (pathname) => {
 			if (memberId === undefined) throw new UploadUnauthorizedError();
+			this.assertUploadPath(pathname);
 			return {
 				allowedContentTypes: [...RECEIPT_FILE_TYPES],
 				maximumSizeInBytes: MAX_UPLOAD_BYTES,
@@ -335,5 +348,11 @@ export class ReceiptsService {
 			);
 		if (!row) throw new NotFoundError(ITEM_NOT_FOUND_MESSAGE);
 		return row;
+	}
+
+	private assertUploadPath(pathname: string): void {
+		if (!pathname.startsWith(this.uploadPathPrefix)) {
+			throw new InvalidInputError(UPLOAD_PATH_MESSAGE);
+		}
 	}
 }

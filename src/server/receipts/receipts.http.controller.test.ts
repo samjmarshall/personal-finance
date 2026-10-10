@@ -14,7 +14,10 @@ import {
 	vi,
 } from "vitest";
 import type { SessionReader } from "~/server/auth/session-reader";
-import { NotFoundError } from "~/server/errors/domain-errors";
+import {
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import type {
 	LogAttributes,
 	Logger,
@@ -362,6 +365,24 @@ describe("ReceiptsHttpController.upload", () => {
 		expect(logs[0]).toMatchObject({
 			level: "warn",
 			msg: "blob callback rejected",
+		});
+	});
+
+	it("400s a token request outside the upload prefix with a warn log and an errored span", async () => {
+		const { controller, answerUpload, logs } = harness();
+		answerUpload.mockRejectedValueOnce(new InvalidInputError("outside"));
+
+		const response = await post(controller);
+
+		expect(response.status).toBe(400);
+		await expect(response.json()).resolves.toEqual({ error: "outside" });
+		const [span] = exporter.getFinishedSpans();
+		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
+		expect(span?.attributes["http.response.status_code"]).toBe(400);
+		expect(logs).toHaveLength(1);
+		expect(logs[0]).toMatchObject({
+			level: "warn",
+			msg: "blob token mint rejected",
 		});
 	});
 

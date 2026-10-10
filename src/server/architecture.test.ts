@@ -12,6 +12,7 @@ const RULES = {
 	3: "an entry point does data access",
 	4: "the relational db.query API reaches every domain's tables",
 	5: "a non-composition-root imports a shared module instance",
+	6: "a file outside src/server/blob-store/ imports @vercel/blob",
 } as const;
 
 type Rule = keyof typeof RULES;
@@ -65,6 +66,14 @@ const isDrizzle = (specifier: string) =>
 	specifier === "drizzle-orm" || specifier.startsWith("drizzle-orm/");
 
 function ruleBroken(file: string, specifier: string): Rule | undefined {
+	// adr028: the adapter's prefix guard is the only thing keeping a branch off
+	// production's files, so nothing may reach `put` / `del` around it.
+	if (
+		specifier === "@vercel/blob" &&
+		!file.startsWith("src/server/blob-store/")
+	) {
+		return 6;
+	}
 	const target = resolve(file, specifier);
 	const crossDomain = domainOf(target) !== domainOf(file);
 	const isSchema = target.endsWith(".schema");
@@ -245,6 +254,21 @@ describe("architecture (adr022)", () => {
 				'const { db } = await import(\n\t"~/server/db"\n);',
 			);
 			expect(found).toMatchObject([{ rule: 3, line: 2 }]);
+		});
+
+		it("lets only the blob-store adapter import @vercel/blob, not /client", () => {
+			const sdk = 'import { del } from "@vercel/blob";';
+			expect(rulesIn("src/server/blob-store/blob-store.ts", sdk)).toEqual([]);
+			expect(rulesIn("src/server/receipts/receipts.service.ts", sdk)).toEqual([
+				6,
+			]);
+			expect(rulesIn("src/app/api/x/route.ts", sdk)).toEqual([6]);
+			expect(
+				rulesIn(
+					"src/app/(dashboard)/x/upload.tsx",
+					'import { upload } from "@vercel/blob/client";',
+				),
+			).toEqual([]);
 		});
 	});
 });

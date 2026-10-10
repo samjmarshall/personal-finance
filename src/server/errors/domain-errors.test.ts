@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { ConflictError, NotFoundError } from "./domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "./domain-errors";
 
 describe.each([
 	["NotFoundError", NotFoundError],
 	["ConflictError", ConflictError],
+	["InvalidInputError", InvalidInputError],
 ] as const)("%s", (name, DomainError) => {
 	it("is an Error carrying the message and its own name", () => {
 		const error = new DomainError("gone");

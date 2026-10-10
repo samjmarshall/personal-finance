@@ -24,6 +24,7 @@ import {
 	RECEIPT_FILE_TYPES,
 	receiptImageUrl,
 	receiptMediaKind,
+	receiptUploadPrefix,
 } from "./receipt-media";
 import type { Stage, StageState } from "./receipt-pipeline";
 import { isoOrNull, receiptPipeline } from "./receipt-pipeline";
@@ -58,4 +59,5 @@ export {
 	receiptMatchDto,
 	receiptMediaKind,
 	receiptPipeline,
+	receiptUploadPrefix,
 };
