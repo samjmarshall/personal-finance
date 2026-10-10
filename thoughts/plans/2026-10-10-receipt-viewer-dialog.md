@@ -38,7 +38,7 @@ The design predates the tRPC 3-tier refactor, so several of its paths and helper
   - The open state is owned by `ReceiptsView` (`receipts-view.tsx:81`).
   - A focus-ring class set to copy is at `receipt-detail.tsx:207`.
 - **List view (`receipts-view.tsx`).**
-  - The thumbnail button at `:166-185` has no focus ring (`:168`). An earlier design review flagged this (`thoughts/plans/2026-09-07-expense-linking-stage-6.md:307`).
+  - The thumbnail button at `:166-185` has no focus ring (`:168`). An earlier design review flagged this (`thoughts/plans/2026-09-07-expense-linking-stage-6.md:313`).
   - Its `previewIcon` (`:68-76`) duplicates the kind-to-icon decision that `SourcePane` also makes.
 - **Headers.** `next.config.ts:15-22` sets `X-Frame-Options: SAMEORIGIN` on every path. There is no CSP anywhere in the app.
 - **Tests.**
@@ -46,7 +46,7 @@ The design predates the tRPC 3-tier refactor, so several of its paths and helper
   - There is no React Testing Library or DOM environment.
   - `.claude/rules/unit-testing.md:2-4` covers `*.test.ts` only.
   - Probe (2026-10-10): with tsconfig `jsx: "react-jsx"`, Vite 8's Oxc compiles `.tsx` under Vitest 4.1 with no `@vitejs/plugin-react`.
-- **Data available for testing.** No HTML receipt exists in the DB. The only writer is the Svix-signed inbound webhook (`thoughts/plans/2026-09-07-expense-linking-stage-6.md:330-348`).
+- **Data available for testing.** No HTML receipt exists in the DB. The only writer is the Svix-signed inbound webhook (`thoughts/plans/2026-09-07-expense-linking-stage-6.md:336-354`).
   - Stale as of Phase 1 (2026-10-10): the branch DB, inherited from production, holds 68 `text/html` email receipts (ids 1–68) and no image or PDF rows. Phase 4 can use an existing row instead of a new forward.
 
 ## Desired End State
@@ -277,7 +277,7 @@ The image and html methods share one private session gate, and that gate carries
 
 ### Success
 - [x] `make check` passes
-- [x] `make test` passes. `unit` 1117 and `component` 32 (thumbnail 13, viewer 15, money 4)
+- [x] `make test` passes. `unit` 1120 (1117 + 3 config-header tests, f925209) and `component` 32 (thumbnail 13, viewer 15, money 4)
 - [x] On the branch dev server, after uploading a JPEG and a PDF through the receipts page (the branch DB has only email rows; `local/<branch>` is a throwaway, and new blobs land under `local/<branch>/`):
   - an image receipt opens the viewer with the full image;
   - a tall image receipt keeps its width and scrolls inside the viewer;
@@ -320,7 +320,7 @@ The image and html methods share one private session gate, and that gate carries
     - adr020 (an iframe or img GET is a plain server root).
 - Prior plans:
   - `thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md:177` (`requireReceiptAccess` dropped), `:466-535` (image route moved to the controller)
-  - `thoughts/plans/2026-09-07-expense-linking-stage-6.md:307` (missing focus ring on the list thumbnail), `:330-348` (an HTML receipt needs a human)
+  - `thoughts/plans/2026-09-07-expense-linking-stage-6.md:313` (missing focus ring on the list thumbnail), `:336-354` (an HTML receipt needs a human)
 - Related code (anchors as built):
   - `src/server/receipts/receipts.http.controller.ts:72-87` (`HTML_CSP`), `:113-164` (`image`, `html`, `signedIn`)
   - `src/server/receipts/receipts.service.ts:38-46,244-279` (`openImage`, `openHtml`, `streamBlob`)
