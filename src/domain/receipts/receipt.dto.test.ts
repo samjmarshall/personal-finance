@@ -66,6 +66,18 @@ describe("receiptCreateDto", () => {
 		).toBe(false);
 	});
 
+	// `get()` builds a URL, which decodes these into `..` and escapes the upload prefix.
+	it.each([
+		"receipts/upload/%2e%2e/email/x.pdf",
+		"receipts/upload/%2E./email/x.pdf",
+		"receipts/upload/..\\email\\x.pdf",
+		"receipts/upload\\..\\email/x.pdf",
+	])("rejects encoded or backslash traversal %s", (blobPathname) => {
+		expect(receiptCreateDto.safeParse({ ...base, blobPathname }).success).toBe(
+			false,
+		);
+	});
+
 	it("keeps create writable into the Receipt interface", () => {
 		const aligned: Contracts = [true];
 		expect(aligned).toHaveLength(1);

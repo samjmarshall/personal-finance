@@ -7,10 +7,11 @@ const receiptFields = {
 	// The image proxy and worker feed this straight to blob `get()`, which resolves an
 	// `https://` value as a URL against a *foreign* store — a store-relative path can't.
 	// Reject URLs and `..` traversal here so both sinks only ever read our own store.
+	// URL parsing turns `%2e` into `.` and `\` into `/`, so those count as traversal too.
 	blobPathname: z
 		.string()
 		.min(1, "Blob pathname is required")
-		.refine((p) => !/^https?:\/\//i.test(p) && !p.includes(".."), {
+		.refine((p) => !/^https?:\/\//i.test(p) && !/\.\.|%2e|\\/i.test(p), {
 			message: "Blob pathname must be a store-relative path, not a URL",
 		}),
 	contentType: z.string().optional(),
