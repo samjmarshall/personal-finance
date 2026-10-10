@@ -7,6 +7,7 @@ import { cache } from "react";
 import { createTRPCContext } from "~/server/api/context";
 import { type AppRouter, createCaller } from "~/server/api/root";
 import { flushAfterResponse } from "~/server/observability/sdk/flush";
+import { redirectOnUnauthorized } from "./auth-errors";
 import { createQueryClient } from "./query-client";
 
 /**
@@ -27,7 +28,11 @@ const createContext = cache(async () => {
 });
 
 const getQueryClient = cache(createQueryClient);
-const caller = createCaller(createContext);
+// A stale cookie passes proxy; send its UNAUTHORIZED to /sign-in, which
+// AsyncBoundary passes through instead of showing an error card (adr026).
+const caller = createCaller(createContext, {
+	onError: redirectOnUnauthorized,
+});
 
 export const { trpc: api, HydrateClient } = createHydrationHelpers<AppRouter>(
 	caller,

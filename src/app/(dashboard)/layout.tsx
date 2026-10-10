@@ -1,23 +1,23 @@
-import { redirect } from "next/navigation";
-
 import { AppNav, MobileNav } from "~/components/app-nav";
-import { getSession } from "~/server/auth/server";
+import { AsyncBoundary } from "~/components/async-boundary";
+import { NavMember, NavMemberSkeleton } from "~/components/nav-member";
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
-	const session = await getSession();
-	if (!session) redirect("/sign-in");
-
-	const userName = session.user?.name || session.user?.email || "Member";
-
 	return (
 		<div className="flex min-h-screen bg-background">
-			<AppNav userName={userName} />
+			<AppNav
+				member={
+					<AsyncBoundary label="member" skeleton={<NavMemberSkeleton />}>
+						<NavMember />
+					</AsyncBoundary>
+				}
+			/>
 			<div className="flex min-w-0 flex-1 flex-col">
-				<MobileNav userName={userName} />
+				<MobileNav />
 				<main className="flex-1">{children}</main>
 			</div>
 		</div>

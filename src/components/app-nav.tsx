@@ -3,7 +3,6 @@
 import {
 	CircleDashed,
 	LayoutDashboard,
-	LogOut,
 	type LucideIcon,
 	Receipt,
 	ScanLine,
@@ -14,10 +13,9 @@ import {
 	WalletMinimal,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
-import { authClient } from "~/server/auth/client";
 
 type NavLeaf = { href: string; label: string; icon: LucideIcon };
 type NavSection = { label: string; icon: LucideIcon; children: NavLeaf[] };
@@ -133,49 +131,8 @@ function NavLinks({ current }: { current: string }) {
 	);
 }
 
-function SignOutButton() {
-	const router = useRouter();
-	const [error, setError] = useState<string | null>(null);
-	const [loading, setLoading] = useState(false);
-	return (
-		<>
-			<button
-				className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground disabled:opacity-50"
-				disabled={loading}
-				onClick={async () => {
-					setError(null);
-					setLoading(true);
-					// Sign-out fails closed while Redis is down (adr007), which leaves the
-					// session live. Routing on regardless would land on /sign-in, which
-					// redirects a live session straight back here — the silent
-					// still-signed-out lie the fail-closed delete exists to prevent.
-					const { error } = await authClient.signOut();
-					if (error) {
-						setError(error.message ?? "Could not sign out. Please try again.");
-						setLoading(false);
-						return;
-					}
-					router.push("/sign-in");
-					router.refresh();
-				}}
-				type="button"
-			>
-				<LogOut className="h-[18px] w-[18px]" />
-				{loading ? "Signing out…" : "Sign out"}
-			</button>
-			{error && (
-				<p
-					className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm"
-					role="alert"
-				>
-					{error}
-				</p>
-			)}
-		</>
-	);
-}
-
-export function AppNav({ userName }: { userName: string }) {
+/** `member` is server-rendered, so the nav paints before the session read. */
+export function AppNav({ member }: { member: ReactNode }) {
 	const current = activeHref(usePathname());
 	return (
 		<aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-4 text-sidebar-foreground lg:flex">
@@ -189,12 +146,6 @@ export function AppNav({ userName }: { userName: string }) {
 				<NavLinks current={current} />
 			</div>
 			<div className="flex flex-col gap-1 border-sidebar-muted/20 border-t pt-3">
-				<div className="px-3 py-1.5">
-					<p className="text-sidebar-muted text-xs">Signed in as</p>
-					<p className="truncate font-medium text-sidebar-foreground text-sm">
-						{userName}
-					</p>
-				</div>
 				{/* Its own landmark: it sits in the footer, outside the main nav, so
 				    without this the desktop Settings link is in no landmark at all. */}
 				<nav aria-label="Settings">
@@ -203,13 +154,13 @@ export function AppNav({ userName }: { userName: string }) {
 						link={settingsLink}
 					/>
 				</nav>
-				<SignOutButton />
+				{member}
 			</div>
 		</aside>
 	);
 }
 
-export function MobileNav({ userName }: { userName: string }) {
+export function MobileNav() {
 	return (
 		<header className="sticky top-0 z-30 flex items-center justify-between border-border border-b bg-card/80 px-4 py-3 backdrop-blur lg:hidden">
 			<div className="flex items-center gap-2">
@@ -224,7 +175,6 @@ export function MobileNav({ userName }: { userName: string }) {
 			>
 				<MobileLinks />
 			</nav>
-			<span className="sr-only">{userName}</span>
 		</header>
 	);
 }
