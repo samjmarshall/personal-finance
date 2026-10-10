@@ -6,8 +6,8 @@ export function receiptImageUrl(id: number): string {
 	return `/api/receipts/${id}/image`;
 }
 
-// The sandboxed e-receipt body route (src/app/api/receipts/[id]/html, adr019); only
-// ever an `<iframe sandbox="">` src, since its CSP blocks everything but styles.
+// The sandboxed e-receipt body route (src/app/api/receipts/[id]/html, adr019). Also
+// opened as a new tab, where only its CSP sandbox locks it down, so never loosen that.
 export function receiptHtmlUrl(id: number): string {
 	return `/api/receipts/${id}/html`;
 }

@@ -17,8 +17,8 @@ const STAND_IN = {
 	text: { Icon: Mail, label: "Email receipt" },
 } as const;
 
-// An <img> only draws images: a PDF won't render and an email body comes back as
-// octet-stream, so null means the real image is safe to show.
+// An <img> can't draw a PDF or an email body, so those get their own icon, and an
+// unknown type gets a broken-image icon. No icon means the real image is safe to show.
 export function previewIcon(contentType: string | null) {
 	const kind = receiptMediaKind(contentType);
 	if (kind === null) return ImageOff;

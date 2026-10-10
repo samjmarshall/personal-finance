@@ -38,8 +38,7 @@ function canFramePdf() {
 	);
 }
 
-// A processed receipt with no vendor is still worth opening (the original is the
-// source of truth); fall back to a neutral title rather than blank.
+// A receipt with no vendor can still be opened, so show a neutral title, never a blank one.
 export function receiptTitle(vendor: string | null) {
 	return vendor?.trim() ? vendor : "Receipt";
 }
@@ -81,7 +80,7 @@ export function ReceiptViewer({
 				className="sm:max-w-[min(64rem,calc(100%-2rem))]"
 				// Keys pressed inside a frame never reach the dialog, so opening focus
 				// on the frame would leave Escape dead.
-				initialFocus={showsFrame ? popupRef : true}
+				initialFocus={showsFrame ? popupRef : undefined}
 				ref={popupRef}
 			>
 				<DialogHeader>
