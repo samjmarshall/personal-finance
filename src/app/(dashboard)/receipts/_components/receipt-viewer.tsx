@@ -38,7 +38,7 @@ function canFramePdf() {
 	);
 }
 
-// A processed receipt with no vendor is still worth opening (the image is the
+// A processed receipt with no vendor is still worth opening (the original is the
 // source of truth); fall back to a neutral title rather than blank.
 export function receiptTitle(vendor: string | null) {
 	return vendor?.trim() ? vendor : "Receipt";
@@ -141,9 +141,8 @@ function ViewerSurface({
 			<WithNewTabLink href={src}>
 				<div className={cn(SURFACE, "w-full")}>
 					{!loaded && <LoadingOverlay />}
-					{/* Untrusted vendor markup (adr019). No sandbox tokens gives it an opaque
-					    origin, no script and no top navigation; a link click navigates only
-					    this frame. White because e-receipts assume it, even in dark mode. */}
+					{/* Untrusted vendor markup (adr019): empty sandbox = opaque origin, no
+					    script, no top navigation. White: e-receipts assume it, even in dark. */}
 					<iframe
 						className="block h-[75dvh] w-full bg-white"
 						onLoad={onLoad}

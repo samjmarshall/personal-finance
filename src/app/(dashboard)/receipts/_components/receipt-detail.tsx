@@ -311,9 +311,8 @@ export function ReceiptDetail({
 						/>
 
 						<div className="grid gap-5 sm:grid-cols-[minmax(0,11rem)_1fr]">
-							{/* The receipt's ground truth, beside the extraction. Keyed so a
-							    cached receipt swapped in under the open dialog starts closed
-							    with a fresh thumbnail. */}
+							{/* Keyed: a cached receipt swapped in under the open dialog starts
+							    closed, with a fresh thumbnail. */}
 							<ReceiptSource
 								contentType={data.contentType}
 								id={data.id}

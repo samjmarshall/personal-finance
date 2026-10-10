@@ -251,8 +251,8 @@ export class ReceiptsService {
 		};
 	}
 
-	// Image route refuses text; this one serves only text, so images/PDFs never leave
-	// sandboxed (adr019). Bodies are UTF-8 strings, so charset is forced.
+	// Image route refuses text, this one serves only text: images and PDFs never go
+	// out through the sandboxed route (adr019). Bodies are UTF-8, so force charset.
 	async openHtml(id: number): Promise<ReceiptHtml> {
 		const blob = await this.streamBlob(id, BODY_NOT_FOUND_MESSAGE);
 		if (receiptMediaKind(blob.contentType) !== "text") {
@@ -265,9 +265,8 @@ export class ReceiptsService {
 		};
 	}
 
-	// Reads by `blobPathname`, never the member-supplied `blobUrl`: the SDK resolves
-	// a pathname against *our* store token, so a URL pointing at a foreign public
-	// store can't be streamed back same-origin as `text/html`.
+	// Read by our stored path, never the member-given URL: a URL to someone else's
+	// public store could be served back same-origin as HTML.
 	private async streamBlob(
 		id: number,
 		missingMessage: string,
