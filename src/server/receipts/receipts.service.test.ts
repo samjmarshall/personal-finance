@@ -702,6 +702,93 @@ describe("openImage", () => {
 	});
 });
 
+describe("openHtml", () => {
+	const stream = new Blob([new Uint8Array([1])]).stream();
+
+	it("streams the blob the row points at", async () => {
+		const pathnames = recorder("receipts/r.html");
+		const streams = recorder({ stream, contentType: "text/html" });
+		const service = serviceWith({
+			repository: { findBlobPathname: pathnames.method },
+			blobStore: { stream: streams.method },
+		});
+
+		await expect(service.openHtml(42)).resolves.toEqual({
+			stream,
+			contentType: "text/html; charset=utf-8",
+		});
+		expect(pathnames.calls).toEqual([[42]]);
+		expect(streams.calls).toEqual([["receipts/r.html"]]);
+	});
+
+	// The email pipeline writes bodies as JS strings, which Blob stores as UTF-8.
+	it.each([
+		["text/html", "text/html; charset=utf-8"],
+		["text/plain", "text/plain; charset=utf-8"],
+		["text/html; charset=ISO-8859-1", "text/html; charset=utf-8"],
+	])("serves %s as %s", async (stored, served) => {
+		const service = serviceWith({
+			repository: { findBlobPathname: async () => "receipts/r.html" },
+			blobStore: { stream: async () => ({ stream, contentType: stored }) },
+		});
+
+		await expect(service.openHtml(42)).resolves.toEqual({
+			stream,
+			contentType: served,
+		});
+	});
+
+	it("404s a missing row without opening the store", async () => {
+		const service = serviceWith({
+			repository: { findBlobPathname: async () => undefined },
+		});
+
+		const thrown = await service.openHtml(42).catch((error) => error);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Receipt not found." });
+	});
+
+	it("404s a blob the store no longer has", async () => {
+		const service = serviceWith({
+			repository: { findBlobPathname: async () => "receipts/r.html" },
+			blobStore: { stream: async () => null },
+		});
+
+		const thrown = await service.openHtml(42).catch((error) => error);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Receipt body not found." });
+	});
+
+	// Only e-receipt bodies leave through the sandboxed route (adr019).
+	it.each([
+		"image/png",
+		"application/pdf",
+		"image/svg+xml",
+		"application/octet-stream",
+	])("404s a %s blob and cancels its stream", async (stored) => {
+		let cancelled = false;
+		const unread = new ReadableStream<Uint8Array>({
+			cancel: () => {
+				cancelled = true;
+			},
+		});
+		const service = serviceWith({
+			repository: { findBlobPathname: async () => "receipts/r.png" },
+			blobStore: {
+				stream: async () => ({ stream: unread, contentType: stored }),
+			},
+		});
+
+		const thrown = await service.openHtml(42).catch((error) => error);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Receipt body not found." });
+		expect(cancelled).toBe(true);
+	});
+});
+
 describe("answerUpload", () => {
 	const event = {
 		type: "blob.generate-client-token",

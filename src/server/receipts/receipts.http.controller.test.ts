@@ -46,6 +46,7 @@ beforeEach(() => exporter.reset());
 type LogEntry = { level: string; msg: string; attrs?: LogAttributes };
 
 const BYTES = new Uint8Array([137, 80, 78, 71]);
+const HTML = "<p>Thanks for your order</p>";
 const imageBlob = (contentType = "image/png") => ({
 	stream: new Blob([BYTES]).stream(),
 	contentType,
@@ -76,6 +77,10 @@ function harness({ memberId = "m1" }: { memberId?: string } = {}) {
 	const openImage = vi.fn<ReceiptsService["openImage"]>(async () =>
 		imageBlob(),
 	);
+	const openHtml = vi.fn<ReceiptsService["openHtml"]>(async () => ({
+		stream: new Blob([HTML]).stream(),
+		contentType: "text/html; charset=utf-8",
+	}));
 	const answerUpload = vi.fn<ReceiptsService["answerUpload"]>(
 		async (_request, event, member) => {
 			if (event.type === "blob.upload-completed") {
@@ -86,12 +91,30 @@ function harness({ memberId = "m1" }: { memberId?: string } = {}) {
 		},
 	);
 	const controller = new ReceiptsHttpController({
-		service: { openImage, answerUpload } as unknown as ReceiptsService,
+		service: {
+			openImage,
+			openHtml,
+			answerUpload,
+		} as unknown as ReceiptsService,
 		sessions: { memberId: sessionMember },
 		logger,
 	});
-	return { controller, logs, sessionMember, openImage, answerUpload };
+	return { controller, logs, sessionMember, openImage, openHtml, answerUpload };
 }
+
+// `Number()` would read "1e3" as 1000 and send 99999999999 to an int4 column.
+const BAD_IDS = [
+	"abc",
+	"0",
+	"-1",
+	"1.5",
+	"1e3",
+	"007",
+	" 3",
+	"2147483648",
+	"99999999999",
+	"",
+];
 
 describe("ReceiptsHttpController.image", () => {
 	const request = () =>
@@ -118,19 +141,7 @@ describe("ReceiptsHttpController.image", () => {
 		expect(sessionMember.mock.calls[0]?.[0].get("cookie")).toBe("session=abc");
 	});
 
-	// `Number()` would read "1e3" as 1000 and send 99999999999 to an int4 column.
-	it.each([
-		"abc",
-		"0",
-		"-1",
-		"1.5",
-		"1e3",
-		"007",
-		" 3",
-		"2147483648",
-		"99999999999",
-		"",
-	])("404s the id %j without opening the image", async (id) => {
+	it.each(BAD_IDS)("404s the id %j without opening the image", async (id) => {
 		const { controller, openImage } = harness();
 
 		const response = await controller.image(request(), id);
@@ -183,6 +194,85 @@ describe("ReceiptsHttpController.image", () => {
 		expect(response.headers.get("Content-Type")).toBe("image/png");
 		expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
 		expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+	});
+});
+
+describe("ReceiptsHttpController.html", () => {
+	const request = () =>
+		new Request("https://ledger.test/api/receipts/3/html", {
+			headers: { cookie: "session=abc" },
+		});
+
+	it("401s a signed-out request before reading anything", async () => {
+		const { controller, sessionMember, openHtml } = harness();
+		sessionMember.mockResolvedValue(undefined);
+
+		const response = await controller.html(request(), "3");
+
+		expect(response.status).toBe(401);
+		await expect(response.text()).resolves.toBe("Unauthorized");
+		expect(openHtml).not.toHaveBeenCalled();
+	});
+
+	it("reads the session from the request's own headers", async () => {
+		const { controller, sessionMember } = harness();
+
+		await controller.html(request(), "3");
+
+		expect(sessionMember.mock.calls[0]?.[0].get("cookie")).toBe("session=abc");
+	});
+
+	it.each(BAD_IDS)("404s the id %j without opening the body", async (id) => {
+		const { controller, openHtml } = harness();
+
+		const response = await controller.html(request(), id);
+
+		expect(response.status).toBe(404);
+		await expect(response.text()).resolves.toBe("Not found");
+		expect(openHtml).not.toHaveBeenCalled();
+	});
+
+	it("opens the body for a good id", async () => {
+		const { controller, openHtml } = harness();
+
+		await controller.html(request(), "2147483647");
+
+		expect(openHtml).toHaveBeenCalledWith(2147483647);
+	});
+
+	it("404s when the service says the body is missing", async () => {
+		const { controller, openHtml } = harness();
+		openHtml.mockRejectedValue(new NotFoundError("Receipt body not found."));
+
+		const response = await controller.html(request(), "3");
+
+		expect(response.status).toBe(404);
+		await expect(response.text()).resolves.toBe("Not found");
+	});
+
+	it("lets any other failure throw", async () => {
+		const { controller, openHtml } = harness();
+		const failure = new Error("store down");
+		openHtml.mockRejectedValue(failure);
+
+		await expect(controller.html(request(), "3")).rejects.toBe(failure);
+	});
+
+	it("streams the body under a locked-down CSP with inert, uncacheable headers", async () => {
+		const { controller } = harness();
+
+		const response = await controller.html(request(), "3");
+
+		expect(response.status).toBe(200);
+		await expect(response.text()).resolves.toBe(HTML);
+		expect(Object.fromEntries(response.headers)).toEqual({
+			"content-type": "text/html; charset=utf-8",
+			"content-security-policy":
+				"default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox",
+			"x-content-type-options": "nosniff",
+			"cache-control": "private, no-store",
+			"referrer-policy": "no-referrer",
+		});
 	});
 });
 

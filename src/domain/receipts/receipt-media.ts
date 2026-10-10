@@ -6,6 +6,12 @@ export function receiptImageUrl(id: number): string {
 	return `/api/receipts/${id}/image`;
 }
 
+// The sandboxed e-receipt body route (src/app/api/receipts/[id]/html, adr019); only
+// ever an `<iframe sandbox="">` src, since its CSP blocks everything but styles.
+export function receiptHtmlUrl(id: number): string {
+	return `/api/receipts/${id}/html`;
+}
+
 // The server mints upload tokens and creates rows only under this folder, and the
 // browser builds its pathname from it, so the two can't drift.
 export function receiptUploadPrefix(blobPathPrefix: string): string {

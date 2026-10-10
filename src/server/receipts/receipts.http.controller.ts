@@ -67,6 +67,24 @@ function badBody(): Response {
 }
 
 const notFound = () => new Response("Not found", { status: 404 });
+const unauthorized = () => new Response("Unauthorized", { status: 401 });
+
+// E-receipt HTML is untrusted sender markup (adr019).
+const HTML_CSP = [
+	// No script, fetch, frames or fonts.
+	"default-src 'none'",
+	// E-receipts carry their layout in inline styles.
+	"style-src 'unsafe-inline'",
+	// Remote images are tracking pixels; inline ones are harmless.
+	"img-src data:",
+	"base-uri 'none'",
+	"form-action 'none'",
+	// Overrides the app-wide `X-Frame-Options: SAMEORIGIN` (next.config.ts), which a
+	// browser may judge against the sandbox's opaque origin and refuse the frame.
+	"frame-ancestors 'self'",
+	// A second lock beside the iframe's own `sandbox` attribute.
+	"sandbox",
+].join("; ");
 
 interface ReceiptsHttpControllerDeps {
 	service: ReceiptsService;
@@ -75,9 +93,9 @@ interface ReceiptsHttpControllerDeps {
 }
 
 /**
- * The receipt image proxy and the Blob client-upload handshake. Both gate on the
- * session here; the rules (what may be served, what may be uploaded) are the
- * service's.
+ * The receipt image proxy, the sandboxed e-receipt body and the Blob client-upload
+ * handshake. Each gates on the session here; the rules (what may be served, what
+ * may be uploaded) are the service's.
  */
 export class ReceiptsHttpController {
 	private readonly service: ReceiptsService;
@@ -93,10 +111,7 @@ export class ReceiptsHttpController {
 	// Streams a private receipt blob to a signed-in member. The store is private, so
 	// the browser can't load the blob URL directly (an anonymous GET 400s).
 	async image(request: Request, rawId: string): Promise<Response> {
-		const memberId = await this.sessions.memberId(request.headers);
-		if (memberId === undefined) {
-			return new Response("Unauthorized", { status: 401 });
-		}
+		if (!(await this.signedIn(request))) return unauthorized();
 
 		const id = parseReceiptId(rawId);
 		if (id === null) return notFound();
@@ -117,6 +132,36 @@ export class ReceiptsHttpController {
 			if (error instanceof NotFoundError) return notFound();
 			throw error;
 		}
+	}
+
+	// The e-receipt body for the viewer's `<iframe sandbox="">` (adr019).
+	async html(request: Request, rawId: string): Promise<Response> {
+		if (!(await this.signedIn(request))) return unauthorized();
+
+		const id = parseReceiptId(rawId);
+		if (id === null) return notFound();
+
+		try {
+			const body = await this.service.openHtml(id);
+			return new Response(body.stream, {
+				headers: {
+					"Content-Type": body.contentType,
+					"Content-Security-Policy": HTML_CSP,
+					"X-Content-Type-Options": "nosniff",
+					"Cache-Control": "private, no-store",
+					"Referrer-Policy": "no-referrer",
+				},
+			});
+		} catch (error) {
+			if (error instanceof NotFoundError) return notFound();
+			throw error;
+		}
+	}
+
+	// TODO(households): scope receipt reads to the viewer's household once households
+	// exist. Today every signed-in Member may view every receipt.
+	private async signedIn(request: Request): Promise<boolean> {
+		return (await this.sessions.memberId(request.headers)) !== undefined;
 	}
 
 	// This request is its own trace root (adr020). Blob's `upload()` hides the token

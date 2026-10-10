@@ -22,6 +22,7 @@ import type { ReceiptMediaKind } from "./receipt-media";
 import {
 	isReceiptFileType,
 	RECEIPT_FILE_TYPES,
+	receiptHtmlUrl,
 	receiptImageUrl,
 	receiptMediaKind,
 	receiptUploadPrefix,
@@ -53,6 +54,7 @@ export {
 	receiptConfirmMatchDto,
 	receiptCreateDto,
 	receiptExtractionDto,
+	receiptHtmlUrl,
 	receiptImageUrl,
 	receiptItemCategoryDto,
 	receiptItemExpenseDto,
