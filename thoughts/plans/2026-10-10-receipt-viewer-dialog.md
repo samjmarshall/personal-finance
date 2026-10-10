@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-09-23-receipt-viewer-dialog.md
 adrs: [adr019]
-status: Ready for Review - Phase 2 of 4
+status: Ready for Review - Phase 3 of 4
 ---
 # Receipt Viewer Dialog Implementation Plan
 
@@ -228,21 +228,22 @@ The image and html methods share one private session gate, and that gate carries
 - **New** `src/app/(dashboard)/receipts/_components/receipt-source-thumbnail.test.tsx`:
   - `previewIcon`: `image/jpeg` → `null`, `application/pdf` → `FileText`, `text/html` → `Mail`, `null` and `image/gif` → `ImageOff`;
   - image: the "Open full receipt" button holds an img whose src is `/api/receipts/7/image`, and a click calls `onOpen` once;
-  - `fireEvent.error(img)`: the img is gone and the button remains;
+  - `fireEvent.error(img)`: the img is gone, "Preview unavailable" shows, and the button remains;
   - pdf and text: the buttons are named "Open PDF receipt" / "Open email receipt", show "PDF receipt" / "Email receipt", and hold no img;
   - `null` and `image/gif`: no button, "No preview" shown;
   - the overlay icon is `aria-hidden`;
   - `user.tab()` focuses the button.
 - **New** `src/app/(dashboard)/receipts/_components/receipt-viewer.tsx` (`"use client"`):
-  - Props: `{ receiptId: number; contentType: string | null; title: string; open: boolean; onOpenChange: (open: boolean) => void }`.
+  - Props: `{ receiptId: number; contentType: string | null; vendor: string | null; open: boolean; onOpenChange: (open: boolean) => void }`. The title is `receiptTitle(vendor)`, exported from here and moved out of `receipt-detail.tsx` (was `titleFor`) so both dialogs agree. `DialogTitle` gets `pr-8` to clear the Close button.
   - Renders `Dialog` / `DialogContent className="sm:max-w-5xl"` / `DialogHeader` / `DialogTitle` from `~/components/ui/dialog` (adr008).
-  - Description by kind: "Original image", "Original PDF", or "Original email. Remote images and scripts are blocked."
+  - Description by kind: "Original image", "Original PDF", or "Original email. Remote images, scripts and most links are blocked."
   - The body is a child `ViewerSurface` keyed by `receiptId`, so its `loaded` / `failed` `useState` resets for each receipt (adr001: local state, no hook or Context). It renders by `receiptMediaKind`:
-    - image: `<img src={receiptImageUrl(id)} alt={\`Receipt from ${title}\`} className="mx-auto block h-auto max-w-full">` inside a `relative min-h-48 max-h-[75dvh] overflow-auto` box. The image keeps its natural size up to the dialog width, so a tall receipt scrolls instead of shrinking past reading. `min-h-48` gives the loading overlay room before the image has a height. It uses `onLoad` / `onError` and the same biome-ignore comment;
+    - image: `<img src={receiptImageUrl(id)} alt={vendor?.trim() ? \`Receipt from ${vendor}\` : "Receipt image"} className="mx-auto block h-auto max-w-full">` inside a `relative min-h-48 max-h-[75dvh] overflow-auto` box. The image keeps its natural size up to the dialog width, so a tall receipt scrolls instead of shrinking past reading. `min-h-48` gives the loading overlay room before the image has a height. It uses `onLoad` / `onError` and the same biome-ignore comment;
     - pdf: an "Open in new tab" link (`<a href={receiptImageUrl(id)} target="_blank" rel="noreferrer">`, as `receipt-detail.tsx:79-84` does today) is always shown. It is the only way to see a PDF on a phone, since this phase deletes today's top-level "Open PDF" link. Beside it:
-      - when `navigator.pdfViewerEnabled === false` (guarded for `typeof navigator`): no iframe and no spinner. Android Chrome has no in-frame PDF viewer, so the frame would stay blank or download and never fire `onLoad`;
+      - when `navigator.pdfViewerEnabled === false` (guarded for `typeof navigator`): no iframe and no spinner; "Preview isn't available on this device." with the link as the main (filled) button. Android Chrome has no in-frame PDF viewer, so the frame would stay blank or download and never fire `onLoad`;
       - otherwise: `<iframe src={receiptImageUrl(id)} title="Receipt PDF" className="h-[75dvh] w-full">` with `onLoad`. It is not sandboxed: Chrome's PDF viewer won't run in a sandboxed frame, and these are the same bytes the link opens top-level;
     - text: `<iframe src={receiptHtmlUrl(id)} sandbox="" referrerPolicy="no-referrer" title="Emailed receipt" className="h-[75dvh] w-full bg-white">` with `onLoad`. It uses a white background because e-receipts assume one in dark mode. A comment cites adr019: there are no tokens, so it gets an opaque origin, no script and no top navigation. A link click navigates the frame itself (Out of Scope);
+    - image and text also get the "Open in new tab" link (image: `receiptImageUrl`, text: `receiptHtmlUrl`), for browser zoom and room on a phone. The error and unknown states get none;
     - `null`: the error alert.
   - Loading: an overlay that copies `receipt-detail.tsx:315-322` (`role="status"`, `aria-label="Loading receipt"`, `Loader2Icon`) until load or error.
   - Error (image only): `<p role="alert">Couldn't load this receipt.</p>`, styled like `receipt-detail.tsx:497-507`.
@@ -255,32 +256,35 @@ The image and html methods share one private session gate, and that gate carries
   - pdf, stubbed `false`: the link shows, with no iframe and no "Loading receipt" status. Stub per case with `Object.defineProperty(navigator, "pdfViewerEnabled", { configurable: true, value })`, because jsdom's own value is not a browser's;
   - text: the "Emailed receipt" iframe has src `/api/receipts/7/html`, `getAttribute("sandbox") === ""` (so no `allow-scripts` and no `allow-same-origin`), and `referrerpolicy` is `no-referrer`. Load hides the status;
   - the Close button calls `onOpenChange` with `false` first. Assert `onOpenChange.mock.calls[0]?.[0]`, not `toHaveBeenCalledWith(false)`: Base UI also passes event details (`DialogRoot.d.ts:40`);
-  - a rerender with `receiptId` 8 shows the status again.
+  - a rerender with `receiptId` 8 shows the status again;
+  - image and text: an "Open in new tab" link to their own route; none after an image error;
+  - a blank vendor: the dialog is named "Receipt" and the img "Receipt image";
+  - pdf, stubbed `false`: "Preview isn't available on this device." shows.
   - If Base UI needs a jsdom shim (for example `Element.prototype.getAnimations`), add it to `src/test/setup-dom.ts` per the Phase 2 rule.
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx`:
-  - Replace `SourcePane` (`:62-109`) and its "never rendered as markup" comment, which adr019 supersedes, with a local `ReceiptSource({ contentType, id, imageSrc, title })`. Drop the imports nothing uses any more.
+  - Replace `SourcePane` (`:62-109`) and its "never rendered as markup" comment, which adr019 supersedes, with a local `ReceiptSource({ contentType, id, imageSrc, vendor })`. Drop the imports nothing uses any more.
     - It owns `const [viewerOpen, setViewerOpen] = useState(false);` (adr001) and renders:
       - `<ReceiptSourceThumbnail contentType={contentType} onOpen={() => setViewerOpen(true)} src={imageSrc} />`;
-      - `<ReceiptViewer contentType={contentType} onOpenChange={setViewerOpen} open={viewerOpen} receiptId={id} title={title} />`.
+      - `<ReceiptViewer contentType={contentType} onOpenChange={setViewerOpen} open={viewerOpen} receiptId={id} vendor={vendor} />`.
     - A one-line comment: the state lives here so every close path resets it. The detail popup unmounts on close (Base UI `keepMounted` defaults to `false`), and the `key` resets it on a receipt switch.
-  - Replace the wrapper and `SourcePane` at `:337-344` with `<ReceiptSource contentType={data.contentType} id={data.id} imageSrc={imageSrc} key={data.id} title={titleFor(data.vendor)} />`. It sits inside the parent `DialogContent`, so Base UI nests the viewer and Escape closes only the viewer. The key also resets the thumbnail's failure flag: a cached receipt can swap `data` with no loading state while `lastId` (`:255`) holds the dialog open. The `Dialog` at `:304` stays as it is.
+  - Replace the wrapper and `SourcePane` at `:337-344` with `<ReceiptSource contentType={data.contentType} id={data.id} imageSrc={imageSrc} key={data.id} vendor={data.vendor} />`. It sits inside the parent `DialogContent`, so Base UI nests the viewer and Escape closes only the viewer. The key also resets the thumbnail's failure flag: a cached receipt can swap `data` with no loading state while `lastId` (`:255`) holds the dialog open. The `Dialog` at `:304` stays as it is.
 - `src/app/(dashboard)/receipts/_components/receipts-view.tsx`:
   - Delete the local `previewIcon` (`:68-76`) and import it from `./receipt-source-thumbnail`. The render at `:162-184` stays as it is: an unknown type now gets `ImageOff` instead of a broken img.
   - Add `outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50` to the thumbnail button (`:168`).
-- `docs/adr/adr019-sandboxed-iframe-for-e-receipt-html.md`: implements this decision (the sandboxed iframe). Add a Negative Consequence: a link click navigates the sandboxed frame to the vendor page. That page runs no script, but its remote images load and the frame has no back button. Accepted, because the Member chose to click. New-tab links would need `allow-popups` on both the iframe and the CSP.
+- `docs/adr/adr019-sandboxed-iframe-for-e-receipt-html.md`: implements this decision (the sandboxed iframe). Add a Negative Consequence: a link click navigates the sandboxed frame to the vendor page. That page runs no script, but its remote images load and the frame has no back button. Accepted, because the Member chose to click. New-tab links would need `allow-popups` on both the iframe and the CSP. A second one: the viewer's "Open in new tab" loads the route top-level, where only the CSP `sandbox` directive holds the opaque origin (one lock, not two). Status stays Proposed until Phase 4.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] On the branch dev server, after uploading a JPEG and a PDF through the receipts page (the branch DB has only email rows; `local/<branch>` is a throwaway, and new blobs land under `local/<branch>/`):
+- [x] `make check` passes
+- [x] `make test` passes. `unit` 1117 and `component` 30 (thumbnail 13, viewer 13, money 4)
+- [x] On the branch dev server, after uploading a JPEG and a PDF through the receipts page (the branch DB has only email rows; `local/<branch>` is a throwaway, and new blobs land under `local/<branch>/`):
   - an image receipt opens the viewer with the full image;
   - a tall image receipt keeps its width and scrolls inside the viewer;
   - a PDF receipt opens in the browser's PDF viewer inside the dialog, and its "Open in new tab" link opens it top-level;
   - each shows the spinner, then the content.
-- [ ] On a phone, a PDF receipt can be opened from the viewer
-- [ ] With focus outside the frame, Escape closes only the viewer, and the detail dialog stays open. Closing and reopening the detail never shows the viewer, and neither does switching to another receipt.
-- [ ] Tabbing shows a visible focus ring on the list thumbnail and on the detail thumbnail. The ring is not clipped.
-- [ ] `/design-review` on the detail thumbnail and the viewer, at 375px and desktop, in light and dark
+- [ ] On a phone, a PDF receipt can be opened from the viewer. Sam checks this on the PR preview deployment.
+- [x] With focus outside the frame, Escape closes only the viewer, and the detail dialog stays open. Closing and reopening the detail never shows the viewer, and neither does switching to another receipt.
+- [x] Tabbing shows a visible focus ring on the list thumbnail and on the detail thumbnail. The ring is not clipped.
+- [x] `/design-review` on the detail thumbnail and the viewer, at 375px and desktop, in light and dark. No blockers. Fixed four High findings: the "Open in new tab" border (`cn()` around `buttonVariants`), keyboard scroll for a tall image (a focusable `<section aria-label="Receipt image">`), the email description now says most links are blocked, and the detail thumbnail is capped at `max-h-64 sm:max-h-80`. Then, on Sam's call, fixed H3/M1 ("Open in new tab" on image and email too; checked live: the email tab is top-level at origin `null`, script blocked, `document.cookie` throws), M3 (the phone PDF fallback and a failed thumbnail say why), M5 (no "Receipt from Receipt" alt), M7 (PDF and email thumbnails brighten on hover) and M9 (`pr-8` on both dialog titles). Not fixed: M2, M4, M6, M8.
 
 ## Phase 4: Live e-receipt check and accept adr019
 ### Changes
