@@ -32,27 +32,33 @@ function toToastMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Something went wrong.";
 }
 
+// Client fetches skip the RSC caller's redirect, so a stale session's
+// UNAUTHORIZED goes to /sign-in here (adr026).
+function redirectIfUnauthorized(error: unknown): boolean {
+	if (
+		environmentManager.isServer() ||
+		!(error instanceof TRPCClientError) ||
+		error.data?.code !== "UNAUTHORIZED"
+	) {
+		return false;
+	}
+	window.location.assign("/sign-in");
+	return true;
+}
+
 export const createQueryClient = () =>
 	new QueryClient({
-		// Surface every mutation failure as a toast (ADR001: the QueryClient is a
-		// permitted global transport client). Fires client-side only — mutations
-		// never run through the server prefetch client.
+		// Surface every mutation failure but UNAUTHORIZED as a toast (ADR001: the
+		// QueryClient is a permitted global transport client). Fires client-side
+		// only — mutations never run through the server prefetch client.
 		mutationCache: new MutationCache({
-			onError: (error) => toast.error(toToastMessage(error)),
-		}),
-		// Client fetches skip the RSC caller's redirect, so a stale session's
-		// UNAUTHORIZED goes to /sign-in here (adr026).
-		queryCache: new QueryCache({
 			onError: (error) => {
-				if (
-					!environmentManager.isServer() &&
-					error instanceof TRPCClientError &&
-					error.data?.code === "UNAUTHORIZED"
-				) {
-					window.location.assign("/sign-in");
+				if (!redirectIfUnauthorized(error)) {
+					toast.error(toToastMessage(error));
 				}
 			},
 		}),
+		queryCache: new QueryCache({ onError: redirectIfUnauthorized }),
 		defaultOptions: {
 			queries: {
 				// With SSR, we usually want to set some default staleTime
