@@ -51,7 +51,7 @@ A stale cookie redirects through `UNAUTHORIZED`. The RSC caller (`src/trpc/serve
 
 ### Negative Consequences
 
-- The layout no longer gates the tree. A future server component that reads data outside tRPC must check the session itself; the layout will not catch it. A reader expecting a layout guard will be surprised.
+- The layout no longer gates the tree. A future server component that reads data outside tRPC must check the session itself; the layout will not catch it. A reader expecting a layout guard will be surprised. This includes server-only values passed as props: an `env` read in a page reaches a fake-cookie response unless a `getSession()` check runs first (`settings/page.tsx`, `receipts/page.tsx`).
 - Two gates to keep honest: the proxy matcher and `protectedProcedure`. A matcher slip degrades UX (a signed-out visitor sees the shell, then redirects), not data safety.
 - The stale-cookie redirect needs the `UNAUTHORIZED` mapping in two places, server caller and client cache.
 - A signed-in Member who opens `/sign-in` sees the form briefly before `RedirectIfSignedIn` (inside Suspense) sends them to `/`.

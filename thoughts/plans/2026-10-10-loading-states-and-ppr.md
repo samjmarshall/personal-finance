@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Ready for Review - Phase 2 of 7
+status: Validated - Phase 2 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -283,7 +283,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - The sync page renders `<AsyncBoundary fade={false} label="…" skeleton={<PageSkeleton … />}>` around an async `*Data` child.
   - The `*Data` child holds today's `void prefetch()` calls and `HydrateClient`.
   - Labels are "expenses", "income" and "categories". The skeleton title and description match each view's `PageHeader` (`expenses-view.tsx:200-209`, `income-view.tsx:113-122`, `categories-view.tsx:96-105`).
-- `src/app/(dashboard)/settings/page.tsx:5-14`: the same pattern with `label="settings"`. `SettingsData` reads `env.RESEND_INBOUND_ADDRESS` and prefetches.
+- `src/app/(dashboard)/settings/page.tsx:5-17`: the same pattern with `label="settings"`. `SettingsData` keeps the page's `getSession()` gate first, then reads `env.RESEND_INBOUND_ADDRESS` and prefetches. Proxy only checks cookie presence, so the gate keeps the env value out of a fake-cookie response (adr026).
 - `src/app/(dashboard)/settings/_components/settings-view.tsx:29-50`: wrap the pay-cycle and forwarding panels each in `<AsyncBoundary label="pay cycle" | "allowed senders" skeleton={<CardSkeleton />}>`. Appearance needs no boundary.
 - `src/app/(dashboard)/loading.tsx`: new. A generic `PageSkeleton` with a title `Skeleton`, kept as a safety net.
 - `src/app/(dashboard)/error.tsx`: new client safety net.
@@ -307,7 +307,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 ### Changes
 
 - `src/app/(dashboard)/transactions/page.tsx:4-17`, `receipts/page.tsx:4-11` and `expenses/unplanned/page.tsx:4-14` follow the Phase 4 page pattern. Labels are "transactions", "receipts" and "unplanned Spend".
-- `src/app/(dashboard)/receipts/page.tsx:5`: prefetch `receipt.list` with `{ unmatchedOnly: false }` (Bug 1).
+- `src/app/(dashboard)/receipts/page.tsx:8`: prefetch `receipt.list` with `{ unmatchedOnly: false }` (Bug 1). `ReceiptsData` keeps the page's `getSession()` gate before it reads `env.BLOB_PATH_PREFIX`, as `SettingsData` does.
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx:72-100,250-254`:
   - Build `queryInput` with `useMemo` over the filter state, so it changes only when a filter changes.
   - Pass it through `useDeferredValue`. Call `transaction.list.useSuspenseQuery(deferredInput)` and drop `placeholderData`.
@@ -427,6 +427,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - [ ] Against a production build served locally, the raw HTML of each dashboard route, fetched with any session cookie, contains the nav (`aria-label="Main navigation"`) and `data-slot="skeleton"` markup
 - [ ] `curl -I https://personal-finance.localhost/api/health` returns 200 and the database is hit per request
 - [ ] The Phase 2 signed-out and stale-cookie checks still pass
+- [ ] With a fake cookie (`__Secure-better-auth.session_token=x`), the `/settings` and `/receipts` responses contain neither the inbound address nor the blob prefix
 - [ ] `/design-review`
 - [ ] `/security-review`
 
