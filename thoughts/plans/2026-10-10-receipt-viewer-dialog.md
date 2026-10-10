@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-09-23-receipt-viewer-dialog.md
 adrs: [adr019]
-status: Validated - Phase 3 of 4
+status: Done
 ---
 # Receipt Viewer Dialog Implementation Plan
 
@@ -300,8 +300,8 @@ The image and html methods share one private session gate, and that gate carries
 - [x] Remote images are blocked. The frame makes no requests to vendor hosts, and the console shows CSP `img-src` violations. (All 7 `m.media-amazon.com` requests show `[FAILED] csp`.)
 - [x] The frame keeps its bounded height and scrolls internally (675px frame, 850px content, scrolled 175px)
 - [x] Clicking a link in the e-receipt never navigates the app page itself. The page stays on `/receipts` with the dialogs open (Out of Scope: the frame itself may navigate). (A `target=_blank` link: popup blocked by the sandbox. A plain `http://` link: blocked as mixed content in the frame. Both left 2 dialogs open and no new tab.)
-- [ ] Signed in on the branch's Vercel preview, the response headers of `/api/receipts/<id>/html` match Desired End State exactly, including `Referrer-Policy: no-referrer`. The signed-out 401 is covered by Phase 1's live check and the controller tests; on a preview, a private window meets Vercel's deployment protection before the app.
-- [ ] adr019 Status is `Accepted`
+- [x] Signed in on the branch's Vercel preview, the response headers of `/api/receipts/<id>/html` match Desired End State exactly, including `Referrer-Policy: no-referrer`. The signed-out 401 is covered by Phase 1's live check and the controller tests; on a preview, a private window meets Vercel's deployment protection before the app. (Checked on the PR #49 preview, id 9: all five match exactly, and `referrer-policy: no-referrer` beats the global `strict-origin-when-cross-origin` on Vercel too.)
+- [x] adr019 Status is `Accepted`
 
 ## References
 - Design doc: `thoughts/designs/2026-09-23-receipt-viewer-dialog.md` (carries `## Related ADRs`). Its file list and helper names are stale; this plan's Current State supersedes them.
