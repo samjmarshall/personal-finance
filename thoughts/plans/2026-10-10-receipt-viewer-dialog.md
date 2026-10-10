@@ -173,6 +173,8 @@ The image and html methods share one private session gate, and that gate carries
 - [x] Signed in on the branch dev server, `/api/receipts/<an image receipt id>/html` returns 404 "Not found". The branch DB has no image or PDF rows (68 `text/html` email rows), so per the user's decision the unit tests cover this (`openHtml` `it.each` over image, pdf, svg and octet-stream). The live checks show: a missing id and a bad id each give 404; id 68 gives 200 with all five headers exactly as in Desired End State; `/68/image` still serves `application/octet-stream`.
 - [x] `/security-review` on the new route, `openHtml` and the CSP: no findings
 
+**Built differently (9634292):** the controller now sends four headers. `Referrer-Policy: no-referrer` comes only from the path-scoped `next.config.ts` entry, since config headers beat route headers. The controller test pins the four.
+
 **Pulled forward from Phase 4 (user approved):** the live check showed `Referrer-Policy: strict-origin-when-cross-origin` on the html route. Config headers override the ones a route sets. The path-scoped `next.config.ts` entry is now in. After the change, the html route sends `no-referrer`, and `/image` and `/receipts` keep `strict-origin-when-cross-origin`. `/security-review` on this change: no findings.
 
 ## Phase 2: Component test harness (React Testing Library + jsdom)
@@ -275,7 +277,7 @@ The image and html methods share one private session gate, and that gate carries
 
 ### Success
 - [x] `make check` passes
-- [x] `make test` passes. `unit` 1117 and `component` 30 (thumbnail 13, viewer 13, money 4)
+- [x] `make test` passes. `unit` 1117 and `component` 32 (thumbnail 13, viewer 15, money 4)
 - [x] On the branch dev server, after uploading a JPEG and a PDF through the receipts page (the branch DB has only email rows; `local/<branch>` is a throwaway, and new blobs land under `local/<branch>/`):
   - an image receipt opens the viewer with the full image;
   - a tall image receipt keeps its width and scrolls inside the viewer;
@@ -285,6 +287,9 @@ The image and html methods share one private session gate, and that gate carries
 - [x] With focus outside the frame, Escape closes only the viewer, and the detail dialog stays open. Closing and reopening the detail never shows the viewer, and neither does switching to another receipt. (Re-checked after 8efcd60 on email id 68: opening focus lands on the viewer, not the frame, and Escape closes only the viewer.)
 - [x] Tabbing shows a visible focus ring on the list thumbnail and on the detail thumbnail. The ring is not clipped.
 - [x] `/design-review` on the detail thumbnail and the viewer, at 375px and desktop, in light and dark. No blockers. Fixed four High findings: the "Open in new tab" border (`cn()` around `buttonVariants`), keyboard scroll for a tall image (a focusable `<section aria-label="Receipt image">`), the email description now says most links are blocked, and the detail thumbnail is capped at `max-h-64 sm:max-h-80`. Then, on Sam's call, fixed H3/M1 ("Open in new tab" on image and email too; checked live: the email tab is top-level at origin `null`, script blocked, `document.cookie` throws), M3 (the phone PDF fallback and a failed thumbnail say why), M5 (no "Receipt from Receipt" alt), M7 (PDF and email thumbnails brighten on hover) and M9 (`pr-8` on both dialog titles). Not fixed: M2, M4, M6, M8.
+- [x] Re-validated 2026-10-10 after 8efcd60 / 3979520: `/design-review` across image, PDF (framed and phone fallback) and email at 1440/768/375/320, light and dark. 0 Blockers, 0 High.
+
+**Built differently (later commits):** `ReceiptSource` takes `{ contentType, id, vendor }` and builds the thumbnail URL itself, so there is no `imageSrc` prop (781b3ca). The frames use a screen-capped height, `h-[min(75dvh,calc(100dvh-12rem))]`, not `h-[75dvh]` (8efcd60). The viewer opens with focus on the popup when a frame shows, so Escape still works; with no frame (image, phone PDF fallback), Base UI's default focus applies (8efcd60, 3979520). The Escape-in-frame note now lives in the focus comment, not the component doc.
 
 ## Phase 4: Live e-receipt check and accept adr019
 ### Changes
@@ -316,14 +321,17 @@ The image and html methods share one private session gate, and that gate carries
 - Prior plans:
   - `thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md:177` (`requireReceiptAccess` dropped), `:466-535` (image route moved to the controller)
   - `thoughts/plans/2026-09-07-expense-linking-stage-6.md:307` (missing focus ring on the list thumbnail), `:330-348` (an HTML receipt needs a human)
-- Related code:
-  - `src/server/receipts/receipts.http.controller.ts:91-117`
-  - `src/server/receipts/receipts.service.ts:36-40,231-242`
-  - `src/domain/receipts/receipt-media.ts:5-25`
-  - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:62-109,304,337-344`
-  - `src/app/(dashboard)/receipts/_components/receipts-view.tsx:68-76,166-185`
-  - `next.config.ts:15-22`
+- Related code (anchors as built):
+  - `src/server/receipts/receipts.http.controller.ts:72-87` (`HTML_CSP`), `:113-164` (`image`, `html`, `signedIn`)
+  - `src/server/receipts/receipts.service.ts:38-46,244-279` (`openImage`, `openHtml`, `streamBlob`)
+  - `src/domain/receipts/receipt-media.ts:5-13,33-37`
+  - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:54-81,275,313-316`
+  - `src/app/(dashboard)/receipts/_components/receipt-source-thumbnail.tsx`
+  - `src/app/(dashboard)/receipts/_components/receipt-viewer.tsx`
+  - `src/app/(dashboard)/receipts/_components/receipts-view.tsx:157-176`
+  - `next.config.ts:15-38`
   - `vitest.config.ts`
+  - `src/test/setup-dom.ts`
 - Docs:
   - `node_modules/next/dist/docs/01-app/02-guides/testing/vitest.md` (RTL setup)
   - Vitest 4.1 `test.projects` (`/vitest-dev/vitest/v4.1.6`, guide/projects.md)
