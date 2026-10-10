@@ -17,10 +17,8 @@ export function SignOutButton() {
 				onClick={async () => {
 					setError(null);
 					setLoading(true);
-					// Sign-out fails closed while Redis is down (adr007), which leaves the
-					// session live. Routing on regardless would land on /sign-in, which
-					// redirects a live session straight back here — the silent
-					// still-signed-out lie the fail-closed delete exists to prevent.
+					// Sign-out fails closed while Redis is down (adr007), so the session stays live.
+					// Don't route on: /sign-in would bounce it back here and hide the failure.
 					const { error } = await authClient.signOut();
 					if (error) {
 						setError(error.message ?? "Could not sign out. Please try again.");

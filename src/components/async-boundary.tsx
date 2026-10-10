@@ -7,12 +7,14 @@ import {
 	Suspense,
 	useCallback,
 	useEffect,
+	useRef,
 	useState,
 	useSyncExternalStore,
 } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { cn } from "~/lib/utils";
 
 type AsyncBoundaryProps = {
 	/** `null` makes an invisible gate: no skeleton while pending. */
@@ -43,6 +45,17 @@ export function AsyncBoundary({
 	);
 	const [skeletonShown, setSkeletonShown] = useState(serverOrHydrating);
 	const onSkeletonShown = useCallback(() => setSkeletonShown(true), []);
+	// Try again unmounts its own button, which drops focus to <body>. Hand it to
+	// the content once it renders.
+	const focusOnReveal = useRef(false);
+	const onRetry = useCallback(() => {
+		focusOnReveal.current = true;
+	}, []);
+	const contentRef = useCallback((content: HTMLDivElement | null) => {
+		if (!content || !focusOnReveal.current) return;
+		focusOnReveal.current = false;
+		content.focus({ preventScroll: true });
+	}, []);
 
 	if (skeleton === null) {
 		return (
@@ -53,18 +66,21 @@ export function AsyncBoundary({
 	}
 
 	return (
-		<ErrorBoundary label={label} skeleton={skeleton}>
+		<ErrorBoundary label={label} onRetry={onRetry} skeleton={skeleton}>
 			<Suspense
 				fallback={
 					<Pending label={label} onShow={onSkeletonShown} skeleton={skeleton} />
 				}
 			>
 				<div
-					className={
-						fade && skeletonShown
-							? "fade-in animate-in motion-reduce:animate-none"
-							: undefined
-					}
+					className={cn(
+						"outline-none",
+						fade &&
+							skeletonShown &&
+							"fade-in animate-in motion-reduce:animate-none",
+					)}
+					ref={contentRef}
+					tabIndex={-1}
 				>
 					{children}
 				</div>
@@ -98,13 +114,18 @@ function Pending({
 // re-fetches Server Components. Its fallback is a plain function, so the hooks
 // live in AsyncBoundaryError.
 const ErrorBoundary = catchError(function asyncBoundaryFallback(
-	{ label, skeleton }: { label: string; skeleton: ReactNode | null },
+	{
+		label,
+		onRetry,
+		skeleton,
+	}: { label: string; onRetry?: () => void; skeleton: ReactNode | null },
 	{ error, retry }: ErrorInfo,
 ) {
 	return (
 		<AsyncBoundaryError
 			error={error}
 			label={label}
+			onRetry={onRetry}
 			retry={retry}
 			skeleton={skeleton}
 		/>
@@ -114,11 +135,13 @@ const ErrorBoundary = catchError(function asyncBoundaryFallback(
 function AsyncBoundaryError({
 	error,
 	label,
+	onRetry,
 	retry,
 	skeleton,
 }: {
 	error: unknown;
 	label: string;
+	onRetry?: () => void;
 	retry: () => void;
 	skeleton: ReactNode | null;
 }) {
@@ -151,6 +174,7 @@ function AsyncBoundaryError({
 							// cached error instead of refetching. Never catchError's reset():
 							// it re-renders without re-fetching Server Components.
 							resetQueryErrors();
+							onRetry?.();
 							retry();
 						}}
 						size="sm"

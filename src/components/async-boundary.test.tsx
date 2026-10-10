@@ -202,6 +202,25 @@ describe("AsyncBoundary", () => {
 			expect(queryFn).toHaveBeenCalledTimes(2);
 		});
 
+		it("Try again moves focus to the recovered content", async () => {
+			silenceErrors();
+			const user = userEvent.setup();
+			let fail = true;
+			function Flaky() {
+				if (fail) throw new Error("offline");
+				return <p>Chart</p>;
+			}
+			await renderBoundary(<Flaky />);
+			fail = false;
+
+			await user.click(screen.getByRole("button", { name: "Try again" }));
+
+			// The Try again button unmounts with the card; focus must not fall to <body>.
+			const chart = await screen.findByText("Chart");
+			expect(document.activeElement).not.toBe(document.body);
+			expect(document.activeElement).toContainElement(chart);
+		});
+
 		it("lets redirect() through to the boundary above", async () => {
 			silenceErrors();
 			function Redirects(): never {
