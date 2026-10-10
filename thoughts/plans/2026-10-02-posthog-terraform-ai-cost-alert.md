@@ -1,7 +1,7 @@
 ---
 date: 2026-10-02
 adrs: [adr015]
-status: Ready to implement
+status: Done
 ---
 # PostHog config in Terraform: AI daily cost alert — Implementation Plan
 

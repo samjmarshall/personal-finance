@@ -1,7 +1,7 @@
 ---
 date: 2026-09-23
 adrs: [adr015]
-status: Ready to implement
+status: Done
 ---
 # Bedrock Token Prices from the AWS Price List Implementation Plan
 

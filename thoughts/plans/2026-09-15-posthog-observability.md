@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-09-15-posthog-observability.md
 adrs: [adr015, adr016]
-status: Ready to implement
+status: Done
 ---
 
 # PostHog observability Implementation Plan

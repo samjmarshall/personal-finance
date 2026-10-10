@@ -2,7 +2,7 @@
 date: 2026-09-29
 design: thoughts/designs/2026-09-29-trpc-3-tier-migration.md
 adrs: [adr021, adr022]
-status: Ready to implement
+status: Done
 ---
 # tRPC 3-tier migration, step 1: foundation + transactions — Implementation Plan
 

@@ -1,7 +1,7 @@
 ---
 date: 2026-10-08
 adrs: [adr028]
-status: Ready to implement
+status: Done
 ---
 # Blob files branch with the database — Implementation Plan
 

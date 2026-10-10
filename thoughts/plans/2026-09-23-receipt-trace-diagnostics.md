@@ -1,7 +1,7 @@
 ---
 date: 2026-09-23
 adrs: [adr015, adr016, adr018]
-status: Ready to implement
+status: Done
 ---
 # Receipt trace diagnostics — fold "More details" (variant C) into the real dialog
 

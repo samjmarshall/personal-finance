@@ -2,7 +2,7 @@
 date: 2026-09-22
 design: thoughts/designs/2026-09-22-client-traceparent.md
 adrs: [adr018]
-status: Ready to implement
+status: Superseded by adr020
 ---
 # Client-originated traceparent Implementation Plan
 
