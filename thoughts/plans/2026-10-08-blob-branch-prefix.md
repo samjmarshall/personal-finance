@@ -239,8 +239,9 @@ One commit: `chore(blob): delete branch blobs on teardown`.
   - `make db_branch_delete` logs one blob deleted for `local/<branch>/`
   - a `list` with that prefix is empty
   - 2026-10-10 on `scratch/blob-teardown`: two uploads under `local/scratch/blob-teardown/receipts/upload/`, one deleted in the UI. `make db_branch_delete` logged "deleted 1 blob(s)", then a re-run logged "deleted 0 blob(s)" and "Branch not found".
-- [ ] Closing a scratch PR runs "Delete branch blobs" green, and its log shows the `preview/<branch>/` count
+- [x] Closing a scratch PR runs "Delete branch blobs" green, and its log shows the `preview/<branch>/` count
   - 2026-10-10: no scratch PR. The `BLOB_READ_WRITE_TOKEN` repo secret is set. Check this when #46 merges: merging closes the PR, and the preview test upload means the log should show `preview/feat/blob-branch-prefix/: deleted 1 blob(s)` or more.
+  - 2026-10-10: #46 merged. Run 38019325268 (`pull_request` closed): "Delete branch blobs" green, logged `preview/feat/blob-branch-prefix/: deleted 1 blob(s)` and `local/feat/blob-branch-prefix/: deleted 1 blob(s)`.
 - [x] Locally on a branch at https://personal-finance.localhost/receipts:
   - deleting an inherited production Receipt removes the row, and its production `blobPathname` still answers `head`
   - deleting a Receipt uploaded on the branch removes its file
