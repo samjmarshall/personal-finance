@@ -18,7 +18,9 @@ describe("VercelBlobStore.read", () => {
 			blob: { contentType: "image/png" },
 		} as never);
 
-		const result = await new VercelBlobStore().read("receipts/r1.png");
+		const result = await new VercelBlobStore({ prefix: "" }).read(
+			"receipts/r1.png",
+		);
 
 		expect(getMock).toHaveBeenCalledWith("receipts/r1.png", {
 			access: "private",
@@ -33,7 +35,7 @@ describe("VercelBlobStore.read", () => {
 			getMock.mockResolvedValue(answer as never);
 
 			await expect(
-				new VercelBlobStore().read("receipts/missing.png"),
+				new VercelBlobStore({ prefix: "" }).read("receipts/missing.png"),
 			).rejects.toThrow("blob fetch failed for receipts/missing.png");
 		},
 	);
@@ -48,7 +50,9 @@ describe("VercelBlobStore.stream", () => {
 			blob: { contentType: "image/png" },
 		} as never);
 
-		const result = await new VercelBlobStore().stream("receipts/r1.png");
+		const result = await new VercelBlobStore({ prefix: "" }).stream(
+			"receipts/r1.png",
+		);
 
 		expect(getMock).toHaveBeenCalledWith("receipts/r1.png", {
 			access: "private",
@@ -62,7 +66,7 @@ describe("VercelBlobStore.stream", () => {
 			getMock.mockResolvedValue(answer as never);
 
 			await expect(
-				new VercelBlobStore().stream("receipts/missing.png"),
+				new VercelBlobStore({ prefix: "" }).stream("receipts/missing.png"),
 			).resolves.toBeNull();
 		},
 	);
@@ -71,9 +75,9 @@ describe("VercelBlobStore.stream", () => {
 		const refusal = new Error("store down");
 		getMock.mockRejectedValue(refusal);
 
-		await expect(new VercelBlobStore().stream("receipts/r1.png")).rejects.toBe(
-			refusal,
-		);
+		await expect(
+			new VercelBlobStore({ prefix: "" }).stream("receipts/r1.png"),
+		).rejects.toBe(refusal);
 	});
 });
 
@@ -86,7 +90,7 @@ describe("VercelBlobStore.write", () => {
 			pathname: "receipts/email/x.html",
 		} as never);
 
-		const result = await new VercelBlobStore().write(
+		const result = await new VercelBlobStore({ prefix: "" }).write(
 			"receipts/email/x.html",
 			"<p>x</p>",
 			"text/html",
@@ -106,7 +110,7 @@ describe("VercelBlobStore.write", () => {
 	it("wraps bytes as a Buffer (the SDK's PutBody has no Uint8Array arm)", async () => {
 		putMock.mockResolvedValue({ url: "u", pathname: "p" } as never);
 
-		await new VercelBlobStore().write(
+		await new VercelBlobStore({ prefix: "" }).write(
 			"p",
 			new Uint8Array([1, 2, 3]),
 			"application/pdf",
@@ -116,13 +120,33 @@ describe("VercelBlobStore.write", () => {
 		expect(Buffer.isBuffer(body)).toBe(true);
 		expect(Array.from(body as Buffer)).toEqual([1, 2, 3]);
 	});
+
+	it("puts under the branch prefix and returns the prefixed pathname", async () => {
+		putMock.mockResolvedValue({
+			url: "https://blob.test/local/b/receipts/x.png",
+			pathname: "local/b/receipts/x.png",
+		} as never);
+
+		const result = await new VercelBlobStore({ prefix: "local/b/" }).write(
+			"receipts/x.png",
+			"x",
+			"image/png",
+		);
+
+		expect(putMock).toHaveBeenCalledWith(
+			"local/b/receipts/x.png",
+			"x",
+			expect.anything(),
+		);
+		expect(result.pathname).toBe("local/b/receipts/x.png");
+	});
 });
 
 describe("VercelBlobStore.delete", () => {
 	it("deletes by pathname", async () => {
 		delMock.mockResolvedValue(undefined);
 
-		await new VercelBlobStore().delete("receipts/r1.png");
+		await new VercelBlobStore({ prefix: "" }).delete("receipts/r1.png");
 
 		expect(delMock).toHaveBeenCalledWith("receipts/r1.png");
 	});
@@ -131,8 +155,25 @@ describe("VercelBlobStore.delete", () => {
 		const refusal = new Error("store down");
 		delMock.mockRejectedValue(refusal);
 
-		await expect(new VercelBlobStore().delete("receipts/r1.png")).rejects.toBe(
-			refusal,
+		await expect(
+			new VercelBlobStore({ prefix: "" }).delete("receipts/r1.png"),
+		).rejects.toBe(refusal);
+	});
+
+	// A branch database's copied rows point at production's files.
+	it("leaves a file the branch inherited from production", async () => {
+		await new VercelBlobStore({ prefix: "local/b/" }).delete("receipts/x.png");
+
+		expect(delMock).not.toHaveBeenCalled();
+	});
+
+	it("deletes a file under the branch prefix", async () => {
+		delMock.mockResolvedValue(undefined);
+
+		await new VercelBlobStore({ prefix: "local/b/" }).delete(
+			"local/b/receipts/x.png",
 		);
+
+		expect(delMock).toHaveBeenCalledWith("local/b/receipts/x.png");
 	});
 });

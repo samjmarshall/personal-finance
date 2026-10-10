@@ -18,7 +18,7 @@ export const receiptsService = new ReceiptsService({
 	transactions: transactionsService,
 	expenses: expensesService,
 	categories: categoriesService,
-	blobStore: new VercelBlobStore(),
+	blobStore: new VercelBlobStore({ prefix: env.BLOB_PATH_PREFIX }),
 	uploads: new VercelClientUploads(),
 	posthogUi: { uiHost: env.POSTHOG_UI_HOST, projectId: env.POSTHOG_PROJECT_ID },
 });

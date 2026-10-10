@@ -32,7 +32,7 @@ function compose(apiKey: string, webhookSecret: string): EmailHttpController {
 			allowedSenders: allowedSendersService,
 			receipts: receiptsService,
 			mailbox: new ResendInboundMailbox({ resend }),
-			blobStore: new VercelBlobStore(),
+			blobStore: new VercelBlobStore({ prefix: env.BLOB_PATH_PREFIX }),
 			logger: rootLogger.with({ component: "service" }),
 		}),
 		logger: rootLogger.with({ component: "controller" }),
