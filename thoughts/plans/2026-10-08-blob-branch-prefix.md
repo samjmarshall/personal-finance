@@ -163,8 +163,9 @@ One commit: `feat(receipts): browser uploads land under the branch prefix`, buil
 - [x] `make check` passes
 - [x] `make test` passes
 - [x] `make build` passes
-- [ ] Locally, with `BLOB_PATH_PREFIX="local/<branch>/"` set by hand: an upload at https://personal-finance.localhost/receipts mints, creates the row and extracts. The row's `blobPathname` (more-details panel) starts with `local/<branch>/receipts/upload/`.
+- [x] Locally, with `BLOB_PATH_PREFIX="local/<branch>/"` set by hand: an upload at https://personal-finance.localhost/receipts mints, creates the row and extracts. The row's `blobPathname` (more-details panel) starts with `local/<branch>/receipts/upload/`.
   - 2026-10-10: mint, create and the image proxy read all work; pathname `local/feat/blob-branch-prefix/receipts/upload/prefix-test-receipt-….jpg`. A token and a `create` for `receipts/upload/evil.jpg` both 400. Extraction not seen: Bedrock refused an expired AWS session token (run `assume` before `make start`).
+  - 2026-10-10: extraction from a prefixed pathname seen on the preview instead (Phase 3 below): Processed, $11.50.
 - [x] `/security-review`: the upload grant and the `create` path check
 
 ## Phase 3: Set the prefix where the DB URL is set
@@ -194,8 +195,9 @@ One commit: `chore(blob): set the prefix in neon-branch.sh and the preview deplo
   - 2026-10-10: the script's log line now prints the prefix (`BLOB_PATH_PREFIX="local/feat/blob-branch-prefix/"`); status shows `*` on `local/feat/blob-branch-prefix`.
 - [x] Run `make db_branch` in every live worktree (`git worktree list`). Worktrees made before this phase have a branch `DATABASE_URL` but no prefix, so they act like production and delete its files.
   - 2026-10-10: the only other worktree (`.claude/worktrees/trpc-step-3-plan`) has no directory left, just a stale lock from 2026-10-06. Nothing live to update.
-- [ ] A preview deploy of this branch builds. An upload on it lands under `preview/<branch>/receipts/upload/`.
-  - 2026-10-10, local stand-in: `VERCEL_ENV=preview pnpm run build` fails on a `local/` prefix ("must be preview/<branch>/ on a preview deploy") and compiles with `BLOB_PATH_PREFIX=preview/feat/blob-branch-prefix/`. The real preview needs a push.
+- [x] A preview deploy of this branch builds. An upload on it lands under `preview/<branch>/receipts/upload/`.
+  - 2026-10-10, local stand-in: `VERCEL_ENV=preview pnpm run build` fails on a `local/` prefix ("must be preview/<branch>/ on a preview deploy") and compiles with `BLOB_PATH_PREFIX=preview/feat/blob-branch-prefix/`.
+  - 2026-10-10, real preview (`0bacb00`, `personal-finance-oivgn0wqa-rekurve.vercel.app`): built green. An upload minted and created (both 200), and a Blob `list` shows `preview/feat/blob-branch-prefix/receipts/upload/prefix-test-receipt-….jpg`. It extracted to Processed, $11.50.
 
 ## Phase 4: Teardown empties the prefix
 
@@ -238,11 +240,12 @@ One commit: `chore(blob): delete branch blobs on teardown`.
   - a `list` with that prefix is empty
   - 2026-10-10 on `scratch/blob-teardown`: two uploads under `local/scratch/blob-teardown/receipts/upload/`, one deleted in the UI. `make db_branch_delete` logged "deleted 1 blob(s)", then a re-run logged "deleted 0 blob(s)" and "Branch not found".
 - [ ] Closing a scratch PR runs "Delete branch blobs" green, and its log shows the `preview/<branch>/` count
-  - Needs a push, a scratch PR and the `BLOB_READ_WRITE_TOKEN` repo secret.
-- [ ] Locally on a branch at https://personal-finance.localhost/receipts:
+  - 2026-10-10: no scratch PR. The `BLOB_READ_WRITE_TOKEN` repo secret is set. Check this when #46 merges: merging closes the PR, and the preview test upload means the log should show `preview/feat/blob-branch-prefix/: deleted 1 blob(s)` or more.
+- [x] Locally on a branch at https://personal-finance.localhost/receipts:
   - deleting an inherited production Receipt removes the row, and its production `blobPathname` still answers `head`
   - deleting a Receipt uploaded on the branch removes its file
-  - 2026-10-10: the second half holds. In the scratch run above, 2 uploads minus 1 UI delete left the 1 that teardown found. The inherited half is not run yet: a guard bug there would delete a production file for good, so it waits for an explicit go-ahead.
+  - 2026-10-10: the second half holds. In the scratch run above, 2 uploads minus 1 UI delete left the 1 that teardown found.
+  - 2026-10-10: the first half was checked by hand on the preview, not locally (same `owns` rule, `preview/` prefix): deleting an inherited production Receipt left its Blob object.
 
 ## References
 
