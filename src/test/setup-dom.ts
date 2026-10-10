@@ -6,7 +6,7 @@ declare global {
 	var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
-// RTL auto-cleans and sets the act flag only when Vitest globals are on; they're
-// off. Without the flag, a stray update outside act (load handler) warns nothing.
+// Globals are off, so the test library skips its auto-cleanup and act flag.
+// Without the flag, React stays silent on updates made outside act.
 afterEach(cleanup);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
