@@ -74,6 +74,7 @@ export function ReceiptViewer({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const kind = receiptMediaKind(contentType);
+	const showsFrame = kind === "text" || (kind === "pdf" && canFramePdf());
 	const popupRef = useRef<HTMLDivElement>(null);
 
 	return (
@@ -82,7 +83,7 @@ export function ReceiptViewer({
 				className="sm:max-w-5xl"
 				// Keys pressed inside a frame never reach the dialog, so opening focus
 				// on the frame would leave Escape dead.
-				initialFocus={kind === "image" ? true : popupRef}
+				initialFocus={showsFrame ? popupRef : true}
 				ref={popupRef}
 			>
 				<DialogHeader>
@@ -152,9 +153,8 @@ function ViewerSurface({
 			<WithNewTabLink href={src}>
 				<div className={cn(SURFACE, "w-full")}>
 					{!loaded && <LoadingOverlay />}
-					{/* Untrusted vendor markup (adr019): empty sandbox = opaque origin, no
-					    script, no top navigation. White: e-receipts assume it, even in dark,
-					    so it stays hidden while loading rather than flash a blank white box. */}
+					{/* Vendor markup (adr019): empty sandbox = opaque origin, no script, no top nav.
+					    White as e-receipts assume it, so hidden until loaded: no flash in dark. */}
 					<iframe
 						className={cn(
 							"block w-full bg-white",

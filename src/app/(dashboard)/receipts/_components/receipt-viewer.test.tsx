@@ -79,13 +79,14 @@ describe("ReceiptViewer", () => {
 		expect(link).toHaveAttribute("target", "_blank");
 	});
 
-	it("image: the scroll box takes focus, so a keyboard can scroll a tall receipt", () => {
+	it("image: opens with focus on the scroll box, so arrow keys scroll a tall receipt", async () => {
 		renderViewer({ contentType: "image/jpeg" });
 
-		const region = screen.getByRole("region", { name: "Receipt image" });
-		region.focus();
-
-		expect(region).toHaveFocus();
+		await waitFor(() =>
+			expect(
+				screen.getByRole("region", { name: "Receipt image" }),
+			).toHaveFocus(),
+		);
 	});
 
 	it("image: a failed load says so in place of the image", () => {
@@ -129,10 +130,16 @@ describe("ReceiptViewer", () => {
 		},
 	);
 
-	it("pdf: with no in-browser viewer, says why and offers the new-tab link", () => {
+	it("pdf: with no in-browser viewer, says why and offers the new-tab link", async () => {
 		stubPdfViewer(false);
 		renderViewer({ contentType: "application/pdf" });
 
+		// No frame to trap Escape, so focus starts on the one thing to do.
+		await waitFor(() =>
+			expect(
+				screen.getByRole("link", { name: "Open in new tab" }),
+			).toHaveFocus(),
+		);
 		expect(
 			screen.getByText("Preview isn't available on this device."),
 		).toBeInTheDocument();
