@@ -21,7 +21,8 @@ Validated in `src/env.ts`. Pull them locally with `vercel env pull`; set them pe
 | `KV_REST_API_TOKEN` | production | Upstash Redis REST token. |
 | `INNGEST_EVENT_KEY` | production | Inngest Cloud key for sending events. |
 | `INNGEST_SIGNING_KEY` | production | Inngest Cloud key `serve` uses to verify inbound requests. |
-| `BLOB_READ_WRITE_TOKEN` | production | Vercel Blob token; mints client-upload tokens at `/api/receipts/upload` (private store) and signs reads for the `/api/receipts/[id]/image` proxy. Injected by the Blob integration in prod. |
+| `BLOB_READ_WRITE_TOKEN` | production | Vercel Blob token; mints client-upload tokens at `/api/receipts/upload` (private store) and signs reads for the `/api/receipts/[id]/image` proxy. One store serves every environment, so the Blob integration injects the same token into all of them. |
+| `BLOB_PATH_PREFIX` | preview | Blob pathname prefix naming the same Neon branch as `DATABASE_URL`: `local/<branch>/` (written by `scripts/neon-branch.sh`) or `preview/<branch>/` (set by `deploy.yml`). Writes go under it and deletes skip files outside it, so a branch never deletes production's files. Empty and forced empty on production. See [adr028](adr/adr028-blob-files-branch-by-pathname-prefix.md). |
 | `AWS_REGION` | optional | Bedrock region, default `ap-southeast-2`. Terraform sets it on Vercel; `assume` exports it locally. |
 | `AWS_ROLE_ARN` | Vercel only | IAM role the deployment's OIDC token is exchanged for (`src/server/aws/credentials.ts`). Set by Terraform per environment; leave unset locally. |
 | `BEDROCK_RECEIPT_MODEL` | optional | Bedrock inference-profile id the `process-receipt` worker calls, default `au.anthropic.claude-sonnet-4-6`. Set by Terraform from `infrastructure/locals.tf`. |

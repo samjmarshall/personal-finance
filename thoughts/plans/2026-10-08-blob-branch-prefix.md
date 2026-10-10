@@ -188,11 +188,14 @@ One commit: `chore(blob): set the prefix in neon-branch.sh and the preview deplo
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make db_branch` on a branch: `.env` gets `BLOB_PATH_PREFIX="local/<branch>/"`. Check with `make db_branch_status` and a grep on the key name only, never the value of a secret.
-- [ ] Run `make db_branch` in every live worktree (`git worktree list`). Worktrees made before this phase have a branch `DATABASE_URL` but no prefix, so they act like production and delete its files.
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make db_branch` on a branch: `.env` gets `BLOB_PATH_PREFIX="local/<branch>/"`. Check with `make db_branch_status` and a grep on the key name only, never the value of a secret.
+  - 2026-10-10: the script's log line now prints the prefix (`BLOB_PATH_PREFIX="local/feat/blob-branch-prefix/"`); status shows `*` on `local/feat/blob-branch-prefix`.
+- [x] Run `make db_branch` in every live worktree (`git worktree list`). Worktrees made before this phase have a branch `DATABASE_URL` but no prefix, so they act like production and delete its files.
+  - 2026-10-10: the only other worktree (`.claude/worktrees/trpc-step-3-plan`) has no directory left, just a stale lock from 2026-10-06. Nothing live to update.
 - [ ] A preview deploy of this branch builds. An upload on it lands under `preview/<branch>/receipts/upload/`.
+  - 2026-10-10, local stand-in: `VERCEL_ENV=preview pnpm run build` fails on a `local/` prefix ("must be preview/<branch>/ on a preview deploy") and compiles with `BLOB_PATH_PREFIX=preview/feat/blob-branch-prefix/`. The real preview needs a push.
 
 ## Phase 4: Teardown empties the prefix
 

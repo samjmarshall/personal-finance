@@ -60,7 +60,8 @@ export const env = createEnv({
 		BLOB_READ_WRITE_TOKEN: requiredInProd(z.string()),
 		/**
 		 * Names the same Neon branch as DATABASE_URL (adr028): `local/<branch>/` or
-		 * `preview/<branch>/`, else `""`. Forced `""` on production.
+		 * `preview/<branch>/`, else `""`. Forced `""` on production. A preview without
+		 * one would delete production's files, so it fails the build.
 		 */
 		BLOB_PATH_PREFIX: z.preprocess(
 			(str) => (process.env.VERCEL_ENV === "production" ? "" : (str ?? "")),
@@ -69,6 +70,12 @@ export const env = createEnv({
 				.refine(
 					(prefix) => prefix === "" || isBranchPrefix(prefix),
 					"must be local/<branch>/ or preview/<branch>/",
+				)
+				.refine(
+					(prefix) =>
+						process.env.VERCEL_ENV !== "preview" ||
+						prefix.startsWith("preview/"),
+					"must be preview/<branch>/ on a preview deploy",
 				),
 		),
 		DATABASE_URL: z.url(),

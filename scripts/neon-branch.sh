@@ -127,8 +127,10 @@ neon_api() {
 }
 
 # Resolve connection URIs for a branch ID, update .env
+# The Blob prefix travels with the DB URL (adr028): a branch DB with an empty
+# prefix would delete the production files its copied rows point at.
 apply_branch_urls() {
-  local branch_id="$1"
+  local branch_id="$1" blob_prefix="$2"
 
   local pooled_uri unpooled_uri
   pooled_uri=$(neon_api GET "/connection_uri?branch_id=${branch_id}&role_name=neondb_owner&database_name=neondb&pooled=true" | jq -r '.uri')
@@ -136,7 +138,8 @@ apply_branch_urls() {
 
   update_env_var "DATABASE_URL" "$pooled_uri"
   update_env_var "DATABASE_URL_UNPOOLED" "$unpooled_uri"
-  log ".env updated — DATABASE_URL=$(mask_url "$pooled_uri")"
+  update_env_var "BLOB_PATH_PREFIX" "$blob_prefix"
+  log ".env updated — DATABASE_URL=$(mask_url "$pooled_uri") BLOB_PATH_PREFIX=\"$blob_prefix\""
 }
 
 # ── Load credentials ──────────────────────────────────────────────────────
@@ -174,7 +177,7 @@ cmd_create() {
     branches=$(neon_api GET "/branches")
     primary_id=$(echo "$branches" | jq -r '.branches[] | select(.primary == true) | .id')
     if [[ -n "$primary_id" ]]; then
-      apply_branch_urls "$primary_id"
+      apply_branch_urls "$primary_id" ""
     fi
     exit 0
   fi
@@ -214,7 +217,9 @@ cmd_create() {
     fi
   fi
 
-  apply_branch_urls "$branch_id"
+  # The full git branch, not the 128-char Neon name: Blob has no length limit
+  # and teardown.yml deletes blobs by the full name.
+  apply_branch_urls "$branch_id" "${PREFIX}/${git_branch}/"
 
   # Run migrations
   log "Running migrations..."
@@ -270,7 +275,7 @@ cmd_delete() {
   local primary_id
   primary_id=$(echo "$branches" | jq -r '.branches[] | select(.primary == true) | .id')
   if [[ -n "$primary_id" ]]; then
-    apply_branch_urls "$primary_id"
+    apply_branch_urls "$primary_id" ""
     log "Restored .env to production DB"
   fi
 }
