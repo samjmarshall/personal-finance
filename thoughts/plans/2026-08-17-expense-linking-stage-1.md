@@ -1,3 +1,9 @@
+---
+date: 2026-08-17
+design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
+adrs: [adr004, adr005, adr010, adr011, adr012]
+status: Done
+---
 # Expense Linking Stage 1 (Must Have) Implementation Plan
 
 ## Context

@@ -271,7 +271,6 @@ describe("ReceiptsHttpController.html", () => {
 				"default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox",
 			"x-content-type-options": "nosniff",
 			"cache-control": "private, no-store",
-			"referrer-policy": "no-referrer",
 		});
 	});
 });

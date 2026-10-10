@@ -1,3 +1,9 @@
+---
+date: 2026-08-29
+design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
+adrs: [adr005, adr010, adr011, adr012]
+status: Done
+---
 # Expense Linking Stage 2 — `kind` + Timing Columns, One-Time UI Implementation Plan
 
 ## Context

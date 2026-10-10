@@ -1,7 +1,7 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-09-23'
+Date: '2026-10-10'
 # prettier-ignore
 ---
 
@@ -69,14 +69,24 @@ under option 1 below.
   correct (`style-src 'unsafe-inline'` is required for e-receipt styling; the ADR
   accepts it because no remote channel remains to exfiltrate through).
 - A strict sandbox cannot self-measure and the parent cannot read an opaque-origin
-  document's height, so there is no auto-height. The frame uses a bounded
-  `max-height` with internal scroll.
+  document's height, so there is no auto-height. The frame gets a fixed height,
+  capped to the screen, and scrolls inside. A `max-height` alone won't do: an
+  iframe with no set height falls back to 150px.
 - Blocking remote images means some receipts render without their hero/logo image.
   Accepted: line items are already extracted, so the picture is a nice-to-have.
 - The CSP must repeat `frame-ancestors 'self'` beside the app-wide
   `X-Frame-Options: SAMEORIGIN` (`next.config.ts`). A browser may judge
   `SAMEORIGIN` against the sandbox's opaque origin and refuse to frame the body;
   `frame-ancestors` overrides `X-Frame-Options` where both are set.
+- A link click inside the e-receipt navigates the sandboxed frame to the vendor
+  page. That page runs no script, but its remote images load and the frame has no
+  back button. Accepted, because the Member chose to click. New-tab links would
+  need `allow-popups` on both the iframe and the CSP, which loosens this decision.
+- The viewer's "Open in new tab" link loads the route top-level, outside the
+  iframe. There only the CSP `sandbox` directive keeps the opaque origin and blocks
+  script, so it is one lock, not two. Accepted, because a phone needs the room and
+  browser zoom to read a wide e-receipt, and remote images stay blocked. A link
+  click there navigates the tab, which does have a back button.
 
 ## Pros and Cons of the Options
 

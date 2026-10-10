@@ -1,3 +1,7 @@
+---
+date: 2026-09-03
+status: Done
+---
 # Inngest Local Dev Server Implementation Plan
 
 ## Context

@@ -149,7 +149,6 @@ export class ReceiptsHttpController {
 					"Content-Security-Policy": HTML_CSP,
 					"X-Content-Type-Options": "nosniff",
 					"Cache-Control": "private, no-store",
-					"Referrer-Policy": "no-referrer",
 				},
 			});
 		} catch (error) {

@@ -1,3 +1,9 @@
+---
+date: 2026-09-11
+design: thoughts/designs/2026-09-11-staged-promote-deployment-gate.md
+adrs: [adr013]
+status: Done
+---
 # Staged Production Deploys with a Promote Gate — Implementation Plan
 
 ## Context

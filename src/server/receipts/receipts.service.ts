@@ -241,14 +241,8 @@ export class ReceiptsService {
 		}
 	}
 
-	// Reads by `blobPathname`, never the member-supplied `blobUrl`: the SDK resolves
-	// a pathname against *our* store token, so a URL pointing at a foreign public
-	// store can't be streamed back same-origin as `text/html`.
 	async openImage(id: number): Promise<ReceiptImage> {
-		const pathname = await this.repository.findBlobPathname(id);
-		if (pathname === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
-		const blob = await this.blobStore.stream(pathname);
-		if (!blob) throw new NotFoundError("Receipt image not found.");
+		const blob = await this.streamBlob(id, "Receipt image not found.");
 		return {
 			stream: blob.stream,
 			contentType: RENDERABLE_TYPES.has(blob.contentType)
@@ -257,14 +251,10 @@ export class ReceiptsService {
 		};
 	}
 
-	// The mirror of `openImage` (adr019): that route refuses text, this one serves
-	// only text, so an image or PDF never leaves through the sandboxed route. Email
-	// bodies are stored from JS strings, which Blob writes as UTF-8.
+	// Image route refuses text, this one serves only text: images and PDFs never go
+	// out through the sandboxed route (adr019). Bodies are UTF-8, so force charset.
 	async openHtml(id: number): Promise<ReceiptHtml> {
-		const pathname = await this.repository.findBlobPathname(id);
-		if (pathname === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
-		const blob = await this.blobStore.stream(pathname);
-		if (!blob) throw new NotFoundError(BODY_NOT_FOUND_MESSAGE);
+		const blob = await this.streamBlob(id, BODY_NOT_FOUND_MESSAGE);
 		if (receiptMediaKind(blob.contentType) !== "text") {
 			await blob.stream.cancel();
 			throw new NotFoundError(BODY_NOT_FOUND_MESSAGE);
@@ -273,6 +263,19 @@ export class ReceiptsService {
 			stream: blob.stream,
 			contentType: `${bareMediaType(blob.contentType)}; charset=utf-8`,
 		};
+	}
+
+	// Read by our stored path, never the member-given URL: a URL to someone else's
+	// public store could be served back same-origin as HTML.
+	private async streamBlob(
+		id: number,
+		missingMessage: string,
+	): Promise<StreamedBlob> {
+		const pathname = await this.repository.findBlobPathname(id);
+		if (pathname === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
+		const blob = await this.blobStore.stream(pathname);
+		if (!blob) throw new NotFoundError(missingMessage);
+		return blob;
 	}
 
 	// The only server step in the client-upload flow: mint a short-lived Blob token

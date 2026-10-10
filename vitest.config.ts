@@ -3,7 +3,6 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
 	resolve: { tsconfigPaths: true },
 	test: {
-		environment: "node",
 		// Unit tests exercise units in isolation, not the runtime env contract — and
 		// modules like the logger now import ~/env, whose validation would otherwise
 		// throw here (e.g. DATABASE_URL unset). Skip it so a bare `make test` needs no
@@ -13,7 +12,25 @@ export default defineConfig({
 		// the next one and make a test's result depend on run order.
 		unstubEnvs: true,
 		// Scoped to src/ so .claude/skills/**/*.test.ts stays with node:test, which
-		// vitest would otherwise collect and fail on.
-		include: ["src/**/*.test.ts"],
+		// vitest would otherwise collect and fail on. Split by extension: node vs jsdom.
+		projects: [
+			{
+				extends: true,
+				test: {
+					name: "unit",
+					environment: "node",
+					include: ["src/**/*.test.ts"],
+				},
+			},
+			{
+				extends: true,
+				test: {
+					name: "component",
+					environment: "jsdom",
+					include: ["src/**/*.test.tsx"],
+					setupFiles: ["./src/test/setup-dom.ts"],
+				},
+			},
+		],
 	},
 });
