@@ -78,9 +78,18 @@ After implementing a phase:
 - Walk **every** item under the phase's `### Success` checklist. Run each command listed (typically some combination of `make check`, `make test`, `make test_e2e`) — don't assume one covers the others
 - Fix any issues before proceeding
 - For behavioural criteria, verify them yourself with the tools you have (browser automation, a scratch script, querying the DB) rather than deferring to the user. Check off only what you've actually observed; ask the user only when verification genuinely needs a human
-- Update checkboxes in the plan file using Edit as items are verified
+- Update checkboxes in the plan file using Edit as items are verified, and the frontmatter `status:` line (see Plan Status)
 
 Don't let verification interrupt your flow - batch it at natural stopping points.
+
+## Plan Status
+
+Keep the plan's frontmatter `status:` current with Edit, so the user can see progress at a glance. M = number of `## Phase` headings.
+
+- Starting Phase N → `status: In Progress - Phase N of M`
+- Phase N's `### Success` checks pass → `status: Ready for Review - Phase N of M`
+- Never set `Validated` or `Done` — those belong to `/validate`
+- No `status:` line (older plan)? Add one; add a frontmatter block if there is none
 
 ## Resolving ADRs
 

@@ -75,6 +75,13 @@ When planning from a `/brainstorm` design doc, reconcile its appendix **before**
 ## Rules
 
 - Open with YAML frontmatter: `date` (today), `design` (path, or omit if none), `adrs` (list of Proposed ADR ids, `[]` if none), `status` (`Ready to implement`). Keep it in sync with the `## References` section.
+- `status` is a one-glance progress label, separate from the checkboxes. `/implement` and `/validate` move it along; only the user sets `Superseded`. M = number of `## Phase` headings:
+  - `Ready to implement` — `/write-plan` saved the plan
+  - `In Progress - Phase N of M` — `/implement` is building Phase N
+  - `Ready for Review - Phase N of M` — `/implement` finished Phase N and its `### Success` checks
+  - `Validated - Phase N of M` — `/validate` confirmed Phases 1–N
+  - `Done` — `/validate` confirmed every phase, or the user calls it shipped
+  - `Superseded by <plan path or ADR>` — a later plan or decision replaced this one
 - Tests ship in the phase that changes behaviour, not a trailing appendix.
 - Success criteria are one flat checklist — don't group them by who verifies them. Runnable criteria use `make` targets (`make check`, `make test`, `make build`, `make test_e2e`); the rest state an observable behaviour.
 - UI phases add `/design-review` as a success checklist item.

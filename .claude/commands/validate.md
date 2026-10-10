@@ -101,7 +101,17 @@ For each phase in the plan:
 5. **Update inline docs**:
    - Update **`docs/README.md`** when the plan adds an env var, integration, scheduled job, or Make target. Skip otherwise.
 
-### Step 3: Update Associated Issue
+### Step 3: Update Plan Status
+
+Set the plan's frontmatter `status:` with Edit, from your per-phase results. M = number of `## Phase` headings.
+
+- Every phase passes → `status: Done`
+- Phases 1–N pass, a later one doesn't (or isn't built yet) → `status: Validated - Phase N of M`
+- Phase 1 fails → leave the status as it is
+
+A phase passes when its changes are in place and no runnable `### Success` criterion fails. Items only a human can check ("Unverified — Needs You") and code review findings don't hold a phase back — status tracks progress, not checkboxes. No `status:` line (older plan)? Add one.
+
+### Step 4: Update Associated Issue
 
 If the plan's `## References` links to an issue or ticket, sync your verification results back to it.
 
@@ -110,7 +120,7 @@ If the plan's `## References` links to an issue or ticket, sync your verificatio
 3. **If it has no checkboxes**, skip this step.
 4. GitHub: `gh issue edit <number> --body "..."`. Linear: MCP tools. File tickets: Edit tool.
 
-### Step 4: Generate Validation Report
+### Step 5: Generate Validation Report
 
 Create comprehensive validation summary:
 
@@ -121,6 +131,7 @@ Create comprehensive validation summary:
 ✓ Phase 1: [Name] - Fully implemented
 ✓ Phase 2: [Name] - Fully implemented
 ⚠️ Phase 3: [Name] - Partially implemented (see issues)
+Plan status → `Validated - Phase 2 of 3`
 
 ### Success Criteria Results
 ✓ Build passes: `make build`
@@ -195,6 +206,7 @@ Always verify:
 - [ ] Documentation updated if needed
 - [ ] No ADR tied to this work remains `Proposed`/`In Progress`
 - [ ] `## Terminology TODO` resolutions present in `CONTEXT.md` and used in code
+- [ ] Plan frontmatter `status:` updated
 
 ## Relationship to Other Commands
 
