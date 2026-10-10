@@ -54,7 +54,9 @@ describe("ReceiptSourceThumbnail", () => {
 		expect(button.querySelector("img")).toBeNull();
 		expect(button).toHaveTextContent("Preview unavailable");
 		expect(
-			screen.getByRole("button", { name: "Open full receipt" }),
+			screen.getByRole("button", {
+				name: "Preview unavailable. Open full receipt",
+			}),
 		).toBeInTheDocument();
 	});
 

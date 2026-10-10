@@ -25,7 +25,7 @@ export function previewIcon(contentType: string | null) {
 	return kind === "image" ? null : STAND_IN[kind].Icon;
 }
 
-// Each name contains the button's visible text (WCAG 2.5.3).
+// Where the button shows text, its name contains it (WCAG 2.5.3).
 const OPEN_LABEL: Record<ReceiptMediaKind, string> = {
 	image: "Open full receipt",
 	pdf: "Open PDF receipt",
@@ -62,7 +62,9 @@ export function ReceiptSourceThumbnail({
 
 	return (
 		<button
-			aria-label={OPEN_LABEL[kind]}
+			aria-label={
+				failed ? `Preview unavailable. ${OPEN_LABEL[kind]}` : OPEN_LABEL[kind]
+			}
 			className={cn(
 				FRAME,
 				"group relative block outline-none transition-colors hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
