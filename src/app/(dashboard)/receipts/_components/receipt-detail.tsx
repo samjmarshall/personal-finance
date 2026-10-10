@@ -54,12 +54,10 @@ function gapParts({ amountDelta, dayDelta }: Candidate) {
 function ReceiptSource({
 	contentType,
 	id,
-	imageSrc,
 	vendor,
 }: {
 	contentType: string | null;
 	id: number;
-	imageSrc: string;
 	vendor: string | null;
 }) {
 	const [viewerOpen, setViewerOpen] = useState(false);
@@ -69,7 +67,7 @@ function ReceiptSource({
 			<ReceiptSourceThumbnail
 				contentType={contentType}
 				onOpen={() => setViewerOpen(true)}
-				src={imageSrc}
+				src={receiptImageUrl(id)}
 			/>
 			<ReceiptViewer
 				contentType={contentType}
@@ -233,7 +231,6 @@ export function ReceiptDetail({
 		{ enabled: open },
 	);
 
-	const imageSrc = data ? receiptImageUrl(data.id) : "";
 	const mismatch = data ? itemsTotalMismatch(data.total, data.items) : false;
 	// Attribution only makes sense once the receipt belongs to a transaction —
 	// until then there's no spend for an item to be a slice of.
@@ -316,7 +313,6 @@ export function ReceiptDetail({
 							<ReceiptSource
 								contentType={data.contentType}
 								id={data.id}
-								imageSrc={imageSrc}
 								key={data.id}
 								vendor={data.vendor}
 							/>
