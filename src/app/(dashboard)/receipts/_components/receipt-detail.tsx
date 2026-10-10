@@ -1,14 +1,8 @@
 "use client";
 
 import { skipToken } from "@tanstack/react-query";
-import {
-	Check,
-	FileText,
-	Loader2Icon,
-	Mail,
-	TriangleAlert,
-} from "lucide-react";
-import { useRef } from "react";
+import { Check, Loader2Icon, TriangleAlert } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Money } from "~/components/money";
@@ -21,12 +15,14 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
-import { receiptImageUrl, receiptMediaKind } from "~/domain/receipts";
+import { receiptImageUrl } from "~/domain/receipts";
 import { itemsTotalMismatch } from "~/domain/receipts/receipt-total";
 import { ReceiptStatus } from "~/lib/constants";
 import { formatCurrency, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { MoreDetails } from "./more-details";
+import { ReceiptSourceThumbnail } from "./receipt-source-thumbnail";
+import { ReceiptViewer, receiptTitle } from "./receipt-viewer";
 
 type Candidate = RouterOutputs["receipt"]["matchCandidates"][number];
 
@@ -36,12 +32,6 @@ const MAX_SUGGESTIONS = 4;
 
 // Below half a cent the gap is rounding noise, not a difference worth naming.
 const SUB_CENT = 0.005;
-
-// A processed receipt with no vendor is still worth opening (the image is the
-// source of truth); fall back to a neutral title rather than blank.
-function titleFor(vendor: string | null) {
-	return vendor?.trim() ? vendor : "Receipt";
-}
 
 // Why this candidate ranked where it did, in the member's terms. Sub-cent gaps
 // read as "exact" — "$0.00 off" looks like a bug.
@@ -59,52 +49,36 @@ function gapParts({ amountDelta, dayDelta }: Candidate) {
 	return [amount, days];
 }
 
-/**
- * The receipt's stored source, in whichever form the blob proxy can serve it.
- * Only images stream back under their real type; a PDF opens in a tab and an
- * emailed body has no picture at all, so both stand in with an icon.
- */
-function SourcePane({
+// The viewer's open state lives here so every close path resets it: the detail
+// popup unmounts on close, and the caller's key resets it on a receipt switch.
+function ReceiptSource({
 	contentType,
-	src,
+	id,
+	imageSrc,
 	vendor,
 }: {
 	contentType: string | null;
-	src: string;
+	id: number;
+	imageSrc: string;
 	vendor: string | null;
 }) {
-	const kind = receiptMediaKind(contentType);
-	if (kind === "pdf")
-		return (
-			<a
-				className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground text-xs hover:text-foreground"
-				href={src}
-				rel="noreferrer"
-				target="_blank"
-			>
-				<FileText aria-hidden className="h-8 w-8" />
-				Open PDF
-			</a>
-		);
-
-	// Never rendered as markup — it is untrusted third-party mail. The extraction
-	// beside this pane is the readable form.
-	if (kind === "text")
-		return (
-			<div className="flex h-48 flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground text-xs">
-				<Mail aria-hidden className="h-8 w-8" />
-				Arrived by email — no image to preview.
-			</div>
-		);
+	const [viewerOpen, setViewerOpen] = useState(false);
 
 	return (
-		// biome-ignore lint/performance/noImgElement: private-blob proxy, not a static asset for next/image
-		<img
-			alt={`Receipt from ${titleFor(vendor)}`}
-			className="h-auto w-full object-contain"
-			loading="lazy"
-			src={src}
-		/>
+		<>
+			<ReceiptSourceThumbnail
+				contentType={contentType}
+				onOpen={() => setViewerOpen(true)}
+				src={imageSrc}
+			/>
+			<ReceiptViewer
+				contentType={contentType}
+				onOpenChange={setViewerOpen}
+				open={viewerOpen}
+				receiptId={id}
+				vendor={vendor}
+			/>
+		</>
 	);
 }
 
@@ -304,7 +278,10 @@ export function ReceiptDetail({
 		<Dialog onOpenChange={onOpenChange} open={open}>
 			<DialogContent className="sm:max-w-4xl">
 				<DialogHeader>
-					<DialogTitle>{data ? titleFor(data.vendor) : "Receipt"}</DialogTitle>
+					{/* pr-8 keeps a long vendor name clear of the corner Close button. */}
+					<DialogTitle className="pr-8">
+						{receiptTitle(data?.vendor ?? null)}
+					</DialogTitle>
 					<DialogDescription>
 						{data?.receiptDate
 							? `Dated ${formatDate(data.receiptDate)}`
@@ -334,14 +311,16 @@ export function ReceiptDetail({
 						/>
 
 						<div className="grid gap-5 sm:grid-cols-[minmax(0,11rem)_1fr]">
-							{/* Source image — the receipt's ground truth, beside the extraction. */}
-							<div className="h-fit overflow-hidden rounded-lg border border-border bg-muted/40">
-								<SourcePane
-									contentType={data.contentType}
-									src={imageSrc}
-									vendor={data.vendor}
-								/>
-							</div>
+							{/* The receipt's ground truth, beside the extraction. Keyed so a
+							    cached receipt swapped in under the open dialog starts closed
+							    with a fresh thumbnail. */}
+							<ReceiptSource
+								contentType={data.contentType}
+								id={data.id}
+								imageSrc={imageSrc}
+								key={data.id}
+								vendor={data.vendor}
+							/>
 
 							{/* min-w-0: as a grid item this defaults to min-width:auto, so the
 							    items table's w-52 picker column inflated the track instead of

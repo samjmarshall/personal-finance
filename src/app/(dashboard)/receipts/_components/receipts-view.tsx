@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Mail, RotateCw, Trash2 } from "lucide-react";
+import { RotateCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
@@ -9,11 +9,12 @@ import { PageHeader } from "~/components/page-header";
 import { SelectField, type SelectFieldOption } from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
-import { receiptImageUrl, receiptMediaKind } from "~/domain/receipts";
+import { receiptImageUrl } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ReceiptDetail } from "./receipt-detail";
+import { previewIcon } from "./receipt-source-thumbnail";
 import { ReceiptUpload } from "./receipt-upload";
 
 type ReceiptRow = RouterOutputs["receipt"]["list"][number];
@@ -64,16 +65,6 @@ const MATCH_FILTER_ITEMS: SelectFieldOption<"all" | "unmatched">[] = [
 	{ value: "all", label: "Matched and unmatched" },
 	{ value: "unmatched", label: "Unmatched only" },
 ];
-
-// Only images survive the blob proxy's renderable allowlist; a PDF or a forwarded
-// email body comes back as octet-stream under nosniff, so an <img> would render
-// broken. Null means "safe to show the real thing".
-function previewIcon(contentType: string | null) {
-	const kind = receiptMediaKind(contentType);
-	if (kind === "pdf") return FileText;
-	if (kind === "text") return Mail;
-	return null;
-}
 
 export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
 	const [status, setStatus] = useState<ReceiptStatus | null>(null);
@@ -165,7 +156,7 @@ export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
 										<td className="px-4 py-2.5">
 											<button
 												aria-label={`Open ${r.vendor ?? "unread receipt"}`}
-												className="block h-10 w-10 overflow-hidden rounded-md border border-border bg-muted/40"
+												className="block h-10 w-10 overflow-hidden rounded-md border border-border bg-muted/40 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 												onClick={() => setDetailId(r.id)}
 												type="button"
 											>
