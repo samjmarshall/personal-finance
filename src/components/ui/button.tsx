@@ -1,6 +1,7 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
+import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 
 const buttonVariants = cva(
@@ -44,14 +45,33 @@ function Button({
 	className,
 	variant = "default",
 	size = "default",
+	loading = false,
+	disabled,
+	focusableWhenDisabled,
+	children,
 	...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props &
+	VariantProps<typeof buttonVariants> & { loading?: boolean }) {
+	const iconOnly = size?.startsWith("icon");
 	return (
 		<ButtonPrimitive
+			aria-busy={loading || undefined}
 			className={cn(buttonVariants({ variant, size, className }))}
 			data-slot="button"
+			disabled={disabled || loading}
+			// A natively disabled button drops focus mid-save; keep it on the button.
+			focusableWhenDisabled={focusableWhenDisabled || loading}
 			{...props}
-		/>
+		>
+			{loading && iconOnly ? (
+				<Spinner />
+			) : (
+				<>
+					{loading && <Spinner data-icon="inline-start" />}
+					{children}
+				</>
+			)}
+		</ButtonPrimitive>
 	);
 }
 

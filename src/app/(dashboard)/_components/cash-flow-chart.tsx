@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { useState } from "react";
 import {
 	Bar,
 	CartesianGrid,
@@ -12,7 +12,9 @@ import {
 	YAxis,
 } from "recharts";
 
+import { AsyncBoundary } from "~/components/async-boundary";
 import { SelectField } from "~/components/select-field";
+import { ChartSkeleton } from "~/components/skeletons";
 import {
 	type ChartConfig,
 	ChartContainer,
@@ -72,13 +74,13 @@ export function CashFlowChart() {
 			</div>
 			{/* Toggling periodKind re-suspends only the chart body, so the toggle
 			    stays interactive while the new grid loads. */}
-			<Suspense
-				fallback={
-					<div className="h-72 w-full animate-pulse rounded-lg bg-muted/50" />
-				}
+			{/* 312 = the h-72 chart plus its legend row (mb-2 + one text-xs line). */}
+			<AsyncBoundary
+				label="cash flow chart"
+				skeleton={<ChartSkeleton height={312} />}
 			>
 				<CashFlowChartBody periodKind={periodKind} />
-			</Suspense>
+			</AsyncBoundary>
 		</div>
 	);
 }
