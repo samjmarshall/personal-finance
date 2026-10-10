@@ -273,9 +273,9 @@ export function ReceiptDetail({
 
 	return (
 		<Dialog onOpenChange={onOpenChange} open={open}>
-			<DialogContent className="sm:max-w-4xl">
+			<DialogContent className="sm:max-w-[min(56rem,calc(100%-2rem))]">
 				<DialogHeader>
-					{/* pr-8 keeps a long vendor name clear of the corner Close button. */}
+					{/* Right padding keeps a long vendor name clear of the corner Close button. */}
 					<DialogTitle className="pr-8">
 						{receiptTitle(data?.vendor ?? null)}
 					</DialogTitle>

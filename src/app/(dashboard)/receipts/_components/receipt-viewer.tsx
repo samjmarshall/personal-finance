@@ -55,10 +55,8 @@ const FIT_HEIGHT = "h-[min(75dvh,calc(100dvh-12rem))]";
 const FIT_MAX_HEIGHT = "max-h-[min(75dvh,calc(100dvh-12rem))]";
 
 /**
- * The original receipt, full size. An iframe can't expose its HTTP status, so a
- * missing PDF or email body shows the route's plain "Not found" inside the frame;
- * only an image gets the in-app error. Escape pressed inside a frame stays in that
- * frame; Close still works.
+ * A frame can't report HTTP status, so a missing PDF or email shows the route's
+ * plain "Not found" in-frame; only an image gets the in-app error.
  */
 export function ReceiptViewer({
 	receiptId,
@@ -80,14 +78,14 @@ export function ReceiptViewer({
 	return (
 		<Dialog onOpenChange={onOpenChange} open={open}>
 			<DialogContent
-				className="sm:max-w-5xl"
+				className="sm:max-w-[min(64rem,calc(100%-2rem))]"
 				// Keys pressed inside a frame never reach the dialog, so opening focus
 				// on the frame would leave Escape dead.
 				initialFocus={showsFrame ? popupRef : true}
 				ref={popupRef}
 			>
 				<DialogHeader>
-					{/* pr-8 keeps a long vendor name clear of the corner Close button. */}
+					{/* Right padding keeps a long vendor name clear of the corner Close button. */}
 					<DialogTitle className="pr-8">{receiptTitle(vendor)}</DialogTitle>
 					<DialogDescription>
 						{kind ? DESCRIPTION[kind] : "Original receipt"}
@@ -153,8 +151,8 @@ function ViewerSurface({
 			<WithNewTabLink href={src}>
 				<div className={cn(SURFACE, "w-full")}>
 					{!loaded && <LoadingOverlay />}
-					{/* Vendor markup (adr019): empty sandbox = opaque origin, no script, no top nav.
-					    White as e-receipts assume it, so hidden until loaded: no flash in dark. */}
+					{/* Untrusted vendor markup (adr019), so fully sandboxed. White because emails
+					    assume it; hidden until loaded so dark mode doesn't flash. */}
 					<iframe
 						className={cn(
 							"block w-full bg-white",
@@ -225,8 +223,8 @@ function NewTabLink({
 }) {
 	return (
 		<a
-			// cn() merges away the base border-transparent, as Button does; without it
-			// the outline border never shows.
+			// Class merge needed: the base transparent border would otherwise beat the
+			// outline variant's border.
 			className={cn(
 				primary
 					? buttonVariants()

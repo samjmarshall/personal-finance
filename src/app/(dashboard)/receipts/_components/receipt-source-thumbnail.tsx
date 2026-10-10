@@ -80,7 +80,9 @@ export function ReceiptSourceThumbnail({
 				// biome-ignore lint/performance/noImgElement: private-blob proxy, not a static asset for next/image
 				<img
 					alt=""
-					className="h-auto w-full object-contain"
+					// Holds the stand-in's height until the image arrives, so the button
+					// isn't a 2px sliver to tab onto and the extraction doesn't jump.
+					className="h-auto min-h-48 w-full object-contain"
 					loading="lazy"
 					onError={() => setFailed(true)}
 					src={src}
