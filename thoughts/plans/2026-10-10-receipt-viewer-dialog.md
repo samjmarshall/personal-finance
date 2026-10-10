@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-09-23-receipt-viewer-dialog.md
 adrs: [adr019]
-status: Ready for Review - Phase 3 of 4
+status: Validated - Phase 3 of 4
 ---
 # Receipt Viewer Dialog Implementation Plan
 
