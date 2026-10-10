@@ -282,7 +282,7 @@ The image and html methods share one private session gate, and that gate carries
   - a PDF receipt opens in the browser's PDF viewer inside the dialog, and its "Open in new tab" link opens it top-level;
   - each shows the spinner, then the content.
 - [ ] On a phone, a PDF receipt can be opened from the viewer. Sam checks this on the PR preview deployment.
-- [x] With focus outside the frame, Escape closes only the viewer, and the detail dialog stays open. Closing and reopening the detail never shows the viewer, and neither does switching to another receipt.
+- [x] With focus outside the frame, Escape closes only the viewer, and the detail dialog stays open. Closing and reopening the detail never shows the viewer, and neither does switching to another receipt. (Re-checked after 8efcd60 on email id 68: opening focus lands on the viewer, not the frame, and Escape closes only the viewer.)
 - [x] Tabbing shows a visible focus ring on the list thumbnail and on the detail thumbnail. The ring is not clipped.
 - [x] `/design-review` on the detail thumbnail and the viewer, at 375px and desktop, in light and dark. No blockers. Fixed four High findings: the "Open in new tab" border (`cn()` around `buttonVariants`), keyboard scroll for a tall image (a focusable `<section aria-label="Receipt image">`), the email description now says most links are blocked, and the detail thumbnail is capped at `max-h-64 sm:max-h-80`. Then, on Sam's call, fixed H3/M1 ("Open in new tab" on image and email too; checked live: the email tab is top-level at origin `null`, script blocked, `document.cookie` throws), M3 (the phone PDF fallback and a failed thumbnail say why), M5 (no "Receipt from Receipt" alt), M7 (PDF and email thumbnails brighten on hover) and M9 (`pr-8` on both dialog titles). Not fixed: M2, M4, M6, M8.
 
@@ -298,7 +298,7 @@ The image and html methods share one private session gate, and that gate carries
 - [x] On the branch dev server, the e-receipt opens in the viewer, is readable, and keeps its inline styles. The frame is not refused by `X-Frame-Options`. (Checked on id 9, Amazon.com.au: header bar, buttons and layout intact.)
 - [x] Scripts are inert. The sandbox blocks script execution, and nothing runs in the parent. (The stored body has no script, so a hostile body was injected with the real headers kept: inline script, `onerror`, `fetch` and a `javascript:` link all blocked, with "Blocked script execution … 'allow-scripts' permission is not set". The parent title and URL were unchanged, and `iframe.contentDocument` is null.)
 - [x] Remote images are blocked. The frame makes no requests to vendor hosts, and the console shows CSP `img-src` violations. (All 7 `m.media-amazon.com` requests show `[FAILED] csp`.)
-- [x] The frame keeps its bounded height and scrolls internally (675px frame, 850px content, scrolled 175px)
+- [x] The frame keeps its bounded height and scrolls internally (675px frame, 850px content, scrolled 175px) (After 8efcd60: 600px at 1280×800, 475px at 375×667, 376px at 320×568; the popup itself never scrolls. The email frame stays hidden until it loads.)
 - [x] Clicking a link in the e-receipt never navigates the app page itself. The page stays on `/receipts` with the dialogs open (Out of Scope: the frame itself may navigate). (A `target=_blank` link: popup blocked by the sandbox. A plain `http://` link: blocked as mixed content in the frame. Both left 2 dialogs open and no new tab.)
 - [x] Signed in on the branch's Vercel preview, the response headers of `/api/receipts/<id>/html` match Desired End State exactly, including `Referrer-Policy: no-referrer`. The signed-out 401 is covered by Phase 1's live check and the controller tests; on a preview, a private window meets Vercel's deployment protection before the app. (Checked on the PR #49 preview, id 9: all five match exactly, and `referrer-policy: no-referrer` beats the global `strict-origin-when-cross-origin` on Vercel too.)
 - [x] adr019 Status is `Accepted`
@@ -306,7 +306,7 @@ The image and html methods share one private session gate, and that gate carries
 ## References
 - Design doc: `thoughts/designs/2026-09-23-receipt-viewer-dialog.md` (carries `## Related ADRs`). Its file list and helper names are stale; this plan's Current State supersedes them.
 - ADRs:
-  - `docs/adr/adr019-sandboxed-iframe-for-e-receipt-html.md` (Proposed): implemented by Phase 1 (route and CSP) and Phase 3 (sandboxed iframe); accepted in Phase 4
+  - `docs/adr/adr019-sandboxed-iframe-for-e-receipt-html.md` (Accepted): implemented by Phase 1 (route and CSP) and Phase 3 (sandboxed iframe); accepted in Phase 4
   - Composes with these Accepted ADRs:
     - adr001 (local `useState`, no Context);
     - adr004 / adr021 (`receipts.http.controller.ts` holds the gate, the service holds the rules);

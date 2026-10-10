@@ -69,8 +69,9 @@ under option 1 below.
   correct (`style-src 'unsafe-inline'` is required for e-receipt styling; the ADR
   accepts it because no remote channel remains to exfiltrate through).
 - A strict sandbox cannot self-measure and the parent cannot read an opaque-origin
-  document's height, so there is no auto-height. The frame uses a bounded
-  `max-height` with internal scroll.
+  document's height, so there is no auto-height. The frame gets a fixed height,
+  capped to the screen, and scrolls inside. A `max-height` alone won't do: an
+  iframe with no set height falls back to 150px.
 - Blocking remote images means some receipts render without their hero/logo image.
   Accepted: line items are already extracted, so the picture is a nice-to-have.
 - The CSP must repeat `frame-ancestors 'self'` beside the app-wide
