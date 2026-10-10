@@ -228,22 +228,26 @@ One commit: `chore(blob): delete branch blobs on teardown`.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `node scripts/blob-prefix-delete.ts receipts/` and `node scripts/blob-prefix-delete.ts ""` both exit non-zero without listing
-- [ ] Locally on a scratch branch:
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `node scripts/blob-prefix-delete.ts receipts/` and `node scripts/blob-prefix-delete.ts ""` both exit non-zero without listing
+  - 2026-10-10: `local/b/ receipts/` and no args refuse too.
+- [x] Locally on a scratch branch:
   - upload a Receipt
   - `make db_branch_delete` logs one blob deleted for `local/<branch>/`
   - a `list` with that prefix is empty
+  - 2026-10-10 on `scratch/blob-teardown`: two uploads under `local/scratch/blob-teardown/receipts/upload/`, one deleted in the UI. `make db_branch_delete` logged "deleted 1 blob(s)", then a re-run logged "deleted 0 blob(s)" and "Branch not found".
 - [ ] Closing a scratch PR runs "Delete branch blobs" green, and its log shows the `preview/<branch>/` count
+  - Needs a push, a scratch PR and the `BLOB_READ_WRITE_TOKEN` repo secret.
 - [ ] Locally on a branch at https://personal-finance.localhost/receipts:
   - deleting an inherited production Receipt removes the row, and its production `blobPathname` still answers `head`
   - deleting a Receipt uploaded on the branch removes its file
+  - 2026-10-10: the second half holds. In the scratch run above, 2 uploads minus 1 UI delete left the 1 that teardown found. The inherited half is not run yet: a guard bug there would delete a production file for good, so it waits for an explicit go-ahead.
 
 ## References
 
 - Ticket: none. This came from the step-7 Phase 4 browser check (2026-10-08).
-- ADRs: `docs/adr/adr028-blob-files-branch-by-pathname-prefix.md` (Proposed, written 2026-10-10 by `/domain-model`), implemented by Phases 1–4.
+- ADRs: `docs/adr/adr028-blob-files-branch-by-pathname-prefix.md` (written 2026-10-10 by `/domain-model`, Accepted 2026-10-10), implemented by Phases 1–4.
 - Composes with: adr004 (adapter tier, `.claude/rules/server-architecture.md:32`), adr021 and adr022 via step 7.
 - Prior plan: `thoughts/plans/2026-10-07-trpc-3-tier-step-7-receipts.md`. This plan depends on its Phase 5 (`:466-536`), now shipped.
 - Vercel docs: https://vercel.com/docs/vercel-blob, https://vercel.com/docs/vercel-blob/using-blob-sdk, https://vercel.com/docs/vercel-blob/usage-and-pricing, https://vercel.com/docs/cli/deploy

@@ -102,6 +102,32 @@ jobs:
               "$api/v13/deployments/$id?teamId=$TEAM_ID" | jq -c '{uid, state}'
           done
 
+      # Blob has no branches: every environment shares one store, and a branch
+      # writes under preview/<branch>/ or local/<branch>/ (adr028). Last, so no
+      # preview is left to upload after the cleanup. !cancelled(): a failed step
+      # above must not strand the files; the script is safe to re-run.
+      - uses: actions/checkout@v6
+        if: ${{ !cancelled() && steps.skip.outputs.skip != 'true' }}
+
+      - uses: pnpm/action-setup@v4
+        if: ${{ !cancelled() && steps.skip.outputs.skip != 'true' }}
+
+      - uses: actions/setup-node@v6
+        if: ${{ !cancelled() && steps.skip.outputs.skip != 'true' }}
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: make install
+        if: ${{ !cancelled() && steps.skip.outputs.skip != 'true' }}
+
+      - name: Delete branch blobs
+        if: ${{ !cancelled() && steps.skip.outputs.skip != 'true' }}
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+        run: node scripts/blob-prefix-delete.ts "preview/${BRANCH}/" "local/${BRANCH}/"
+
       # No Inngest cleanup step: app/environment archival is a dashboard-only
       # action with no public REST endpoint. Deleting the Vercel deployment
       # above removes the endpoint Inngest invokes, so orphaned crons (ADR002's

@@ -1,5 +1,5 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
 Date: '2026-10-10'
 # prettier-ignore
@@ -41,7 +41,7 @@ Chosen option: "1. One store, a pathname prefix per Neon branch", because it is 
 - **The prefix names the same branch as `DATABASE_URL`.** `BLOB_PATH_PREFIX` is `local/<branch>/` locally, `preview/<branch>/` on a preview deploy, and `""` on production and local `main`. It's set where the database URL is chosen: `neon-branch.sh` writes both to `.env`, and `deploy.yml` passes it to a preview deploy by the same git ref the Neon integration names `preview/<ref>` after. `src/env.ts` forces `""` when `VERCEL_ENV` is `production` and fails a preview build without a `preview/` prefix.
 - **The adapter owns the rule.** `VercelBlobStore` takes the prefix. `write` puts at `prefix + pathname` and returns the prefixed pathname, which the service stores on the row. `read` and `stream` take any pathname. `delete` is a silent no-op unless the environment owns the pathname. A branch owns paths under its prefix; production owns every path not under `local/` or `preview/`. An architecture rule keeps `@vercel/blob` imports inside `src/server/blob-store/`.
 - **Browser uploads use the prefix too.** The browser builds `<prefix>receipts/upload/<name>`, since Blob's token hook can't rewrite the pathname. The upload grant and `receipt.create` both refuse a pathname outside that path with `InvalidInputError` (HTTP 400, tRPC `BAD_REQUEST`).
-- **Teardown empties the prefix.** `scripts/blob-prefix-delete.ts` lists and deletes a prefix, and refuses anything that isn't `local/…/` or `preview/…/` (or bare `local/` for `delete --all`). `neon-branch.sh delete` runs it before deleting the Neon branch. `teardown.yml` runs it last, after the preview deployments are gone.
+- **Teardown empties the prefix.** `scripts/blob-prefix-delete.ts` lists and deletes a prefix, and refuses anything that isn't `local/…/` or `preview/…/` (or bare `local/` or `preview/`, which empty every branch of that kind). `neon-branch.sh delete` runs it before deleting the Neon branch. `teardown.yml` runs it last, after the preview deployments are gone.
 
 ### Positive Consequences
 
@@ -109,4 +109,5 @@ Option 2, plus a job that copies every production file a new branch's rows point
 ## Links
 
 - Composes with [adr004](adr004-domain-oriented-3-tier-server-architecture.md): the prefix rule lives in the adapter tier, so services stay environment-free.
+- Extends [adr021](adr021-trpc-router-is-the-controller-tier.md): `InvalidInputError` is a third shared domain error, mapped to `BAD_REQUEST` beside the other two.
 - Vendor docs: [Vercel Blob](https://vercel.com/docs/vercel-blob), [Using the Blob SDK](https://vercel.com/docs/vercel-blob/using-blob-sdk), [Vercel CLI deploy](https://vercel.com/docs/cli/deploy)
