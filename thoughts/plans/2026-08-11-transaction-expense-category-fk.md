@@ -1,3 +1,8 @@
+---
+date: 2026-08-11
+adrs: [adr005]
+status: Superseded by 2026-08-17-expense-linking-stage-1
+---
 # Transaction → Expense Category FK Implementation Plan
 
 ## Context

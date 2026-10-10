@@ -1,3 +1,9 @@
+---
+date: 2026-08-11
+design: thoughts/designs/2026-08-11-shadcn-base-ui-migration.md
+adrs: [adr008, adr009]
+status: Done
+---
 # shadcn on Base UI Migration Implementation Plan
 
 ## Context

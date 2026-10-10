@@ -1,3 +1,9 @@
+---
+date: 2026-09-04
+design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
+adrs: [adr002, adr003, adr005, adr010, adr012]
+status: Done
+---
 # Expense Linking Stage 5 — Receipts (upload → worker → page → matching) Implementation Plan
 
 ## Context

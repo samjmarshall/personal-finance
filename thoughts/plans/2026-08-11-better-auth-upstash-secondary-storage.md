@@ -1,3 +1,9 @@
+---
+date: 2026-08-11
+design: thoughts/designs/2026-08-11-better-auth-upstash-secondary-storage.md
+adrs: [adr003, adr004, adr006, adr007]
+status: Done
+---
 # Better Auth secondary storage on Upstash Redis — Implementation Plan
 
 ## Context

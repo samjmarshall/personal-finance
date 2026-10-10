@@ -1,3 +1,9 @@
+---
+date: 2026-09-12
+design: thoughts/designs/2026-08-24-trpc-error-parser.md
+adrs: [adr003, adr004, adr012]
+status: Done
+---
 # tRPC Error Parser — normalize DB errors into a tagged union — Implementation Plan
 
 ## Context

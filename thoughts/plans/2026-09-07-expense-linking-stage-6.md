@@ -1,3 +1,9 @@
+---
+date: 2026-09-07
+design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
+adrs: [adr002, adr005, adr010, adr012]
+status: Done
+---
 # Expense Linking Stage 6 — Email Ingestion Implementation Plan
 
 ## Context

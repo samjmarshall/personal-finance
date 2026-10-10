@@ -1,3 +1,9 @@
+---
+date: 2026-09-01
+design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
+adrs: [adr005, adr008, adr010, adr011, adr012]
+status: Done
+---
 # Expense Linking Stage 3 — Cash Flow Chart + Balance Snapshot Implementation Plan
 
 ## Context
