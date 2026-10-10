@@ -160,11 +160,12 @@ One commit: `feat(receipts): browser uploads land under the branch prefix`, buil
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes
 - [ ] Locally, with `BLOB_PATH_PREFIX="local/<branch>/"` set by hand: an upload at https://personal-finance.localhost/receipts mints, creates the row and extracts. The row's `blobPathname` (more-details panel) starts with `local/<branch>/receipts/upload/`.
-- [ ] `/security-review`: the upload grant and the `create` path check
+  - 2026-10-10: mint, create and the image proxy read all work; pathname `local/feat/blob-branch-prefix/receipts/upload/prefix-test-receipt-….jpg`. A token and a `create` for `receipts/upload/evil.jpg` both 400. Extraction not seen: Bedrock refused an expired AWS session token (run `assume` before `make start`).
+- [x] `/security-review`: the upload grant and the `create` path check
 
 ## Phase 3: Set the prefix where the DB URL is set
 

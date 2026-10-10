@@ -75,7 +75,7 @@ function previewIcon(contentType: string | null) {
 	return null;
 }
 
-export function ReceiptsView() {
+export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
 	const [status, setStatus] = useState<ReceiptStatus | null>(null);
 	const [match, setMatch] = useState<"all" | "unmatched">("all");
 	const [detailId, setDetailId] = useState<number | null>(null);
@@ -109,7 +109,7 @@ export function ReceiptsView() {
 	return (
 		<div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
 			<PageHeader
-				actions={<ReceiptUpload />}
+				actions={<ReceiptUpload uploadPrefix={uploadPrefix} />}
 				description="Upload a photo or PDF; we extract the vendor, total and line items."
 				title="Receipts"
 			/>

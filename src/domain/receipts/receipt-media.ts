@@ -6,6 +6,12 @@ export function receiptImageUrl(id: number): string {
 	return `/api/receipts/${id}/image`;
 }
 
+// The server mints upload tokens and creates rows only under this folder, and the
+// browser builds its pathname from it, so the two can't drift.
+export function receiptUploadPrefix(blobPathPrefix: string): string {
+	return `${blobPathPrefix}receipts/upload/`;
+}
+
 export type ReceiptMediaKind = "image" | "pdf" | "text";
 
 // One table for every media type a receipt can hold, so no caller keeps its own list.

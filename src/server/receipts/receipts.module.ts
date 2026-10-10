@@ -1,3 +1,4 @@
+import { receiptUploadPrefix } from "~/domain/receipts";
 import { env } from "~/env";
 import { membersService } from "~/server/auth/members.module";
 import { VercelBlobStore } from "~/server/blob-store/blob-store";
@@ -20,5 +21,6 @@ export const receiptsService = new ReceiptsService({
 	categories: categoriesService,
 	blobStore: new VercelBlobStore({ prefix: env.BLOB_PATH_PREFIX }),
 	uploads: new VercelClientUploads(),
+	uploadPathPrefix: receiptUploadPrefix(env.BLOB_PATH_PREFIX),
 	posthogUi: { uiHost: env.POSTHOG_UI_HOST, projectId: env.POSTHOG_PROJECT_ID },
 });

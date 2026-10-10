@@ -14,3 +14,10 @@ export class ConflictError extends Error {
 		this.name = "ConflictError";
 	}
 }
+
+export class InvalidInputError extends Error {
+	constructor(message: string, options?: { cause?: unknown }) {
+		super(message, options);
+		this.name = "InvalidInputError";
+	}
+}

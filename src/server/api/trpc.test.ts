@@ -25,7 +25,11 @@ import {
 	protectedProcedure,
 	publicProcedure,
 } from "~/server/api/trpc";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
 const exporter = new InMemorySpanExporter();
@@ -45,6 +49,7 @@ afterEach(() => vi.restoreAllMocks());
 
 const notFound = new NotFoundError("gone");
 const conflict = new ConflictError("taken");
+const invalid = new InvalidInputError("bad path");
 
 const router = createTRPCRouter({
 	ok: publicProcedure.query(() => "result"),
@@ -72,6 +77,9 @@ const router = createTRPCRouter({
 	}),
 	conflict: publicProcedure.query(() => {
 		throw conflict;
+	}),
+	invalid: publicProcedure.query(() => {
+		throw invalid;
 	}),
 	plain: publicProcedure.query(() => {
 		throw new Error("plain");
@@ -231,6 +239,15 @@ describe("error mapping", () => {
 			code: "CONFLICT",
 			message: "taken",
 			cause: conflict,
+		});
+	});
+
+	it("maps an InvalidInputError to BAD_REQUEST, keeping its message and cause", async () => {
+		captureStdout();
+		await expect(caller().invalid()).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+			message: "bad path",
+			cause: invalid,
 		});
 	});
 

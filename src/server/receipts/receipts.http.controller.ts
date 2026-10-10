@@ -1,6 +1,9 @@
 import type { HandleUploadBody } from "@vercel/blob/client";
 import type { SessionReader } from "~/server/auth/session-reader";
-import { NotFoundError } from "~/server/errors/domain-errors";
+import {
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import type { Logger } from "~/server/observability/logging/logger";
 import { BaggageKey } from "~/server/observability/tracing/baggage";
 import { traceIdHeaders } from "~/server/observability/tracing/current-trace-id";
@@ -36,6 +39,7 @@ function failureStatus(
 	type: HandleUploadBody["type"],
 ): 401 | 400 | 500 {
 	if (error instanceof UploadUnauthorizedError) return 401;
+	if (error instanceof InvalidInputError) return 400;
 	return type === "blob.upload-completed" ? 400 : 500;
 }
 
@@ -160,18 +164,23 @@ export class ReceiptsHttpController {
 					// status clean, so without this it looks like a success in PostHog.
 					span.setAttribute("http.response.status_code", status);
 					// Same levels as the tRPC middleware: a signed-out tab is routine (warn,
-					// clean span), a rejected callback is the caller's fault (warn), the
-					// rest is ours (error).
+					// clean span), a rejected callback or token path is the caller's fault
+					// (warn), the rest is ours (error).
 					if (status === 401) {
 						this.logger.warn("blob token mint refused", {
 							"blob.event_type": event.type,
 						});
 					} else if (status === 400) {
 						failSpan(span, error);
-						this.logger.warn("blob callback rejected", {
-							error,
-							"blob.event_type": event.type,
-						});
+						this.logger.warn(
+							event.type === "blob.upload-completed"
+								? "blob callback rejected"
+								: "blob token mint rejected",
+							{
+								error,
+								"blob.event_type": event.type,
+							},
+						);
 					} else {
 						failSpan(span, error);
 						this.logger.error("blob event failed", {

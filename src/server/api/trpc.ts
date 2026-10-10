@@ -15,7 +15,11 @@ import superjson from "superjson";
 import { flattenError, ZodError } from "zod";
 
 import type { Context } from "~/server/api/context";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import { reportError } from "~/server/observability/errors/report-error";
 import { createRootLogger } from "~/server/observability/logging/logger";
 import { BaggageKey } from "~/server/observability/tracing/baggage";
@@ -151,6 +155,9 @@ const errorMappingMiddleware = t.middleware(async ({ next }) => {
 	const { cause } = result.error;
 	if (cause instanceof NotFoundError) throw mappedError("NOT_FOUND", cause);
 	if (cause instanceof ConflictError) throw mappedError("CONFLICT", cause);
+	if (cause instanceof InvalidInputError) {
+		throw mappedError("BAD_REQUEST", cause);
+	}
 	return result;
 });
 

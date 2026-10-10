@@ -3,7 +3,11 @@ import type { Receipt, ReceiptItem } from "~/domain/receipts";
 import { ReceiptChannel, ReceiptStatus } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import { recorder } from "~/test/fakes";
 import type { ReceiptsService } from "./receipts.service";
 import { receiptRouter } from "./receipts.trpc.controller";
@@ -183,6 +187,19 @@ describe("receipt router", () => {
 		).rejects.toMatchObject({
 			code: "NOT_FOUND",
 			message: "Receipt not found.",
+		});
+	});
+
+	it("surfaces an InvalidInputError from create as BAD_REQUEST", async () => {
+		const create = async (): Promise<never> => {
+			throw new InvalidInputError("Receipt file is outside the upload folder.");
+		};
+
+		await expect(
+			callerWith({ create }).receipt.create(UPLOAD),
+		).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+			message: "Receipt file is outside the upload folder.",
 		});
 	});
 
