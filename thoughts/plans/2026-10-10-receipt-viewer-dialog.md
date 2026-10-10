@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-09-23-receipt-viewer-dialog.md
 adrs: [adr019]
-status: Validated - Phase 1 of 4
+status: Ready for Review - Phase 2 of 4
 ---
 # Receipt Viewer Dialog Implementation Plan
 
@@ -209,9 +209,9 @@ The image and html methods share one private session gate, and that gate carries
     - jsdom shims live in `src/test/setup-dom.ts`. Add one only when a failing test proves it is needed, each with a one-line reason.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes. The output lists both the `unit` and `component` projects, and the existing `*.test.ts` count is unchanged.
-- [ ] `src/components/money.test.tsx` fails when the `ledger` tone branch in `money.tsx` is broken on purpose, then passes when it is restored
+- [x] `make check` passes
+- [x] `make test` passes. Both the `unit` (1117 tests, 107 files, same as before) and `component` (4 tests) projects run. The default reporter names a project only on failure; `--reporter=verbose` lists both.
+- [x] `src/components/money.test.tsx` fails when the `ledger` tone branch in `money.tsx` is broken on purpose, then passes when it is restored
 
 ## Phase 3: ReceiptViewer dialog and source thumbnail
 ### Changes
