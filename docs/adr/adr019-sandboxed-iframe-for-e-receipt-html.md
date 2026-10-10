@@ -73,6 +73,10 @@ under option 1 below.
   `max-height` with internal scroll.
 - Blocking remote images means some receipts render without their hero/logo image.
   Accepted: line items are already extracted, so the picture is a nice-to-have.
+- The CSP must repeat `frame-ancestors 'self'` beside the app-wide
+  `X-Frame-Options: SAMEORIGIN` (`next.config.ts`). A browser may judge
+  `SAMEORIGIN` against the sandbox's opaque origin and refuse to frame the body;
+  `frame-ancestors` overrides `X-Frame-Options` where both are set.
 
 ## Pros and Cons of the Options
 
@@ -89,11 +93,11 @@ sequenceDiagram
     participant B as Blob store
     V->>I: src=/api/receipts/{id}/html
     I->>R: GET (browser cookie attached)
-    R->>R: requireReceiptAccess → 401 if no session
-    R->>R: content type is text/* else 404
+    R->>R: ReceiptsHttpController session gate → 401 if no session
+    R->>R: ReceiptsService.openHtml: blob type is text/* else 404
     R->>B: read by blobPathname
     B-->>R: bytes
-    R-->>I: 200 text/html + CSP default-src 'none'; img-src data:; sandbox
+    R-->>I: 200 text/html + CSP default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox
     Note over I: no allow-scripts, no allow-same-origin<br/>remote images blocked, cannot script parent
 ```
 
@@ -102,7 +106,7 @@ sequenceDiagram
 | Browser-enforced isolation, not parser-dependent                     | First CSP in the app; a new header to maintain                 |
 | Remote images blocked → no tracking pixel, no IP leak                | No iframe auto-height under a strict sandbox; bounded + scroll |
 | Image route stays hardened; HTML never re-enters it                  | Some receipts lose their logo/hero image                       |
-| CSP + sandbox are two independent locks; CSP is exactly testable     | Extra route + shared access helper to build and test           |
+| CSP + sandbox are two independent locks; CSP is exactly testable     | Extra route + controller/service method to build and test      |
 
 ### 2. DOMPurify sanitize + render inline
 

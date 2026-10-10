@@ -3,9 +3,18 @@ import { describe, expect, it } from "vitest";
 import {
 	isReceiptFileType,
 	RECEIPT_FILE_TYPES,
+	receiptHtmlUrl,
+	receiptImageUrl,
 	receiptMediaKind,
 	receiptUploadPrefix,
 } from "./receipt-media";
+
+describe("receipt URLs", () => {
+	it("points each kind at its own proxy route", () => {
+		expect(receiptImageUrl(7)).toBe("/api/receipts/7/image");
+		expect(receiptHtmlUrl(7)).toBe("/api/receipts/7/html");
+	});
+});
 
 describe("receiptMediaKind", () => {
 	it.each([

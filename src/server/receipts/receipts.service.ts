@@ -9,9 +9,11 @@ import {
 	type ReceiptDetail,
 	type ReceiptItem,
 	type ReceiptListItem,
+	receiptMediaKind,
 } from "~/domain/receipts";
 import { ReceiptChannel } from "~/lib/constants";
 import { type PosthogUiConfig, posthogTraceUrl } from "~/lib/posthog-trace-url";
+import { bareMediaType } from "~/lib/utils";
 import type { MembersService } from "~/server/auth/members.service";
 import type { BlobStore, StreamedBlob } from "~/server/blob-store/blob-store";
 import type { ClientUploads } from "~/server/blob-store/client-uploads";
@@ -52,6 +54,7 @@ export class UploadUnauthorizedError extends Error {
 }
 
 const NOT_FOUND_MESSAGE = "Receipt not found.";
+const BODY_NOT_FOUND_MESSAGE = "Receipt body not found.";
 const UPLOAD_PATH_MESSAGE = "Receipt file is outside the upload folder.";
 const ITEM_NOT_FOUND_MESSAGE = "Receipt item not found.";
 // Picking an Expense or Category can fail if another tab just deleted it.
@@ -59,6 +62,7 @@ const ITEM_FK_CONFLICT_MESSAGE =
 	"The selected expense or category no longer exists.";
 
 export type ReceiptImage = StreamedBlob;
+export type ReceiptHtml = StreamedBlob;
 
 /** Blob columns for a row about to be minted; the store has already accepted the write. */
 export interface StoredBlob {
@@ -250,6 +254,24 @@ export class ReceiptsService {
 			contentType: RENDERABLE_TYPES.has(blob.contentType)
 				? blob.contentType
 				: "application/octet-stream",
+		};
+	}
+
+	// The mirror of `openImage` (adr019): that route refuses text, this one serves
+	// only text, so an image or PDF never leaves through the sandboxed route. Email
+	// bodies are stored from JS strings, which Blob writes as UTF-8.
+	async openHtml(id: number): Promise<ReceiptHtml> {
+		const pathname = await this.repository.findBlobPathname(id);
+		if (pathname === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
+		const blob = await this.blobStore.stream(pathname);
+		if (!blob) throw new NotFoundError(BODY_NOT_FOUND_MESSAGE);
+		if (receiptMediaKind(blob.contentType) !== "text") {
+			await blob.stream.cancel();
+			throw new NotFoundError(BODY_NOT_FOUND_MESSAGE);
+		}
+		return {
+			stream: blob.stream,
+			contentType: `${bareMediaType(blob.contentType)}; charset=utf-8`,
 		};
 	}
 

@@ -30,6 +30,12 @@ const config: NextConfig = {
 					},
 				],
 			},
+			// Config headers beat the ones a route sets, and the last match wins, so the
+			// sandboxed e-receipt body (adr019) needs its own entry to send no referrer.
+			{
+				source: "/api/receipts/:id/html",
+				headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+			},
 		];
 	},
 };
