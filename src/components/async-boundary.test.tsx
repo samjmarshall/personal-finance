@@ -5,10 +5,11 @@ import {
 } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { TRPCClientError } from "@trpc/client";
 import { redirect } from "next/navigation";
 import { Component, use } from "react";
 import { renderToString } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AsyncBoundary } from "~/components/async-boundary";
 import { createAppRouter } from "~/test/app-router";
 
@@ -39,11 +40,16 @@ async function renderBoundary(children: React.ReactNode) {
 }
 
 describe("AsyncBoundary", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("shows the skeleton and a Loading status while pending", async () => {
 		await renderBoundary(<Suspends promise={deferred<string>().promise} />);
 
 		expect(screen.getByText("Skeleton")).toBeInTheDocument();
 		expect(screen.getByRole("status")).toHaveTextContent("Loading cash flow");
+		expect(screen.getByRole("status").closest("[aria-busy]")).toBeNull();
 	});
 
 	it("shows the content once resolved", async () => {
@@ -58,7 +64,6 @@ describe("AsyncBoundary", () => {
 	});
 
 	describe("fade", () => {
-		// The fade class sits on the content's wrapper.
 		const wrapperOf = (text: string) => screen.getByText(text).parentElement;
 
 		it("fades the content in after the skeleton showed", async () => {
@@ -174,6 +179,21 @@ describe("AsyncBoundary", () => {
 			expect(errors).toHaveBeenCalledWith(error);
 		});
 
+		it("keeps the skeleton, not the card, for a stale session", async () => {
+			silenceErrors();
+			const error = TRPCClientError.from({
+				error: {
+					code: -32001,
+					message: "UNAUTHORIZED",
+					data: { code: "UNAUTHORIZED" },
+				},
+			});
+			await renderBoundary(<Throws error={error} />);
+
+			expect(screen.getByText("Skeleton")).toBeInTheDocument();
+			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+		});
+
 		it("Try again refetches the failed query and refreshes the router", async () => {
 			silenceErrors();
 			const user = userEvent.setup();
@@ -219,6 +239,21 @@ describe("AsyncBoundary", () => {
 			const chart = await screen.findByText("Chart");
 			expect(document.activeElement).not.toBe(document.body);
 			expect(document.activeElement).toContainElement(chart);
+		});
+
+		it("a failed Try again moves focus to the new Try again", async () => {
+			silenceErrors();
+			const user = userEvent.setup();
+			function AlwaysFails(): never {
+				throw new Error("offline");
+			}
+			await renderBoundary(<AlwaysFails />);
+
+			await user.click(screen.getByRole("button", { name: "Try again" }));
+
+			expect(
+				await screen.findByRole("button", { name: "Try again" }),
+			).toHaveFocus();
 		});
 
 		it("lets redirect() through to the boundary above", async () => {

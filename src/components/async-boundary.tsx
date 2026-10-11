@@ -15,6 +15,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
+import { isAuthError } from "~/trpc/auth-errors";
 
 type AsyncBoundaryProps = {
 	/** `null` makes an invisible gate: no skeleton while pending. */
@@ -35,9 +36,8 @@ export function AsyncBoundary({
 	fade = true,
 	children,
 }: AsyncBoundaryProps) {
-	// The server writes the content wrapper before a child suspends, so it can't
-	// know whether the skeleton streamed first. Server and hydration assume it
-	// did: streamed content fades on reveal and the class matches on hydrate.
+	// Server can't know if the skeleton streamed first. Assume it did, so
+	// streamed content fades in and hydration matches.
 	const serverOrHydrating = useSyncExternalStore(
 		subscribeNever,
 		() => false,
@@ -46,15 +46,15 @@ export function AsyncBoundary({
 	const [skeletonShown, setSkeletonShown] = useState(serverOrHydrating);
 	const onSkeletonShown = useCallback(() => setSkeletonShown(true), []);
 	// Try again unmounts its own button, which drops focus to <body>. Hand it to
-	// the content once it renders.
+	// whatever renders next: the content, or a fresh Try again if it failed again.
 	const focusOnReveal = useRef(false);
 	const onRetry = useCallback(() => {
 		focusOnReveal.current = true;
 	}, []);
-	const contentRef = useCallback((content: HTMLDivElement | null) => {
-		if (!content || !focusOnReveal.current) return;
+	const focusRef = useCallback((element: HTMLElement | null) => {
+		if (!element || !focusOnReveal.current) return;
 		focusOnReveal.current = false;
-		content.focus({ preventScroll: true });
+		element.focus({ preventScroll: true });
 	}, []);
 
 	if (skeleton === null) {
@@ -66,7 +66,12 @@ export function AsyncBoundary({
 	}
 
 	return (
-		<ErrorBoundary label={label} onRetry={onRetry} skeleton={skeleton}>
+		<ErrorBoundary
+			focusRef={focusRef}
+			label={label}
+			onRetry={onRetry}
+			skeleton={skeleton}
+		>
 			<Suspense
 				fallback={
 					<Pending label={label} onShow={onSkeletonShown} skeleton={skeleton} />
@@ -79,7 +84,7 @@ export function AsyncBoundary({
 							skeletonShown &&
 							"fade-in animate-in motion-reduce:animate-none",
 					)}
-					ref={contentRef}
+					ref={focusRef}
 					tabIndex={-1}
 				>
 					{children}
@@ -100,30 +105,38 @@ function Pending({
 }) {
 	useEffect(() => onShow(), [onShow]);
 
+	// Status sits outside the busy region: screen readers hold back announcements
+	// from inside one.
 	return (
-		<div aria-busy="true">
-			{skeleton}
+		<>
+			<div aria-busy="true">{skeleton}</div>
 			<span className="sr-only" role="status">
 				Loading {label}
 			</span>
-		</div>
+		</>
 	);
 }
 
-// catchError passes redirect() / notFound() through and gives a retry() that
-// re-fetches Server Components. Its fallback is a plain function, so the hooks
-// live in AsyncBoundaryError.
+// Next's error boundary: lets redirects and not-found pass, and its retry
+// re-fetches server content. Its fallback can't use hooks, so a child does.
 const ErrorBoundary = catchError(function asyncBoundaryFallback(
 	{
+		focusRef,
 		label,
 		onRetry,
 		skeleton,
-	}: { label: string; onRetry?: () => void; skeleton: ReactNode | null },
+	}: {
+		focusRef?: (element: HTMLElement | null) => void;
+		label: string;
+		onRetry?: () => void;
+		skeleton: ReactNode | null;
+	},
 	{ error, retry }: ErrorInfo,
 ) {
 	return (
 		<AsyncBoundaryError
 			error={error}
+			focusRef={focusRef}
 			label={label}
 			onRetry={onRetry}
 			retry={retry}
@@ -134,12 +147,14 @@ const ErrorBoundary = catchError(function asyncBoundaryFallback(
 
 function AsyncBoundaryError({
 	error,
+	focusRef,
 	label,
 	onRetry,
 	retry,
 	skeleton,
 }: {
 	error: unknown;
+	focusRef?: (element: HTMLElement | null) => void;
 	label: string;
 	onRetry?: () => void;
 	retry: () => void;
@@ -154,6 +169,8 @@ function AsyncBoundaryError({
 	}, [error]);
 
 	if (skeleton === null) return null;
+	// A stale session is already reloading to sign-in. Don't flash a failure first.
+	if (isAuthError(error)) return skeleton;
 
 	// The hidden skeleton holds the region's size, so the page doesn't jump
 	// when the error swaps in, or again when Try again brings the skeleton back.
@@ -170,13 +187,13 @@ function AsyncBoundaryError({
 					</p>
 					<Button
 						onClick={() => {
-							// Without the query reset, a failed suspense query rethrows its
-							// cached error instead of refetching. Never catchError's reset():
-							// it re-renders without re-fetching Server Components.
+							// Clear cached query errors first, or a failed query rethrows its
+							// old error. Next's plain reset skips re-fetching server content.
 							resetQueryErrors();
 							onRetry?.();
 							retry();
 						}}
+						ref={focusRef}
 						size="sm"
 						variant="outline"
 					>
