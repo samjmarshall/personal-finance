@@ -47,8 +47,11 @@ export function CardSkeleton() {
 	return (
 		<Card aria-hidden>
 			<CardContent>
-				<Skeleton className="my-0.5 h-4 w-24" />
-				<Skeleton className="mt-0.5 mb-4.5 h-3 w-48" />
+				{/* Flex, so the bars' margins add up instead of collapsing. */}
+				<div className="mb-4 flex flex-col">
+					<Skeleton className="my-0.5 h-4 w-24" />
+					<Skeleton className="my-0.5 h-3 w-48" />
+				</div>
 				<div className="flex flex-col gap-3">
 					<Skeleton className="h-8 w-full" />
 					<Skeleton className="h-8 w-full" />

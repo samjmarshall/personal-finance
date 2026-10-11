@@ -119,9 +119,10 @@ export function SpendChartsSkeleton() {
 /** Title + subtitle lines, 36 + 16 gap like the real cards. */
 function HeadingSkeleton() {
 	return (
-		<>
+		// Flex, so the bars' margins add up instead of collapsing.
+		<div className="mb-4 flex flex-col">
 			<Skeleton className="my-0.5 h-4 w-32" />
-			<Skeleton className="mt-0.5 mb-4.5 h-3 w-48" />
-		</>
+			<Skeleton className="my-0.5 h-3 w-48" />
+		</div>
 	);
 }
