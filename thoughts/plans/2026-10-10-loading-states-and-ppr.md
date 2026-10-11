@@ -12,14 +12,14 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
 
 ## Current State
 
-- **Versions.** `next` is 16.4.0 (`package.json:69`), not the 16.3.5 the design names. React 19.2.8 (`:72-73`), `@base-ui/react` 1.7.0 (`:47`), better-auth 1.6.26 (`:60`), `tw-animate-css` 1.4.0 (`:82`), Vitest 4.1.11 (`:101`).
+- **Versions.** `next` is 16.4.0 (`package.json:67`), not the 16.3.5 the design names. React 19.2.8 (`:71-72`), `@base-ui/react` 1.7.0 (`:34`), better-auth 1.6.26 (`:59`), `tw-animate-css` 1.4.0 (`:80`), Vitest 4.1.11 (`:105`).
 - **Auth.**
   - `src/app/(dashboard)/layout.tsx:11-14` awaits `getSession()`, redirects to `/sign-in` and passes `userName` to `AppNav` / `MobileNav` (`:18`, `:20`).
   - `getSession` is `cache(() => auth.api.getSession({ headers: await headers() }))` (`src/server/auth/server.ts:5-7`).
   - There is no `src/proxy.ts` or `middleware.ts`.
   - The session cookie is better-auth's default `better-auth.session_token`, `__Secure-` prefixed on https (`src/server/auth/config.ts` sets no `cookiePrefix`). `cookieCache` lasts 60s (`config.ts:66`).
   - `getSessionCookie(request)` checks both names and only checks that the cookie is there (`node_modules/better-auth/dist/cookies/index.mjs:211-219`).
-  - `protectedProcedure` throws `UNAUTHORIZED` at `src/server/api/trpc.ts:189-191`.
+  - `protectedProcedure` throws `UNAUTHORIZED` at `src/server/api/trpc.ts:195-198`.
   - Sign-in and sign-up await `getSession()` and redirect signed-in Members (`src/app/sign-in/page.tsx:8-9`, `src/app/sign-up/page.tsx:8-9`).
 - **Nav.** `src/components/app-nav.tsx` is `"use client"` (`:1`).
   - `AppNav({ userName })` is at `:178`. Its member block is at `:192-197`, the Settings link at `:200-205` and `<SignOutButton />` at `:206`.
@@ -60,7 +60,7 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - `/settings`:
     - `SettingsView` has no query.
     - The pay-cycle panel (`pay-cycle-section.tsx:15`) and the allowed-senders panel (`allowed-senders-section.tsx:20`) suspend.
-    - The page reads `env.RESEND_INBOUND_ADDRESS` (`settings/page.tsx:12`).
+    - The page reads `env.RESEND_INBOUND_ADDRESS` (`settings/page.tsx:18`).
 - **Receipt bugs.**
   - Bug 2: `receipt-detail.tsx:289` treats `!data` as loading, so a failed `receipt.get` spins forever.
   - Bug 3: `:121` and `:249` toast in `onError`, on top of the global toast.
@@ -70,14 +70,14 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - Forms swap their label to "Saving…" and never lock their fields.
   - `FieldSet` renders a native `<fieldset>` (`src/components/ui/field.tsx:9-20`), but Base UI `Select.Trigger` / `Combobox.Input` ignore a disabled ancestor fieldset (`@base-ui/react/select/trigger/SelectTrigger.js:75`, `combobox/input/ComboboxInput.js:81`).
   - Dialog `onOpenChange(open, eventDetails)` gives `eventDetails.cancel()` (`@base-ui/react/dialog/root/DialogRoot.d.ts:40,85-88`).
-  - An AlertDialog never dismisses on outside press (`dialog/root/useRenderDialogRoot.js:29-30`).
+  - An AlertDialog never dismisses on outside press (`dialog/root/useRenderDialogRoot.js:32-34`).
   - Base UI `Button` has `focusableWhenDisabled` (`button/Button.d.ts:17-21`).
   - `SortableItem` accepts `disabled` (`src/components/ui/sortable.tsx:303-327`).
 - **Tests and lint.**
   - Correction (validation): the jsdom harness landed on main before this plan (`33a08fb`). `vitest.config.ts:16-34` already splits `unit` (node) and `component` (jsdom) projects, Testing Library and jsdom are installed, and `.claude/rules/unit-testing.md` already covers `.test.tsx`.
   - `biome.jsonc` has no `noRestrictedImports` or `overrides`. The rule sits in the `style` group (`node_modules/@biomejs/biome/configuration_schema.json:14085,14271`).
 - **Stage B blockers.**
-  - `next.config.ts:4-35` has no `cacheComponents`. 16.4 also expects `partialPrefetching: true` (`node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/cacheComponents.md:21-29`).
+  - `next.config.ts:4-41` has no `cacheComponents`. 16.4 also expects `partialPrefetching: true` (`node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/cacheComponents.md:21-29`).
   - `src/app/api/health/route.ts:10` exports `dynamic = "force-dynamic"`, which errors under `cacheComponents` (`02-guides/migrating-to-cache-components.md:74`).
   - TanStack `prefetchQuery` and `dehydrate()` read `Date.now()` (`hydration.js:32`), which is a sync-IO prerender error unless `await io()` runs first (`03-api-reference/04-functions/io.md`).
   - No server component reads `new Date()` in render. The client `new Date()` reads (`expenses-view.tsx:101`, `one-time-section.tsx:43`, form `useState` initialisers) all sit inside data boundaries.
@@ -241,7 +241,8 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - Hard load: all 8 routes pass. Client nav from `/`: all 7 pass.
   - Re-validated after `3d67b7a` (revoked session, 60s wait): client nav `/expenses` → `/transactions` now lands on `/sign-in` with no card (2 of 2 here, 4 of 4 in design review).
   - It still shows the "0 transactions" empty state for ~400ms first. Cause: `transaction.list` is a plain `useQuery` (`transactions-view.tsx:82`), so it renders empty until the 401. Moved to Phase 5, which makes that query suspend.
-  - Every stale redirect is now a full page load, including `/` → `/expenses` (`redirectIfUnauthorized`, `src/trpc/query-client.ts:37-41`, fires beside `catchError`'s soft redirect). adr026 updated.
+  - Routes that stream the redirect through a prefetch (e.g. `/` → `/expenses`) now land with a full page load (`redirectIfUnauthorized`, `src/trpc/query-client.ts:37-41`, fires beside `catchError`'s soft redirect). `/`, `/receipts` and `/settings` hit it in their server render and redirect softly (re-validation). adr026 updated.
+  - Re-validated 2026-10-11 (fresh revoked session, 65s wait): hard load 8 of 8, client nav 9 of 9 hops in design review, no card, no toast.
 - [x] A signed-in Member who opens `/sign-in` lands on `/`
 - [x] The desktop nav paints at once; the member block shows its skeleton, then the name and Sign out
 - [x] `/design-review`: no blockers. The one High (`/transactions` empty-state flash above) is moved to Phase 5. Mediums are in the validation report.
@@ -373,7 +374,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `transactions-view.tsx:384`
 - Dialog forms:
   - Files: `expense-form.tsx:109,173,312-316`, `category-form.tsx:47,64,111-113`, `income-form.tsx:87,141,284-285` and `transaction-form.tsx:90,151,282-284`.
-  - Wrap the fields in `<FieldSet disabled={isSaving}>`.
+  - Wrap the fields in `<FieldSet disabled={isSaving}>` (income and transaction forms name the flag `pending`).
   - Also pass `disabled={isSaving}` to each `SelectField` / `Combobox`, because Base UI ignores the native fieldset.
   - Cancel gets `disabled={isSaving}`.
   - Submit stays outside the fieldset with `loading={isSaving}` and keeps its label (drop "Saving…").
@@ -392,7 +393,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `receipt-detail.tsx:408-444`: a `Spinner` beside the acting item's pickers.
   - `receipt-detail.tsx:174-199`: confirm match uses `loading` on the acting row.
 - `src/app/(dashboard)/expenses/categories/_components/categories-view.tsx:108-127`: pass `disabled={reorder.isPending}` to each `SortableItem` (`sortable.tsx:303-327`) so the drag handles lock while the save runs.
-- `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:95-110`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels.
+- `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:100-115`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels.
 - These switch to `Spinner`: `receipt-detail.tsx:142-152,289-296`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
 
 ### Success
@@ -412,7 +413,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 
 ### Changes
 
-- `next.config.ts:4-35`: set `cacheComponents: true` and `partialPrefetching: true` (`cacheComponents.md:21-29`).
+- `next.config.ts:4-41`: set `cacheComponents: true` and `partialPrefetching: true` (`cacheComponents.md:21-29`).
 - Add `await io()` (from `next/cache`) as the first line of every prefetching server section:
   - Files: `expenses/page.tsx`, `income/page.tsx`, `expenses/categories/page.tsx`, `settings/page.tsx`, `transactions/page.tsx`, `receipts/page.tsx`, `expenses/unplanned/page.tsx` (their `*Data` children) and `_components/cash-flow-section.tsx`.
   - Why: TanStack `prefetchQuery` / `dehydrate()` read `Date.now()` before `headers()` is awaited, which is a sync-IO prerender error (`hydration.js:32`, `migrating-to-cache-components.md:101`, `io.md`).
@@ -452,8 +453,8 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `02-guides/migrating-to-cache-components.md`
   - `02-guides/authentication-with-cache-components.md`
 - Related code:
-  - `src/trpc/server.ts:16-35`
-  - `src/trpc/query-client.ts:31-55`
+  - `src/trpc/server.ts:17-40`
+  - `src/trpc/query-client.ts:35-82`
   - `src/server/api/trpc.ts:75-81,184-199`
-  - `src/components/app-nav.tsx:136-230`
+  - `src/components/app-nav.tsx:134-181`, `src/components/nav-member.tsx`, `src/components/sign-out-button.tsx`
 - Prior fix: commit `6ea0b35` (categories cache read, the design's Bug 4)

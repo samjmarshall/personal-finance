@@ -120,7 +120,7 @@ sequenceDiagram
   - Auth errors aren't retried. The query `retry` skips `UNAUTHORIZED` and the `/sign-in` redirect digest (`isAuthError`, `src/trpc/auth-errors.ts`), so the redirect doesn't wait out about 7s of backed-off retries.
   - A plain `useQuery` holds a streamed redirect without throwing, so the `QueryCache` `onError` sends any `isAuthError` to `/sign-in` with a full page load (`src/trpc/query-client.ts`).
   - `NavMember`'s redirect stays as the backstop.
-  - Verified with a revoked session after the 60s `cookieCache`. Every dashboard route, on a hard load and on a client navigation into it, lands on `/sign-in` with no "Couldn't load" card. It lands with a full page load, even where a soft redirect would do (a click from `/` to `/expenses`), because the cache's redirect fires too.
+  - Verified with a revoked session after the 60s `cookieCache`. Every dashboard route, on a hard load and on a client navigation into it, lands on `/sign-in` with no "Couldn't load" card. Routes whose server render hits the redirect first (`/`, `/receipts`, `/settings`) redirect softly. Routes that stream it through a prefetch (e.g. a click from `/` to `/expenses`) land with a full page load, because the cache's redirect fires too.
 
 ## Links
 
