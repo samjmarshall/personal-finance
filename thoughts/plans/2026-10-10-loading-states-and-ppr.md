@@ -293,7 +293,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `src/app/(dashboard)/loading.tsx`: new. A generic `PageSkeleton` with a title `Skeleton`, kept as a safety net.
 - `src/app/(dashboard)/error.tsx`: new client safety net.
   - It takes `{ error, retry }` and logs `console.error(error)`.
-  - It renders a `role="alert"` card reading "Couldn't load this page" with Try again calling `retry()`, modelled on `expenses/unplanned/error.tsx:12-46`.
+  - It renders a `role="alert"` card reading "Couldn't load this page" with Try again calling `useQueryErrorResetBoundary().reset()`, then `retry()`, as `AsyncBoundary` does. Modelled on `expenses/unplanned/error.tsx:12-46`.
 - No new tests (single-use route components).
 
 ### Success
@@ -325,7 +325,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `UnplannedTable({ range })` calls `transaction.unplanned.useSuspenseQuery({ from, to })` and renders the grouped rows and empty state moved from `unplanned-view.tsx:198-296`, including the link picker.
 - `src/app/(dashboard)/expenses/unplanned/_components/unplanned-view.tsx:53-72,119,179-204,271-282`:
   - Keep the `range` effect. Defer `range` with `useDeferredValue`.
-  - While `range` is `null`, render `<TableSkeleton />`.
+  - While `deferredRange` is `null`, render `<TableSkeleton />`. Not `range`: on the render where the effect first sets `range`, `deferredRange` is still `null`.
   - Otherwise render `<AsyncBoundary fade={false} label="unplanned Spend" skeleton={<TableSkeleton />}><UnplannedTable range={deferredRange} /></AsyncBoundary>`, dimmed while `range !== deferredRange`.
   - This inner boundary stops the table's first load from re-suspending the whole page.
   - Remove the loading card, error card and `isFetching` dim.
@@ -423,6 +423,9 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - Run `make build` and fix any other validation error it reports.
   - `export const instant = false` is a last resort only. Mark each use with a `TODO` and remove it before merging.
 - Keep `src/app/(dashboard)/loading.tsx`.
+- Check route state under Activity. With `cacheComponents`, leaving a route hides it instead of unmounting it, so its state survives and its effects re-run on return (`02-guides/preserving-ui-state.md`).
+  - Transient UI (open dialogs, confirm dialogs, menus) must reset when hidden. Close it in a `useLayoutEffect` cleanup, as the guide shows.
+  - Mount-seeded state needs no change. For example, `unplanned-view.tsx:58-62` re-seeds the period on return, the same as today's remount.
 
 ### Success
 
@@ -433,6 +436,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - [ ] Against a production build served locally, the raw HTML of each dashboard route, fetched with any session cookie, contains the nav (`aria-label="Main navigation"`) and `data-slot="skeleton"` markup
 - [ ] `curl -I https://personal-finance.localhost/api/health` returns 200 and the database is hit per request
 - [ ] The Phase 2 signed-out and stale-cookie checks still pass
+- [ ] Leaving a route with a dialog open (browser Back) and returning shows the dialog closed
 - [ ] With a fake cookie (`__Secure-better-auth.session_token=x`), the `/settings` and `/receipts` responses contain neither the inbound address nor the blob prefix
 - [ ] `/design-review`
 - [ ] `/security-review`
