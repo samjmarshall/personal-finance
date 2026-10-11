@@ -119,32 +119,20 @@ function Pending({
 	);
 }
 
+type ErrorBoundaryProps = {
+	focusRef?: (element: HTMLElement | null) => void;
+	label: string;
+	onRetry?: () => void;
+	skeleton: ReactNode | null;
+};
+
 // Next's error boundary: lets redirects and not-found pass, and its retry
 // re-fetches server content. Its fallback can't use hooks, so a child does.
 const ErrorBoundary = catchError(function asyncBoundaryFallback(
-	{
-		focusRef,
-		label,
-		onRetry,
-		skeleton,
-	}: {
-		focusRef?: (element: HTMLElement | null) => void;
-		label: string;
-		onRetry?: () => void;
-		skeleton: ReactNode | null;
-	},
+	props: ErrorBoundaryProps,
 	{ error, retry }: ErrorInfo,
 ) {
-	return (
-		<AsyncBoundaryError
-			error={error}
-			focusRef={focusRef}
-			label={label}
-			onRetry={onRetry}
-			retry={retry}
-			skeleton={skeleton}
-		/>
-	);
+	return <AsyncBoundaryError {...props} error={error} retry={retry} />;
 });
 
 function AsyncBoundaryError({
@@ -154,14 +142,7 @@ function AsyncBoundaryError({
 	onRetry,
 	retry,
 	skeleton,
-}: {
-	error: unknown;
-	focusRef?: (element: HTMLElement | null) => void;
-	label: string;
-	onRetry?: () => void;
-	retry: () => void;
-	skeleton: ReactNode | null;
-}) {
+}: ErrorBoundaryProps & { error: unknown; retry: () => void }) {
 	const { reset: resetQueryErrors } = useQueryErrorResetBoundary();
 	const [retrying, setRetrying] = useState(false);
 
@@ -175,9 +156,8 @@ function AsyncBoundaryError({
 	// A stale session is already reloading to sign-in. Don't flash a failure first.
 	if (isAuthError(error)) return skeleton;
 
-	// The hidden skeleton holds the region's size, so the page doesn't jump
-	// when the error swaps in, or again when Try again brings the skeleton back.
-	// Message sits at the top: centred in a tall region, it lands below the fold.
+	// Hidden skeleton keeps the region's size: no jump on error or on Try again.
+	// Message at top: centred in a tall region, it lands below the fold.
 	return (
 		<div className="grid">
 			<div className="invisible col-start-1 row-start-1">{skeleton}</div>

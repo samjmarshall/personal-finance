@@ -1,7 +1,7 @@
 import { ArrowDownRight } from "lucide-react";
 
 import { Money } from "~/components/money";
-import { ChartSkeleton } from "~/components/skeletons";
+import { ChartSkeleton, HeadingSkeleton } from "~/components/skeletons";
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { MonthlySpendChart } from "./monthly-spend-chart";
@@ -112,17 +112,6 @@ export function SpendChartsSkeleton() {
 					</CardContent>
 				</Card>
 			</div>
-		</div>
-	);
-}
-
-/** Title + subtitle lines, 36 + 16 gap like the real cards. */
-function HeadingSkeleton() {
-	return (
-		// Flex, so the bars' margins add up instead of collapsing.
-		<div className="mb-4 flex flex-col">
-			<Skeleton className="my-0.5 h-4 w-32" />
-			<Skeleton className="my-0.5 h-3 w-48" />
 		</div>
 	);
 }

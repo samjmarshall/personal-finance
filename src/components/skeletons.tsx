@@ -47,11 +47,7 @@ export function CardSkeleton() {
 	return (
 		<Card aria-hidden>
 			<CardContent>
-				{/* Flex, so the bars' margins add up instead of collapsing. */}
-				<div className="mb-4 flex flex-col">
-					<Skeleton className="my-0.5 h-4 w-24" />
-					<Skeleton className="my-0.5 h-3 w-48" />
-				</div>
+				<HeadingSkeleton />
 				<div className="flex flex-col gap-3">
 					<Skeleton className="h-8 w-full" />
 					<Skeleton className="h-8 w-full" />
@@ -59,6 +55,17 @@ export function CardSkeleton() {
 				</div>
 			</CardContent>
 		</Card>
+	);
+}
+
+/** Title + subtitle lines, 36 + 16 gap like the real card headings. */
+export function HeadingSkeleton() {
+	return (
+		// Flex, so the bars' margins add up instead of collapsing.
+		<div className="mb-4 flex flex-col">
+			<Skeleton className="my-0.5 h-4 w-32" />
+			<Skeleton className="my-0.5 h-3 w-48" />
+		</div>
 	);
 }
 
