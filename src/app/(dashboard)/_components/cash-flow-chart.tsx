@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
 	Bar,
 	CartesianGrid,
@@ -20,6 +20,7 @@ import {
 	ChartContainer,
 	ChartTooltip,
 } from "~/components/ui/chart";
+import { Skeleton } from "~/components/ui/skeleton";
 import type { PeriodKind } from "~/lib/period";
 import { cn, formatCompact, formatCurrency } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -57,13 +58,7 @@ export function CashFlowChart() {
 
 	return (
 		<div>
-			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-				<div>
-					<h2 className="font-semibold text-foreground text-sm">Cash flow</h2>
-					<p className="text-muted-foreground text-xs">
-						Recorded flow, then a forward projection of commitments
-					</p>
-				</div>
+			<CashFlowHeader>
 				<SelectField
 					aria-label="Chart period"
 					className="w-32"
@@ -71,20 +66,50 @@ export function CashFlowChart() {
 					onValueChange={(v) => v && setPeriodKind(v)}
 					value={periodKind}
 				/>
-			</div>
+			</CashFlowHeader>
 			{/* Toggling periodKind re-suspends only the chart body, so the toggle
 			    stays interactive while the new grid loads. */}
-			{/* Skeleton height = chart + legend, so the swap doesn't shift layout. */}
 			{/* Keyed so one period's error card doesn't stick on the next. */}
 			<AsyncBoundary
 				key={periodKind}
 				label="cash flow chart"
-				skeleton={<ChartSkeleton height={312} />}
+				skeleton={<ChartBodySkeleton />}
 			>
 				<CashFlowChartBody periodKind={periodKind} />
 			</AsyncBoundary>
 		</div>
 	);
+}
+
+/** Uses the real header, so it wraps like the loaded card at every width. */
+export function CashFlowChartSkeleton() {
+	return (
+		<div aria-hidden>
+			<CashFlowHeader>
+				<Skeleton className="h-8 w-32" />
+			</CashFlowHeader>
+			<ChartBodySkeleton />
+		</div>
+	);
+}
+
+function CashFlowHeader({ children }: { children: ReactNode }) {
+	return (
+		<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+			<div>
+				<h2 className="font-semibold text-foreground text-sm">Cash flow</h2>
+				<p className="text-muted-foreground text-xs">
+					Recorded flow, then a forward projection of commitments
+				</p>
+			</div>
+			{children}
+		</div>
+	);
+}
+
+// Chart + legend height, so the swap doesn't shift layout.
+function ChartBodySkeleton() {
+	return <ChartSkeleton height={312} />;
 }
 
 function CashFlowChartBody({ periodKind }: { periodKind: PeriodKind }) {
