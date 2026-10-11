@@ -3,9 +3,8 @@ import type * as React from "react";
 
 import { cn } from "~/lib/utils";
 
-// Decorative, unlike the registry's role="status" version: a caller that needs
-// an announcement wraps it in its own status region. Sized by attribute, not a
-// size-* class, so Button's per-size svg rule still sizes it.
+// Decorative, not a status region: callers wrap it if they need an announcement.
+// Sized by attribute so Button's per-size icon rule still applies.
 function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
 	return (
 		<Loader2Icon

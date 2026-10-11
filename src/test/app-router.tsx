@@ -5,11 +5,7 @@ import {
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 
-/**
- * Stands in for the App Router context Next mounts around the app, so
- * `catchError`'s `retry()` reaches `router.refresh()`. Pass `AppRouter` as
- * Testing Library's `wrapper` and assert on the `router` spies.
- */
+/** Fake App Router context so Next's error-boundary retry reaches a refresh spy. Use `AppRouter` as the render wrapper. */
 export function createAppRouter() {
 	const router = {
 		back: vi.fn(),

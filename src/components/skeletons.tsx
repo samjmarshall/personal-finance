@@ -1,9 +1,8 @@
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 
-// Placeholders sized to the real markup, so content replaces them without a
-// layout shift. Each root is aria-hidden: AsyncBoundary's status text speaks
-// for the region.
+// Sized to the real markup, so no layout shift on swap. Roots are hidden from
+// screen readers; the boundary's status text speaks for the region.
 
 const indices = (n: number) => Array.from({ length: n }, (_, i) => i);
 
@@ -43,7 +42,7 @@ export function TableSkeleton({
 	);
 }
 
-/** A card with the dashboard/settings heading pair (text-sm title, text-xs caption) and body rows. */
+/** Matches the dashboard/settings card's heading and body sizes, so no shift. */
 export function CardSkeleton() {
 	return (
 		<Card aria-hidden>
