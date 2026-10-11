@@ -7,7 +7,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TRPCClientError } from "@trpc/client";
 import { redirect } from "next/navigation";
-import { Component, use } from "react";
+import { Component, use, useState } from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AsyncBoundary } from "~/components/async-boundary";
@@ -251,9 +251,52 @@ describe("AsyncBoundary", () => {
 
 			await user.click(screen.getByRole("button", { name: "Try again" }));
 
-			expect(
-				await screen.findByRole("button", { name: "Try again" }),
-			).toHaveFocus();
+			const tryAgain = await screen.findByRole("button", { name: "Try again" });
+			expect(tryAgain).toHaveFocus();
+			expect(tryAgain).not.toHaveAttribute("aria-busy");
+		});
+
+		it("Try again shows it's working while the refresh is pending", async () => {
+			silenceErrors();
+			const user = userEvent.setup();
+			const { router, AppRouter } = createAppRouter();
+			const { promise, resolve } = deferred<string>();
+			// A real refresh suspends the page above, so the card stays up until the server answers.
+			let startRefresh = () => {};
+			function Page({ children }: { children: React.ReactNode }) {
+				const [refreshing, setRefreshing] = useState(false);
+				startRefresh = () => setRefreshing(true);
+				if (refreshing) use(promise);
+				return children;
+			}
+			router.refresh.mockImplementation(() => startRefresh());
+			let fail = true;
+			function Flaky() {
+				if (fail) throw new Error("offline");
+				return <p>Chart</p>;
+			}
+			await act(async () =>
+				render(
+					<Page>
+						<AsyncBoundary label="cash flow" skeleton={<p>Skeleton</p>}>
+							<Flaky />
+						</AsyncBoundary>
+					</Page>,
+					{ wrapper: AppRouter },
+				),
+			);
+			fail = false;
+
+			await act(async () =>
+				user.click(screen.getByRole("button", { name: "Try again" })),
+			);
+
+			expect(screen.getByRole("button", { name: "Try again" })).toHaveAttribute(
+				"aria-busy",
+				"true",
+			);
+			await act(async () => resolve("Chart"));
+			expect(screen.getByText("Chart")).toBeInTheDocument();
 		});
 
 		it("lets redirect() through to the boundary above", async () => {

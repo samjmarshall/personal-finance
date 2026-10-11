@@ -161,6 +161,7 @@ function AsyncBoundaryError({
 	skeleton: ReactNode | null;
 }) {
 	const { reset: resetQueryErrors } = useQueryErrorResetBoundary();
+	const [retrying, setRetrying] = useState(false);
 
 	// Production forwards a generic message + digest, not the original error.
 	// Log it so the failure is visible and the digest matches the server logs.
@@ -186,7 +187,10 @@ function AsyncBoundaryError({
 						Couldn't load {label}.
 					</p>
 					<Button
+						// The card stays up while the retry runs; show it's working.
+						loading={retrying}
 						onClick={() => {
+							setRetrying(true);
 							// Clear cached query errors first, or a failed query rethrows its
 							// old error. Next's plain reset skips re-fetching server content.
 							resetQueryErrors();
