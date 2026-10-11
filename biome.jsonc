@@ -1,6 +1,7 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"root": true,
+	"plugins": ["./biome-plugins/no-namespace-suspense.grit"],
 	"vcs": {
 		"enabled": true,
 		"useIgnoreFile": true,
