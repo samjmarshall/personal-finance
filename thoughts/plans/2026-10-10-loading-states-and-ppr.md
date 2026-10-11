@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Validated - Phase 1 of 7
+status: Validated - Phase 2 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -43,7 +43,7 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - The only `<Suspense>` is `src/app/(dashboard)/_components/cash-flow-chart.tsx:75-79`.
   - The only route `error.tsx` is `src/app/(dashboard)/expenses/unplanned/error.tsx`.
   - There is no `Skeleton` or `Spinner` in `src/components/ui/`.
-  - There are nine ad-hoc `Loader2Icon` / `Loader2` spinners: `sonner.tsx:28`, `receipt-upload.tsx:103`, `receipt-detail.tsx:177,224-226,321`, `more-details.tsx:114,125`, `balance-snapshot-card.tsx:99-100`, `pay-cycle-section.tsx:76-77` and `allowed-senders-section.tsx:101-102`.
+  - There are ten ad-hoc `Loader2Icon` / `Loader2` spinners: `sonner.tsx:28`, `receipt-upload.tsx:108`, `receipt-detail.tsx:149,196-198,295`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125`, `balance-snapshot-card.tsx:99-100`, `pay-cycle-section.tsx:76-77` and `allowed-senders-section.tsx:101-102`.
 - **Dashboard home** (`src/app/(dashboard)/page.tsx`).
   - It awaits `transaction.summary`, `expense.list` and `income.list` (`:20-25`), then starts the `cashflow.get` / `balance.latest` prefetches (`:29-30`).
   - Stat cards: derived at `:32-80`, rendered at `:90-117`.
@@ -54,16 +54,16 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - `/expenses`, `/income`, `/expenses/categories`: `useSuspenseQuery` only.
   - `/transactions`: `transaction.list.useQuery` with `placeholderData`. Filters are in `useState` (`transactions-view.tsx:57-84`), and `isFetching` dims the rows (`:250-254`).
   - `/receipts`:
-    - `receipt.list.useQuery` with `placeholderData` and 3s polling while a row is pending (`receipts-view.tsx:85-97`).
-    - The page prefetches the list without input (`receipts/page.tsx:5`), so the key misses the client's `{ unmatchedOnly: false }`. This is Bug 1.
+    - `receipt.list.useQuery` with `placeholderData` and 3s polling while a row is pending (`receipts-view.tsx:77-88`).
+    - The page prefetches the list without input (`receipts/page.tsx:13`), so the key misses the client's `{ unmatchedOnly: false }`. This is Bug 1.
   - `/expenses/unplanned`: `transaction.unplanned.useQuery` waits on `skipToken` until an effect sets `range` (`unplanned-view.tsx:53-72`). It has its own loading card (`:271-282`) and error card (`:179-197`).
   - `/settings`:
     - `SettingsView` has no query.
     - The pay-cycle panel (`pay-cycle-section.tsx:15`) and the allowed-senders panel (`allowed-senders-section.tsx:20`) suspend.
     - The page reads `env.RESEND_INBOUND_ADDRESS` (`settings/page.tsx:12`).
 - **Receipt bugs.**
-  - Bug 2: `receipt-detail.tsx:315` treats `!data` as loading, so a failed `receipt.get` spins forever.
-  - Bug 3: `:149` and `:276-279` toast in `onError`, on top of the global toast.
+  - Bug 2: `receipt-detail.tsx:289` treats `!data` as loading, so a failed `receipt.get` spins forever.
+  - Bug 3: `:121` and `:249` toast in `onError`, on top of the global toast.
   - The design's Bug 4 (categories `useState(list)` copy) was already fixed in commit `6ea0b35`. `categories-view.tsx:23` reads the query directly.
 - **Actions.**
   - `ConfirmDialog`'s action is `AlertDialogAction`, built on `Close`, so it closes on click (`src/components/confirm-dialog.tsx:47-52`, `src/components/ui/alert-dialog.tsx:145-162`). Six delete call sites use it.
@@ -74,8 +74,7 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - Base UI `Button` has `focusableWhenDisabled` (`button/Button.d.ts:17-21`).
   - `SortableItem` accepts `disabled` (`src/components/ui/sortable.tsx:303-327`).
 - **Tests and lint.**
-  - `vitest.config.ts:3-18` runs `src/**/*.test.ts` in node. No jsdom or Testing Library is installed, and there are no `.test.tsx` files.
-  - `.claude/rules/unit-testing.md:1-20` only covers `.test.ts`.
+  - Correction (validation): the jsdom harness landed on main before this plan (`33a08fb`). `vitest.config.ts:16-34` already splits `unit` (node) and `component` (jsdom) projects, Testing Library and jsdom are installed, and `.claude/rules/unit-testing.md` already covers `.test.tsx`.
   - `biome.jsonc` has no `noRestrictedImports` or `overrides`. The rule sits in the `style` group (`node_modules/@biomejs/biome/configuration_schema.json:14085,14271`).
 - **Stage B blockers.**
   - `next.config.ts:4-35` has no `cacheComponents`. 16.4 also expects `partialPrefetching: true` (`node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/cacheComponents.md:21-29`).
@@ -126,6 +125,7 @@ Run every phase on a feature branch. Check that `make db_branch_status` shows `*
 
 ### Changes
 
+- Deviation (validation): the dev deps, `vitest.config.ts` projects, `src/test/setup-dom.ts` and `unit-testing.md` bullets below were already on main (`33a08fb`). This branch only added `src/test/app-router.tsx`.
 - `package.json`: add dev dependencies `@testing-library/react`, `@testing-library/user-event` and `jsdom`. Ranges are allowed for dev deps (`.claude/rules/package.json.md`).
 - `vitest.config.ts:3-18`: split into `test.projects`, each with `extends: true` so `env`, `unstubEnvs` and `tsconfigPaths` still apply.
   - `node` project: `src/**/*.test.ts`.
@@ -202,13 +202,13 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `config.matcher` is `"/((?!api|sign-in|sign-up|_next/static|_next/image|.*\\..*).*)"`.
 - `src/trpc/auth-errors.ts`: new.
   - `redirectOnUnauthorized({ error })` calls `redirect("/sign-in")` when `error.code === "UNAUTHORIZED"`.
-  - `isAuthError(error: unknown)` is true for a `TRPCClientError` with `data.code === "UNAUTHORIZED"`, or an error whose `digest` starts with `NEXT_REDIRECT`.
+  - `isAuthError(error: unknown)` is true for a `TRPCClientError` with `data.code === "UNAUTHORIZED"`, or an error whose `digest` is a `NEXT_REDIRECT` to `/sign-in` (as built, `3d67b7a`: other redirects don't match).
 - `src/trpc/auth-errors.test.ts` (node):
   - `UNAUTHORIZED` throws a `NEXT_REDIRECT` error to `/sign-in`; other codes don't throw.
   - `isAuthError` recognises both shapes and rejects a plain `Error`.
 - `src/trpc/server.ts:30`: `createCaller(createContext, { onError: redirectOnUnauthorized })`. tRPC rethrows what `onError` throws (`tracked-DWInO6EQ.mjs:315-324`), and `catchError` passes the redirect through.
 - `src/trpc/query-client.ts:31-55`. Together these resolve adr026's open question:
-  - Add `queryCache: new QueryCache({ onError })`. In the browser it sends a `TRPCClientError` `UNAUTHORIZED` to `window.location.assign("/sign-in")`.
+  - Add `queryCache: new QueryCache({ onError })`. In the browser it sends any `isAuthError` (client `UNAUTHORIZED` or the streamed sign-in digest) to `window.location.assign("/sign-in")`. As built, `3d67b7a`: a plain `useQuery` holds a streamed redirect without throwing.
   - Set `defaultOptions.queries.retry` to `(failureCount, error) => !isServer && failureCount < 3 && !isAuthError(error)`. This keeps TanStack's server default of 0, and stops 3 backed-off retries (about 7s) before an auth redirect.
   - Set `dehydrate.shouldRedactErrors: () => false`, as the tRPC docs do. A rejected prefetch then reaches the client with its `NEXT_REDIRECT` digest. Flight still strips messages in production.
 - `src/components/sign-out-button.tsx`: new. Move `SignOutButton` out of `app-nav.tsx:136-176` unchanged and export it.
@@ -237,12 +237,14 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - [x] `make test` passes
 - [x] `make build` passes
 - [x] Signed out, `curl -I https://personal-finance.localhost/expenses` returns 307 to `/sign-in`, and `curl -I https://personal-finance.localhost/sign-in` returns 200
-- [ ] On the `local/<branch>` database, delete a session you created (its row and Redis key), then wait out the 60s `cookieCache`. Every dashboard route then lands on `/sign-in` with no "Couldn't load" card, on both a hard load and a client navigation.
+- [x] On the `local/<branch>` database, delete a session you created (its row and Redis key), then wait out the 60s `cookieCache`. Every dashboard route then lands on `/sign-in` with no "Couldn't load" card, on both a hard load and a client navigation.
   - Hard load: all 8 routes pass. Client nav from `/`: all 7 pass.
-  - Fails: client nav `/expenses` → `/transactions` stays put and shows "0 transactions" (2 of 2). The categories and expenses suspense queries are already cached, so nothing throws. `transaction.list` is a plain `useQuery`, and the streamed redirect error just sits in it. `redirectIfUnauthorized` (`src/trpc/query-client.ts:37-47`) only matches `TRPCClientError`, not a `NEXT_REDIRECT` digest.
+  - Re-validated after `3d67b7a` (revoked session, 60s wait): client nav `/expenses` → `/transactions` now lands on `/sign-in` with no card (2 of 2 here, 4 of 4 in design review).
+  - It still shows the "0 transactions" empty state for ~400ms first. Cause: `transaction.list` is a plain `useQuery` (`transactions-view.tsx:82`), so it renders empty until the 401. Moved to Phase 5, which makes that query suspend.
+  - Every stale redirect is now a full page load, including `/` → `/expenses` (`redirectIfUnauthorized`, `src/trpc/query-client.ts:37-41`, fires beside `catchError`'s soft redirect). adr026 updated.
 - [x] A signed-in Member who opens `/sign-in` lands on `/`
 - [x] The desktop nav paints at once; the member block shows its skeleton, then the name and Sign out
-- [ ] `/design-review`: High, the stale-cookie `/transactions` client nav above
+- [x] `/design-review`: no blockers. The one High (`/transactions` empty-state flash above) is moved to Phase 5. Mediums are in the validation report.
 - [x] `/security-review`
 
 ## Phase 3: Dashboard home
@@ -285,7 +287,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - The sync page renders `<AsyncBoundary fade={false} label="…" skeleton={<PageSkeleton … />}>` around an async `*Data` child.
   - The `*Data` child holds today's `void prefetch()` calls and `HydrateClient`.
   - Labels are "expenses", "income" and "categories". The skeleton title and description match each view's `PageHeader` (`expenses-view.tsx:200-209`, `income-view.tsx:113-122`, `categories-view.tsx:96-105`).
-- `src/app/(dashboard)/settings/page.tsx:5-17`: the same pattern with `label="settings"`. `SettingsData` keeps the page's `getSession()` gate first, then reads `env.RESEND_INBOUND_ADDRESS` and prefetches. Proxy only checks cookie presence, so the gate keeps the env value out of a fake-cookie response (adr026).
+- `src/app/(dashboard)/settings/page.tsx:8-21`: the same pattern with `label="settings"`. `SettingsData` keeps the page's `getSession()` gate first, then reads `env.RESEND_INBOUND_ADDRESS` and prefetches. Proxy only checks cookie presence, so the gate keeps the env value out of a fake-cookie response (adr026).
 - `src/app/(dashboard)/settings/_components/settings-view.tsx:29-50`: wrap the pay-cycle and forwarding panels each in `<AsyncBoundary label="pay cycle" | "allowed senders" skeleton={<CardSkeleton />}>`. Appearance needs no boundary.
 - `src/app/(dashboard)/loading.tsx`: new. A generic `PageSkeleton` with a title `Skeleton`, kept as a safety net.
 - `src/app/(dashboard)/error.tsx`: new client safety net.
@@ -308,16 +310,16 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 
 ### Changes
 
-- `src/app/(dashboard)/transactions/page.tsx:4-17`, `receipts/page.tsx:4-11` and `expenses/unplanned/page.tsx:4-14` follow the Phase 4 page pattern. Labels are "transactions", "receipts" and "unplanned Spend".
-- `src/app/(dashboard)/receipts/page.tsx:8`: prefetch `receipt.list` with `{ unmatchedOnly: false }` (Bug 1). `ReceiptsData` keeps the page's `getSession()` gate before it reads `env.BLOB_PATH_PREFIX`, as `SettingsData` does.
+- `src/app/(dashboard)/transactions/page.tsx:4-17`, `receipts/page.tsx:9-19` and `expenses/unplanned/page.tsx:4-14` follow the Phase 4 page pattern. Labels are "transactions", "receipts" and "unplanned Spend".
+- `src/app/(dashboard)/receipts/page.tsx:13`: prefetch `receipt.list` with `{ unmatchedOnly: false }` (Bug 1). `ReceiptsData` keeps the page's `getSession()` gate before it reads `env.BLOB_PATH_PREFIX`, as `SettingsData` does.
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx:72-100,250-254`:
   - Build `queryInput` with `useMemo` over the filter state, so it changes only when a filter changes.
   - Pass it through `useDeferredValue`. Call `transaction.list.useSuspenseQuery(deferredInput)` and drop `placeholderData`.
   - Dim the `<tbody>` (`opacity-60`) while `queryInput !== deferredInput`, replacing the `isFetching` dim.
   - Read `data.items` / `data.total` directly.
-- `src/app/(dashboard)/receipts/_components/receipts-view.tsx:85-107,153-157,263-274`:
+- `src/app/(dashboard)/receipts/_components/receipts-view.tsx:77-98,147,251-265`:
   - Apply the same `useMemo` + `useDeferredValue` + `useSuspenseQuery` change and keep `refetchInterval` polling.
-  - Drop the `isError` copy (`:264-267`); `AsyncBoundary` owns errors.
+  - Drop the `isError` copy (`:255-258`); `AsyncBoundary` owns errors.
 - `src/app/(dashboard)/expenses/unplanned/_components/unplanned-table.tsx`: new.
   - `UnplannedTable({ range })` calls `transaction.unplanned.useSuspenseQuery({ from, to })` and renders the grouped rows and empty state moved from `unplanned-view.tsx:198-296`, including the link picker.
 - `src/app/(dashboard)/expenses/unplanned/_components/unplanned-view.tsx:53-72,119,179-204,271-282`:
@@ -327,10 +329,10 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - This inner boundary stops the table's first load from re-suspending the whole page.
   - Remove the loading card, error card and `isFetching` dim.
 - `src/app/(dashboard)/expenses/unplanned/error.tsx`: delete. `AsyncBoundary` replaces it.
-- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:315-322`: Bug 2.
+- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:289-296`: Bug 2.
   - Render a `role="alert"` "Couldn't load this receipt" state with Try again (`refetch()`) when `receipt.get` errors.
   - Show the spinner only while it is loading.
-- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:149,276-279`: Bug 3. Drop the local `onError` toasts; `query-client.ts:36-38` already toasts.
+- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:48-54` already toasts.
 - No new tests (single-use route components).
 
 ### Success
@@ -342,6 +344,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - [ ] Stepping the period on `/expenses/unplanned` dims the rows. The first load shows one `TableSkeleton` under the real header and period controls, with no full-page skeleton flash.
 - [ ] A first load of `/receipts` with receipts in the database shows rows, never "No receipts yet" (Bug 1)
 - [ ] A stale-session client nav to `/receipts` lands on `/sign-in` with no "No receipts yet" flash
+- [ ] A stale-session client nav `/expenses` → `/transactions` lands on `/sign-in` with no "0 transactions" flash (moved from Phase 2)
 - [ ] With a pending receipt, `/receipts` still polls every 3s
 - [ ] Forcing `receipt.get` to throw shows the error state with Try again, not an endless spinner (Bug 2)
 - [ ] A failed confirm-match or item attribution shows exactly one toast (Bug 3)
@@ -362,7 +365,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - A harness whose `onConfirm` resolves closes the dialog.
   - A harness whose `onConfirm` rejects leaves it open.
 - The six delete callers pass `pending={remove.isPending}` and close on success with `remove.mutate({ id }, { onSuccess: () => setConfirmOpen(false) })`:
-  - `receipts-view.tsx:282`
+  - `receipts-view.tsx:273`
   - `allowed-senders-section.tsx:162`
   - `expenses-view.tsx:426`
   - `categories-view.tsx:194`
@@ -382,15 +385,15 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - Single buttons switch the `Loader2Icon` swap to `loading` and get their labels back:
   - `balance-snapshot-card.tsx:90-106`
   - `pay-cycle-section.tsx:70-83`
-  - `allowed-senders-section.tsx:95-108` (icon-only, so it shows a same-size spinner)
+  - `allowed-senders-section.tsx:95-108`: a `Plus` with an sr-only "Add address", at the default size. Add `size="icon"` (same `h-8`, keep `w-14`) so `loading` swaps `Plus` for the spinner instead of adding one beside it. The sr-only label stays the name.
 - Row actions show `loading` only on the acting row (`mutation.variables?.id === row.id`):
-  - `receipts-view.tsx:224-237`: retry becomes an icon `Button` with `loading`.
+  - `receipts-view.tsx:219-231`: retry becomes an icon `Button` with `loading`.
   - `unplanned-table.tsx` (the link picker moved in Phase 5): a `Spinner` beside the acting row's picker.
-  - `receipt-detail.tsx:434-468`: a `Spinner` beside the acting item's pickers.
-  - `receipt-detail.tsx:202-227`: confirm match uses `loading` on the acting row.
+  - `receipt-detail.tsx:408-444`: a `Spinner` beside the acting item's pickers.
+  - `receipt-detail.tsx:174-199`: confirm match uses `loading` on the acting row.
 - `src/app/(dashboard)/expenses/categories/_components/categories-view.tsx:108-127`: pass `disabled={reorder.isPending}` to each `SortableItem` (`sortable.tsx:303-327`) so the drag handles lock while the save runs.
 - `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:95-110`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels.
-- These switch to `Spinner`: `receipt-detail.tsx:170-180,315-322`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
+- These switch to `Spinner`: `receipt-detail.tsx:142-152,289-296`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
 
 ### Success
 
