@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Validated - Phase 3 of 7
+status: Ready for Review - Phase 4 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -308,22 +308,47 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - It renders a `role="alert"` card reading "Couldn't load this page" with Try again calling `useQueryErrorResetBoundary().reset()`, then `retry()`, as `AsyncBoundary` does. Modelled on `expenses/unplanned/error.tsx:12-46`.
 - No new tests (single-use route components).
 
-### Success
+Deviations (from the design review fixes):
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] A hard load of `/expenses`, `/income`, `/expenses/categories` and `/settings` paints the title and skeleton at once, then content with no layout shift and no header blink
-- [ ] A nav click to each of those routes shows a skeleton at once: the generic one, then the page's own with its title. No layout shift between them.
-- [ ] On `/settings`, Appearance renders while the other panels load. Forcing `allowedSender.list` to throw shows the card only in that panel.
-- [ ] Screen readers announce "Loading expenses" (and so on) while pending
-- [ ] `/design-review`
+- `src/components/route-skeletons.tsx`: new. One skeleton per page (`ExpensesSkeleton`, `IncomeSkeleton`, `CategoriesSkeleton`, `SettingsSkeleton`, plus `OverviewSkeleton`, `TransactionsSkeleton`, `ReceiptsSkeleton`, `UnplannedSkeleton`). Each has the page's container width, header and a body shaped like its view, so pages no longer use a bare `<PageSkeleton … />`.
+- `loading.tsx` is URL-aware, not generic. It reads `usePathname()` and draws that page's skeleton, with a `role="status"` "Loading {label}" outside an `aria-busy` region. Falls back to a bare `PageSkeleton`. Why: prefetch for dynamic routes stops at the first `loading.js` ("Layout to first loading boundary"), and for every section that is this file. A nested `loading.tsx` was tried and never painted on nav. The generic one jumped width (always 5xl; categories is 3xl, transactions/receipts 6xl).
+- `PageSkeleton` gained `className` (container width) and `contentClassName` (body gap), and `children` is optional. `PageHeader` takes `ReactNode` title and description.
+- `src/components/retry-card.tsx`: new. The error card, shared by `AsyncBoundary` and `error.tsx`. Spinner while retrying, focus back on Try again if the retry fails.
+- Page-level errors keep the header: skeletons mark their body with `ErrorSlot` (`skeletons.tsx`), and `AsyncBoundary` portals the error card into it. Test added to `async-boundary.test.tsx`.
+- `TableSkeleton` is `table-fixed`, so it can't push past a phone's width.
+- Settings panels use `settings-panel-skeleton.tsx` (`PayCycleSkeleton`, `ForwardingSkeleton`): the real heading and blurb over bars, flat like the panels. `CardSkeleton` was removed.
+- `error.tsx` uses the 6xl container, a "Something went wrong" `PageHeader` and `RetryCard`. A module flag carries "refocus Try again" across the remount on a failed retry.
+
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes
+  - Re-run after the design review fixes as `pnpm run build`. `make build`'s `rm -rf .next` would wipe the running dev server's `.next/dev`.
+- [x] A hard load of `/expenses`, `/income`, `/expenses/categories` and `/settings` paints the title and skeleton at once, then content with no layout shift and no header blink
+  - Sampled each hard load: title + skeleton at ~100ms, header top 32 throughout, container width unchanged (categories 768).
+  - After the per-page skeletons, skeleton/real body heights at 1440 and 375: categories, income and settings match. Expenses differs only by data row count. Forwarding panel matches per block (field 1px off).
+- [x] A nav click to each of those routes shows a skeleton at once: the generic one, then the page's own with its title. No layout shift between them.
+  - Superseded by the URL-aware `loading.tsx` (see Deviations): a nav now paints the target page's own skeleton, then the page. No generic frame.
+  - Live in dev, page delayed by a temporary server sleep: container width matches skeleton → page (categories 464/768 at 375/1440, transactions 272/1152), header height 77 and content start 133 unchanged, status "Loading categories" / "Loading transactions". Reverted.
+  - Dev only: there is no prefetch, so the old page stays ~2.6s before the skeleton paints. Production prefetches the boundary. Not checked live: a local `next start` redirects to sign-in (secure session cookie over http).
+- [x] On `/settings`, Appearance renders while the other panels load. Forcing `allowedSender.list` to throw shows the card only in that panel.
+  - Live fault check: one "Couldn't load allowed senders" card, none in pay cycle. Fault reverted.
+- [x] Screen readers announce "Loading expenses" (and so on) while pending
+  - `role=status` read "Loading expenses", "Loading income", "Loading categories", "Loading settings", then per-panel "Loading pay cycle" / "Loading allowed senders".
+- [x] `/design-review`: no blockers. All three Highs fixed and checked live:
+  - Page error card was full-bleed with no heading and scrolled sideways at 375. Now it sits under the real header, inside the container, full content width, no sideways scroll, no bars (1440, 375). Settings panel error: card in that panel only, heading and blurb still shown.
+  - Nav jumped width from the generic 5xl skeleton. Fixed by the URL-aware `loading.tsx` (see above).
+  - Mediums fixed: page-shaped skeleton bodies, table clipping on phones, `error.tsx` matches the section cards (spinner, focus back on a failed retry, 6xl container), `loading.tsx` status text and no phantom action bar, action bar width.
+  - Live retry checks (fault toggled with a temp file): failed retry shows the spinner, then focus returns to Try again. A good retry moves focus to the loaded region.
+  - Left open: low skeleton contrast, slow retry in dev, double "Loading" announcement, `/transactions` hydration mismatch (Phase 5). After a good `error.tsx` retry, focus lands on `body`. On phones, the page-error header keeps a blank gap where the hidden action bar sits. `OverviewSkeleton` body is empty: the page is sync, so its section skeletons follow straight away.
 
 ## Phase 5: Filtered lists and receipt bugs
 
 ### Changes
 
 - `src/app/(dashboard)/transactions/page.tsx:4-17`, `receipts/page.tsx:9-19` and `expenses/unplanned/page.tsx:4-14` follow the Phase 4 page pattern. Labels are "transactions", "receipts" and "unplanned Spend".
+  - Skeletons: use `TransactionsSkeleton`, `ReceiptsSkeleton` and `UnplannedSkeleton` from `route-skeletons.tsx`, the same ones `loading.tsx` draws on nav. Fill in their bodies to match each view.
+  - Found in Phase 4: the Receipts header action is 32px tall vs the skeleton's `h-7` (28px). The Transactions description counts rows, so the skeleton draws a bar in its place. Check both for header shift.
+  - Found in Phase 4: `/transactions` logs a hydration mismatch on load. Fix or explain it here.
 - `src/app/(dashboard)/receipts/page.tsx:13`: prefetch `receipt.list` with `{ unmatchedOnly: false }` (Bug 1). `ReceiptsData` keeps the page's `getSession()` gate before it reads `env.BLOB_PATH_PREFIX`, as `SettingsData` does.
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx:72-100,250-254`:
   - Build `queryInput` with `useMemo` over the filter state, so it changes only when a filter changes.
