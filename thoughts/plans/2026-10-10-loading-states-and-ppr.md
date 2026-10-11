@@ -55,12 +55,12 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - `/transactions`: `transaction.list.useQuery` with `placeholderData`. Filters are in `useState` (`transactions-view.tsx:57-84`), and `isFetching` dims the rows (`:250-254`).
   - `/receipts`:
     - `receipt.list.useQuery` with `placeholderData` and 3s polling while a row is pending (`receipts-view.tsx:77-88`).
-    - The page prefetches the list without input (`receipts/page.tsx:13`), so the key misses the client's `{ unmatchedOnly: false }`. This is Bug 1.
+    - The page prefetches the list without input (`receipts/page.tsx:7`), so the key misses the client's `{ unmatchedOnly: false }`. This is Bug 1.
   - `/expenses/unplanned`: `transaction.unplanned.useQuery` waits on `skipToken` until an effect sets `range` (`unplanned-view.tsx:53-72`). It has its own loading card (`:271-282`) and error card (`:179-197`).
   - `/settings`:
     - `SettingsView` has no query.
     - The pay-cycle panel (`pay-cycle-section.tsx:15`) and the allowed-senders panel (`allowed-senders-section.tsx:20`) suspend.
-    - The page reads `env.RESEND_INBOUND_ADDRESS` (`settings/page.tsx:18`).
+    - The page reads `env.RESEND_INBOUND_ADDRESS` (`settings/page.tsx:12`).
 - **Receipt bugs.**
   - Bug 2: `receipt-detail.tsx:289` treats `!data` as loading, so a failed `receipt.get` spins forever.
   - Bug 3: `:121` and `:249` toast in `onError`, on top of the global toast.
@@ -127,7 +127,7 @@ Run every phase on a feature branch. Check that `make db_branch_status` shows `*
 
 - Deviation (validation): the dev deps, `vitest.config.ts` projects, `src/test/setup-dom.ts` and `unit-testing.md` bullets below were already on main (`33a08fb`). This branch only added `src/test/app-router.tsx`.
 - `package.json`: add dev dependencies `@testing-library/react`, `@testing-library/user-event` and `jsdom`. Ranges are allowed for dev deps (`.claude/rules/package.json.md`).
-- `vitest.config.ts:3-18`: split into `test.projects`, each with `extends: true` so `env`, `unstubEnvs` and `tsconfigPaths` still apply.
+- `vitest.config.ts:16-34`: split into `test.projects`, each with `extends: true` so `env`, `unstubEnvs` and `tsconfigPaths` still apply.
   - `node` project: `src/**/*.test.ts`.
   - `jsdom` project: `src/**/*.test.tsx`, with `setupFiles: ["src/test/setup-dom.ts"]`.
 - `src/test/setup-dom.ts`: `afterEach(cleanup)` from Testing Library. Vitest globals are off, so its auto-cleanup won't register.
@@ -140,7 +140,7 @@ Run every phase on a feature branch. Check that `make db_branch_status` shows `*
 - `src/components/ui/skeleton.tsx`: new, from the shadcn registry. `data-slot="skeleton"`, `animate-pulse rounded-md bg-muted`, `aria-hidden`, `motion-reduce:animate-none`.
 - `src/components/ui/spinner.tsx`: new, from the shadcn registry. A decorative `Loader2Icon` with `animate-spin motion-reduce:animate-none` and `aria-hidden`. Callers that need an announcement wrap it in a `role="status"` region.
 - `src/components/ui/button.tsx:43-56`: add a `loading?: boolean` prop.
-  - Text sizes: render `<Spinner data-icon="inline-start" />` before the label and keep the label.
+  - Text sizes: render `<Spinner data-icon="inline-start" />` before the label and keep the label. A leading `data-icon="inline-start"` child icon hides while loading, so the spinner takes its place.
   - Icon sizes (`icon`, `icon-xs`, `icon-sm`, `icon-lg`, `:22-33`): swap the icon child for a same-size `Spinner`.
   - When loading, set `disabled`, `focusableWhenDisabled` and `aria-busy`.
 - `src/components/ui/button.test.tsx`: `loading` shows a spinner, sets `aria-busy`, ignores clicks, and keeps focus on the button.
@@ -210,7 +210,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `src/trpc/query-client.ts:31-55`. Together these resolve adr026's open question:
   - Add `queryCache: new QueryCache({ onError })`. In the browser it sends any `isAuthError` (client `UNAUTHORIZED` or the streamed sign-in digest) to `window.location.assign("/sign-in")`. As built, `3d67b7a`: a plain `useQuery` holds a streamed redirect without throwing.
   - Set `defaultOptions.queries.retry` to `(failureCount, error) => !isServer && failureCount < 3 && !isAuthError(error)`. This keeps TanStack's server default of 0, and stops 3 backed-off retries (about 7s) before an auth redirect.
-    - Superseded in Phase 3 (`106de8a`): `isTransientError` (`query-client.ts:44-50`) retries only network drops and 5xx, twice, at 300ms then 900ms.
+    - Superseded in Phase 3 (`106de8a`, `943a956`): `isTransientError` (`query-client.ts:44-55`) retries only network drops, 5xx and failed server prefetches (a plain error), twice, at 300ms then 900ms. 4xx and redirect digests fail fast.
   - Set `dehydrate.shouldRedactErrors: () => false`, as the tRPC docs do. A rejected prefetch then reaches the client with its `NEXT_REDIRECT` digest. Flight still strips messages in production.
 - `src/components/sign-out-button.tsx`: new. Move `SignOutButton` out of `app-nav.tsx:136-176` unchanged and export it.
 - `src/components/nav-member.tsx`: new server component.
@@ -277,15 +277,17 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - Measured skeleton/real section heights, CLS 0 at each width: 1440 116/116, 396/396, 678/682; 1024 248/248, 440/440, 678/682; 768 248/248, 624/623, 1002/1006; 375 512/512, 684/683, 1178/1182. Spending rows are sized to typical data (5 priorities, 8 groups), so empty data lands shorter.
 - [x] Server logs show `transaction.summary`, `expense.list`, `income.list`, `cashflow.get` and `balance.latest` all start in the same request window, not after one another
   - All five logged the same millisecond start (temporary log, reverted). `transaction.summary` ran once.
-  - Re-validated 2026-10-11: same millisecond again, `transaction.summary` once.
+  - Re-validated 2026-10-11: same millisecond again, `transaction.summary` once. Third run after the fixes: same.
 - [x] Forcing `transaction.summary` to throw shows "Couldn't load summary" and "Couldn't load spending" while cash flow still renders. Removing the fault and pressing Try again recovers.
 - [x] `/design-review`: no blockers. Both Highs fixed:
   - The cash-flow skeleton was too short below xl because the real header wraps. It now renders the real header and balance heading (`CashFlowChartSkeleton`, `BalanceSnapshotCardSkeleton`).
   - Section error cards lost their top gap, because the margin sat on the skeleton root inside the boundary's grid cell. Section spacing now lives on wrappers in `page.tsx`. Live fault check: gaps 24px and 16px.
   - Slow error card fixed in `106de8a`: client queries retry only network drops and 5xx, twice, at 300ms then 900ms. Live fault check: card in 2.8s (was ~7.6s), 1.6s after Try again (was ~7s).
   - Mediums left open (outside Phase 3): quiet error card styling, low skeleton contrast, a one-frame blank on swap plus a double fade with the inner chart boundary (`async-boundary.tsx`), `role=status` inserted with its text already in it, and older chart a11y issues.
-  - Re-validated 2026-10-11: heights, CLS 0, gaps, fault + Try again and reduced motion all pass again. New High, open: the error text is centred in a section-tall card, so it sits below the fold (spending at 1440x900: y≈1000). Spending skeleton's 4px gap was margin collapse in `HeadingSkeleton`, not data. Fixed: 682/682 at 1440, 1182/1182 at 375.
-  - Validation finding, open: `106de8a` stops client retries of a failed server prefetch. The streamed error is a plain `Error`, not a `TRPCClientError`, so `isTransientError` says no. Live check (`cashflow.get` forced to throw): card at once, zero client `/api/trpc` requests. Before, 3 retries ran the real fetch.
+  - Re-validated 2026-10-11: heights, CLS 0, gaps, fault + Try again and reduced motion all pass again. Spending skeleton's 4px gap was margin collapse in `HeadingSkeleton`, not data. Fixed (`54ecd3d`).
+  - Fixed (`c0709cd`): the error text sat centred in a section-tall card, below the fold (spending at 1440x900: y≈1000). Live check: text now 16px below each card top (summary y149, spending y693).
+  - Fixed (`943a956`): `106de8a` had stopped client retries of a failed server prefetch (a plain `Error`, not a `TRPCClientError`). Live check (`cashflow.get` forced to throw): 2 real client fetches at ~0.47s and ~1.41s, card at 1.46s.
+  - Third validation 2026-10-11 (design review, phases 1–3): no blockers, no Highs. Heights skeleton/real: 1440 116/116, 396/396, 682/682; 1024 248/248, 440/440, 682/682; 768 248/248, 624/623, 1006/1006; 375 512/512, 684/683, 1182/1182. CLS 0. New Mediums, open: error card looks unfinished (card in card, faint text), Try again widens 14px while loading (`button.tsx`), spending skeleton draws grey bars instead of its fixed titles.
 
 ## Phase 4: Prefetched pages, settings and safety nets
 
@@ -300,7 +302,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - Labels are "expenses", "income" and "categories". The skeleton title and description match each view's `PageHeader` (`expenses-view.tsx:200-209`, `income-view.tsx:113-122`, `categories-view.tsx:96-105`).
 - `src/app/(dashboard)/settings/page.tsx:8-21`: the same pattern with `label="settings"`. `SettingsData` keeps the page's `getSession()` gate first, then reads `env.RESEND_INBOUND_ADDRESS` and prefetches. Proxy only checks cookie presence, so the gate keeps the env value out of a fake-cookie response (adr026).
 - `src/app/(dashboard)/settings/_components/settings-view.tsx:29-50`: wrap the pay-cycle and forwarding panels each in `<AsyncBoundary label="pay cycle" | "allowed senders" skeleton={<CardSkeleton />}>`. Appearance needs no boundary.
-- `src/app/(dashboard)/loading.tsx`: new. A generic `PageSkeleton` with a title `Skeleton`, kept as a safety net.
+- `src/app/(dashboard)/loading.tsx`: new. A generic `PageSkeleton` with a title `Skeleton`, kept as a safety net. On a client nav it shows first, then the page's own skeleton swaps in. The layout matches, so only the title text fills in. Accepted: design decision 10 relies on `loading.tsx` for nav feedback.
 - `src/app/(dashboard)/error.tsx`: new client safety net.
   - It takes `{ error, retry }` and logs `console.error(error)`.
   - It renders a `role="alert"` card reading "Couldn't load this page" with Try again calling `useQueryErrorResetBoundary().reset()`, then `retry()`, as `AsyncBoundary` does. Modelled on `expenses/unplanned/error.tsx:12-46`.
@@ -312,7 +314,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - [ ] `make test` passes
 - [ ] `make build` passes
 - [ ] A hard load of `/expenses`, `/income`, `/expenses/categories` and `/settings` paints the title and skeleton at once, then content with no layout shift and no header blink
-- [ ] A nav click to each of those routes shows its skeleton at once
+- [ ] A nav click to each of those routes shows a skeleton at once: the generic one, then the page's own with its title. No layout shift between them.
 - [ ] On `/settings`, Appearance renders while the other panels load. Forcing `allowedSender.list` to throw shows the card only in that panel.
 - [ ] Screen readers announce "Loading expenses" (and so on) while pending
 - [ ] `/design-review`
@@ -343,7 +345,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:289-296`: Bug 2.
   - Render a `role="alert"` "Couldn't load this receipt" state with Try again (`refetch()`) when `receipt.get` errors.
   - Show the spinner only while it is loading.
-- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:57-63` already toasts.
+- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:62-68` already toasts.
 - No new tests (single-use route components).
 
 ### Success
@@ -392,7 +394,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `src/components/auth-form.tsx:18-44,86-94`:
   - Wrap the fields in `<FieldSet disabled={loading}>`. Submit uses `loading` and stays loading through the route change; `loading` already isn't reset on success (`:38-39`).
   - The error `<p>` gets `role="alert"`.
-- `src/components/sign-out-button.tsx`: a `Button` with `loading` replaces the raw `<button>`, keeping the nav item look.
+- `src/components/sign-out-button.tsx`: a `Button` with `loading` replaces the raw `<button>`, keeping the nav item look. `LogOut` gets `data-icon="inline-start"` so the spinner replaces it.
 - Single buttons switch the `Loader2Icon` swap to `loading` and get their labels back:
   - `balance-snapshot-card.tsx:88-104`
   - `pay-cycle-section.tsx:70-83`
@@ -403,7 +405,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `receipt-detail.tsx:408-444`: a `Spinner` beside the acting item's pickers.
   - `receipt-detail.tsx:174-199`: confirm match uses `loading` on the acting row.
 - `src/app/(dashboard)/expenses/categories/_components/categories-view.tsx:108-127`: pass `disabled={reorder.isPending}` to each `SortableItem` (`sortable.tsx:303-327`) so the drag handles lock while the save runs.
-- `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:100-115`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels.
+- `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:100-115`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels. Always render `<Upload data-icon="inline-start" />`; the spinner replaces it while loading.
 - These switch to `Spinner`: `receipt-detail.tsx:142-152,289-296`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
 
 ### Success
@@ -469,7 +471,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `02-guides/authentication-with-cache-components.md`
 - Related code:
   - `src/trpc/server.ts:17-40`
-  - `src/trpc/query-client.ts:35-92`
+  - `src/trpc/query-client.ts:35-97`
   - `src/server/api/trpc.ts:75-85,183-206`
   - `src/components/app-nav.tsx:134-181`, `src/components/nav-member.tsx`, `src/components/sign-out-button.tsx`
 - Prior fix: commit `6ea0b35` (categories cache read, the design's Bug 4)
