@@ -56,7 +56,12 @@ function Button({
 	return (
 		<ButtonPrimitive
 			aria-busy={loading || undefined}
-			className={cn(buttonVariants({ variant, size, className }))}
+			className={cn(
+				buttonVariants({ variant, size, className }),
+				// Spinner takes the leading icon's place, as on icon buttons.
+				loading &&
+					"[&>[data-icon=inline-start]:not([data-slot=spinner])]:hidden",
+			)}
 			data-slot="button"
 			disabled={disabled || loading}
 			// A natively disabled button drops focus mid-save; keep it on the button.
@@ -66,7 +71,7 @@ function Button({
 			{loading && iconOnly ? (
 				<>
 					<Spinner />
-					{/* Hide the icon, not a screen-reader label, so the name holds. */}
+					{/* Spinner takes the icon's place; children stay for screen readers so the name holds. */}
 					<span className="sr-only">{children}</span>
 				</>
 			) : (
