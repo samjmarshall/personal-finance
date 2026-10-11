@@ -177,13 +177,11 @@ function AsyncBoundaryError({
 
 	// The hidden skeleton holds the region's size, so the page doesn't jump
 	// when the error swaps in, or again when Try again brings the skeleton back.
+	// Message sits at the top: centred in a tall region, it lands below the fold.
 	return (
 		<div className="grid">
 			<div className="invisible col-start-1 row-start-1">{skeleton}</div>
-			<Card
-				className="col-start-1 row-start-1 justify-center text-center"
-				role="alert"
-			>
+			<Card className="col-start-1 row-start-1 text-center" role="alert">
 				<CardContent className="flex flex-col items-center gap-3">
 					<p className="text-muted-foreground text-sm">
 						Couldn't load {label}.
