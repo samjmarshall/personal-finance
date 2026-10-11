@@ -40,6 +40,15 @@ function redirectIfUnauthorized(error: unknown): boolean {
 	return true;
 }
 
+/** Only failures a retry can fix: a network drop or a 5xx. 4xx and redirects fail fast. */
+export function isTransientError(error: unknown): boolean {
+	if (!(error instanceof TRPCClientError)) return false;
+	// A network failure never got a response, so it carries no data.
+	const status = (error.data as { httpStatus?: number } | undefined)
+		?.httpStatus;
+	return status === undefined || status >= 500;
+}
+
 export const createQueryClient = () =>
 	new QueryClient({
 		// Surface every mutation failure but UNAUTHORIZED as a toast (ADR001: the
@@ -58,12 +67,14 @@ export const createQueryClient = () =>
 				// With SSR, we usually want to set some default staleTime
 				// above 0 to avoid refetching immediately on the client
 				staleTime: 30 * 1000,
-				// No retries on the server or for sign-in errors. They won't fix
-				// themselves, and 3 slow retries delay the sign-in redirect ~7s.
+				// The default (3 tries, 1s/2s/4s) holds a failing section's error card
+				// back ~7s, and again after each Try again. Two quick tries cover a
+				// blip; the server never retries.
 				retry: (failureCount, error) =>
 					!environmentManager.isServer() &&
-					failureCount < 3 &&
-					!isAuthError(error),
+					failureCount < 2 &&
+					isTransientError(error),
+				retryDelay: (attempt) => 300 * 3 ** attempt,
 			},
 			dehydrate: {
 				serializeData: SuperJSON.serialize,
