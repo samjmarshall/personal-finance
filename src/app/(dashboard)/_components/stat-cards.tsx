@@ -15,9 +15,8 @@ export async function StatCards() {
 		getIncome(),
 	]);
 
-	// Recurring-only: one-time rows carry a monthly cadence of 0, and every figure
-	// here (counts + leftover) is monthly-framed, so one-time entries mustn't count.
-	// Leftover stays recurring-monthly — upcoming one-time spend isn't a cadence.
+	// Recurring only: every figure is monthly, and one-time rows have no monthly
+	// amount, so they'd skew the counts.
 	const recurringExpenses = expenses.filter(
 		(e) => e.kind === CommitmentKind.Recurring,
 	);

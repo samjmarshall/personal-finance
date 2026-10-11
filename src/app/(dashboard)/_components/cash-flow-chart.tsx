@@ -67,8 +67,8 @@ export function CashFlowChart() {
 					value={periodKind}
 				/>
 			</CashFlowHeader>
-			{/* Toggling periodKind re-suspends only the chart body, so the toggle
-			    stays interactive while the new grid loads. */}
+			{/* The select sits outside the boundary, so it stays usable while the
+			    new period loads. */}
 			{/* Keyed so one period's error card doesn't stick on the next. */}
 			<AsyncBoundary
 				key={periodKind}
