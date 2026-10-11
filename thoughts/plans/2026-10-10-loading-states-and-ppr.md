@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Ready for Review - Phase 3 of 7
+status: Validated - Phase 3 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -33,7 +33,7 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - The `MutationCache` toasts every mutation error (`:36-38`). There is no `QueryCache`.
   - No `retry` is set, so client queries retry 3 times.
   - Pending queries are dehydrated (`:47-49`).
-  - No `shouldRedactErrors` is set. TanStack's default redacts every rejected pending query to `Error("redacted")` (`@tanstack/query-core/build/modern/hydration.js:15-29,56-58`), which drops Next's `NEXT_REDIRECT` digest. adr026's open question comes from this.
+  - No `shouldRedactErrors` is set. TanStack's default redacts every rejected pending query to `Error("redacted")` (`@tanstack/query-core/build/modern/hydration.js:15-30,54-56`), which drops Next's `NEXT_REDIRECT` digest. adr026's open question comes from this.
 - **Error boundaries.**
   - `catchError` (`next/error`) is client-only.
   - It rethrows `redirect()` / `notFound()` (`node_modules/next/dist/client/components/catch-error.js:53-58`).
@@ -43,7 +43,7 @@ Pages load data on the server and show nothing until it arrives. There is no `lo
   - The only `<Suspense>` is `src/app/(dashboard)/_components/cash-flow-chart.tsx:75-79`.
   - The only route `error.tsx` is `src/app/(dashboard)/expenses/unplanned/error.tsx`.
   - There is no `Skeleton` or `Spinner` in `src/components/ui/`.
-  - There are ten ad-hoc `Loader2Icon` / `Loader2` spinners: `sonner.tsx:28`, `receipt-upload.tsx:108`, `receipt-detail.tsx:149,196-198,295`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125`, `balance-snapshot-card.tsx:99-100`, `pay-cycle-section.tsx:76-77` and `allowed-senders-section.tsx:101-102`.
+  - There are ten ad-hoc `Loader2Icon` / `Loader2` spinners: `sonner.tsx:28`, `receipt-upload.tsx:108`, `receipt-detail.tsx:149,196-198,295`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125`, `balance-snapshot-card.tsx:97-98`, `pay-cycle-section.tsx:76-77` and `allowed-senders-section.tsx:101-102`.
 - **Dashboard home** (`src/app/(dashboard)/page.tsx`).
   - It awaits `transaction.summary`, `expense.list` and `income.list` (`:20-25`), then starts the `cashflow.get` / `balance.latest` prefetches (`:29-30`).
   - Stat cards: derived at `:32-80`, rendered at `:90-117`.
@@ -117,7 +117,7 @@ Ship seven PRs in the design's delivery order. The design's slice 4 is split in 
 - Phase 6 adds pending states.
 - Phase 7 flips `cacheComponents` and fixes the known prerender errors.
 
-Each phase leaves the app working and passes `make check`, `make test` and `make build`. `make build` needs production env vars (`docs/README.md:39`).
+Each phase leaves the app working and passes `make check`, `make test` and `make build`. `make build` needs production env vars (`docs/README.md:40`).
 
 Run every phase on a feature branch. Check that `make db_branch_status` shows `*` on `local/<branch>` before any write or session test.
 
@@ -210,6 +210,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `src/trpc/query-client.ts:31-55`. Together these resolve adr026's open question:
   - Add `queryCache: new QueryCache({ onError })`. In the browser it sends any `isAuthError` (client `UNAUTHORIZED` or the streamed sign-in digest) to `window.location.assign("/sign-in")`. As built, `3d67b7a`: a plain `useQuery` holds a streamed redirect without throwing.
   - Set `defaultOptions.queries.retry` to `(failureCount, error) => !isServer && failureCount < 3 && !isAuthError(error)`. This keeps TanStack's server default of 0, and stops 3 backed-off retries (about 7s) before an auth redirect.
+    - Superseded in Phase 3 (`106de8a`): `isTransientError` (`query-client.ts:44-50`) retries only network drops and 5xx, twice, at 300ms then 900ms.
   - Set `dehydrate.shouldRedactErrors: () => false`, as the tRPC docs do. A rejected prefetch then reaches the client with its `NEXT_REDIRECT` digest. Flight still strips messages in production.
 - `src/components/sign-out-button.tsx`: new. Move `SignOutButton` out of `app-nav.tsx:136-176` unchanged and export it.
 - `src/components/nav-member.tsx`: new server component.
@@ -276,12 +277,15 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - Measured skeleton/real section heights, CLS 0 at each width: 1440 116/116, 396/396, 678/682; 1024 248/248, 440/440, 678/682; 768 248/248, 624/623, 1002/1006; 375 512/512, 684/683, 1178/1182. Spending rows are sized to typical data (5 priorities, 8 groups), so empty data lands shorter.
 - [x] Server logs show `transaction.summary`, `expense.list`, `income.list`, `cashflow.get` and `balance.latest` all start in the same request window, not after one another
   - All five logged the same millisecond start (temporary log, reverted). `transaction.summary` ran once.
+  - Re-validated 2026-10-11: same millisecond again, `transaction.summary` once.
 - [x] Forcing `transaction.summary` to throw shows "Couldn't load summary" and "Couldn't load spending" while cash flow still renders. Removing the fault and pressing Try again recovers.
 - [x] `/design-review`: no blockers. Both Highs fixed:
   - The cash-flow skeleton was too short below xl because the real header wraps. It now renders the real header and balance heading (`CashFlowChartSkeleton`, `BalanceSnapshotCardSkeleton`).
   - Section error cards lost their top gap, because the margin sat on the skeleton root inside the boundary's grid cell. Section spacing now lives on wrappers in `page.tsx`. Live fault check: gaps 24px and 16px.
   - Slow error card fixed in `106de8a`: client queries retry only network drops and 5xx, twice, at 300ms then 900ms. Live fault check: card in 2.8s (was ~7.6s), 1.6s after Try again (was ~7s).
   - Mediums left open (outside Phase 3): quiet error card styling, low skeleton contrast, a one-frame blank on swap plus a double fade with the inner chart boundary (`async-boundary.tsx`), `role=status` inserted with its text already in it, and older chart a11y issues.
+  - Re-validated 2026-10-11: heights, CLS 0, gaps, fault + Try again and reduced motion all pass again. New High, open: the error text is centred in a section-tall card, so it sits below the fold (spending at 1440x900: y≈1000). Spending skeleton's 4px gap was margin collapse in `HeadingSkeleton`, not data. Fixed: 682/682 at 1440, 1182/1182 at 375.
+  - Validation finding, open: `106de8a` stops client retries of a failed server prefetch. The streamed error is a plain `Error`, not a `TRPCClientError`, so `isTransientError` says no. Live check (`cashflow.get` forced to throw): card at once, zero client `/api/trpc` requests. Before, 3 retries ran the real fetch.
 
 ## Phase 4: Prefetched pages, settings and safety nets
 
@@ -339,7 +343,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:289-296`: Bug 2.
   - Render a `role="alert"` "Couldn't load this receipt" state with Try again (`refetch()`) when `receipt.get` errors.
   - Show the spinner only while it is loading.
-- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:48-54` already toasts.
+- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:57-63` already toasts.
 - No new tests (single-use route components).
 
 ### Success
@@ -390,7 +394,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - The error `<p>` gets `role="alert"`.
 - `src/components/sign-out-button.tsx`: a `Button` with `loading` replaces the raw `<button>`, keeping the nav item look.
 - Single buttons switch the `Loader2Icon` swap to `loading` and get their labels back:
-  - `balance-snapshot-card.tsx:90-106`
+  - `balance-snapshot-card.tsx:88-104`
   - `pay-cycle-section.tsx:70-83`
   - `allowed-senders-section.tsx:95-108`: a `Plus` with an sr-only "Add address", at the default size. Add `size="icon"` (same `h-8`, keep `w-14`) so `loading` swaps `Plus` for the spinner instead of adding one beside it. The sr-only label stays the name.
 - Row actions show `loading` only on the acting row (`mutation.variables?.id === row.id`):
@@ -422,10 +426,11 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `next.config.ts:4-41`: set `cacheComponents: true` and `partialPrefetching: true` (`cacheComponents.md:21-29`).
 - Add `await io()` (from `next/cache`) as the first line of every prefetching server section:
   - Files: `expenses/page.tsx`, `income/page.tsx`, `expenses/categories/page.tsx`, `settings/page.tsx`, `transactions/page.tsx`, `receipts/page.tsx`, `expenses/unplanned/page.tsx` (their `*Data` children) and `_components/cash-flow-section.tsx`.
+  - `CashFlowSection` (`cash-flow-section.tsx:11`) is sync today, so make it `async` to add the `await`.
   - Why: TanStack `prefetchQuery` / `dehydrate()` read `Date.now()` before `headers()` is awaited, which is a sync-IO prerender error (`hydration.js:32`, `migrating-to-cache-components.md:101`, `io.md`).
 - `src/app/api/health/route.ts:7-10`:
   - Remove `export const dynamic = "force-dynamic"`, which errors under `cacheComponents` (`migrating-to-cache-components.md:74`).
-  - Call `await connection()` (from `next/server`) first in `GET`, so `select 1` runs per request and never at build (`:825-829`).
+  - Call `await connection()` (from `next/server`) first in `GET`, so `select 1` runs per request and never at build (`migrating-to-cache-components.md:825-829`). Put it before the `try`: a `try/catch` swallows the prerender bail-out (`:883`).
 - Run `make build` and fix any other validation error it reports.
   - `export const instant = false` is a last resort only. Mark each use with a `TODO` and remove it before merging.
 - Keep `src/app/(dashboard)/loading.tsx`.
@@ -464,7 +469,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
   - `02-guides/authentication-with-cache-components.md`
 - Related code:
   - `src/trpc/server.ts:17-40`
-  - `src/trpc/query-client.ts:35-82`
-  - `src/server/api/trpc.ts:75-81,184-199`
+  - `src/trpc/query-client.ts:35-92`
+  - `src/server/api/trpc.ts:75-85,183-206`
   - `src/components/app-nav.tsx:134-181`, `src/components/nav-member.tsx`, `src/components/sign-out-button.tsx`
 - Prior fix: commit `6ea0b35` (categories cache read, the design's Bug 4)
