@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Validated - Phase 2 of 7
+status: Validated - Phase 1 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -237,10 +237,12 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - [x] `make test` passes
 - [x] `make build` passes
 - [x] Signed out, `curl -I https://personal-finance.localhost/expenses` returns 307 to `/sign-in`, and `curl -I https://personal-finance.localhost/sign-in` returns 200
-- [x] On the `local/<branch>` database, delete a session you created (its row and Redis key), then wait out the 60s `cookieCache`. Every dashboard route then lands on `/sign-in` with no "Couldn't load" card, on both a hard load and a client navigation.
+- [ ] On the `local/<branch>` database, delete a session you created (its row and Redis key), then wait out the 60s `cookieCache`. Every dashboard route then lands on `/sign-in` with no "Couldn't load" card, on both a hard load and a client navigation.
+  - Hard load: all 8 routes pass. Client nav from `/`: all 7 pass.
+  - Fails: client nav `/expenses` → `/transactions` stays put and shows "0 transactions" (2 of 2). The categories and expenses suspense queries are already cached, so nothing throws. `transaction.list` is a plain `useQuery`, and the streamed redirect error just sits in it. `redirectIfUnauthorized` (`src/trpc/query-client.ts:37-47`) only matches `TRPCClientError`, not a `NEXT_REDIRECT` digest.
 - [x] A signed-in Member who opens `/sign-in` lands on `/`
 - [x] The desktop nav paints at once; the member block shows its skeleton, then the name and Sign out
-- [x] `/design-review`
+- [ ] `/design-review`: High, the stale-cookie `/transactions` client nav above
 - [x] `/security-review`
 
 ## Phase 3: Dashboard home
