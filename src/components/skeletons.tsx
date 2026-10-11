@@ -1,5 +1,7 @@
-import { Card, CardContent } from "~/components/ui/card";
+import type { ReactNode } from "react";
+import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
+import { cn } from "~/lib/utils";
 
 // Sized to the real markup, so no layout shift on swap. Roots are hidden from
 // screen readers; the boundary's status text speaks for the region.
@@ -16,7 +18,8 @@ export function TableSkeleton({
 }) {
 	return (
 		<Card aria-hidden className="[--card-spacing:0px]">
-			<table className="w-full border-collapse text-sm">
+			{/* Fixed layout: the bars can't push the columns past a phone's width. */}
+			<table className="w-full table-fixed border-collapse text-sm">
 				<thead>
 					<tr className="border-border border-b bg-muted/40">
 						{indices(cols).map((col) => (
@@ -42,22 +45,6 @@ export function TableSkeleton({
 	);
 }
 
-/** Matches the dashboard/settings card's heading and body sizes, so no shift. */
-export function CardSkeleton() {
-	return (
-		<Card aria-hidden>
-			<CardContent>
-				<HeadingSkeleton />
-				<div className="flex flex-col gap-3">
-					<Skeleton className="h-8 w-full" />
-					<Skeleton className="h-8 w-full" />
-					<Skeleton className="h-8 w-2/3" />
-				</div>
-			</CardContent>
-		</Card>
-	);
-}
-
 /** Title + subtitle lines, 36 + 16 gap like the real card headings. */
 export function HeadingSkeleton() {
 	return (
@@ -72,4 +59,23 @@ export function HeadingSkeleton() {
 /** `height` in px, matching the chart's fixed height. */
 export function ChartSkeleton({ height }: { height: number }) {
 	return <Skeleton className="w-full rounded-lg" style={{ height }} />;
+}
+
+/** Where AsyncBoundary puts its error card. `children` stay under it as hidden
+ *  filler, so the region keeps its size. */
+export function ErrorSlot({
+	className,
+	children,
+}: {
+	className?: string;
+	children: ReactNode;
+}) {
+	return (
+		<div
+			className={cn("grid grid-cols-1 *:col-start-1 *:row-start-1", className)}
+			data-error-slot
+		>
+			<div aria-hidden>{children}</div>
+		</div>
+	);
 }

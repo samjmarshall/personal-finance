@@ -5,8 +5,8 @@ export function PageHeader({
 	description,
 	actions,
 }: {
-	title: string;
-	description?: string;
+	title: ReactNode;
+	description?: ReactNode;
 	actions?: ReactNode;
 }) {
 	return (
@@ -16,9 +16,9 @@ export function PageHeader({
 					{title}
 				</h1>
 				{description && (
-					<p className="mt-1 text-pretty text-muted-foreground text-sm">
+					<div className="mt-1 text-pretty text-muted-foreground text-sm">
 						{description}
-					</p>
+					</div>
 				)}
 			</div>
 			{actions && <div className="flex items-center gap-2">{actions}</div>}

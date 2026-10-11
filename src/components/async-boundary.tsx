@@ -1,19 +1,19 @@
 "use client";
 
-import { useQueryErrorResetBoundary } from "@tanstack/react-query";
 import { catchError, type ErrorInfo } from "next/error";
 import {
 	type ReactNode,
 	Suspense,
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 
-import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
+import { RetryCard } from "~/components/retry-card";
 import { cn } from "~/lib/utils";
 import { isAuthError } from "~/trpc/auth-errors";
 
@@ -143,8 +143,9 @@ function AsyncBoundaryError({
 	retry,
 	skeleton,
 }: ErrorBoundaryProps & { error: unknown; retry: () => void }) {
-	const { reset: resetQueryErrors } = useQueryErrorResetBoundary();
-	const [retrying, setRetrying] = useState(false);
+	const wrapper = useRef<HTMLDivElement>(null);
+	// undefined until looked for, so the card mounts once, in its final place.
+	const [slot, setSlot] = useState<HTMLElement | null>();
 
 	// Production forwards a generic message + digest, not the original error.
 	// Log it so the failure is visible and the digest matches the server logs.
@@ -152,39 +153,37 @@ function AsyncBoundaryError({
 		console.error(error);
 	}, [error]);
 
+	// A page skeleton (PageSkeleton) marks its body, so a page-level failure keeps
+	// the page's header and container instead of a bare card.
+	useLayoutEffect(() => {
+		setSlot(wrapper.current?.querySelector<HTMLElement>("[data-error-slot]"));
+	}, []);
+
 	if (skeleton === null) return null;
 	// A stale session is already reloading to sign-in. Don't flash a failure first.
 	if (isAuthError(error)) return skeleton;
 
+	const card = (
+		<RetryCard
+			buttonRef={focusRef}
+			className="visible col-start-1 row-start-1"
+			label={label}
+			onRetry={onRetry}
+			retry={retry}
+		/>
+	);
+
 	// Hidden skeleton keeps the region's size: no jump on error or on Try again.
-	// Message at top: centred in a tall region, it lands below the fold.
+	// Message at top: centred in a tall region, it lands below the fold. Bars stay
+	// hidden even in a header that shows through: a failed page keeps only its text.
 	return (
-		<div className="grid">
+		<div
+			className="grid grid-cols-1 [&_[data-slot=skeleton]]:invisible"
+			ref={wrapper}
+		>
 			<div className="invisible col-start-1 row-start-1">{skeleton}</div>
-			<Card className="col-start-1 row-start-1 text-center" role="alert">
-				<CardContent className="flex flex-col items-center gap-3">
-					<p className="text-muted-foreground text-sm">
-						Couldn't load {label}.
-					</p>
-					<Button
-						// The card stays up while the retry runs; show it's working.
-						loading={retrying}
-						onClick={() => {
-							setRetrying(true);
-							// Clear cached query errors first, or a failed query rethrows its
-							// old error. Next's plain reset skips re-fetching server content.
-							resetQueryErrors();
-							onRetry?.();
-							retry();
-						}}
-						ref={focusRef}
-						size="sm"
-						variant="outline"
-					>
-						Try again
-					</Button>
-				</CardContent>
-			</Card>
+			{slot === null && card}
+			{slot && createPortal(card, slot)}
 		</div>
 	);
 }

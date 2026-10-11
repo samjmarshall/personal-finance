@@ -11,6 +11,7 @@ import { Component, use, useState } from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AsyncBoundary } from "~/components/async-boundary";
+import { PageSkeleton } from "~/components/page-skeleton";
 import { createAppRouter } from "~/test/app-router";
 
 function deferred<T>() {
@@ -160,6 +161,44 @@ describe("AsyncBoundary", () => {
 			);
 			expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
 			expect(errors).toHaveBeenCalledWith(error);
+		});
+
+		it("puts the card in a page skeleton's body, under its header", async () => {
+			silenceErrors();
+			const user = userEvent.setup();
+			const { AppRouter } = createAppRouter();
+			let fail = true;
+			function Flaky() {
+				if (fail) throw new Error("offline");
+				return <p>Income</p>;
+			}
+			await act(async () =>
+				render(
+					<AsyncBoundary
+						label="income"
+						skeleton={
+							<article aria-label="Income page">
+								<PageSkeleton description="Money in." title="Income" />
+							</article>
+						}
+					>
+						<Flaky />
+					</AsyncBoundary>,
+					{ wrapper: AppRouter },
+				),
+			);
+
+			const page = screen.getByRole("article", { name: "Income page" });
+			expect(page).toContainElement(screen.getByRole("alert"));
+			expect(
+				screen.getByRole("heading", { level: 1, name: "Income" }),
+			).toBeInTheDocument();
+
+			fail = false;
+			await user.click(screen.getByRole("button", { name: "Try again" }));
+
+			expect(await screen.findByText("Income")).toBeInTheDocument();
+			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 		});
 
 		it("renders nothing for a skeleton={null} gate, but still logs", async () => {
