@@ -42,7 +42,12 @@ function redirectIfUnauthorized(error: unknown): boolean {
 
 /** Only failures a retry can fix: a network drop or a 5xx. 4xx and redirects fail fast. */
 export function isTransientError(error: unknown): boolean {
-	if (!(error instanceof TRPCClientError)) return false;
+	if (!(error instanceof TRPCClientError)) {
+		// A failed server prefetch arrives as a plain error with no status. Retry
+		// it with a real fetch, which tells 4xx from 5xx. Never retry a redirect.
+		const digest = (error as { digest?: unknown } | null)?.digest;
+		return !(typeof digest === "string" && digest.startsWith("NEXT_"));
+	}
 	// A network failure never got a response, so it carries no data.
 	const status = (error.data as { httpStatus?: number } | undefined)
 		?.httpStatus;
@@ -67,9 +72,8 @@ export const createQueryClient = () =>
 				// With SSR, we usually want to set some default staleTime
 				// above 0 to avoid refetching immediately on the client
 				staleTime: 30 * 1000,
-				// The default (3 tries, 1s/2s/4s) holds a failing section's error card
-				// back ~7s, and again after each Try again. Two quick tries cover a
-				// blip; the server never retries.
+				// Default 3 retries (1s/2s/4s) hold the error card ~7s, again on each
+				// Try again. 2 quick retries (0.3s, 0.9s) cover a blip. Server never retries.
 				retry: (failureCount, error) =>
 					!environmentManager.isServer() &&
 					failureCount < 2 &&

@@ -37,8 +37,12 @@ describe("isTransientError", () => {
 		expect(isTransientError(trpcError("NOT_FOUND", 404))).toBe(false);
 	});
 
-	it("fails fast on anything that isn't a tRPC error", () => {
-		expect(isTransientError(new Error("boom"))).toBe(false);
+	it("retries a failed server prefetch, which streams in as a plain error", () => {
+		expect(isTransientError(new Error("boom"))).toBe(true);
+	});
+
+	it("fails fast on a streamed redirect", () => {
 		expect(isTransientError(thrownBy(() => redirect("/sign-in")))).toBe(false);
+		expect(isTransientError(thrownBy(() => redirect("/expenses")))).toBe(false);
 	});
 });
