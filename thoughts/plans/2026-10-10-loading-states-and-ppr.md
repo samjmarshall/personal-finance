@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Validated - Phase 2 of 7
+status: Ready for Review - Phase 3 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -269,13 +269,19 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] With dev latency on, a hard load of `/` paints the header and three skeletons at once, and each section fills on its own with no layout shift
-- [ ] Server logs show `transaction.summary`, `expense.list`, `income.list`, `cashflow.get` and `balance.latest` all start in the same request window, not after one another
-- [ ] Forcing `transaction.summary` to throw shows "Couldn't load summary" and "Couldn't load spending" while cash flow still renders. Removing the fault and pressing Try again recovers.
-- [ ] `/design-review`
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes
+- [x] With dev latency on, a hard load of `/` paints the header and three skeletons at once, and each section fills on its own with no layout shift
+  - Measured skeleton/real section heights, CLS 0 at each width: 1440 116/116, 396/396, 678/682; 1024 248/248, 440/440, 678/682; 768 248/248, 624/623, 1002/1006; 375 512/512, 684/683, 1178/1182. Spending rows are sized to typical data (5 priorities, 8 groups), so empty data lands shorter.
+- [x] Server logs show `transaction.summary`, `expense.list`, `income.list`, `cashflow.get` and `balance.latest` all start in the same request window, not after one another
+  - All five logged the same millisecond start (temporary log, reverted). `transaction.summary` ran once.
+- [x] Forcing `transaction.summary` to throw shows "Couldn't load summary" and "Couldn't load spending" while cash flow still renders. Removing the fault and pressing Try again recovers.
+- [x] `/design-review`: no blockers. Both Highs fixed:
+  - The cash-flow skeleton was too short below xl because the real header wraps. It now renders the real header and balance heading (`CashFlowChartSkeleton`, `BalanceSnapshotCardSkeleton`).
+  - Section error cards lost their top gap, because the margin sat on the skeleton root inside the boundary's grid cell. Section spacing now lives on wrappers in `page.tsx`. Live fault check: gaps 24px and 16px.
+  - Slow error card fixed in `106de8a`: client queries retry only network drops and 5xx, twice, at 300ms then 900ms. Live fault check: card in 2.8s (was ~7.6s), 1.6s after Try again (was ~7s).
+  - Mediums left open (outside Phase 3): quiet error card styling, low skeleton contrast, a one-frame blank on swap plus a double fade with the inner chart boundary (`async-boundary.tsx`), `role=status` inserted with its text already in it, and older chart a11y issues.
 
 ## Phase 4: Prefetched pages, settings and safety nets
 
