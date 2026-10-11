@@ -40,7 +40,7 @@ function redirectIfUnauthorized(error: unknown): boolean {
 	return true;
 }
 
-/** Only failures a retry can fix: a network drop or a 5xx. 4xx and redirects fail fast. */
+/** Only failures a retry can fix: network drop, 5xx, failed server prefetch. 4xx and redirects fail fast. */
 export function isTransientError(error: unknown): boolean {
 	if (!(error instanceof TRPCClientError)) {
 		// A failed server prefetch arrives as a plain error with no status. Retry
@@ -56,9 +56,8 @@ export function isTransientError(error: unknown): boolean {
 
 export const createQueryClient = () =>
 	new QueryClient({
-		// Surface every mutation failure but UNAUTHORIZED as a toast (ADR001: the
-		// QueryClient is a permitted global transport client). Fires client-side
-		// only — mutations never run through the server prefetch client.
+		// Toast every mutation failure but a stale session, which redirects (ADR001:
+		// a global transport client is allowed). Client-only: no server mutations.
 		mutationCache: new MutationCache({
 			onError: (error) => {
 				if (!redirectIfUnauthorized(error)) {
@@ -82,9 +81,8 @@ export const createQueryClient = () =>
 			},
 			dehydrate: {
 				serializeData: SuperJSON.serialize,
-				// The default redacts a rejected pending prefetch to Error("redacted"),
-				// dropping the NEXT_REDIRECT digest that sends a stale session to
-				// /sign-in. Flight still strips messages in production.
+				// Default redaction drops the redirect marker that sends a stale session
+				// to sign-in. React still strips error messages in production.
 				shouldRedactErrors: () => false,
 				shouldDehydrateQuery: (query) =>
 					defaultShouldDehydrateQuery(query) ||

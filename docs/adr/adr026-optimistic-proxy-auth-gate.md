@@ -117,7 +117,7 @@ sequenceDiagram
 
 - A pending prefetch that rejects streams to the client as a dehydrated error, which TanStack may redact. Does the `UNAUTHORIZED` → `/sign-in` mapping still fire on that path? **Yes, resolved in Stage A (loading-states plan, Phase 2):**
   - Redaction is off (`dehydrate.shouldRedactErrors: () => false` in `src/trpc/query-client.ts`), so the rejected prefetch reaches the client with its `NEXT_REDIRECT` digest and `catchError` passes it to the router. Flight still strips error messages in production.
-  - Auth errors aren't retried. The query `retry` skips `UNAUTHORIZED` and the `/sign-in` redirect digest (`isAuthError`, `src/trpc/auth-errors.ts`), so the redirect doesn't wait out about 7s of backed-off retries.
+  - Auth errors aren't retried. The query `retry` (`isTransientError`, `src/trpc/query-client.ts`) retries only network drops, 5xx and failed server prefetches. A 4xx, including `UNAUTHORIZED`, and any streamed redirect digest fail fast, so the redirect doesn't wait out backed-off retries.
   - A plain `useQuery` holds a streamed redirect without throwing, so the `QueryCache` `onError` sends any `isAuthError` to `/sign-in` with a full page load (`src/trpc/query-client.ts`).
   - `NavMember`'s redirect stays as the backstop.
   - Verified with a revoked session after the 60s `cookieCache`. Every dashboard route, on a hard load and on a client navigation into it, lands on `/sign-in` with no "Couldn't load" card. Routes whose server render hits the redirect first (`/`, `/receipts`, `/settings`) redirect softly. Routes that stream it through a prefetch (e.g. a click from `/` to `/expenses`) land with a full page load, because the cache's redirect fires too.
