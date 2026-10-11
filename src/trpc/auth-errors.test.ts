@@ -1,5 +1,6 @@
 import { TRPCClientError } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
+import { redirect } from "next/navigation";
 import { describe, expect, it } from "vitest";
 import { isAuthError, redirectOnUnauthorized } from "~/trpc/auth-errors";
 
@@ -64,5 +65,6 @@ describe("isAuthError", () => {
 		});
 		expect(isAuthError(forbidden)).toBe(false);
 		expect(isAuthError(new Error("boom"))).toBe(false);
+		expect(isAuthError(thrownBy(() => redirect("/expenses")))).toBe(false);
 	});
 });

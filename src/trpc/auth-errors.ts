@@ -10,11 +10,13 @@ export function redirectOnUnauthorized({ error }: { error: TRPCError }) {
 	if (error.code === "UNAUTHORIZED") redirect("/sign-in");
 }
 
-/** A stale session, from a client fetch or a server redirect streamed in a prefetch. */
+/** A stale session: a client UNAUTHORIZED, or the sign-in redirect streamed in a prefetch. */
 export function isAuthError(error: unknown): boolean {
 	if (error instanceof TRPCClientError) {
 		return error.data?.code === "UNAUTHORIZED";
 	}
 	const digest = (error as { digest?: unknown } | null)?.digest;
-	return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+	return (
+		typeof digest === "string" && /^NEXT_REDIRECT;\w+;\/sign-in;/.test(digest)
+	);
 }

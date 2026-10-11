@@ -32,16 +32,10 @@ function toToastMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Something went wrong.";
 }
 
-// Client fetches skip the RSC caller's redirect, so a stale session's
-// UNAUTHORIZED goes to /sign-in here (adr026).
+// Client fetches skip the RSC caller's redirect, and a plain query holds a
+// streamed one without throwing, so a stale session goes to /sign-in here (adr026).
 function redirectIfUnauthorized(error: unknown): boolean {
-	if (
-		environmentManager.isServer() ||
-		!(error instanceof TRPCClientError) ||
-		error.data?.code !== "UNAUTHORIZED"
-	) {
-		return false;
-	}
+	if (environmentManager.isServer() || !isAuthError(error)) return false;
 	window.location.assign("/sign-in");
 	return true;
 }
