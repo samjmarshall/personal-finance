@@ -58,8 +58,8 @@ export const createQueryClient = () =>
 				// With SSR, we usually want to set some default staleTime
 				// above 0 to avoid refetching immediately on the client
 				staleTime: 30 * 1000,
-				// Keeps TanStack's server default of 0. An auth error won't heal on
-				// retry, and 3 backed-off retries hold the redirect for ~7s.
+				// No retries on the server or for sign-in errors. They won't fix
+				// themselves, and 3 slow retries delay the sign-in redirect ~7s.
 				retry: (failureCount, error) =>
 					!environmentManager.isServer() &&
 					failureCount < 3 &&
