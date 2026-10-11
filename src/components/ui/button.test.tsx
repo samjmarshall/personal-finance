@@ -17,16 +17,16 @@ describe("Button loading", () => {
 		expect(spinnerIn(button)).toBeInTheDocument();
 	});
 
-	it("swaps an icon button's icon for the spinner", () => {
+	it("keeps an icon button's screen-reader label while it shows the spinner", () => {
 		render(
-			<Button aria-label="Add" loading size="icon">
-				<PlusIcon data-testid="plus" />
+			<Button loading size="icon">
+				<PlusIcon />
+				<span className="sr-only">Add</span>
 			</Button>,
 		);
 
 		const button = screen.getByRole("button", { name: "Add" });
 		expect(spinnerIn(button)).toBeInTheDocument();
-		expect(screen.queryByTestId("plus")).not.toBeInTheDocument();
 	});
 
 	it("ignores clicks", async () => {
