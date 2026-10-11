@@ -241,6 +241,40 @@ describe("AsyncBoundary", () => {
 			expect(document.activeElement).toContainElement(chart);
 		});
 
+		it("Try again leaves focus alone if the user moved on while it loaded", async () => {
+			silenceErrors();
+			const user = userEvent.setup();
+			const { AppRouter } = createAppRouter();
+			const { promise, resolve } = deferred<string>();
+			let fail = true;
+			function Flaky() {
+				if (fail) throw new Error("offline");
+				return <Suspends promise={promise} />;
+			}
+			await act(async () =>
+				render(
+					<>
+						<input aria-label="Note" />
+						<AsyncBoundary label="cash flow" skeleton={<p>Skeleton</p>}>
+							<Flaky />
+						</AsyncBoundary>
+					</>,
+					{ wrapper: AppRouter },
+				),
+			);
+			fail = false;
+
+			await act(async () =>
+				user.click(screen.getByRole("button", { name: "Try again" })),
+			);
+			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+			await user.click(screen.getByRole("textbox", { name: "Note" }));
+			await act(async () => resolve("Chart"));
+
+			expect(screen.getByText("Chart")).toBeInTheDocument();
+			expect(screen.getByRole("textbox", { name: "Note" })).toHaveFocus();
+		});
+
 		it("a failed Try again moves focus to the new Try again", async () => {
 			silenceErrors();
 			const user = userEvent.setup();

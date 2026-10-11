@@ -54,6 +54,8 @@ export function AsyncBoundary({
 	const focusRef = useCallback((element: HTMLElement | null) => {
 		if (!element || !focusOnReveal.current) return;
 		focusOnReveal.current = false;
+		// The user moved on while it loaded. Don't pull focus back.
+		if (document.activeElement !== document.body) return;
 		element.focus({ preventScroll: true });
 	}, []);
 
