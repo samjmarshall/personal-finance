@@ -74,7 +74,7 @@ export function CashFlowChart() {
 			</div>
 			{/* Toggling periodKind re-suspends only the chart body, so the toggle
 			    stays interactive while the new grid loads. */}
-			{/* 312 = the h-72 chart plus its legend row (mb-2 + one text-xs line). */}
+			{/* Skeleton height = chart + legend, so the swap doesn't shift layout. */}
 			{/* Keyed so one period's error card doesn't stick on the next. */}
 			<AsyncBoundary
 				key={periodKind}
