@@ -15,8 +15,8 @@ export default function ExpensesPage() {
 	);
 }
 
-// Prefetches live here, not in the page: they read headers(), so they must
-// run inside the boundary.
+// Prefetch here, not in the page: it reads request headers, so it must run
+// inside the boundary.
 async function ExpensesData() {
 	void api.expense.list.prefetch();
 	void api.expense.consumption.prefetch();

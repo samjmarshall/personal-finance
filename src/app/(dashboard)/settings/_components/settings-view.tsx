@@ -120,10 +120,8 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 					))}
 				</nav>
 
-				{/* Every section stays mounted and the inactive ones are hidden —
-				    unmounting would silently bin a half-typed anchor or address when a
-				    member flicks to Appearance and back. Each data panel has its own
-				    boundary, so one failing leaves the others usable. */}
+				{/* All stay mounted, so half-typed input survives a tab switch. Each data
+				    panel has its own boundary: one failing leaves the rest usable. */}
 				{sections.map(({ id, render }) => (
 					<div hidden={active !== id} key={id}>
 						{render({ inboundAddress })}

@@ -131,7 +131,7 @@ function NavLinks({ current }: { current: string }) {
 	);
 }
 
-/** `member` is server-rendered, so the nav paints before the session read. */
+/** Member slot is server-rendered, so the nav paints before the session read. */
 export function AppNav({ member }: { member: ReactNode }) {
 	const current = activeHref(usePathname());
 	return (

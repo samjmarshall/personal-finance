@@ -56,8 +56,7 @@ export function isTransientError(error: unknown): boolean {
 
 export const createQueryClient = () =>
 	new QueryClient({
-		// Toast every mutation failure but a stale session, which redirects (ADR001:
-		// a global transport client is allowed). Client-only: no server mutations.
+		// Global toast is allowed here (ADR001). Client-only: no server mutations.
 		mutationCache: new MutationCache({
 			onError: (error) => {
 				if (!redirectIfUnauthorized(error)) {
