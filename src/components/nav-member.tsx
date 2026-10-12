@@ -4,7 +4,7 @@ import { SignOutButton } from "~/components/sign-out-button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { getSession } from "~/server/auth/server";
 
-// The sidebar is dark in both themes, so the default bg-muted would glare.
+// Sidebar is dark in both themes. Default muted fill would glare.
 const sidebarSkeleton = "bg-sidebar-muted/20";
 
 /** Proxy only checks the cookie is there; this is the session check behind it (adr026). */

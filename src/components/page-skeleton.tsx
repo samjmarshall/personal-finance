@@ -11,7 +11,7 @@ type PageSkeletonProps = {
 	description?: string;
 	/** Reserves room for a header button of this size, so the title doesn't shift. */
 	action?: "sm" | "default";
-	/** Overrides the default `max-w-5xl`, to match the view's container. */
+	/** Match the view's container width. */
 	className?: string;
 	/** Gap under the header. Must equal the view's, or the swap jumps. */
 	contentClassName?: string;
@@ -29,8 +29,8 @@ export function PageSkeleton({
 }: PageSkeletonProps) {
 	return (
 		<div className={cn("mx-auto max-w-5xl px-4 py-8 sm:px-8", className)}>
-			{/* If the page fails, AsyncBoundary hides this skeleton but the header
-			    shows through, and its error card lands in the slot below. */}
+			{/* On page failure the bars hide but this header stays. Error card
+			    fills the slot below. */}
 			<div className="visible">
 				<PageHeader
 					actions={

@@ -8,7 +8,7 @@ import { cn } from "~/lib/utils";
 
 const indices = (n: number) => Array.from({ length: n }, (_, i) => i);
 
-/** Same cell padding and line heights as the list tables (transactions-view). */
+/** Same padding and line heights as the real list tables. */
 export function TableSkeleton({
 	rows = 8,
 	cols = 5,
@@ -65,8 +65,7 @@ export function ChartSkeleton({ height }: { height: number }) {
 	return <Skeleton className="w-full rounded-lg" style={{ height }} />;
 }
 
-/** Where AsyncBoundary puts its error card. `children` stay under it as hidden
- *  filler, so the region keeps its size. */
+/** Slot for the error card. Hidden filler keeps the region's size. */
 export function ErrorSlot({
 	className,
 	children,

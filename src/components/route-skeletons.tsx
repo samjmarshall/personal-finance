@@ -4,8 +4,8 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
 
-// One per page: loading.tsx draws it on nav, the page's boundary (if any) on hard
-// load, so both paint one frame. Headers and bodies copy each view's markup.
+// One per page, used on nav and on hard load, so both paint the same frame.
+// Copies each view's markup.
 
 const indices = (n: number) => Array.from({ length: n }, (_, i) => i);
 

@@ -15,7 +15,6 @@ type ListFilters = {
 	page: number;
 };
 
-/** What the view opens on: newest first, first page, no filters. */
 export const DEFAULT_FILTERS: ListFilters = {
 	search: "",
 	priority: null,

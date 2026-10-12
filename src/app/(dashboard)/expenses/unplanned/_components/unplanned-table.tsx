@@ -32,8 +32,7 @@ export function UnplannedTable({
 			// derived view and appears in the Planned transaction list.
 			void utils.transaction.unplanned.invalidate();
 			void utils.transaction.list.invalidate();
-			// Linking sets the row's expenseId, adding it to that expense's consumed
-			// total on the Planned page.
+			// Row now counts toward that expense's used total on the Planned page.
 			void utils.expense.consumption.invalidate();
 		},
 	});
@@ -120,9 +119,8 @@ export function UnplannedTable({
 									<SelectField
 										aria-label={`Link ${row.description} to an expense`}
 										className="w-full"
-										// Gate only the row whose link is in flight. The
-										// mutation is shared, so `link.isPending` alone would
-										// freeze every row's picker on any single link.
+										// Block only the row being linked. The save is shared,
+										// so a global flag would freeze every picker.
 										disabled={link.isPending && link.variables?.id === row.id}
 										items={expenseOptions}
 										onValueChange={(v) => {
