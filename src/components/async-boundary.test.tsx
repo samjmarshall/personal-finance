@@ -290,6 +290,47 @@ describe("AsyncBoundary", () => {
 			expect(router.refresh).not.toHaveBeenCalled();
 		});
 
+		it("going back to a failed filter fetches it again", async () => {
+			silenceErrors();
+			const queryClient = new QueryClient({
+				defaultOptions: { queries: { retry: false } },
+			});
+			const fetchBroken = vi
+				.fn<() => Promise<string>>()
+				.mockRejectedValueOnce(new Error("offline"))
+				.mockResolvedValue("broken");
+			function Rows({ filter }: { filter: string }) {
+				const { data } = useSuspenseQuery({
+					queryKey: ["rows", filter],
+					queryFn: filter === "broken" ? fetchBroken : async () => filter,
+				});
+				return <p>Rows for {data}</p>;
+			}
+			const ui = (filter: string) => (
+				<QueryClientProvider client={queryClient}>
+					<AsyncBoundary
+						label="transactions"
+						resetKey={filter}
+						skeleton={<p>Skeleton</p>}
+					>
+						<Rows filter={filter} />
+					</AsyncBoundary>
+				</QueryClientProvider>
+			);
+			const { AppRouter } = createAppRouter();
+			const { rerender } = await act(async () =>
+				render(ui("broken"), { wrapper: AppRouter }),
+			);
+			expect(await screen.findByRole("alert")).toBeInTheDocument();
+			await act(async () => rerender(ui("groceries")));
+			expect(await screen.findByText("Rows for groceries")).toBeInTheDocument();
+
+			await act(async () => rerender(ui("broken")));
+
+			expect(await screen.findByText("Rows for broken")).toBeInTheDocument();
+			expect(fetchBroken).toHaveBeenCalledTimes(2);
+		});
+
 		it("Try again moves focus to the recovered content", async () => {
 			silenceErrors();
 			const user = userEvent.setup();

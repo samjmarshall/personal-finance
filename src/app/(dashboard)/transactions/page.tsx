@@ -1,6 +1,10 @@
 import { AsyncBoundary } from "~/components/async-boundary";
 import { TransactionsSkeleton } from "~/components/route-skeletons";
 import { api, HydrateClient } from "~/trpc/server";
+import {
+	DEFAULT_FILTERS,
+	toListInput,
+} from "./_components/transaction-list-input";
 import { TransactionsView } from "./_components/transactions-view";
 
 export default function TransactionsPage() {
@@ -20,13 +24,7 @@ export default function TransactionsPage() {
 async function TransactionsData() {
 	void api.category.list.prefetch();
 	void api.expense.list.prefetch();
-	// The view's first query key: default sort, first page, no filters.
-	void api.transaction.list.prefetch({
-		sortBy: "date",
-		sortDir: "desc",
-		limit: 50,
-		offset: 0,
-	});
+	void api.transaction.list.prefetch(toListInput(DEFAULT_FILTERS));
 	return (
 		<HydrateClient>
 			<TransactionsView />

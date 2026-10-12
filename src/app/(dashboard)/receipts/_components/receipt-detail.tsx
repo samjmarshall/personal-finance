@@ -230,8 +230,9 @@ export function ReceiptDetail({
 		{ enabled: open },
 	);
 	// A refetch with no data drops isError, which would swap the alert for the
-	// spinner and lose the button's focus. Held until the refetch settles.
-	const [retrying, setRetrying] = useState(false);
+	// spinner and lose focus. Held till it settles, for that receipt only.
+	const [retryingId, setRetryingId] = useState<number | null>(null);
+	const retrying = retryingId !== null && retryingId === lastId.current;
 
 	const mismatch = data ? itemsTotalMismatch(data.total, data.items) : false;
 	// Attribution only makes sense once the receipt belongs to a transaction —
@@ -299,8 +300,11 @@ export function ReceiptDetail({
 						<Button
 							loading={retrying}
 							onClick={() => {
-								setRetrying(true);
-								void refetch().finally(() => setRetrying(false));
+								const id = lastId.current;
+								setRetryingId(id);
+								void refetch().finally(() =>
+									setRetryingId((current) => (current === id ? null : current)),
+								);
 							}}
 							size="sm"
 							variant="outline"

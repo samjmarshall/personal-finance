@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
-import { AsyncBoundary } from "~/components/async-boundary";
+import { AsyncBoundary, LoadingRegion } from "~/components/async-boundary";
 import { PageHeader } from "~/components/page-header";
 import { UnplannedGroupsSkeleton } from "~/components/route-skeletons";
 import { Button } from "~/components/ui/button";
@@ -131,10 +131,13 @@ export function UnplannedView() {
 			</div>
 
 			<div className="mt-6">
-				{/* Not `range`: on the render where the effect first sets it, this
-				    is still null. */}
+				{/* The lagging copy, not the live one: it's still empty for one
+				    render after the period is first set. */}
 				{deferredRange === null ? (
-					<UnplannedGroupsSkeleton />
+					<LoadingRegion
+						label="unplanned Spend"
+						skeleton={<UnplannedGroupsSkeleton />}
+					/>
 				) : (
 					// Its own boundary, so the rows' first load doesn't suspend the
 					// whole page back to its skeleton.

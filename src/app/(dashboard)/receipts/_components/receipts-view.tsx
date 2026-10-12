@@ -16,11 +16,15 @@ import { ReceiptStatus } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ReceiptDetail } from "./receipt-detail";
+import {
+	DEFAULT_FILTERS,
+	type ListInput,
+	toListInput,
+} from "./receipt-list-input";
 import { previewIcon } from "./receipt-source-thumbnail";
 import { ReceiptUpload } from "./receipt-upload";
 
 type ReceiptRow = RouterOutputs["receipt"]["list"][number];
-type ListInput = { status: ReceiptStatus | undefined; unmatchedOnly: boolean };
 
 type StatusStyle = { label: string; badge: string; dot: string };
 
@@ -70,8 +74,8 @@ const MATCH_FILTER_ITEMS: SelectFieldOption<"all" | "unmatched">[] = [
 ];
 
 export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
-	const [status, setStatus] = useState<ReceiptStatus | null>(null);
-	const [match, setMatch] = useState<"all" | "unmatched">("all");
+	const [status, setStatus] = useState(DEFAULT_FILTERS.status);
+	const [match, setMatch] = useState(DEFAULT_FILTERS.match);
 	const [detailId, setDetailId] = useState<number | null>(null);
 	const [deleteTarget, setDeleteTarget] = useState<ReceiptRow | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
@@ -79,10 +83,7 @@ export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
 	// Memoised so it only changes with a filter, and the deferred copy below
 	// lags only while that filter's rows load.
 	const queryInput = useMemo(
-		() => ({
-			status: status ?? undefined,
-			unmatchedOnly: match === "unmatched",
-		}),
+		() => toListInput({ status, match }),
 		[status, match],
 	);
 	// The table keeps the old rows (dimmed) while the new ones load, instead

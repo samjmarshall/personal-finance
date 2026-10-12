@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
 	AppRouterContext,
 	type AppRouterInstance,
@@ -5,7 +6,7 @@ import {
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 
-/** Fake App Router context so Next's error-boundary retry reaches a refresh spy. Use `AppRouter` as the render wrapper. */
+/** Fake App Router context so Next's error-boundary retry reaches a refresh spy, plus the query client the app shell provides. Use `AppRouter` as the render wrapper. */
 export function createAppRouter() {
 	const router = {
 		back: vi.fn(),
@@ -16,9 +17,14 @@ export function createAppRouter() {
 		prefetch: vi.fn(),
 		bfcacheId: "test",
 	} satisfies AppRouterInstance;
+	const queryClient = new QueryClient();
 
 	function AppRouter({ children }: { children: ReactNode }) {
-		return <AppRouterContext value={router}>{children}</AppRouterContext>;
+		return (
+			<QueryClientProvider client={queryClient}>
+				<AppRouterContext value={router}>{children}</AppRouterContext>
+			</QueryClientProvider>
+		);
 	}
 
 	return { router, AppRouter };

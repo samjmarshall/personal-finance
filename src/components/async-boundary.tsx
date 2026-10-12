@@ -1,6 +1,9 @@
 "use client";
 
-import { useQueryErrorResetBoundary } from "@tanstack/react-query";
+import {
+	useQueryClient,
+	useQueryErrorResetBoundary,
+} from "@tanstack/react-query";
 import { catchError, type ErrorInfo } from "next/error";
 import {
 	type ReactNode,
@@ -10,11 +13,11 @@ import {
 	useLayoutEffect,
 	useRef,
 	useState,
-	useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 
 import { RetryCard } from "~/components/retry-card";
+import { useHydrating } from "~/hooks/use-hydrating";
 import { cn } from "~/lib/utils";
 import { isAuthError } from "~/trpc/auth-errors";
 
@@ -30,8 +33,6 @@ type AsyncBoundaryProps = {
 	children: ReactNode;
 };
 
-const subscribeNever = () => () => {};
-
 /** The only way to add a loading region (adr027). */
 export function AsyncBoundary({
 	skeleton,
@@ -42,11 +43,7 @@ export function AsyncBoundary({
 }: AsyncBoundaryProps) {
 	// Server can't know if the skeleton streamed first. Assume it did, so
 	// streamed content fades in and hydration matches.
-	const serverOrHydrating = useSyncExternalStore(
-		subscribeNever,
-		() => false,
-		() => true,
-	);
+	const serverOrHydrating = useHydrating();
 	const [skeletonShown, setSkeletonShown] = useState(serverOrHydrating);
 	const onSkeletonShown = useCallback(() => setSkeletonShown(true), []);
 	// Try again unmounts its own button, which drops focus to <body>. Hand it to
@@ -168,6 +165,7 @@ function AsyncBoundaryError({
 	reset: () => void;
 }) {
 	const wrapper = useRef<HTMLDivElement>(null);
+	const queryClient = useQueryClient();
 	const { reset: resetQueryErrors } = useQueryErrorResetBoundary();
 	const [failedKey] = useState(resetKey);
 	// undefined until looked for, so the card mounts once, in its final place.
@@ -184,8 +182,13 @@ function AsyncBoundaryError({
 	useEffect(() => {
 		if (Object.is(resetKey, failedKey)) return;
 		resetQueryErrors();
+		// Forget old failures too, or going back to a failed filter reshows its error, untried.
+		queryClient.removeQueries({
+			type: "inactive",
+			predicate: (query) => query.state.status === "error",
+		});
 		reset();
-	}, [resetKey, failedKey, resetQueryErrors, reset]);
+	}, [resetKey, failedKey, resetQueryErrors, queryClient, reset]);
 
 	// Page skeletons mark their body, so a page failure keeps the header, not a bare card.
 	useLayoutEffect(() => {

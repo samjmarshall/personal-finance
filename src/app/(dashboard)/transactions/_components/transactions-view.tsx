@@ -11,12 +11,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import {
-	useDeferredValue,
-	useMemo,
-	useState,
-	useSyncExternalStore,
-} from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import { AsyncBoundary } from "~/components/async-boundary";
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
@@ -33,16 +28,20 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
+import { useHydrating } from "~/hooks/use-hydrating";
 import { Frequency, Priority, priorityStyle } from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
-import { api, type RouterInputs, type RouterOutputs } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
 import { TransactionForm } from "./transaction-form";
+import {
+	DEFAULT_FILTERS,
+	type ListInput,
+	PAGE_SIZE,
+	type SortBy,
+	toListInput,
+} from "./transaction-list-input";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
-type ListInput = RouterInputs["transaction"]["list"];
-type SortBy = "date" | "description" | "amount" | "group" | "priority";
-
-const PAGE_SIZE = 50;
 
 // Filters use null (not "") for "no selection"; the null-valued option both
 // labels the trigger and lets the user clear back to "all".
@@ -63,12 +62,12 @@ const FREQUENCY_FILTER_ITEMS = withAllOption(
 );
 
 export function TransactionsView() {
-	const [search, setSearch] = useState("");
-	const [priority, setPriority] = useState<Priority | null>(null);
-	const [frequency, setFrequency] = useState<Frequency | null>(null);
-	const [sortBy, setSortBy] = useState<SortBy>("date");
-	const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-	const [page, setPage] = useState(0);
+	const [search, setSearch] = useState(DEFAULT_FILTERS.search);
+	const [priority, setPriority] = useState(DEFAULT_FILTERS.priority);
+	const [frequency, setFrequency] = useState(DEFAULT_FILTERS.frequency);
+	const [sortBy, setSortBy] = useState(DEFAULT_FILTERS.sortBy);
+	const [sortDir, setSortDir] = useState(DEFAULT_FILTERS.sortDir);
+	const [page, setPage] = useState(DEFAULT_FILTERS.page);
 
 	const [formOpen, setFormOpen] = useState(false);
 	const [editing, setEditing] = useState<Transaction | null>(null);
@@ -81,15 +80,7 @@ export function TransactionsView() {
 	// Memoised so it only changes with a filter, and the deferred copy below
 	// lags only while that filter's rows load.
 	const queryInput = useMemo(
-		() => ({
-			search: search || undefined,
-			priority: priority ?? undefined,
-			frequency: frequency ?? undefined,
-			sortBy,
-			sortDir,
-			limit: PAGE_SIZE,
-			offset: page * PAGE_SIZE,
-		}),
+		() => toListInput({ search, priority, frequency, sortBy, sortDir, page }),
 		[search, priority, frequency, sortBy, sortDir, page],
 	);
 	// The table keeps the old rows (dimmed) while the new ones load, instead
@@ -205,7 +196,6 @@ export function TransactionsView() {
 					skeleton={<TransactionsTableSkeleton />}
 				>
 					<TransactionsTable
-						hasFilters={hasFilters}
 						input={deferredInput}
 						onDelete={(tx) => {
 							setDeleteTarget(tx);
@@ -240,17 +230,11 @@ export function TransactionsView() {
 	);
 }
 
-const subscribeNever = () => () => {};
-
 // Same key as the table's query, so it shares that fetch and never suspends.
 function TransactionCount({ input }: { input: ListInput }) {
 	// The server can't know if the rows landed before this rendered. A bar until
 	// hydrated keeps both sides' markup the same.
-	const hydrating = useSyncExternalStore(
-		subscribeNever,
-		() => false,
-		() => true,
-	);
+	const hydrating = useHydrating();
 	const { data, isError } = api.transaction.list.useQuery(input);
 	// The table's card says why. A bar would look like it's still loading.
 	if (!hydrating && !data && isError) return <span className="block h-5" />;
@@ -297,7 +281,6 @@ function TransactionsTable({
 	input,
 	stale,
 	page,
-	hasFilters,
 	onPageChange,
 	onSort,
 	onEdit,
@@ -307,7 +290,6 @@ function TransactionsTable({
 	/** A newer filter's rows are loading; these are the old ones. */
 	stale: boolean;
 	page: number;
-	hasFilters: boolean;
 	onPageChange: (page: number) => void;
 	onSort: (col: SortBy) => void;
 	onEdit: (tx: Transaction) => void;
@@ -315,6 +297,8 @@ function TransactionsTable({
 }) {
 	const [{ items, total }] = api.transaction.list.useSuspenseQuery(input);
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+	// The rows' filters, not the live ones: those run ahead while the rows load.
+	const hasFilters = Boolean(input.search || input.priority || input.frequency);
 
 	const pageSum = useMemo(
 		() => items.reduce((s, t) => s + t.amount, 0),

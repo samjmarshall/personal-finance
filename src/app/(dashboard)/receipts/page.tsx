@@ -6,6 +6,7 @@ import { receiptUploadPrefix } from "~/domain/receipts";
 import { env } from "~/env";
 import { getSession } from "~/server/auth/server";
 import { api, HydrateClient } from "~/trpc/server";
+import { DEFAULT_FILTERS, toListInput } from "./_components/receipt-list-input";
 import { ReceiptsView } from "./_components/receipts-view";
 
 export default function ReceiptsPage() {
@@ -24,8 +25,7 @@ async function ReceiptsData() {
 	// Proxy only checks a cookie is there, so check the session before the env
 	// value reaches the response (adr026).
 	if (!(await getSession())) redirect("/sign-in");
-	// Must match the view's first query key, or the prefetch goes unused.
-	void api.receipt.list.prefetch({ unmatchedOnly: false });
+	void api.receipt.list.prefetch(toListInput(DEFAULT_FILTERS));
 	return (
 		<HydrateClient>
 			<ReceiptsView uploadPrefix={receiptUploadPrefix(env.BLOB_PATH_PREFIX)} />

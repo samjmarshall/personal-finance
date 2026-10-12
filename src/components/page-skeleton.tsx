@@ -9,9 +9,8 @@ type PageSkeletonProps = {
 	title?: string;
 	/** Omit when it holds live data: it becomes a bar. */
 	description?: string;
-	/** Reserves room for a header button, so the title doesn't shift. `true` is a
-	 *  `sm` button, `"default"` a default-size one. */
-	action?: boolean | "default";
+	/** Reserves room for a header button of this size, so the title doesn't shift. */
+	action?: "sm" | "default";
 	/** Overrides the default `max-w-5xl`, to match the view's container. */
 	className?: string;
 	/** Gap under the header. Must equal the view's, or the swap jumps. */
@@ -23,7 +22,7 @@ type PageSkeletonProps = {
 export function PageSkeleton({
 	title,
 	description,
-	action = false,
+	action,
 	className,
 	contentClassName = "mt-6",
 	children = <TableSkeleton />,
@@ -37,7 +36,7 @@ export function PageSkeleton({
 					actions={
 						action ? (
 							<Skeleton
-								className={cn("w-30", action === "default" ? "h-8" : "h-7")}
+								className={cn("w-30", action === "sm" ? "h-7" : "h-8")}
 							/>
 						) : undefined
 					}

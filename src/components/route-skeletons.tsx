@@ -25,7 +25,7 @@ export function OverviewSkeleton() {
 export function ExpensesSkeleton() {
 	return (
 		<PageSkeleton
-			action
+			action="sm"
 			description="Your budgeted outgoings, split by cadence."
 			title="Expenses"
 		>
@@ -101,7 +101,7 @@ export function UnplannedGroupsSkeleton() {
 export function CategoriesSkeleton() {
 	return (
 		<PageSkeleton
-			action
+			action="sm"
 			className="max-w-3xl"
 			description="File Expenses, Transactions and receipt items under one shared list."
 			title="Categories"
@@ -129,7 +129,7 @@ export function CategoriesSkeleton() {
 export function IncomeSkeleton() {
 	return (
 		<PageSkeleton
-			action
+			action="sm"
 			description="Money coming in each fortnight, by person."
 			title="Income"
 		>
@@ -145,7 +145,7 @@ export function IncomeSkeleton() {
 export function TransactionsSkeleton() {
 	// No description: it counts the rows, so it isn't known yet.
 	return (
-		<PageSkeleton action className="max-w-6xl" title="Transaction History">
+		<PageSkeleton action="sm" className="max-w-6xl" title="Transaction History">
 			<Card>
 				<CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
 					{/* Search, then the priority and frequency filters */}
