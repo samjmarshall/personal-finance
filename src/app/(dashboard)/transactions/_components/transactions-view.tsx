@@ -235,7 +235,11 @@ function TransactionCount({ input }: { input: ListInput }) {
 	// The server can't know if the rows landed before this rendered. A bar until
 	// hydrated keeps both sides' markup the same.
 	const hydrating = useHydrating();
-	const { data, isError } = api.transaction.list.useQuery(input);
+	const { data, isError } = api.transaction.list.useQuery(input, {
+		// Only read the table's result. Own fetches re-ran a failed load and
+		// showed a bar beside its error card.
+		enabled: false,
+	});
 	// The table's card says why. A bar would look like it's still loading.
 	if (!hydrating && !data && isError) return <span className="block h-5" />;
 	if (hydrating || !data) return <BarSlot bar="h-4 w-72" height="h-5" />;
@@ -439,7 +443,7 @@ function TransactionsTable({
 				</span>
 				<div className="flex items-center gap-3">
 					<span className="text-muted-foreground">
-						{/* The rows' page, not `page`: that runs ahead while they load. */}
+						{/* Page of the loaded rows, not the newer one still loading. */}
 						Page {(input.offset ?? 0) / PAGE_SIZE + 1} of {totalPages}
 					</span>
 					<div className="flex gap-1">
@@ -454,7 +458,10 @@ function TransactionsTable({
 						</Button>
 						<Button
 							aria-label="Next page"
-							disabled={page + 1 >= totalPages}
+							// The page count is the old rows' until the new ones land.
+							disabled={stale || page + 1 >= totalPages}
+							// Pressing it turns it off for the load; keep focus on it.
+							focusableWhenDisabled
 							onClick={() => onPageChange(page + 1)}
 							size="icon"
 							variant="outline"

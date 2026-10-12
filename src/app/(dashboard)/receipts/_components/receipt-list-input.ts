@@ -1,13 +1,11 @@
 import type { ReceiptStatus } from "~/lib/constants";
+import type { RouterInputs } from "~/trpc/react";
 
-export type ListInput = {
-	status: ReceiptStatus | undefined;
-	unmatchedOnly: boolean;
-};
+// Input is optional on the server, so drop the "no input" case.
+export type ListInput = Exclude<RouterInputs["receipt"]["list"], void>;
 
 type ListFilters = { status: ReceiptStatus | null; match: "all" | "unmatched" };
 
-/** What the view opens on: every receipt. */
 export const DEFAULT_FILTERS: ListFilters = { status: null, match: "all" };
 
 /** Shared by the view and the page's prefetch, so the prefetch can't miss. */

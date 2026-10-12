@@ -230,6 +230,7 @@ describe("AsyncBoundary", () => {
 			await renderBoundary(<Throws error={error} />);
 
 			expect(screen.getByText("Skeleton")).toBeInTheDocument();
+			expect(screen.getByRole("status")).toHaveTextContent(/^Loading/);
 			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 		});
 

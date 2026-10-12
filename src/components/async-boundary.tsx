@@ -197,7 +197,8 @@ function AsyncBoundaryError({
 
 	if (skeleton === null) return null;
 	// A stale session is already reloading to sign-in. Don't flash a failure first.
-	if (isAuthError(error)) return skeleton;
+	if (isAuthError(error))
+		return <LoadingRegion label={label} skeleton={skeleton} />;
 
 	const card = (
 		<RetryCard
