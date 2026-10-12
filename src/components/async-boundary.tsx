@@ -185,7 +185,9 @@ function AsyncBoundaryError({
 		// Forget old failures too, or going back to a failed filter reshows its error, untried.
 		queryClient.removeQueries({
 			type: "inactive",
-			predicate: (query) => query.state.status === "error",
+			// With data, a failed refetch still shows its rows. Keep those.
+			predicate: (query) =>
+				query.state.status === "error" && query.state.data === undefined,
 		});
 		reset();
 	}, [resetKey, failedKey, resetQueryErrors, queryClient, reset]);
