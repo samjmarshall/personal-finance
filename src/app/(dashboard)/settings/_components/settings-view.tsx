@@ -55,7 +55,7 @@ const sections: Section[] = [
 		render: ({ inboundAddress }) => (
 			<AsyncBoundary
 				label="allowed senders"
-				skeleton={<ForwardingSkeleton inboundAddress={!!inboundAddress} />}
+				skeleton={<ForwardingSkeleton hasInboundAddress={!!inboundAddress} />}
 			>
 				<AllowedSendersSection inboundAddress={inboundAddress} />
 			</AsyncBoundary>

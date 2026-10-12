@@ -51,9 +51,9 @@ export function PayCycleSkeleton() {
 }
 
 export function ForwardingSkeleton({
-	inboundAddress,
+	hasInboundAddress,
 }: {
-	inboundAddress: boolean;
+	hasInboundAddress: boolean;
 }) {
 	return (
 		<SettingsPanelSkeleton
@@ -62,7 +62,7 @@ export function ForwardingSkeleton({
 		>
 			{/* Flex boxes here and below, so the bars' margins add up instead of
 			    collapsing. */}
-			{inboundAddress && (
+			{hasInboundAddress && (
 				<div className="mb-5 flex flex-col rounded-md border border-border px-3 py-2.5">
 					<Skeleton className="my-0.5 h-3 w-28" />
 					<Skeleton className="mt-1 mb-0.5 h-4 w-64 max-w-full" />
