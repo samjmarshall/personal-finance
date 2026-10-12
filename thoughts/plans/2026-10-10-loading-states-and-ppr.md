@@ -426,6 +426,16 @@ Deviations:
   - Left open: focus after a good retry lands on an unnamed wrapper (Phase 4 item). Error card is skeleton-sized (by design). Toast shows raw server text (`toToastMessage`, same as the old local toasts). Receipt dialog height jumps on load. Offline spinner (intended). Older a11y and touch-target nits. Two "Loading" statuses for ~10ms. "unplanned Spend" casing is the CONTEXT.md term.
   - Validation 2026-10-12 (design review, phases 1–5): no blockers, no Highs. Phase 5 Success re-checked live: dims with 0 skeleton frames, failed filter → good filter clears the card with 0 server refreshes, stale session lands on `/sign-in` with no empty copy, Bug 1–3, no hydration mismatch, CLS 0 at 1440/768/375. New Mediums, open: error card logs "signal is aborted" under browser-faked faults (a real server fault this session logged the real `TRPCClientError`), error card very tall on phones, failed Try again flickers card → skeleton → card, filter results not announced, `/` scrolls 5px sideways at 375 (pre-existing), receipts table clips at mid widths (pre-existing).
   - Code review: 14 findings, in the validation report. Top ones: going back to a filter that failed shows its cached error with no refetch; empty-table copy reads live filters over lagging rows; dialog `retrying` survives a receipt switch.
+  - Re-validation 2026-10-12, after `7b24c06` (the fixes for those three):
+    - `make check`, `make test` (1191 passing) and `pnpm run build` pass.
+    - Items 4–12 re-checked live, with faults faked in the browser:
+      - Going back to a failed filter fetches it again (transactions, receipts, unplanned).
+      - No list request on a hard load of `/receipts` (68 rows are in the SSR HTML).
+      - The dialog's retry spinner doesn't carry over to another receipt.
+      - No hydration warnings, and no header shift on the 5 list pages.
+    - Confirm-match toast not re-run: no receipt has a match candidate now, and `7b24c06` didn't touch it.
+    - Design review: no blockers. One High: content flips back to the skeleton on a throttled link. It's dev only: 0 of 15 throttled prod loads flipped (`next start`, 5 routes × 3), while the same watcher caught it on all 5 routes in dev.
+    - Code review: 15 findings, in the validation report. Top one: the pager's Next button reads the old page count while a new filter's rows load (`transactions-view.tsx:457`).
 
 ## Phase 6: Action pending states
 
@@ -442,12 +452,12 @@ Deviations:
   - A harness whose `onConfirm` resolves closes the dialog.
   - A harness whose `onConfirm` rejects leaves it open.
 - The six delete callers pass `pending={remove.isPending}` and close on success with `remove.mutate({ id }, { onSuccess: () => setConfirmOpen(false) })`:
-  - `receipts-view.tsx:273`
+  - `receipts-view.tsx:151`
   - `allowed-senders-section.tsx:162`
   - `expenses-view.tsx:426`
   - `categories-view.tsx:194`
   - `income-view.tsx:262`
-  - `transactions-view.tsx:384`
+  - `transactions-view.tsx:221`
 - Dialog forms:
   - Files: `expense-form.tsx:109,173,312-316`, `category-form.tsx:47,64,111-113`, `income-form.tsx:87,141,284-285` and `transaction-form.tsx:90,151,282-284`.
   - Wrap the fields in `<FieldSet disabled={isSaving}>` (income and transaction forms name the flag `pending`).
@@ -467,13 +477,13 @@ Deviations:
   - `pay-cycle-section.tsx:70-83`
   - `allowed-senders-section.tsx:95-108`: a `Plus` with an sr-only "Add address", at the default size. Add `size="icon"` (same `h-8`, keep `w-14`) so `loading` swaps `Plus` for the spinner instead of adding one beside it. The sr-only label stays the name.
 - Row actions show pending only on the acting row: `mutation.isPending && mutation.variables?.<key> === row.id`, where `<key>` names the row (`id`; receipt detail's confirm uses `transactionId`, its pickers `itemId`). TanStack keeps `variables` after the mutation settles.
-  - `receipts-view.tsx:219-231`: retry becomes an icon `Button` with `loading`. Its actions cell is hidden until hover or focus (`:218`), and Safari doesn't focus a clicked button. So add `opacity-100` to that cell while its row's retry is pending, or the spinner vanishes when the mouse leaves.
-  - `unplanned-table.tsx` (the link picker moved in Phase 5): a `Spinner` beside the acting row's picker.
-  - `receipt-detail.tsx:408-444`: a `Spinner` beside the acting item's pickers.
-  - `receipt-detail.tsx:174-199`: confirm match keeps its two-line row `<button>`, not `Button`: Button's `h-8`, `justify-center` and `whitespace-nowrap` would clip it. Keep `disabled={confirm.isPending}` on every row, so a second match can't race the first. On the acting row, swap the `Loader2Icon` (`:196-199`) for `Spinner` in place of the amount and set `aria-busy`.
+  - `receipts-view.tsx:283-295`: retry becomes an icon `Button` with `loading`. Its actions cell is hidden until hover or focus (`:282`), and Safari doesn't focus a clicked button. So add `opacity-100` to that cell while its row's retry is pending, or the spinner vanishes when the mouse leaves.
+  - `unplanned-table.tsx:120-133` (the link picker moved in Phase 5): a `Spinner` beside the acting row's picker.
+  - `receipt-detail.tsx:432-471`: a `Spinner` beside the acting item's pickers.
+  - `receipt-detail.tsx:172-207`: confirm match keeps its two-line row `<button>`, not `Button`: Button's `h-8`, `justify-center` and `whitespace-nowrap` would clip it. Keep `disabled={confirm.isPending}` on every row, so a second match can't race the first. On the acting row, swap the `Loader2Icon` (`:194-199`) for `Spinner` in place of the amount and set `aria-busy`.
 - `src/app/(dashboard)/expenses/categories/_components/categories-view.tsx:108-127`: pass `disabled={reorder.isPending}` to each `SortableItem` (`sortable.tsx:303-327`) so the drag handles lock while the save runs.
 - `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:100-115`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels. Always render `<Upload data-icon="inline-start" />`; the spinner replaces it while loading.
-- These switch to `Spinner`: `receipt-detail.tsx:142-152,289-296`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
+- These switch to `Spinner`: `receipt-detail.tsx:142-152,315-322`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
 
 ### Success
 
@@ -506,11 +516,11 @@ Deviations:
 - Keep `src/app/(dashboard)/loading.tsx`.
 - Check route state under Activity. With `cacheComponents`, leaving a route hides it instead of unmounting it, so its state survives and its effects re-run on return (`02-guides/preserving-ui-state.md`).
   - Transient UI must reset when hidden. Close it in a `useLayoutEffect` cleanup, as the guide shows:
-    - receipts: `detailId`, `deleteTarget`, `confirmOpen` (`receipts-view.tsx:72-74`)
-    - expenses, income, categories, transactions: `formOpen`, `editing`, `confirmOpen`, `deleteTarget` (`expenses-view.tsx:49-52`, `income-view.tsx:29-32`, `categories-view.tsx:48-53`, `transactions-view.tsx:64-67`)
+    - receipts: `detailId`, `deleteTarget`, `confirmOpen` (`receipts-view.tsx:79-81`)
+    - expenses, income, categories, transactions: `formOpen`, `editing`, `confirmOpen`, `deleteTarget` (`expenses-view.tsx:49-52`, `income-view.tsx:29-32`, `categories-view.tsx:48-53`, `transactions-view.tsx:72-75`)
     - settings: `confirmOpen` (`allowed-senders-section.tsx:26`)
     - Disclosures (`one-time-section.tsx:36` `pastOpen`, `more-details.tsx:213`) may stay open; that's the state Activity is meant to keep.
-  - Mount-seeded state is not the same as today's remount. Under Activity the old state shows first, then the effect re-runs. `unplanned-view.tsx:58-62` would show the period the user stepped to, then snap to the current one. Seed only when `range` is null or `anchorDate` changed (keep the seeded anchor in a ref), so a return keeps the user's period with no snap.
+  - Mount-seeded state is not the same as today's remount. Under Activity the old state shows first, then the effect re-runs. `unplanned-view.tsx:53-58` would show the period the user stepped to, then snap to the current one. Seed only when `range` is null or `anchorDate` changed (keep the seeded anchor in a ref), so a return keeps the user's period with no snap.
 
 ### Success
 
