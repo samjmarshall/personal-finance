@@ -206,7 +206,7 @@ This phase implements `docs/adr/adr026-optimistic-proxy-auth-gate.md`.
 - `src/trpc/auth-errors.test.ts` (node):
   - `UNAUTHORIZED` throws a `NEXT_REDIRECT` error to `/sign-in`; other codes don't throw.
   - `isAuthError` recognises both shapes and rejects a plain `Error`.
-- `src/trpc/server.ts:30`: `createCaller(createContext, { onError: redirectOnUnauthorized })`. tRPC rethrows what `onError` throws (`tracked-DWInO6EQ.mjs:315-324`), and `catchError` passes the redirect through.
+- `src/trpc/server.ts:33-35`: `createCaller(createContext, { onError: redirectOnUnauthorized })`. tRPC rethrows what `onError` throws (`tracked-DWInO6EQ.mjs:315-324`), and `catchError` passes the redirect through.
 - `src/trpc/query-client.ts:31-55`. Together these resolve adr026's open question:
   - Add `queryCache: new QueryCache({ onError })`. In the browser it sends any `isAuthError` (client `UNAUTHORIZED` or the streamed sign-in digest) to `window.location.assign("/sign-in")`. As built, `3d67b7a`: a plain `useQuery` holds a streamed redirect without throwing.
   - Set `defaultOptions.queries.retry` to `(failureCount, error) => !isServer && failureCount < 3 && !isAuthError(error)`. This keeps TanStack's server default of 0, and stops 3 backed-off retries (about 7s) before an auth redirect.
@@ -336,13 +336,14 @@ Deviations (from the design review fixes):
 - [x] On `/settings`, Appearance renders while the other panels load. Forcing `allowedSender.list` to throw shows the card only in that panel.
   - Live fault check: one "Couldn't load allowed senders" card, none in pay cycle. Fault reverted.
 - [x] Screen readers announce "Loading expenses" (and so on) while pending
-  - `role=status` read "Loading expenses", "Loading income", "Loading categories", "Loading settings", then per-panel "Loading pay cycle" / "Loading allowed senders".
+  - `role=status` read "Loading expenses", "Loading income", "Loading categories", "Loading settings", then per-panel "Loading pay cycle" / "Loading al? lowed senders".
 - [x] `/design-review`: no blockers. All three Highs fixed and checked live:
   - Page error card was full-bleed with no heading and scrolled sideways at 375. Now it sits under the real header, inside the container, full content width, no sideways scroll, no bars (1440, 375). Settings panel error: card in that panel only, heading and blurb still shown.
   - Nav jumped width from the generic 5xl skeleton. Fixed by the URL-aware `loading.tsx` (see above).
   - Mediums fixed: page-shaped skeleton bodies, table clipping on phones, `error.tsx` matches the section cards (spinner, focus back on a failed retry, 6xl container), `loading.tsx` status text and no phantom action bar, action bar width.
   - Live retry checks (fault toggled with a temp file): failed retry shows the spinner, then focus returns to Try again. A good retry moves focus to the loaded region.
   - Validation 2026-10-12: design-review H2 (`/expenses` flips back to its skeleton for ~2.7s after content) seen only in dev on one stale session. Prod build, same data-heavy session, 3 hard loads: one clean swap at ~300ms, no flip, no console errors. Not a Phase 4 bug.
+  - Re-validation 2026-10-12 (design review, phases 1–4): no blockers. Its one High (`/` flips summary, cash flow and spending back to skeleton ~0.6s at hydration on a throttled link) is dev only: 3 of 3 dev loads, 0 of 5 prod loads (`next start`, same user and data), no console errors either side. Its "no client retry" on a summary fault is expected: summary and spending await on the server, so there's no client query to retry (`943a956` covers cash-flow prefetches). New Mediums, open: Settings panels re-fade on every tab switch, Forwarding skeleton always draws 2 rows, focus after a good retry lands on an unnamed wrapper.
   - Left open: low skeleton contrast, slow retry in dev, double "Loading" announcement, `/transactions` hydration mismatch (Phase 5). After a good `error.tsx` retry, focus lands on `body`. On phones, the page-error header keeps a blank gap where the hidden action bar sits. `OverviewSkeleton` body is empty: the page is sync, so its section skeletons follow straight away.
 
 ## Phase 5: Filtered lists and receipt bugs
@@ -356,12 +357,14 @@ Deviations (from the design review fixes):
 - `src/app/(dashboard)/receipts/page.tsx:13`: prefetch `receipt.list` with `{ unmatchedOnly: false }` (Bug 1). `ReceiptsData` keeps the page's `getSession()` gate before it reads `env.BLOB_PATH_PREFIX`, as `SettingsData` does.
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx:72-100,250-254`:
   - Build `queryInput` with `useMemo` over the filter state, so it changes only when a filter changes.
-  - Pass it through `useDeferredValue`. Call `transaction.list.useSuspenseQuery(deferredInput)` and drop `placeholderData`.
+  - Pass it through `useDeferredValue` and drop `placeholderData`.
+  - Move the table and pager into a new `TransactionsTable({ input, … })` that calls `transaction.list.useSuspenseQuery(input)` and reads `data.items` / `data.total` directly.
+  - The view renders `<AsyncBoundary fade={false} label="transactions" skeleton={<TableSkeleton />}><TransactionsTable input={deferredInput} … /></AsyncBoundary>` below the filter bar. Why: a filter whose fetch fails would otherwise throw to the page boundary, which unmounts the view, and Try again resets every filter. The inner boundary keeps the header, filters and their state.
+  - The header count reads the same key with `transaction.list.useQuery(deferredInput)` (shared cache, never suspends). It shows a bar until the query has data.
   - Dim the `<tbody>` (`opacity-60`) while `queryInput !== deferredInput`, replacing the `isFetching` dim.
-  - Read `data.items` / `data.total` directly.
 - `src/app/(dashboard)/receipts/_components/receipts-view.tsx:77-98,147,251-265`:
-  - Apply the same `useMemo` + `useDeferredValue` + `useSuspenseQuery` change and keep `refetchInterval` polling.
-  - Drop the `isError` copy (`:255-258`); `AsyncBoundary` owns errors.
+  - Apply the same `useMemo` + `useDeferredValue` change, with the `useSuspenseQuery` in a `ReceiptsTable` under its own `AsyncBoundary` below the filter bar, for the same reason. Keep `refetchInterval` polling.
+  - Drop the `isError` copy (`:255-258`); the inner boundary owns errors.
 - `src/app/(dashboard)/expenses/unplanned/_components/unplanned-table.tsx`: new.
   - `UnplannedTable({ range })` calls `transaction.unplanned.useSuspenseQuery({ from, to })` and renders the grouped rows and empty state moved from `unplanned-view.tsx:198-296`, including the link picker.
 - `src/app/(dashboard)/expenses/unplanned/_components/unplanned-view.tsx:53-72,119,179-204,271-282`:
@@ -372,9 +375,11 @@ Deviations (from the design review fixes):
   - Remove the loading card, error card and `isFetching` dim.
 - `src/app/(dashboard)/expenses/unplanned/error.tsx`: delete. `AsyncBoundary` replaces it.
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:289-296`: Bug 2.
-  - Render a `role="alert"` "Couldn't load this receipt" state with Try again (`refetch()`) when `receipt.get` errors.
-  - Show the spinner only while it is loading.
-- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:62-68` already toasts.
+  - Branch on `data` first, in this order:
+    - `data` → the content, even if a background refetch failed. A refetch on focus can fail after `staleTime` (`query-client.ts:72`); keep what's on screen, as the other views do (queries don't toast, `query-client.ts:66`).
+    - `isError` → a `role="alert"` "Couldn't load this receipt" state with Try again (`refetch()`).
+    - otherwise → the spinner. Not `isLoading`: offline, the query pauses with `isLoading` false, so a loading-only spinner would leave a blank dialog.
+- `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:60-66` already toasts.
 - No new tests (single-use route components).
 
 ### Success
@@ -383,12 +388,13 @@ Deviations (from the design review fixes):
 - [ ] `make test` passes
 - [ ] `make build` passes
 - [ ] Changing search, sort, page or a filter on `/transactions` and `/receipts` dims the rows and never flashes a skeleton
+- [ ] Forcing the list query to throw for one filter shows the card in the table only. The filters keep their values, and Try again loads that filter's rows.
 - [ ] Stepping the period on `/expenses/unplanned` dims the rows. The first load shows one `TableSkeleton` under the real header and period controls, with no full-page skeleton flash.
 - [ ] A first load of `/receipts` with receipts in the database shows rows, never "No receipts yet" (Bug 1)
 - [ ] A stale-session client nav to `/receipts` lands on `/sign-in` with no "No receipts yet" flash
 - [ ] A stale-session client nav `/expenses` → `/transactions` lands on `/sign-in` with no "0 transactions" flash (moved from Phase 2)
 - [ ] With a pending receipt, `/receipts` still polls every 3s
-- [ ] Forcing `receipt.get` to throw shows the error state with Try again, not an endless spinner (Bug 2)
+- [ ] Forcing `receipt.get` to throw shows the error state with Try again, not an endless spinner (Bug 2). A failed refetch on an open receipt keeps its content.
 - [ ] A failed confirm-match or item attribution shows exactly one toast (Bug 3)
 - [ ] `/design-review`
 
@@ -416,13 +422,14 @@ Deviations (from the design review fixes):
 - Dialog forms:
   - Files: `expense-form.tsx:109,173,312-316`, `category-form.tsx:47,64,111-113`, `income-form.tsx:87,141,284-285` and `transaction-form.tsx:90,151,282-284`.
   - Wrap the fields in `<FieldSet disabled={isSaving}>` (income and transaction forms name the flag `pending`).
+  - Add `min-w-0` to `FieldSet`'s base classes (`field.tsx:13`). A native fieldset defaults to `min-inline-size: min-content` (Tailwind's reset doesn't clear it), so a long option name in a `grid-cols-2` row would widen the whole form past a 375px dialog. Its `gap-4` matches each form's (`expense-form.tsx:185` and the rest), so spacing stays the same.
   - Disabling the focused field (Enter to submit) drops focus to `body`. On a failed save, put focus back on the field that had it. Same for `auth-form.tsx`.
   - Also pass `disabled={isSaving}` to each `SelectField` / `Combobox`, because Base UI ignores the native fieldset.
   - Cancel gets `disabled={isSaving}`.
   - Submit stays outside the fieldset with `loading={isSaving}` and keeps its label (drop "Saving…").
   - The dialog's `onOpenChange` calls `eventDetails.cancel()` while saving, which blocks Esc, outside press and the X.
 - `src/components/auth-form.tsx:18-44,86-94`:
-  - Wrap the fields in `<FieldSet disabled={loading}>`. Submit uses `loading` and stays loading through the route change; `loading` already isn't reset on success (`:38-39`).
+  - Wrap the fields in `<FieldSet disabled={loading}>` (gets `min-w-0` from above). Submit uses `loading` and stays loading through the route change; `loading` already isn't reset on success (`:38-39`).
   - The error `<p>` gets `role="alert"`.
 - `src/components/sign-out-button.tsx`: a `Button` with `loading` replaces the raw `<button>`, keeping the nav item look. `LogOut` gets `data-icon="inline-start"` so the spinner replaces it.
   - Button's base classes fight the nav look (`button.tsx:8,25`): `justify-center`, `h-8`, and `[&_svg:not([class*='size-'])]:size-4` shrinks the 18px icon to 16. Override them in `className` and size the icon with `size-[18px]`, then check the row still lines up with the nav links.
@@ -430,11 +437,11 @@ Deviations (from the design review fixes):
   - `balance-snapshot-card.tsx:88-104`
   - `pay-cycle-section.tsx:70-83`
   - `allowed-senders-section.tsx:95-108`: a `Plus` with an sr-only "Add address", at the default size. Add `size="icon"` (same `h-8`, keep `w-14`) so `loading` swaps `Plus` for the spinner instead of adding one beside it. The sr-only label stays the name.
-- Row actions show `loading` only on the acting row (`mutation.isPending && mutation.variables?.id === row.id`; TanStack keeps `variables` after the mutation settles):
-  - `receipts-view.tsx:219-231`: retry becomes an icon `Button` with `loading`.
+- Row actions show pending only on the acting row: `mutation.isPending && mutation.variables?.<key> === row.id`, where `<key>` names the row (`id`; receipt detail's confirm uses `transactionId`, its pickers `itemId`). TanStack keeps `variables` after the mutation settles.
+  - `receipts-view.tsx:219-231`: retry becomes an icon `Button` with `loading`. Its actions cell is hidden until hover or focus (`:218`), and Safari doesn't focus a clicked button. So add `opacity-100` to that cell while its row's retry is pending, or the spinner vanishes when the mouse leaves.
   - `unplanned-table.tsx` (the link picker moved in Phase 5): a `Spinner` beside the acting row's picker.
   - `receipt-detail.tsx:408-444`: a `Spinner` beside the acting item's pickers.
-  - `receipt-detail.tsx:174-199`: confirm match uses `loading` on the acting row.
+  - `receipt-detail.tsx:174-199`: confirm match keeps its two-line row `<button>`, not `Button`: Button's `h-8`, `justify-center` and `whitespace-nowrap` would clip it. Keep `disabled={confirm.isPending}` on every row, so a second match can't race the first. On the acting row, swap the `Loader2Icon` (`:196-199`) for `Spinner` in place of the amount and set `aria-busy`.
 - `src/app/(dashboard)/expenses/categories/_components/categories-view.tsx:108-127`: pass `disabled={reorder.isPending}` to each `SortableItem` (`sortable.tsx:303-327`) so the drag handles lock while the save runs.
 - `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:100-115`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels. Always render `<Upload data-icon="inline-start" />`; the spinner replaces it while loading.
 - These switch to `Spinner`: `receipt-detail.tsx:142-152,289-296`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
@@ -446,6 +453,7 @@ Deviations (from the design review fixes):
 - [ ] `make build` passes
 - [ ] Each delete keeps its dialog open with a spinner until done. It closes on success, and on error it stays open and the global toast reports it.
 - [ ] Each dialog form locks inputs, selects, comboboxes and Cancel while saving, ignores Esc and the X, and shows a spinner beside the kept label
+- [ ] At 375px, each dialog form fits its dialog with no sideways scroll, with a long name picked in every select, and field spacing matches `main`
 - [ ] Sign-in shows a spinner until the dashboard renders, and screen readers announce a sign-in error
 - [ ] Balance save, pay-cycle save, allowed-sender add, receipt retry, confirm match, the item and link pickers, upload and sign out each show a spinner on the acting control only
 - [ ] Drag handles lock while a category reorder saves
@@ -468,8 +476,12 @@ Deviations (from the design review fixes):
   - `export const instant = false` is a last resort only. Mark each use with a `TODO` and remove it before merging.
 - Keep `src/app/(dashboard)/loading.tsx`.
 - Check route state under Activity. With `cacheComponents`, leaving a route hides it instead of unmounting it, so its state survives and its effects re-run on return (`02-guides/preserving-ui-state.md`).
-  - Transient UI (open dialogs, confirm dialogs, menus) must reset when hidden. Close it in a `useLayoutEffect` cleanup, as the guide shows.
-  - Mount-seeded state needs no change. For example, `unplanned-view.tsx:58-62` re-seeds the period on return, the same as today's remount.
+  - Transient UI must reset when hidden. Close it in a `useLayoutEffect` cleanup, as the guide shows:
+    - receipts: `detailId`, `deleteTarget`, `confirmOpen` (`receipts-view.tsx:72-74`)
+    - expenses, income, categories, transactions: `formOpen`, `editing`, `confirmOpen`, `deleteTarget` (`expenses-view.tsx:49-52`, `income-view.tsx:29-32`, `categories-view.tsx:48-53`, `transactions-view.tsx:64-67`)
+    - settings: `confirmOpen` (`allowed-senders-section.tsx:26`)
+    - Disclosures (`one-time-section.tsx:36` `pastOpen`, `more-details.tsx:213`) may stay open; that's the state Activity is meant to keep.
+  - Mount-seeded state is not the same as today's remount. Under Activity the old state shows first, then the effect re-runs. `unplanned-view.tsx:58-62` would show the period the user stepped to, then snap to the current one. Seed only when `range` is null or `anchorDate` changed (keep the seeded anchor in a ref), so a return keeps the user's period with no snap.
 
 ### Success
 
@@ -480,7 +492,8 @@ Deviations (from the design review fixes):
 - [ ] Against a production build served locally, the raw HTML of each dashboard route, fetched with any session cookie, contains the nav (`aria-label="Main navigation"`) and `data-slot="skeleton"` markup
 - [ ] `curl -I https://personal-finance.localhost/api/health` returns 200 and the database is hit per request
 - [ ] The Phase 2 signed-out and stale-cookie checks still pass
-- [ ] Leaving a route with a dialog open (browser Back) and returning shows the dialog closed
+- [ ] Leaving a route with a dialog open (browser Back) and returning shows the dialog closed. Check each listed view, incl. an open receipt detail.
+- [ ] On `/expenses/unplanned`, step back a period, leave and return: the same period shows, with no snap to the current one
 - [ ] With a fake cookie (`__Secure-better-auth.session_token=x`), the `/settings` and `/receipts` responses contain neither the inbound address nor the blob prefix
 - [ ] `/design-review`
 - [ ] `/security-review`
