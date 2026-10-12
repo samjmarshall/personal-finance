@@ -9,8 +9,9 @@ type PageSkeletonProps = {
 	title?: string;
 	/** Omit when it holds live data: it becomes a bar. */
 	description?: string;
-	/** Reserves room for a small header button, so the title doesn't shift. */
-	action?: boolean;
+	/** Reserves room for a header button, so the title doesn't shift. `true` is a
+	 *  `sm` button, `"default"` a default-size one. */
+	action?: boolean | "default";
 	/** Overrides the default `max-w-5xl`, to match the view's container. */
 	className?: string;
 	/** Gap under the header. Must equal the view's, or the swap jumps. */
@@ -33,7 +34,13 @@ export function PageSkeleton({
 			    shows through, and its error card lands in the slot below. */}
 			<div className="visible">
 				<PageHeader
-					actions={action ? <Skeleton className="h-7 w-30" /> : undefined}
+					actions={
+						action ? (
+							<Skeleton
+								className={cn("w-30", action === "default" ? "h-8" : "h-7")}
+							/>
+						) : undefined
+					}
 					description={description ?? <BarSlot bar="h-4 w-72" height="h-5" />}
 					title={
 						title ?? (
@@ -52,7 +59,7 @@ export function PageSkeleton({
 
 // A flex slot, so the bar's room is a fixed line height and can't collapse into
 // the header's margins. Spans, not the div Skeleton: it sits inside the h1.
-function BarSlot({ height, bar }: { height: string; bar: string }) {
+export function BarSlot({ height, bar }: { height: string; bar: string }) {
 	return (
 		<span className={cn("flex items-center", height)}>
 			<span

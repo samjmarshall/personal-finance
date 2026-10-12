@@ -3,11 +3,11 @@
 import { skipToken } from "@tanstack/react-query";
 import { Check, Loader2Icon, TriangleAlert } from "lucide-react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { Money } from "~/components/money";
 import { SelectField, type SelectFieldOption } from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -114,11 +114,10 @@ function MatchBanner({
 			: skipToken,
 	);
 
+	// A transaction claimed mid-read fails the unique index; the global
+	// mutation toast says so.
 	const confirm = api.receipt.confirmMatch.useMutation({
 		onSuccess: () => utils.receipt.invalidate(),
-		// The unique index rejects a transaction that was claimed mid-read; say so
-		// rather than leaving the click looking ignored.
-		onError: (error) => toast.error(error.message),
 	});
 
 	if (transactionId !== null) {
@@ -226,10 +225,13 @@ export function ReceiptDetail({
 	// while fading out, instead of snapping to "Receipt" + a spinner.
 	const lastId = useRef(receiptId);
 	if (receiptId !== null) lastId.current = receiptId;
-	const { data, isLoading } = api.receipt.get.useQuery(
+	const { data, isError, refetch } = api.receipt.get.useQuery(
 		{ id: lastId.current ?? 0 },
 		{ enabled: open },
 	);
+	// A refetch with no data drops isError, which would swap the alert for the
+	// spinner and lose the button's focus. Held until the refetch settles.
+	const [retrying, setRetrying] = useState(false);
 
 	const mismatch = data ? itemsTotalMismatch(data.total, data.items) : false;
 	// Attribution only makes sense once the receipt belongs to a transaction —
@@ -244,10 +246,7 @@ export function ReceiptDetail({
 	});
 
 	const utils = api.useUtils();
-	const onAttributed = {
-		onSuccess: () => utils.receipt.invalidate(),
-		onError: (error: { message: string }) => toast.error(error.message),
-	};
+	const onAttributed = { onSuccess: () => utils.receipt.invalidate() };
 	const setExpense = api.receipt.setItemExpense.useMutation(onAttributed);
 	const setCategory = api.receipt.setItemCategory.useMutation(onAttributed);
 
@@ -286,7 +285,30 @@ export function ReceiptDetail({
 					</DialogDescription>
 				</DialogHeader>
 
-				{isLoading || !data ? (
+				{/* Data first: a failed background refetch keeps what's on screen.
+				    Not isLoading for the spinner: offline, the query pauses with it
+				    false, which would leave a blank dialog. */}
+				{!data && (isError || retrying) ? (
+					<div
+						className="flex h-48 flex-col items-center justify-center gap-3"
+						role="alert"
+					>
+						<p className="text-muted-foreground text-sm">
+							Couldn't load this receipt.
+						</p>
+						<Button
+							loading={retrying}
+							onClick={() => {
+								setRetrying(true);
+								void refetch().finally(() => setRetrying(false));
+							}}
+							size="sm"
+							variant="outline"
+						>
+							Try again
+						</Button>
+					</div>
+				) : !data ? (
 					<div
 						aria-label="Loading receipt"
 						className="flex h-48 items-center justify-center text-muted-foreground"

@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryErrorResetBoundary } from "@tanstack/react-query";
 import { catchError, type ErrorInfo } from "next/error";
 import {
 	type ReactNode,
@@ -24,6 +25,8 @@ type AsyncBoundaryProps = {
 	label: string;
 	/** Fade content in after the skeleton showed. Off where the skeleton already draws the real header. */
 	fade?: boolean;
+	/** A change clears the error card, so picking another filter loads it. */
+	resetKey?: unknown;
 	children: ReactNode;
 };
 
@@ -34,6 +37,7 @@ export function AsyncBoundary({
 	skeleton,
 	label,
 	fade = true,
+	resetKey,
 	children,
 }: AsyncBoundaryProps) {
 	// Server can't know if the skeleton streamed first. Assume it did, so
@@ -61,7 +65,7 @@ export function AsyncBoundary({
 
 	if (skeleton === null) {
 		return (
-			<ErrorBoundary label={label} skeleton={null}>
+			<ErrorBoundary label={label} resetKey={resetKey} skeleton={null}>
 				<Suspense fallback={null}>{children}</Suspense>
 			</ErrorBoundary>
 		);
@@ -72,6 +76,7 @@ export function AsyncBoundary({
 			focusRef={focusRef}
 			label={label}
 			onRetry={onRetry}
+			resetKey={resetKey}
 			skeleton={skeleton}
 		>
 			<Suspense
@@ -133,6 +138,7 @@ type ErrorBoundaryProps = {
 	focusRef?: (element: HTMLElement | null) => void;
 	label: string;
 	onRetry?: () => void;
+	resetKey?: unknown;
 	skeleton: ReactNode | null;
 };
 
@@ -140,9 +146,11 @@ type ErrorBoundaryProps = {
 // re-fetches server content. Its fallback can't use hooks, so a child does.
 const ErrorBoundary = catchError(function asyncBoundaryFallback(
 	props: ErrorBoundaryProps,
-	{ error, retry }: ErrorInfo,
+	{ error, retry, reset }: ErrorInfo,
 ) {
-	return <AsyncBoundaryError {...props} error={error} retry={retry} />;
+	return (
+		<AsyncBoundaryError {...props} error={error} reset={reset} retry={retry} />
+	);
 });
 
 function AsyncBoundaryError({
@@ -150,10 +158,18 @@ function AsyncBoundaryError({
 	focusRef,
 	label,
 	onRetry,
+	resetKey,
 	retry,
+	reset,
 	skeleton,
-}: ErrorBoundaryProps & { error: unknown; retry: () => void }) {
+}: ErrorBoundaryProps & {
+	error: unknown;
+	retry: () => void;
+	reset: () => void;
+}) {
 	const wrapper = useRef<HTMLDivElement>(null);
+	const { reset: resetQueryErrors } = useQueryErrorResetBoundary();
+	const [failedKey] = useState(resetKey);
 	// undefined until looked for, so the card mounts once, in its final place.
 	const [slot, setSlot] = useState<HTMLElement | null>();
 
@@ -162,6 +178,14 @@ function AsyncBoundaryError({
 	useEffect(() => {
 		console.error(error);
 	}, [error]);
+
+	// Next's boundary clears only on a route change or Try again. Reset, not
+	// retry: the new key loads on the client, with no server refresh.
+	useEffect(() => {
+		if (Object.is(resetKey, failedKey)) return;
+		resetQueryErrors();
+		reset();
+	}, [resetKey, failedKey, resetQueryErrors, reset]);
 
 	// Page skeletons mark their body, so a page failure keeps the header, not a bare card.
 	useLayoutEffect(() => {

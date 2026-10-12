@@ -33,7 +33,8 @@ export function RetryCard({
 			<CardContent className="flex flex-col items-center gap-3">
 				<p className="text-muted-foreground text-sm">Couldn't load {label}.</p>
 				<Button
-					// The card stays up while the retry runs; show it's working.
+					// The card stays up through the server refresh; the skeleton covers
+					// the client fetch after.
 					loading={retrying}
 					onClick={() => {
 						setRetrying(true);

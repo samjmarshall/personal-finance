@@ -1,4 +1,5 @@
 import { PageSkeleton } from "~/components/page-skeleton";
+import { TableSkeleton } from "~/components/skeletons";
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
@@ -44,7 +45,56 @@ export function UnplannedSkeleton() {
 		<PageSkeleton
 			description="Spend not yet linked to a planned expense. Link a transaction to move it out of here."
 			title="Unplanned"
-		/>
+		>
+			{/* Period controls. Draws the length toggle, which shows only with a
+			    fortnight anchor; without one a phone lands a row shorter. */}
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div className="flex items-center gap-2">
+					<Skeleton className="size-7" />
+					<div className="flex h-5 min-w-44 justify-center">
+						<Skeleton className="my-0.5 h-4 w-32" />
+					</div>
+					<Skeleton className="size-7" />
+				</div>
+				<div className="flex gap-1">
+					<Skeleton className="h-7 w-20" />
+					<Skeleton className="h-7 w-16" />
+				</div>
+			</div>
+			<div className="mt-6">
+				<UnplannedGroupsSkeleton />
+			</div>
+		</PageSkeleton>
+	);
+}
+
+/** The view's grouped rows; also its table boundary's skeleton. */
+export function UnplannedGroupsSkeleton() {
+	return (
+		<div aria-hidden className="flex flex-col gap-6">
+			{[3, 2].map((rows) => (
+				<Card className="[--card-spacing:0px]" key={rows}>
+					<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3">
+						<Skeleton className="my-0.5 h-4 w-32" />
+						<Skeleton className="my-0.5 h-4 w-16" />
+					</div>
+					<div className="divide-y divide-border">
+						{indices(rows).map((row) => (
+							<div
+								className="flex flex-col gap-2 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:items-center sm:gap-3"
+								key={row}
+							>
+								<Skeleton className="my-0.5 h-4 w-20" />
+								<Skeleton className="my-0.5 h-4 w-48 max-w-full" />
+								<Skeleton className="my-0.5 h-4 w-16 sm:justify-self-end" />
+								{/* Link picker */}
+								<Skeleton className="h-8 w-full" />
+							</div>
+						))}
+					</div>
+				</Card>
+			))}
+		</div>
 	);
 }
 
@@ -95,18 +145,100 @@ export function IncomeSkeleton() {
 export function TransactionsSkeleton() {
 	// No description: it counts the rows, so it isn't known yet.
 	return (
-		<PageSkeleton action className="max-w-6xl" title="Transaction History" />
+		<PageSkeleton action className="max-w-6xl" title="Transaction History">
+			<Card>
+				<CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
+					{/* Search, then the priority and frequency filters */}
+					<Skeleton className="h-8 sm:flex-1" />
+					<div className="flex gap-2">
+						<Skeleton className="h-8 w-36" />
+						<Skeleton className="h-8 w-32" />
+					</div>
+				</CardContent>
+			</Card>
+			<div className="mt-4">
+				<TransactionsTableSkeleton />
+			</div>
+		</PageSkeleton>
+	);
+}
+
+/** The view's table and pager; also its table boundary's skeleton. */
+export function TransactionsTableSkeleton() {
+	return (
+		<TableSkeleton
+			footer={
+				<div className="flex flex-col gap-3 border-border border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+					{/* Page total, then "Page n of m" and the prev / next buttons */}
+					<Skeleton className="my-0.5 h-4 w-36" />
+					<div className="flex items-center gap-3">
+						<Skeleton className="my-0.5 h-4 w-20" />
+						<div className="flex gap-1">
+							<Skeleton className="size-8" />
+							<Skeleton className="size-8" />
+						</div>
+					</div>
+				</div>
+			}
+		/>
 	);
 }
 
 export function ReceiptsSkeleton() {
 	return (
 		<PageSkeleton
-			action
+			// The upload button is default size, 4px taller than the others.
+			action="default"
 			className="max-w-6xl"
 			description="Upload a photo or PDF; we extract the vendor, total and line items."
 			title="Receipts"
-		/>
+		>
+			<Card>
+				{/* Status and match filters. Same widths, so they wrap like the real ones. */}
+				<CardContent className="flex flex-wrap items-center gap-2">
+					<Skeleton className="h-8 w-40" />
+					<Skeleton className="h-8 w-52" />
+				</CardContent>
+			</Card>
+			<div className="mt-4">
+				<ReceiptsTableSkeleton />
+			</div>
+		</PageSkeleton>
+	);
+}
+
+/** The view's table; also its table boundary's skeleton. */
+export function ReceiptsTableSkeleton() {
+	return (
+		<Card aria-hidden className="[--card-spacing:0px]">
+			<table className="w-full table-fixed border-collapse text-sm">
+				<thead>
+					<tr className="border-border border-b bg-muted/40">
+						{/* Thumbnail column: the 40px image plus cell padding */}
+						<th className="w-18 px-4 py-2.5" />
+						{indices(4).map((col) => (
+							<th className="px-4 py-2.5" key={col}>
+								<Skeleton className="h-4 w-16 max-w-full" />
+							</th>
+						))}
+					</tr>
+				</thead>
+				<tbody className="divide-y divide-border">
+					{indices(8).map((row) => (
+						<tr key={row}>
+							<td className="px-4 py-2.5">
+								<Skeleton className="size-10" />
+							</td>
+							{indices(4).map((col) => (
+								<td className="px-4 py-3" key={col}>
+									<Skeleton className="my-0.5 h-4 w-3/4" />
+								</td>
+							))}
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</Card>
 	);
 }
 

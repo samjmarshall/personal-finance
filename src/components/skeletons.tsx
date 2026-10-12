@@ -12,9 +12,12 @@ const indices = (n: number) => Array.from({ length: n }, (_, i) => i);
 export function TableSkeleton({
 	rows = 8,
 	cols = 5,
+	footer,
 }: {
 	rows?: number;
 	cols?: number;
+	/** Drawn under the rows, inside the card (a pager bar). */
+	footer?: ReactNode;
 }) {
 	return (
 		<Card aria-hidden className="[--card-spacing:0px]">
@@ -41,6 +44,7 @@ export function TableSkeleton({
 					))}
 				</tbody>
 			</table>
+			{footer}
 		</Card>
 	);
 }

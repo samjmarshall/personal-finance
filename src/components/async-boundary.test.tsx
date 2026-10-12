@@ -261,6 +261,35 @@ describe("AsyncBoundary", () => {
 			expect(queryFn).toHaveBeenCalledTimes(2);
 		});
 
+		it("a new resetKey clears the card without refreshing the router", async () => {
+			silenceErrors();
+			function Rows({ filter }: { filter: string }) {
+				if (filter === "broken") throw new Error("offline");
+				return <p>Rows for {filter}</p>;
+			}
+			const ui = (filter: string) => (
+				<AsyncBoundary
+					label="transactions"
+					resetKey={filter}
+					skeleton={<p>Skeleton</p>}
+				>
+					<Rows filter={filter} />
+				</AsyncBoundary>
+			);
+			const { router, AppRouter } = createAppRouter();
+			const { rerender } = await act(async () =>
+				render(ui("broken"), { wrapper: AppRouter }),
+			);
+			await act(async () => rerender(ui("broken")));
+			expect(screen.getByRole("alert")).toBeInTheDocument();
+
+			await act(async () => rerender(ui("groceries")));
+
+			expect(await screen.findByText("Rows for groceries")).toBeInTheDocument();
+			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+			expect(router.refresh).not.toHaveBeenCalled();
+		});
+
 		it("Try again moves focus to the recovered content", async () => {
 			silenceErrors();
 			const user = userEvent.setup();
