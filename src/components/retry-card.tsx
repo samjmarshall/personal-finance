@@ -17,7 +17,7 @@ type RetryCardProps = {
 	className?: string;
 };
 
-/** The one failure card, for AsyncBoundary and the route error files. */
+/** Shared, so section and page failures look the same. */
 export function RetryCard({
 	label,
 	retry,

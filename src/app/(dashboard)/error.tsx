@@ -18,8 +18,8 @@ function focusTryAgain(button: HTMLButtonElement | null) {
 	button.focus({ preventScroll: true });
 }
 
-// Last resort for pages with no boundary of their own (overview, transactions,
-// receipts: all wide). Most failures hit an AsyncBoundary first.
+// Last resort for pages with no error boundary of their own. Most failures are
+// caught lower down. Wide container fits every page.
 export default function DashboardError({
 	error,
 	retry,

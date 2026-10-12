@@ -163,8 +163,7 @@ function AsyncBoundaryError({
 		console.error(error);
 	}, [error]);
 
-	// A page skeleton (PageSkeleton) marks its body, so a page-level failure keeps
-	// the page's header and container instead of a bare card.
+	// Page skeletons mark their body, so a page failure keeps the header, not a bare card.
 	useLayoutEffect(() => {
 		setSlot(wrapper.current?.querySelector<HTMLElement>("[data-error-slot]"));
 	}, []);

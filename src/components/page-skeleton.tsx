@@ -9,11 +9,11 @@ type PageSkeletonProps = {
 	title?: string;
 	/** Omit when it holds live data: it becomes a bar. */
 	description?: string;
-	/** Reserves a `size="sm"` button's room in the header. */
+	/** Reserves room for a small header button, so the title doesn't shift. */
 	action?: boolean;
 	/** Overrides the default `max-w-5xl`, to match the view's container. */
 	className?: string;
-	/** Gap under the header. Matches the view's own spacing. */
+	/** Gap under the header. Must equal the view's, or the swap jumps. */
 	contentClassName?: string;
 	children?: ReactNode;
 };
