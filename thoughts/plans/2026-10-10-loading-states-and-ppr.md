@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Validated - Phase 4 of 7
+status: Ready for Review - Phase 5 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -382,21 +382,48 @@ Deviations (from the design review fixes):
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:60-66` already toasts.
 - No new tests (single-use route components).
 
+Deviations:
+
+- Unplanned uses a new `UnplannedGroupsSkeleton` (2 group cards on the row grid), not `TableSkeleton`. The view is grouped cards, not a table. `UnplannedSkeleton` draws the period controls over it.
+- `TransactionsTableSkeleton` and `ReceiptsTableSkeleton` are exported for the inner boundaries. `TableSkeleton` gained a `footer` (the pager bar). Receipts has its own: a thumbnail column and taller rows.
+- `PageSkeleton` `action="default"` reserves a 32px button. Fixes the Receipts header shift (28 vs 32px).
+- `/transactions` hydration mismatch, explained and fixed. The header count used a plain `useQuery`. On SSR it had no data (bar). At hydration the streamed rows were often there, so it rendered text. `TransactionCount` now draws the bar until hydrated (`useSyncExternalStore`). Hard load: no mismatch in the console.
+- Table components sit in their view files (`TransactionsTable`, `ReceiptsTable`). `UnplannedTable` also owns the expense/category reads and the link mutation, and takes `stale` for the dim.
+- `AsyncBoundary` gained `resetKey` (from the design review). `catchError` clears only on a pathname change or retry, so a failed filter kept its card after the member picked another. A new key now clears the card (query errors reset first) with no server refresh. All 3 inner boundaries pass their deferred input. Not a `key`: that remounts and flashes the skeleton. Test added.
+- `SortHeader` moved to module scope: declared inside the table, it remounted each render and dropped focus after a sort.
+- While a filter's list errors, the Transactions header count is blank, not a bar (a bar reads as still loading).
+- The pager label reads the rows' page (`input.offset`), not `page`, which runs ahead while they load.
+- Stale rows get `aria-busy` with the dim (all 3 lists).
+- Receipt dialog Try again holds the alert until the refetch settles (`retrying`). A refetch with no data drops `isError`, which swapped in the spinner and lost focus.
+
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] Changing search, sort, page or a filter on `/transactions` and `/receipts` dims the rows and never flashes a skeleton
-- [ ] Forcing the list query to throw for one filter shows the card in the table only. The filters keep their values, and Try again loads that filter's rows.
-- [ ] Stepping the period on `/expenses/unplanned` dims the rows. The first load shows one `TableSkeleton` under the real header and period controls, with no full-page skeleton flash.
-- [ ] A first load of `/receipts` with receipts in the database shows rows, never "No receipts yet" (Bug 1)
-- [ ] A stale-session client nav to `/receipts` lands on `/sign-in` with no "No receipts yet" flash
-- [ ] A stale-session client nav `/expenses` → `/transactions` lands on `/sign-in` with no "0 transactions" flash (moved from Phase 2)
-- [ ] With a pending receipt, `/receipts` still polls every 3s
-- [ ] Forcing `receipt.get` to throw shows the error state with Try again, not an endless spinner (Bug 2). A failed refetch on an open receipt keeps its content.
-- [ ] A failed confirm-match or item attribution shows exactly one toast (Bug 3)
-- [ ] `/design-review`
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make build` passes
+  - As `pnpm run build`, for the same reason as Phase 4: the dev server was running.
+- [x] Changing search, sort, page or a filter on `/transactions` and `/receipts` dims the rows and never flashes a skeleton
+  - DOM watched live: each change dims `tbody`, zero skeleton frames. Transactions: search, sort, next page, priority. Receipts: status, match, back to all.
+- [x] Forcing the list query to throw for one filter shows the card in the table only. The filters keep their values, and Try again loads that filter's rows.
+  - Temp-file fault on one filter (`transaction.list` search "woolworths", `receipt.list` status "failed"): card in the table slot, header, filters and values kept. Fault off, Try again loads that filter's rows (1 and 6). Reverted.
+- [x] Stepping the period on `/expenses/unplanned` dims the rows. The first load shows one `TableSkeleton` under the real header and period controls, with no full-page skeleton flash.
+  - Group-shaped skeleton, not `TableSkeleton` (see Deviations). Hard load and nav: page skeleton → real header and controls over the groups skeleton → rows. It never goes back. August ↔ July: dims, no skeleton.
+- [x] A first load of `/receipts` with receipts in the database shows rows, never "No receipts yet" (Bug 1)
+  - Hard load: 68 rows. "No receipts yet" not in the SSR HTML and never in the DOM.
+- [x] A stale-session client nav to `/receipts` lands on `/sign-in` with no "No receipts yet" flash
+- [x] A stale-session client nav `/expenses` → `/transactions` lands on `/sign-in` with no "0 transactions" flash (moved from Phase 2)
+  - Both: both `session_token` cookies (localhost and subdomain) swapped for junk, nav link clicked. Lands on `/sign-in`. A sessionStorage log that survives the reload shows no empty copy, no "0 transactions" and no "Couldn't load".
+- [x] With a pending receipt, `/receipts` still polls every 3s
+  - About 3.6s apart: the 3s timer plus the fetch time.
+- [x] Forcing `receipt.get` to throw shows the error state with Try again, not an endless spinner (Bug 2). A failed refetch on an open receipt keeps its content.
+  - Fault on: "Couldn't load this receipt." + Try again. Fault off, Try again loads it. Then after `staleTime` with the fault back on, a focus refetch fails and the content stays, no alert. Reverted.
+- [x] A failed confirm-match or item attribution shows exactly one toast (Bug 3)
+  - Faulted confirm-match, item category and item expense: 1 toast each. Needed a matching branch-DB transaction ("AMAZON PHASE5 MATCH TEST", $15.37, 22 Sept), now matched to the Amazon receipt.
+- [x] `/design-review`: no blockers. Both Highs fixed and checked live:
+  - A failed filter's card stuck after picking another filter or period. Fixed by `resetKey` (see Deviations). Live fault (`transaction.list` search "zzfail", `receipt.list` unmatched only, `transaction.unplanned` via temp file): card shows, then a good filter or the previous period loads rows. Card gone, 0 RSC requests (no server refresh). Reverted.
+  - Sort dropped keyboard focus. Fixed by the module-scope `SortHeader`. Live: Enter on Date twice, focus stays on Date.
+  - Mediums fixed: dialog Try again focus (live: failed retry keeps alert and focus on the button; good retry loads, focus on the dialog), blank header count during an error, pager label lead, `aria-busy` on stale rows, `RetryCard` comment (its spinner covers only the server refresh).
+  - Left open: focus after a good retry lands on an unnamed wrapper (Phase 4 item). Error card is skeleton-sized (by design). Toast shows raw server text (`toToastMessage`, same as the old local toasts). Receipt dialog height jumps on load. Offline spinner (intended). Older a11y and touch-target nits. Two "Loading" statuses for ~10ms. "unplanned Spend" casing is the CONTEXT.md term.
 
 ## Phase 6: Action pending states
 
