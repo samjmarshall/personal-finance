@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Ready for Review - Phase 5 of 7
+status: Validated - Phase 5 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -376,7 +376,7 @@ Deviations (from the design review fixes):
 - `src/app/(dashboard)/expenses/unplanned/error.tsx`: delete. `AsyncBoundary` replaces it.
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:289-296`: Bug 2.
   - Branch on `data` first, in this order:
-    - `data` → the content, even if a background refetch failed. A refetch on focus can fail after `staleTime` (`query-client.ts:72`); keep what's on screen, as the other views do (queries don't toast, `query-client.ts:66`).
+    - `data` → the content, even if a background refetch failed. A refetch on focus can fail after `staleTime` (`query-client.ts:72`); keep what's on screen, as the other views do (queries don't toast, `query-client.ts:67`).
     - `isError` → a `role="alert"` "Couldn't load this receipt" state with Try again (`refetch()`).
     - otherwise → the spinner. Not `isLoading`: offline, the query pauses with `isLoading` false, so a loading-only spinner would leave a blank dialog.
 - `src/app/(dashboard)/receipts/_components/receipt-detail.tsx:121,249`: Bug 3. Drop the local `onError` toasts; `query-client.ts:60-66` already toasts.
@@ -424,6 +424,8 @@ Deviations:
   - Sort dropped keyboard focus. Fixed by the module-scope `SortHeader`. Live: Enter on Date twice, focus stays on Date.
   - Mediums fixed: dialog Try again focus (live: failed retry keeps alert and focus on the button; good retry loads, focus on the dialog), blank header count during an error, pager label lead, `aria-busy` on stale rows, `RetryCard` comment (its spinner covers only the server refresh).
   - Left open: focus after a good retry lands on an unnamed wrapper (Phase 4 item). Error card is skeleton-sized (by design). Toast shows raw server text (`toToastMessage`, same as the old local toasts). Receipt dialog height jumps on load. Offline spinner (intended). Older a11y and touch-target nits. Two "Loading" statuses for ~10ms. "unplanned Spend" casing is the CONTEXT.md term.
+  - Validation 2026-10-12 (design review, phases 1–5): no blockers, no Highs. Phase 5 Success re-checked live: dims with 0 skeleton frames, failed filter → good filter clears the card with 0 server refreshes, stale session lands on `/sign-in` with no empty copy, Bug 1–3, no hydration mismatch, CLS 0 at 1440/768/375. New Mediums, open: error card logs "signal is aborted" under browser-faked faults (a real server fault this session logged the real `TRPCClientError`), error card very tall on phones, failed Try again flickers card → skeleton → card, filter results not announced, `/` scrolls 5px sideways at 375 (pre-existing), receipts table clips at mid widths (pre-existing).
+  - Code review: 14 findings, in the validation report. Top ones: going back to a filter that failed shows its cached error with no refetch; empty-table copy reads live filters over lagging rows; dialog `retrying` survives a receipt switch.
 
 ## Phase 6: Action pending states
 
