@@ -28,8 +28,8 @@ const createContext = cache(async () => {
 });
 
 const getQueryClient = cache(createQueryClient);
-// A stale cookie passes proxy; send its UNAUTHORIZED to /sign-in, which
-// AsyncBoundary passes through instead of showing an error card (adr026).
+// A stale cookie passes proxy. Send it to sign-in; error boundaries let the
+// redirect through, so no error card shows (adr026).
 const caller = createCaller(createContext, {
 	onError: redirectOnUnauthorized,
 });

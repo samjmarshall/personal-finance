@@ -2,8 +2,8 @@ import { useSyncExternalStore } from "react";
 
 const subscribeNever = () => () => {};
 
-// True on the server and while hydrating. Unlike the mounted flag, false from the
-// first render when mounted on the client. SSR-safety primitive, so adr001 allows it.
+// True on the server and while hydrating; false at once when first mounted on
+// the client. SSR-safe primitive, so adr001 allows it.
 export function useHydrating() {
 	return useSyncExternalStore(
 		subscribeNever,

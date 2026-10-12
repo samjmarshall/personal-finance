@@ -27,7 +27,7 @@ export async function NavMember() {
 	);
 }
 
-/** Same line heights and padding as NavMember, so the name lands without a shift. */
+/** Same line heights and padding as the real member block, so the name lands without a shift. */
 export function NavMemberSkeleton() {
 	return (
 		<div aria-hidden className="flex flex-col gap-1">

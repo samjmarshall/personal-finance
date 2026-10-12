@@ -79,9 +79,8 @@ export function UnplannedTable({
 				const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
 				return (
 					<Card className="[--card-spacing:0px]" key={key}>
-						{/* Mirror the row grid so the group total sits in the same
-						    column as the amounts it sums (col 3); the picker column
-						    (col 4) stays empty. */}
+						{/* Same grid as rows: total sits under the amounts, picker
+						    column empty. */}
 						<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
 							<span className="flex min-w-0 items-center gap-2 sm:col-span-2">
 								<span className="truncate font-semibold text-foreground text-sm">

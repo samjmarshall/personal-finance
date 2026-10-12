@@ -229,8 +229,8 @@ export function ReceiptDetail({
 		{ id: lastId.current ?? 0 },
 		{ enabled: open },
 	);
-	// A refetch with no data drops isError, which would swap the alert for the
-	// spinner and lose focus. Held till it settles, for that receipt only.
+	// A refetch clears the error, so the alert would flip to the spinner and lose
+	// focus. Hold the alert till it settles, for this receipt only.
 	const [retryingId, setRetryingId] = useState<number | null>(null);
 	const retrying = retryingId !== null && retryingId === lastId.current;
 
@@ -286,9 +286,8 @@ export function ReceiptDetail({
 					</DialogDescription>
 				</DialogHeader>
 
-				{/* Data first: a failed background refetch keeps what's on screen.
-				    Not isLoading for the spinner: offline, the query pauses with it
-				    false, which would leave a blank dialog. */}
+				{/* Data first: a failed refetch keeps what's on screen. Offline, a
+				    paused query isn't "loading", so a loading check leaves it blank. */}
 				{!data && (isError || retrying) ? (
 					<div
 						className="flex h-48 flex-col items-center justify-center gap-3"

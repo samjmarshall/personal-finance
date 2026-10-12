@@ -6,7 +6,7 @@ import {
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 
-/** Fake App Router context so Next's error-boundary retry reaches a refresh spy, plus the query client the app shell provides. Use `AppRouter` as the render wrapper. */
+/** Test wrapper: fake router so Next's error retry hits a spy, plus the app's query client. */
 export function createAppRouter() {
 	const router = {
 		back: vi.fn(),
