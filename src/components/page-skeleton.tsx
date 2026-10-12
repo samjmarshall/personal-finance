@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { PageHeader } from "~/components/page-header";
 import { ErrorSlot, TableSkeleton } from "~/components/skeletons";
-import { Skeleton } from "~/components/ui/skeleton";
+import { Skeleton, skeletonClassName } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
 
 type PageSkeletonProps = {
@@ -57,10 +57,7 @@ function BarSlot({ height, bar }: { height: string; bar: string }) {
 		<span className={cn("flex items-center", height)}>
 			<span
 				aria-hidden
-				className={cn(
-					"animate-pulse rounded-md bg-muted motion-reduce:animate-none",
-					bar,
-				)}
+				className={cn(skeletonClassName, bar)}
 				data-slot="skeleton"
 			/>
 		</span>

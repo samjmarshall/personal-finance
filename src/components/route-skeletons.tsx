@@ -3,9 +3,8 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
 
-// One per page, shared by its page-level AsyncBoundary and the group's
-// loading.tsx, so a nav and a hard load show the same frame. Headers repeat each
-// view's PageHeader; bodies follow its markup.
+// One per page: loading.tsx draws it on nav, the page's boundary (if any) on hard
+// load, so both paint one frame. Headers and bodies copy each view's markup.
 
 const indices = (n: number) => Array.from({ length: n }, (_, i) => i);
 
@@ -61,7 +60,8 @@ export function CategoriesSkeleton() {
 				{indices(6).map((row) => (
 					<Card key={row}>
 						<CardContent className="flex items-center justify-between gap-4">
-							<Skeleton className="size-4" />
+							{/* The real grip has a 1px focus border each side. */}
+							<Skeleton className="mx-px size-4" />
 							<div className="flex min-w-0 flex-1 items-center gap-2">
 								<Skeleton className="h-4 w-28" />
 								<Skeleton className="h-5 w-20 rounded-full" />
@@ -118,11 +118,15 @@ export function SettingsSkeleton() {
 			title="Settings"
 		>
 			<div className="grid gap-6 lg:grid-cols-[184px_1fr] lg:gap-10">
-				<div className="flex gap-1 border-border border-b lg:flex-col lg:border-b-0 lg:border-l">
-					{["w-24", "w-20", "w-24"].map((width) => (
+				<div className="flex gap-1 overflow-x-auto border-border border-b lg:h-fit lg:flex-col lg:border-b-0 lg:border-l">
+					{[
+						{ tab: "appearance", width: "w-24" },
+						{ tab: "pay-cycle", width: "w-20" },
+						{ tab: "forwarding", width: "w-24" },
+					].map(({ tab, width }) => (
 						<div
 							className="-mb-px border-transparent border-b-2 px-3 py-2 lg:mb-0 lg:-ml-px lg:border-b-0 lg:border-l-2 lg:py-1.5 lg:pl-4"
-							key={width}
+							key={tab}
 						>
 							<Skeleton className={cn("my-0.5 h-4", width)} />
 						</div>
@@ -152,7 +156,6 @@ export function SettingsSkeleton() {
 	);
 }
 
-/** Per fortnight / month / year totals. */
 function StatTilesSkeleton({ className }: { className?: string }) {
 	return (
 		<div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-3", className)}>
@@ -169,7 +172,6 @@ function StatTilesSkeleton({ className }: { className?: string }) {
 	);
 }
 
-/** A named group's card: header, column labels, then rows on the views' grid. */
 function GroupCardSkeleton({ rows }: { rows: number }) {
 	const grid =
 		"grid grid-cols-2 items-center gap-2 px-4 sm:grid-cols-[1fr_repeat(3,7rem)_3rem]";

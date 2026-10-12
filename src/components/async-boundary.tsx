@@ -106,7 +106,17 @@ function Pending({
 	onShow: () => void;
 }) {
 	useEffect(() => onShow(), [onShow]);
+	return <LoadingRegion label={label} skeleton={skeleton} />;
+}
 
+/** The one pending look: skeleton plus a "Loading {label}" status. */
+export function LoadingRegion({
+	label,
+	skeleton,
+}: {
+	label: string;
+	skeleton: ReactNode;
+}) {
 	// Status sits outside the busy region: screen readers hold back announcements
 	// from inside one.
 	return (
@@ -166,16 +176,17 @@ function AsyncBoundaryError({
 	const card = (
 		<RetryCard
 			buttonRef={focusRef}
-			className="visible col-start-1 row-start-1"
+			// A section card fills its section. A page body can be screens tall, so
+			// there the card hugs its text.
+			className={cn("visible col-start-1 row-start-1", slot && "self-start")}
 			label={label}
 			onRetry={onRetry}
 			retry={retry}
 		/>
 	);
 
-	// Hidden skeleton keeps the region's size: no jump on error or on Try again.
-	// Message at top: centred in a tall region, it lands below the fold. Bars stay
-	// hidden even in a header that shows through: a failed page keeps only its text.
+	// Hidden skeleton holds the size, so no jump. Message at top, not below the fold.
+	// Bars hide even in a header that shows through: a failed page keeps only text.
 	return (
 		<div
 			className="grid grid-cols-1 [&_[data-slot=skeleton]]:invisible"

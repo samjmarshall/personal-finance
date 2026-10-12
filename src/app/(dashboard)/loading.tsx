@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { LoadingRegion } from "~/components/async-boundary";
 import { PageSkeleton } from "~/components/page-skeleton";
 import {
 	CategoriesSkeleton,
@@ -14,9 +15,8 @@ import {
 	UnplannedSkeleton,
 } from "~/components/route-skeletons";
 
-// Prefetch stops at the first loading boundary, which for every section is this
-// file, so a nav paints it, not a nested loading.tsx. It draws the target page's
-// skeleton, the same one that page's own boundary shows next.
+// Every page's first loading boundary, so a nav paints this. Same skeleton the
+// page's own boundary shows next, so nothing shifts.
 const pages: Record<string, { label: string; skeleton: ReactNode }> = {
 	"/": { label: "overview", skeleton: <OverviewSkeleton /> },
 	"/expenses": { label: "expenses", skeleton: <ExpensesSkeleton /> },
@@ -43,13 +43,5 @@ export default function DashboardLoading() {
 		skeleton: <PageSkeleton />,
 	};
 
-	// Status sits outside the busy region, as in AsyncBoundary.
-	return (
-		<>
-			<div aria-busy="true">{skeleton}</div>
-			<span className="sr-only" role="status">
-				Loading {label}
-			</span>
-		</>
-	);
+	return <LoadingRegion label={label} skeleton={skeleton} />;
 }

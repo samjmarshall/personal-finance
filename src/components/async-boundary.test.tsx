@@ -170,7 +170,7 @@ describe("AsyncBoundary", () => {
 			let fail = true;
 			function Flaky() {
 				if (fail) throw new Error("offline");
-				return <p>Income</p>;
+				return <p>Pay received</p>;
 			}
 			await act(async () =>
 				render(
@@ -197,7 +197,7 @@ describe("AsyncBoundary", () => {
 			fail = false;
 			await user.click(screen.getByRole("button", { name: "Try again" }));
 
-			expect(await screen.findByText("Income")).toBeInTheDocument();
+			expect(await screen.findByText("Pay received")).toBeInTheDocument();
 			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 		});
 

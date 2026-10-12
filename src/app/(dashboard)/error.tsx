@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { PageHeader } from "~/components/page-header";
 import { RetryCard } from "~/components/retry-card";
+import { isAuthError } from "~/trpc/auth-errors";
 
 // A failed retry remounts this file, so the "refocus Try again" note has to
 // outlive it.
@@ -17,9 +18,8 @@ function focusTryAgain(button: HTMLButtonElement | null) {
 	button.focus({ preventScroll: true });
 }
 
-// Last resort: a page with no boundary of its own throws here instead of
-// blanking the segment. Most failures land in an AsyncBoundary first. Those
-// pages (overview, transactions, receipts) all use the wide container.
+// Last resort for pages with no boundary of their own (overview, transactions,
+// receipts: all wide). Most failures hit an AsyncBoundary first.
 export default function DashboardError({
 	error,
 	retry,
@@ -32,6 +32,9 @@ export default function DashboardError({
 	useEffect(() => {
 		console.error(error);
 	}, [error]);
+
+	// A stale session is already reloading to sign-in. Don't flash a failure first.
+	if (isAuthError(error)) return null;
 
 	return (
 		<div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
