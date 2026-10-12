@@ -436,6 +436,13 @@ Deviations:
     - Confirm-match toast not re-run: no receipt has a match candidate now, and `7b24c06` didn't touch it.
     - Design review: no blockers. One High: content flips back to the skeleton on a throttled link. It's dev only: 0 of 15 throttled prod loads flipped (`next start`, 5 routes × 3), while the same watcher caught it on all 5 routes in dev.
     - Code review: 15 findings, in the validation report. Top one: the pager's Next button reads the old page count while a new filter's rows load (`transactions-view.tsx:457`).
+  - Third validation 2026-10-12, after `8ad5eab`:
+    - `make check`, `make test` (1191 passing) and `pnpm run build` pass.
+    - Design review (phases 1–5, 8 surfaces, 1440/768/375): no blockers, no Highs from this branch. Next is off while new rows load, sort keeps focus, failed filter → good filter clears the card with 0 server refreshes, stale session (5 hard loads, 5 client navs) lands on `/sign-in` with no card or flash, Bugs 1–3, skeleton heights exact, no hydration warnings.
+    - Its one High is old code: `/` scrolls 47px sideways at 375 (`monthly-spend-chart.tsx:18-45`, grows with months of data). Not a Phase 5 gate.
+    - New Mediums, open: dimmed rows fail AA contrast for ~0.5s, dimmed rows still take clicks, table skeletons are 5 even columns vs 7 real (45 vs 51px rows), settings status and error cards sit in `hidden` tabs.
+    - Code review: 12 findings, in the validation report. Top ones: a filter change clears errored queries for the whole cache (`async-boundary.tsx:186`), and `error.tsx`'s focus flag survives a good retry.
+    - Comment judge: 7 rewrites applied. Security review: nothing ≥8 confidence.
 
 ## Phase 6: Action pending states
 
