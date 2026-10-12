@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Ready for Review - Phase 4 of 7
+status: Validated - Phase 4 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -319,6 +319,8 @@ Deviations (from the design review fixes):
 - Settings panels use `settings-panel-skeleton.tsx` (`PayCycleSkeleton`, `ForwardingSkeleton`): the real heading and blurb over bars, flat like the panels. `CardSkeleton` was removed.
 - `error.tsx` uses the 6xl container, a "Something went wrong" `PageHeader` and `RetryCard`. A module flag carries "refocus Try again" across the remount on a failed retry.
 
+### Success
+
 - [x] `make check` passes
 - [x] `make test` passes
 - [x] `make build` passes
@@ -329,7 +331,8 @@ Deviations (from the design review fixes):
 - [x] A nav click to each of those routes shows a skeleton at once: the generic one, then the page's own with its title. No layout shift between them.
   - Superseded by the URL-aware `loading.tsx` (see Deviations): a nav now paints the target page's own skeleton, then the page. No generic frame.
   - Live in dev, page delayed by a temporary server sleep: container width matches skeleton → page (categories 464/768 at 375/1440, transactions 272/1152), header height 77 and content start 133 unchanged, status "Loading categories" / "Loading transactions". Reverted.
-  - Dev only: there is no prefetch, so the old page stays ~2.6s before the skeleton paints. Production prefetches the boundary. Not checked live: a local `next start` redirects to sign-in (secure session cookie over http).
+  - Dev only: there is no prefetch, so the old page stays ~2.6s before the skeleton paints. Production prefetches the boundary.
+  - Validation 2026-10-12, prod build (`next start` over https via portless): nav to each route, incl. sibling `/expenses` ↔ `/expenses/categories`, paints the target skeleton + status in 33–61ms, content by ~350ms.
 - [x] On `/settings`, Appearance renders while the other panels load. Forcing `allowedSender.list` to throw shows the card only in that panel.
   - Live fault check: one "Couldn't load allowed senders" card, none in pay cycle. Fault reverted.
 - [x] Screen readers announce "Loading expenses" (and so on) while pending
@@ -339,6 +342,7 @@ Deviations (from the design review fixes):
   - Nav jumped width from the generic 5xl skeleton. Fixed by the URL-aware `loading.tsx` (see above).
   - Mediums fixed: page-shaped skeleton bodies, table clipping on phones, `error.tsx` matches the section cards (spinner, focus back on a failed retry, 6xl container), `loading.tsx` status text and no phantom action bar, action bar width.
   - Live retry checks (fault toggled with a temp file): failed retry shows the spinner, then focus returns to Try again. A good retry moves focus to the loaded region.
+  - Validation 2026-10-12: design-review H2 (`/expenses` flips back to its skeleton for ~2.7s after content) seen only in dev on one stale session. Prod build, same data-heavy session, 3 hard loads: one clean swap at ~300ms, no flip, no console errors. Not a Phase 4 bug.
   - Left open: low skeleton contrast, slow retry in dev, double "Loading" announcement, `/transactions` hydration mismatch (Phase 5). After a good `error.tsx` retry, focus lands on `body`. On phones, the page-error header keeps a blank gap where the hidden action bar sits. `OverviewSkeleton` body is empty: the page is sync, so its section skeletons follow straight away.
 
 ## Phase 5: Filtered lists and receipt bugs
@@ -412,6 +416,7 @@ Deviations (from the design review fixes):
 - Dialog forms:
   - Files: `expense-form.tsx:109,173,312-316`, `category-form.tsx:47,64,111-113`, `income-form.tsx:87,141,284-285` and `transaction-form.tsx:90,151,282-284`.
   - Wrap the fields in `<FieldSet disabled={isSaving}>` (income and transaction forms name the flag `pending`).
+  - Disabling the focused field (Enter to submit) drops focus to `body`. On a failed save, put focus back on the field that had it. Same for `auth-form.tsx`.
   - Also pass `disabled={isSaving}` to each `SelectField` / `Combobox`, because Base UI ignores the native fieldset.
   - Cancel gets `disabled={isSaving}`.
   - Submit stays outside the fieldset with `loading={isSaving}` and keeps its label (drop "Saving…").
@@ -420,11 +425,12 @@ Deviations (from the design review fixes):
   - Wrap the fields in `<FieldSet disabled={loading}>`. Submit uses `loading` and stays loading through the route change; `loading` already isn't reset on success (`:38-39`).
   - The error `<p>` gets `role="alert"`.
 - `src/components/sign-out-button.tsx`: a `Button` with `loading` replaces the raw `<button>`, keeping the nav item look. `LogOut` gets `data-icon="inline-start"` so the spinner replaces it.
+  - Button's base classes fight the nav look (`button.tsx:8,25`): `justify-center`, `h-8`, and `[&_svg:not([class*='size-'])]:size-4` shrinks the 18px icon to 16. Override them in `className` and size the icon with `size-[18px]`, then check the row still lines up with the nav links.
 - Single buttons switch the `Loader2Icon` swap to `loading` and get their labels back:
   - `balance-snapshot-card.tsx:88-104`
   - `pay-cycle-section.tsx:70-83`
   - `allowed-senders-section.tsx:95-108`: a `Plus` with an sr-only "Add address", at the default size. Add `size="icon"` (same `h-8`, keep `w-14`) so `loading` swaps `Plus` for the spinner instead of adding one beside it. The sr-only label stays the name.
-- Row actions show `loading` only on the acting row (`mutation.variables?.id === row.id`):
+- Row actions show `loading` only on the acting row (`mutation.isPending && mutation.variables?.id === row.id`; TanStack keeps `variables` after the mutation settles):
   - `receipts-view.tsx:219-231`: retry becomes an icon `Button` with `loading`.
   - `unplanned-table.tsx` (the link picker moved in Phase 5): a `Spinner` beside the acting row's picker.
   - `receipt-detail.tsx:408-444`: a `Spinner` beside the acting item's pickers.
@@ -496,7 +502,7 @@ Deviations (from the design review fixes):
   - `02-guides/authentication-with-cache-components.md`
 - Related code:
   - `src/trpc/server.ts:17-40`
-  - `src/trpc/query-client.ts:35-97`
+  - `src/trpc/query-client.ts:35-94`
   - `src/server/api/trpc.ts:75-85,183-206`
   - `src/components/app-nav.tsx:134-181`, `src/components/nav-member.tsx`, `src/components/sign-out-button.tsx`
 - Prior fix: commit `6ea0b35` (categories cache read, the design's Bug 4)
