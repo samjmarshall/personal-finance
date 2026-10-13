@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "~/components/ui/button";
 import { authClient } from "~/server/auth/client";
 
 export function SignOutButton() {
@@ -11,9 +12,11 @@ export function SignOutButton() {
 	const [loading, setLoading] = useState(false);
 	return (
 		<>
-			<button
-				className="flex w-full items-center gap-3 rounded-lg px-3 py-2 font-medium text-sidebar-muted text-sm transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground disabled:opacity-50"
-				disabled={loading}
+			<Button
+				// Overrides Button's own height, border, padding, centring and 16px icon so the
+				// row lines up with the nav links.
+				className="h-auto w-full justify-start gap-3 border-0 px-3 py-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-foreground has-data-[icon=inline-start]:pl-3 dark:hover:bg-sidebar-accent/40 [&_svg:not([class*='size-'])]:size-[18px]"
+				loading={loading}
 				onClick={async () => {
 					setError(null);
 					setLoading(true);
@@ -29,10 +32,11 @@ export function SignOutButton() {
 					router.refresh();
 				}}
 				type="button"
+				variant="ghost"
 			>
-				<LogOut className="h-[18px] w-[18px]" />
-				{loading ? "Signing out…" : "Sign out"}
-			</button>
+				<LogOut data-icon="inline-start" />
+				Sign out
+			</Button>
 			{error && (
 				<p
 					className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm"

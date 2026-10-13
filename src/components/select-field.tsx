@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-
 import {
 	Select,
 	SelectContent,
@@ -9,6 +8,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select";
+import { Spinner } from "~/components/ui/spinner";
 
 export type SelectFieldOption<T> = {
 	value: T;
@@ -38,6 +38,7 @@ export function SelectField<T>({
 	id,
 	className,
 	disabled,
+	loading = false,
 	readOnly,
 	placeholder,
 	"aria-label": ariaLabel,
@@ -51,6 +52,8 @@ export function SelectField<T>({
 	id?: string;
 	className?: string;
 	disabled?: boolean;
+	// A save is running for this field: locks it and shows a spinner in the trigger.
+	loading?: boolean;
 	// Stays focusable, unlike `disabled`, so its description is still read.
 	readOnly?: boolean;
 	placeholder?: ReactNode;
@@ -59,19 +62,21 @@ export function SelectField<T>({
 }) {
 	return (
 		<Select
-			disabled={disabled}
+			disabled={disabled || loading}
 			items={items}
 			onValueChange={onValueChange}
 			readOnly={readOnly}
 			value={value}
 		>
 			<SelectTrigger
+				aria-busy={loading || undefined}
 				aria-describedby={ariaDescribedBy}
 				aria-label={ariaLabel}
 				className={className}
 				id={id}
 			>
 				<SelectValue placeholder={placeholder} />
+				{loading && <Spinner className="text-muted-foreground" />}
 			</SelectTrigger>
 			<SelectContent>
 				{items.map((item) => (

@@ -426,10 +426,15 @@ export function ExpensesView() {
 			<DeleteConfirmDialog
 				label={deleteTarget?.name}
 				onConfirm={() => {
-					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
+					if (deleteTarget)
+						remove.mutate(
+							{ id: deleteTarget.id },
+							{ onSuccess: () => setConfirmOpen(false) },
+						);
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
+				pending={remove.isPending}
 			/>
 		</div>
 	);

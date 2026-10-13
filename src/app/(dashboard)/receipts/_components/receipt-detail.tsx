@@ -1,7 +1,7 @@
 "use client";
 
 import { skipToken } from "@tanstack/react-query";
-import { Check, Loader2Icon, TriangleAlert } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Money } from "~/components/money";
@@ -15,6 +15,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
+import { Spinner } from "~/components/ui/spinner";
 import { receiptImageUrl } from "~/domain/receipts";
 import { itemsTotalMismatch } from "~/domain/receipts/receipt-total";
 import { ReceiptStatus } from "~/lib/constants";
@@ -145,7 +146,7 @@ function MatchBanner({
 				className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-muted-foreground text-sm"
 				role="status"
 			>
-				<Loader2Icon aria-hidden className="h-4 w-4 shrink-0 animate-spin" />
+				<Spinner className="shrink-0" />
 				Looking for a matching transaction…
 			</p>
 		);
@@ -170,10 +171,12 @@ function MatchBanner({
 			</h3>
 			<ul className="mt-2 flex flex-col gap-1.5">
 				{candidates.slice(0, MAX_SUGGESTIONS).map((c) => {
-					const saving = confirm.variables?.transactionId === c.id;
+					const saving =
+						confirm.isPending && confirm.variables?.transactionId === c.id;
 					return (
 						<li key={c.id}>
 							<button
+								aria-busy={saving || undefined}
 								aria-label={`Match to ${c.description}, ${formatDate(c.date)}, ${gapParts(c).join(", ")}`}
 								className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2 text-left outline-none transition-colors hover:border-foreground/25 hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
 								disabled={confirm.isPending}
@@ -191,11 +194,8 @@ function MatchBanner({
 									</span>
 								</span>
 								{/* Dimming alone reads as "nothing happened" on a slow link. */}
-								{confirm.isPending && saving ? (
-									<Loader2Icon
-										aria-hidden
-										className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
-									/>
+								{saving ? (
+									<Spinner className="shrink-0 text-muted-foreground" />
 								) : (
 									<Money
 										className="shrink-0 text-sm"
@@ -317,7 +317,7 @@ export function ReceiptDetail({
 						className="flex h-48 items-center justify-center text-muted-foreground"
 						role="status"
 					>
-						<Loader2Icon aria-hidden className="h-5 w-5 animate-spin" />
+						<Spinner className="size-5" />
 					</div>
 				) : (
 					<div
@@ -433,13 +433,13 @@ export function ReceiptDetail({
 																	<SelectField
 																		aria-label={`Expense for ${item.name}`}
 																		className="w-full"
+																		items={expenseOptions}
 																		// Gate only the row being saved — the mutation is
 																		// shared, so isPending alone freezes every picker.
-																		disabled={
+																		loading={
 																			setExpense.isPending &&
 																			setExpense.variables?.itemId === item.id
 																		}
-																		items={expenseOptions}
 																		onValueChange={(expenseId) =>
 																			setExpense.mutate({
 																				itemId: item.id,
@@ -452,11 +452,11 @@ export function ReceiptDetail({
 																	<SelectField
 																		aria-label={`Category for ${item.name}`}
 																		className="w-full"
-																		disabled={
+																		items={categoryOptions}
+																		loading={
 																			setCategory.isPending &&
 																			setCategory.variables?.itemId === item.id
 																		}
-																		items={categoryOptions}
 																		onValueChange={(categoryId) =>
 																			setCategory.mutate({
 																				itemId: item.id,

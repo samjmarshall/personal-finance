@@ -9,14 +9,21 @@ import {
 	CircleX,
 	ClipboardCopy,
 	ExternalLink,
-	Loader2,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import {
+	type ComponentType,
+	type KeyboardEvent,
+	useEffect,
+	useId,
+	useRef,
+	useState,
+} from "react";
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import { Spinner } from "~/components/ui/spinner";
 import {
 	type ReceiptDetail,
 	receiptPipeline,
@@ -108,23 +115,21 @@ function TraceHeader({
 
 const STAGE_META: Record<
 	StageState,
-	{ Icon: typeof Check; cls: string; spin?: boolean }
+	{
+		Icon: ComponentType<{ "aria-hidden"?: boolean; className?: string }>;
+		cls: string;
+	}
 > = {
 	ok: { Icon: Check, cls: "text-[var(--badge-positive-fg)]" },
-	active: { Icon: Loader2, cls: "text-[var(--badge-warn-fg)]", spin: true },
+	active: { Icon: Spinner, cls: "text-[var(--badge-warn-fg)]" },
 	failed: { Icon: CircleX, cls: "text-[var(--badge-spend-fg)]" },
 	skipped: { Icon: CircleDashed, cls: "text-muted-foreground" },
 	pending: { Icon: Circle, cls: "text-muted-foreground" },
 };
 
 function StageIcon({ state }: { state: StageState }) {
-	const { Icon, cls, spin } = STAGE_META[state];
-	return (
-		<Icon
-			aria-hidden
-			className={cn("h-4 w-4 shrink-0", cls, spin && "animate-spin")}
-		/>
-	);
+	const { Icon, cls } = STAGE_META[state];
+	return <Icon aria-hidden className={cn("h-4 w-4 shrink-0", cls)} />;
 }
 
 function Timeline({ data }: { data: ReceiptDetail }) {

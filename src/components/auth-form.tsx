@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
-import { Field, FieldLabel } from "~/components/ui/field";
+import { Field, FieldLabel, FieldSet } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { useRestoreFocus } from "~/hooks/use-restore-focus";
 import { authClient } from "~/server/auth/client";
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
@@ -16,12 +17,14 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
+	const rememberFocus = useRestoreFocus(loading);
 
 	const isSignUp = mode === "sign-up";
 
 	async function onSubmit(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
+		rememberFocus();
 		setLoading(true);
 		try {
 			if (isSignUp) {
@@ -45,52 +48,57 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
 	return (
 		<form className="flex flex-col gap-4" onSubmit={onSubmit}>
-			{isSignUp && (
+			<FieldSet disabled={loading}>
+				{isSignUp && (
+					<Field>
+						<FieldLabel htmlFor="name">Name</FieldLabel>
+						<Input
+							autoComplete="name"
+							id="name"
+							onChange={(e) => setName(e.target.value)}
+							placeholder="Sam"
+							value={name}
+						/>
+					</Field>
+				)}
 				<Field>
-					<FieldLabel htmlFor="name">Name</FieldLabel>
+					<FieldLabel htmlFor="email">Email</FieldLabel>
 					<Input
-						autoComplete="name"
-						id="name"
-						onChange={(e) => setName(e.target.value)}
-						placeholder="Sam"
-						value={name}
+						autoComplete="email"
+						id="email"
+						onChange={(e) => setEmail(e.target.value)}
+						placeholder="you@example.com"
+						required
+						type="email"
+						value={email}
 					/>
 				</Field>
-			)}
-			<Field>
-				<FieldLabel htmlFor="email">Email</FieldLabel>
-				<Input
-					autoComplete="email"
-					id="email"
-					onChange={(e) => setEmail(e.target.value)}
-					placeholder="you@example.com"
-					required
-					type="email"
-					value={email}
-				/>
-			</Field>
-			<Field>
-				<FieldLabel htmlFor="password">Password</FieldLabel>
-				<Input
-					autoComplete={isSignUp ? "new-password" : "current-password"}
-					id="password"
-					minLength={8}
-					onChange={(e) => setPassword(e.target.value)}
-					placeholder="At least 8 characters"
-					required
-					type="password"
-					value={password}
-				/>
-			</Field>
+				<Field>
+					<FieldLabel htmlFor="password">Password</FieldLabel>
+					<Input
+						autoComplete={isSignUp ? "new-password" : "current-password"}
+						id="password"
+						minLength={8}
+						onChange={(e) => setPassword(e.target.value)}
+						placeholder="At least 8 characters"
+						required
+						type="password"
+						value={password}
+					/>
+				</Field>
+			</FieldSet>
 
 			{error && (
-				<p className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm">
+				<p
+					className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm"
+					role="alert"
+				>
 					{error}
 				</p>
 			)}
 
-			<Button className="mt-1" disabled={loading} type="submit">
-				{loading ? "Please wait…" : isSignUp ? "Create account" : "Sign in"}
+			<Button className="mt-1" loading={loading} type="submit">
+				{isSignUp ? "Create account" : "Sign in"}
 			</Button>
 
 			<p className="text-center text-muted-foreground text-sm">

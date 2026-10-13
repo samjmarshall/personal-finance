@@ -57,7 +57,13 @@ function Button({
 		<ButtonPrimitive
 			aria-busy={loading || undefined}
 			className={cn(
-				buttonVariants({ variant, size, className }),
+				buttonVariants({
+					variant,
+					size,
+					// The sr-only label is absolute; without this it escapes to the
+					// nearest positioned ancestor and widens a scroll container.
+					className: cn(loading && iconOnly && "relative", className),
+				}),
 				// Spinner takes the leading icon's place, as on icon buttons.
 				loading &&
 					"[&>[data-icon=inline-start]:not([data-slot=spinner])]:hidden",

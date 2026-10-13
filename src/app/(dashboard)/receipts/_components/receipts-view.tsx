@@ -10,6 +10,7 @@ import { PageHeader } from "~/components/page-header";
 import { ReceiptsTableSkeleton } from "~/components/route-skeletons";
 import { SelectField, type SelectFieldOption } from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { receiptImageUrl } from "~/domain/receipts";
 import { ReceiptStatus } from "~/lib/constants";
@@ -151,10 +152,15 @@ export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
 			<DeleteConfirmDialog
 				label={deleteTarget?.vendor ?? "this receipt"}
 				onConfirm={() => {
-					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
+					if (deleteTarget)
+						remove.mutate(
+							{ id: deleteTarget.id },
+							{ onSuccess: () => setConfirmOpen(false) },
+						);
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
+				pending={remove.isPending}
 			/>
 		</div>
 	);
@@ -215,6 +221,7 @@ function ReceiptsTable({
 							const style = STATUS_STYLE[r.status];
 							const isDuplicate = r.status === ReceiptStatus.Duplicate;
 							const PreviewIcon = previewIcon(r.contentType);
+							const retrying = retry.isPending && retry.variables?.id === r.id;
 							return (
 								<tr className="group hover:bg-muted/30" key={r.id}>
 									<td className="px-4 py-2.5">
@@ -279,19 +286,25 @@ function ReceiptsTable({
 										</Badge>
 									</td>
 									<td className="px-4 py-3">
-										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+										<div
+											className={cn(
+												"flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100",
+												// Safari doesn't focus a clicked button, so without this the
+												// spinner vanishes when the pointer leaves the row.
+												retrying && "opacity-100",
+											)}
+										>
 											{r.status === ReceiptStatus.Failed && (
-												<button
+												<Button
 													aria-label={`Retry ${r.vendor ?? "receipt"}`}
-													className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-													disabled={
-														retry.isPending && retry.variables?.id === r.id
-													}
+													className="text-muted-foreground"
+													loading={retrying}
 													onClick={() => retry.mutate({ id: r.id })}
-													type="button"
+													size="icon-sm"
+													variant="ghost"
 												>
-													<RotateCw className="h-3.5 w-3.5" />
-												</button>
+													<RotateCw className="size-3.5" />
+												</Button>
 											)}
 											<button
 												aria-label={`Delete ${r.vendor ?? "receipt"}`}

@@ -98,38 +98,42 @@ export function UnplannedTable({
 							/>
 						</div>
 						<div className="divide-y divide-border">
-							{rowsInGroup.map((row) => (
-								<div
-									className="flex flex-col gap-2 px-4 py-3 text-sm sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:items-center sm:gap-3"
-									key={row.id}
-								>
-									<span className="tabular whitespace-nowrap text-muted-foreground">
-										{formatDate(row.date)}
-									</span>
-									<span className="min-w-0 font-medium text-foreground">
-										{row.description}
-									</span>
-									<Money
-										className="sm:text-right"
-										signed
-										tone="ledger"
-										value={row.amount}
-									/>
-									<SelectField
-										aria-label={`Link ${row.description} to an expense`}
-										className="w-full"
-										// Block only the row being linked. The save is shared,
-										// so a global flag would freeze every picker.
-										disabled={link.isPending && link.variables?.id === row.id}
-										items={expenseOptions}
-										onValueChange={(v) => {
-											if (v) link.mutate({ id: row.id, expenseId: Number(v) });
-										}}
-										placeholder="Link to expense…"
-										value={null}
-									/>
-								</div>
-							))}
+							{rowsInGroup.map((row) => {
+								// Block only the row being linked. The save is shared,
+								// so a global flag would freeze every picker.
+								const linking = link.isPending && link.variables?.id === row.id;
+								return (
+									<div
+										className="flex flex-col gap-2 px-4 py-3 text-sm sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:items-center sm:gap-3"
+										key={row.id}
+									>
+										<span className="tabular whitespace-nowrap text-muted-foreground">
+											{formatDate(row.date)}
+										</span>
+										<span className="min-w-0 font-medium text-foreground">
+											{row.description}
+										</span>
+										<Money
+											className="sm:text-right"
+											signed
+											tone="ledger"
+											value={row.amount}
+										/>
+										<SelectField
+											aria-label={`Link ${row.description} to an expense`}
+											className="w-full"
+											items={expenseOptions}
+											loading={linking}
+											onValueChange={(v) => {
+												if (v)
+													link.mutate({ id: row.id, expenseId: Number(v) });
+											}}
+											placeholder="Link to expense…"
+											value={null}
+										/>
+									</div>
+								);
+							})}
 						</div>
 					</Card>
 				);

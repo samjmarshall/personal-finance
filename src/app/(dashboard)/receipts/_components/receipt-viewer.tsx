@@ -1,11 +1,6 @@
 "use client";
 
-import {
-	FileText,
-	Loader2Icon,
-	SquareArrowOutUpRight,
-	TriangleAlert,
-} from "lucide-react";
+import { FileText, SquareArrowOutUpRight, TriangleAlert } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 
 import { buttonVariants } from "~/components/ui/button";
@@ -16,6 +11,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
+import { Spinner } from "~/components/ui/spinner";
 import {
 	type ReceiptMediaKind,
 	receiptHtmlUrl,
@@ -246,7 +242,7 @@ function LoadingOverlay() {
 			className="absolute inset-0 flex items-center justify-center text-muted-foreground"
 			role="status"
 		>
-			<Loader2Icon aria-hidden className="h-5 w-5 animate-spin" />
+			<Spinner className="size-5" />
 		</div>
 	);
 }

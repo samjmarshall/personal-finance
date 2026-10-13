@@ -1,6 +1,5 @@
 "use client";
 
-import { Loader2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -86,21 +85,16 @@ export function BalanceSnapshotCard() {
 							value={amount}
 						/>
 						<Button
-							className="w-14"
+							// Fits spinner + label, so the width holds while saving.
+							className="w-20"
 							// Guards the empty field, not a repeat amount: a snapshot is
 							// stamped asOf now, so re-saving an unchanged balance is a real
 							// action — it re-anchors the projection to today.
-							disabled={set.isPending || amount === ""}
+							disabled={amount === ""}
+							loading={set.isPending}
 							type="submit"
 						>
-							{set.isPending ? (
-								<Loader2Icon
-									className="animate-spin"
-									data-icon="inline-start"
-								/>
-							) : (
-								"Save"
-							)}
+							Save
 						</Button>
 					</div>
 					<FieldError id="balance-error">{error}</FieldError>

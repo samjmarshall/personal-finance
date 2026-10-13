@@ -11,9 +11,15 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
-import { Field, FieldLabel, FieldOptional } from "~/components/ui/field";
+import {
+	Field,
+	FieldLabel,
+	FieldOptional,
+	FieldSet,
+} from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { useRestoreFocus } from "~/hooks/use-restore-focus";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 type Category = RouterOutputs["category"]["list"][number];
@@ -45,6 +51,7 @@ export function CategoryForm({
 	const create = api.category.create.useMutation({ onSuccess });
 	const update = api.category.update.useMutation({ onSuccess });
 	const isSaving = create.isPending || update.isPending;
+	const rememberFocus = useRestoreFocus(isSaving);
 
 	function onSubmit(e: React.FormEvent) {
 		e.preventDefault();
@@ -56,12 +63,19 @@ export function CategoryForm({
 			description: description.trim() || undefined,
 		};
 
+		rememberFocus();
 		if (category) update.mutate({ id: category.id, ...payload });
 		else create.mutate(payload);
 	}
 
 	return (
-		<Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+		<Dialog
+			onOpenChange={(next, eventDetails) => {
+				if (isSaving) eventDetails.cancel();
+				else if (!next) onClose();
+			}}
+			open={open}
+		>
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>
@@ -71,29 +85,31 @@ export function CategoryForm({
 						A Category files Expenses, Transactions and receipt items.
 					</DialogDescription>
 				</DialogHeader>
-				<form className="flex flex-col gap-4" onSubmit={onSubmit}>
-					<Field>
-						<FieldLabel htmlFor="cat-name">Name</FieldLabel>
-						<Input
-							id="cat-name"
-							onChange={(e) => setName(e.target.value)}
-							placeholder="e.g. Utilities"
-							value={name}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="cat-desc">
-							Description
-							<FieldOptional />
-						</FieldLabel>
-						<Textarea
-							className="wrap-anywhere"
-							id="cat-desc"
-							onChange={(e) => setDescription(e.target.value)}
-							placeholder="What belongs in this category?"
-							value={description}
-						/>
-					</Field>
+				<form className="flex min-w-0 flex-col gap-4" onSubmit={onSubmit}>
+					<FieldSet disabled={isSaving}>
+						<Field>
+							<FieldLabel htmlFor="cat-name">Name</FieldLabel>
+							<Input
+								id="cat-name"
+								onChange={(e) => setName(e.target.value)}
+								placeholder="e.g. Utilities"
+								value={name}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="cat-desc">
+								Description
+								<FieldOptional />
+							</FieldLabel>
+							<Textarea
+								className="wrap-anywhere"
+								id="cat-desc"
+								onChange={(e) => setDescription(e.target.value)}
+								placeholder="What belongs in this category?"
+								value={description}
+							/>
+						</Field>
+					</FieldSet>
 
 					{error && (
 						<p
@@ -105,15 +121,16 @@ export function CategoryForm({
 					)}
 
 					<DialogFooter>
-						<Button onClick={onClose} type="button" variant="outline">
+						<Button
+							disabled={isSaving}
+							onClick={onClose}
+							type="button"
+							variant="outline"
+						>
 							Cancel
 						</Button>
-						<Button disabled={isSaving} type="submit">
-							{isSaving
-								? "Saving…"
-								: category
-									? "Save changes"
-									: "Add category"}
+						<Button loading={isSaving} type="submit">
+							{category ? "Save changes" : "Add category"}
 						</Button>
 					</DialogFooter>
 				</form>
