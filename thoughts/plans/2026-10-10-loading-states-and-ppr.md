@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Validated - Phase 5 of 7
+status: Ready for Review - Phase 6 of 7
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -492,19 +492,40 @@ Deviations:
 - `src/app/(dashboard)/receipts/_components/receipt-upload.tsx:100-115`: `loading={status !== "idle"}`, keeping the "Processing…" / "Uploading…" stage labels. Always render `<Upload data-icon="inline-start" />`; the spinner replaces it while loading.
 - These switch to `Spinner`: `receipt-detail.tsx:142-152,315-322`, `receipt-viewer.tsx:249`, `more-details.tsx:114,125` and `src/components/ui/sonner.tsx:28`.
 
+Deviations:
+
+- 375px overflow had a second cause: the `<form>` is a grid item of `DialogContent`, so its `min-width: auto` let a `whitespace-nowrap` select trigger widen it. All four forms get `min-w-0`. `FieldSet min-w-0` stays: the native fieldset min-content would bite next.
+- `ConfirmDialog`'s action is a plain `Button`, not `AlertDialogAction`, so it doesn't auto-close before the mutation settles.
+- New `src/hooks/use-restore-focus.ts` (+ test) holds the focus-back logic shared by the 4 dialog forms and `auth-form.tsx`.
+- `SelectField` gained `loading` (spinner in the trigger, `aria-busy`, disabled) for the link and item pickers.
+- Icon-only loading `Button` gets `relative`: its `sr-only` label is absolute and escaped the receipts table's scroll wrapper, widening the page at 375px.
+- Balance and pay-cycle Save: `w-14` → `w-20` so spinner + "Save" fit at a steady width.
+- Sign-out `Button` gets `border-0`: Button's transparent border made the row 2px taller and 1px off the nav links.
+
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes
-- [ ] Each delete keeps its dialog open with a spinner until done. It closes on success, and on error it stays open and the global toast reports it.
-- [ ] Each dialog form locks inputs, selects, comboboxes and Cancel while saving, ignores Esc and the X, and shows a spinner beside the kept label
-- [ ] At 375px, each dialog form fits its dialog with no sideways scroll, with a long name picked in every select, and field spacing matches `main`
-- [ ] Sign-in shows a spinner until the dashboard renders, and screen readers announce a sign-in error
-- [ ] Balance save, pay-cycle save, allowed-sender add, receipt retry, confirm match, the item and link pickers, upload and sign out each show a spinner on the acting control only
-- [ ] Drag handles lock while a category reorder saves
-- [ ] `Loader2Icon` / `Loader2` appear in `src/` only inside `src/components/ui/spinner.tsx`
-- [ ] `/design-review`
+- [x] `make check` passes
+- [x] `make test` passes
+  - 1198 tests, incl. 5 `ConfirmDialog` + 2 `useRestoreFocus`.
+- [x] `make build` passes
+  - As `pnpm run build` (dev server running), re-run after the design-review fixes.
+- [x] Each delete keeps its dialog open with a spinner until done. It closes on success, and on error it stays open and the global toast reports it.
+  - Live, expense delete: 1.5s delayed success → dialog open, action `aria-busy`, Cancel disabled, Esc ignored, closes after, row gone. Forced failure → stays open, unlocks. Other five callers share `DeleteConfirmDialog` + the same `onSuccess` close.
+- [x] Each dialog form locks inputs, selects, comboboxes and Cancel while saving, ignores Esc and the X, and shows a spinner beside the kept label
+  - Live, all four (expense, income, transaction, category): submit `aria-busy`, Cancel disabled, inputs/selects disabled (fieldset + `SelectField`), Esc and X ignored, unlocks after a failed save.
+- [x] At 375px, each dialog form fits its dialog with no sideways scroll, with a long name picked in every select, and field spacing matches `main`
+  - Design review: income and category passed; expense and transaction overflowed (scrollWidth 728–787 vs 343). After the form `min-w-0` fix, live with ~90-char names in every select: dialog 343/343, page 375. Spacing matches `main` on all 4.
+- [x] Sign-in shows a spinner until the dashboard renders, and screen readers announce a sign-in error
+  - Design review: spinner held through a delayed 5.1s run until the dashboard; error renders in `<p role="alert">`.
+- [x] Balance save, pay-cycle save, allowed-sender add, receipt retry, confirm match, the item and link pickers, upload and sign out each show a spinner on the acting control only
+  - Live: balance and pay-cycle save (steady 80px), allowed-sender add (steady 56px), receipt retry and unplanned link picker (acting row only), sign out (500 → spinner, then alert; row lines up with nav links, 36px, icon x=28). Design review covered confirm match, item pickers and upload.
+  - Retry at 375 no longer widens the page (375 before and while pending).
+- [x] Drag handles lock while a category reorder saves
+  - Live: all handles disabled while `category.reorder` is in flight, enabled after.
+- [x] `Loader2Icon` / `Loader2` appear in `src/` only inside `src/components/ui/spinner.tsx`
+  - `grep Loader2 src` outside `ui/spinner.tsx`: none.
+- [x] `/design-review`
+  - 0 Blockers, 3 High, all fixed (see Deviations). Mediums left for review: focus drops to `body` when inline forms, pickers and match rows lock; Delete widens 65 → 85px so Cancel shifts; busy control dims with the rest; confirm-match row shifts 16px at 375 (old); no sign-out below `lg` (old).
 
 ## Phase 7: Stage B, enable PPR
 
