@@ -1,11 +1,11 @@
 "use client";
 
-import { Loader2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { Skeleton } from "~/components/ui/skeleton";
 import { cn, formatCurrency, formatDate } from "~/lib/utils";
 import { api } from "~/trpc/react";
 
@@ -40,10 +40,7 @@ export function BalanceSnapshotCard() {
 
 	return (
 		<div>
-			<h2 className="font-semibold text-foreground text-sm">Balance</h2>
-			<p className="mb-4 text-muted-foreground text-xs">
-				Anchors the projected balance line
-			</p>
+			<BalanceHeading />
 
 			{latest ? (
 				<div>
@@ -88,26 +85,47 @@ export function BalanceSnapshotCard() {
 							value={amount}
 						/>
 						<Button
-							className="w-14"
+							// Fits spinner + label, so the width holds while saving.
+							className="w-20"
 							// Guards the empty field, not a repeat amount: a snapshot is
 							// stamped asOf now, so re-saving an unchanged balance is a real
 							// action — it re-anchors the projection to today.
-							disabled={set.isPending || amount === ""}
+							disabled={amount === ""}
+							loading={set.isPending}
 							type="submit"
 						>
-							{set.isPending ? (
-								<Loader2Icon
-									className="animate-spin"
-									data-icon="inline-start"
-								/>
-							) : (
-								"Save"
-							)}
+							Save
 						</Button>
 					</div>
 					<FieldError id="balance-error">{error}</FieldError>
 				</Field>
 			</form>
 		</div>
+	);
+}
+
+/** Real heading, so it wraps like the loaded card. Sized for a saved balance. */
+export function BalanceSnapshotCardSkeleton() {
+	return (
+		<div aria-hidden>
+			<BalanceHeading />
+			<Skeleton className="h-8 w-36" />
+			<Skeleton className="mt-1 h-4 w-28" />
+			<div className="mt-4 flex flex-col gap-2">
+				<Skeleton className="h-5 w-28" />
+				<Skeleton className="h-8 w-full" />
+			</div>
+		</div>
+	);
+}
+
+function BalanceHeading() {
+	return (
+		<>
+			<h2 className="font-semibold text-foreground text-sm">Balance</h2>
+			<p className="mb-4 text-muted-foreground text-xs">
+				Anchors the projected balance line
+			</p>
+		</>
 	);
 }

@@ -116,7 +116,11 @@ export function CategoriesView() {
 					{categories.map((category) => {
 						const expenseCount = countOf.get(category.id) ?? 0;
 						return (
-							<SortableItem key={category.id} value={String(category.id)}>
+							<SortableItem
+								disabled={reorder.isPending}
+								key={category.id}
+								value={String(category.id)}
+							>
 								<Card>
 									<CardContent className="flex items-center justify-between gap-4">
 										<SortableItemHandle
@@ -194,10 +198,15 @@ export function CategoriesView() {
 			<DeleteConfirmDialog
 				label={deleteTarget?.name}
 				onConfirm={() => {
-					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
+					if (deleteTarget)
+						remove.mutate(
+							{ id: deleteTarget.id },
+							{ onSuccess: () => setConfirmOpen(false) },
+						);
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
+				pending={remove.isPending}
 			/>
 		</div>
 	);

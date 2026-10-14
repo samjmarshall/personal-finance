@@ -1,19 +1,18 @@
-import { redirect } from "next/navigation";
-
+import { AsyncBoundary } from "~/components/async-boundary";
 import { AuthForm } from "~/components/auth-form";
 import { AuthShell } from "~/components/auth-shell";
-import { getSession } from "~/server/auth/server";
+import { RedirectIfSignedIn } from "~/components/redirect-if-signed-in";
 
-export default async function SignUpPage() {
-	const session = await getSession();
-	if (session) redirect("/");
-
+export default function SignUpPage() {
 	return (
 		<AuthShell
 			subtitle="One shared budget for the whole household."
 			title="Create your ledger"
 		>
 			<AuthForm mode="sign-up" />
+			<AsyncBoundary label="session" skeleton={null}>
+				<RedirectIfSignedIn />
+			</AsyncBoundary>
 		</AuthShell>
 	);
 }

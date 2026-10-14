@@ -16,8 +16,10 @@ import {
 	FieldDescription,
 	FieldLabel,
 	FieldOptional,
+	FieldSet,
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { useRestoreFocus } from "~/hooks/use-restore-focus";
 import { CommitmentKind, toCommitmentKind } from "~/lib/constants";
 import { fromDateInput, toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -107,6 +109,7 @@ export function ExpenseForm({
 	const create = api.expense.create.useMutation({ onSuccess });
 	const update = api.expense.update.useMutation({ onSuccess });
 	const isSaving = create.isPending || update.isPending;
+	const rememberFocus = useRestoreFocus(isSaving);
 
 	function deriveAmounts(value: number, from: "fortnight" | "month" | "year") {
 		let month: number;
@@ -165,12 +168,19 @@ export function ExpenseForm({
 					...deriveAmounts(value, basis),
 				};
 
+		rememberFocus();
 		if (expense) update.mutate({ id: expense.id, ...payload });
 		else create.mutate(payload);
 	}
 
 	return (
-		<Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+		<Dialog
+			onOpenChange={(next, eventDetails) => {
+				if (isSaving) eventDetails.cancel();
+				else if (!next) onClose();
+			}}
+			open={open}
+		>
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>{expense ? "Edit expense" : "Add expense"}</DialogTitle>
@@ -182,122 +192,131 @@ export function ExpenseForm({
 				</DialogHeader>
 				{/* noValidate: the required date input is React-validated (onSubmit), so
 			    suppress the native bubble that would clash with the error banner below. */}
-				<form className="flex flex-col gap-4" noValidate onSubmit={onSubmit}>
-					<Field>
-						<FieldLabel htmlFor="exp-name">Name</FieldLabel>
-						<Input
-							id="exp-name"
-							onChange={(e) => setName(e.target.value)}
-							placeholder="e.g. Netflix"
-							value={name}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="exp-cat">Category</FieldLabel>
-						<SelectField
-							className="w-full"
-							id="exp-cat"
-							items={categoryOptions}
-							onValueChange={setCategoryId}
-							placeholder="Choose a category"
-							value={categoryId}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="exp-kind">Type</FieldLabel>
-						<SelectField
-							className="w-full"
-							id="exp-kind"
-							items={KIND_OPTIONS}
-							onValueChange={(v) => v && setKind(v)}
-							value={kind}
-						/>
-					</Field>
-					<div className="grid grid-cols-2 gap-3">
+				<form
+					className="flex min-w-0 flex-col gap-4"
+					noValidate
+					onSubmit={onSubmit}
+				>
+					<FieldSet disabled={isSaving}>
 						<Field>
-							<FieldLabel htmlFor="exp-amt">Amount</FieldLabel>
+							<FieldLabel htmlFor="exp-name">Name</FieldLabel>
 							<Input
-								id="exp-amt"
-								inputMode="decimal"
-								min="0"
-								onChange={(e) => setAmount(e.target.value)}
-								placeholder="0.00"
-								step="0.01"
-								type="number"
-								value={amount}
+								id="exp-name"
+								onChange={(e) => setName(e.target.value)}
+								placeholder="e.g. Netflix"
+								value={name}
 							/>
 						</Field>
-						{isOneTime ? (
+						<Field>
+							<FieldLabel htmlFor="exp-cat">Category</FieldLabel>
+							<SelectField
+								className="w-full"
+								disabled={isSaving}
+								id="exp-cat"
+								items={categoryOptions}
+								onValueChange={setCategoryId}
+								placeholder="Choose a category"
+								value={categoryId}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="exp-kind">Type</FieldLabel>
+							<SelectField
+								className="w-full"
+								disabled={isSaving}
+								id="exp-kind"
+								items={KIND_OPTIONS}
+								onValueChange={(v) => v && setKind(v)}
+								value={kind}
+							/>
+						</Field>
+						<div className="grid grid-cols-2 gap-3">
 							<Field>
-								<FieldLabel htmlFor="exp-date">Expected date</FieldLabel>
+								<FieldLabel htmlFor="exp-amt">Amount</FieldLabel>
 								<Input
-									id="exp-date"
-									onChange={(e) => setExpectedDate(e.target.value)}
-									required
-									type="date"
-									value={expectedDate}
+									id="exp-amt"
+									inputMode="decimal"
+									min="0"
+									onChange={(e) => setAmount(e.target.value)}
+									placeholder="0.00"
+									step="0.01"
+									type="number"
+									value={amount}
 								/>
 							</Field>
-						) : (
-							<Field>
-								<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
-								<SelectField
-									className="w-full"
-									id="exp-basis"
-									items={BASIS_OPTIONS}
-									onValueChange={(v) => v && setBasis(v)}
-									value={basis}
-								/>
-							</Field>
-						)}
-					</div>
-
-					{!isOneTime && (
-						<div className="flex flex-col gap-2">
-							<div className="grid grid-cols-2 gap-3">
+							{isOneTime ? (
 								<Field>
-									<FieldLabel htmlFor="exp-due-day">
-										Due day
-										<FieldOptional />
-									</FieldLabel>
+									<FieldLabel htmlFor="exp-date">Expected date</FieldLabel>
 									<Input
-										aria-describedby="exp-timing-hint"
-										id="exp-due-day"
-										inputMode="numeric"
-										max="31"
-										min="1"
-										onChange={(e) => setDueDay(e.target.value)}
-										placeholder="—"
-										step="1"
-										type="number"
-										value={dueDay}
+										id="exp-date"
+										onChange={(e) => setExpectedDate(e.target.value)}
+										required
+										type="date"
+										value={expectedDate}
 									/>
 								</Field>
+							) : (
 								<Field>
-									<FieldLabel htmlFor="exp-due-month">
-										Due month
-										<FieldOptional />
-									</FieldLabel>
-									<Input
-										aria-describedby="exp-timing-hint"
-										id="exp-due-month"
-										inputMode="numeric"
-										max="12"
-										min="1"
-										onChange={(e) => setDueMonth(e.target.value)}
-										placeholder="—"
-										step="1"
-										type="number"
-										value={dueMonth}
+									<FieldLabel htmlFor="exp-basis">Per</FieldLabel>
+									<SelectField
+										className="w-full"
+										disabled={isSaving}
+										id="exp-basis"
+										items={BASIS_OPTIONS}
+										onValueChange={(v) => v && setBasis(v)}
+										value={basis}
 									/>
 								</Field>
-							</div>
-							<FieldDescription id="exp-timing-hint">
-								Set a due day for a monthly bill, or add a month too for a
-								once-a-year one. Leave blank to spread the cost evenly.
-							</FieldDescription>
+							)}
 						</div>
-					)}
+
+						{!isOneTime && (
+							<div className="flex flex-col gap-2">
+								<div className="grid grid-cols-2 gap-3">
+									<Field>
+										<FieldLabel htmlFor="exp-due-day">
+											Due day
+											<FieldOptional />
+										</FieldLabel>
+										<Input
+											aria-describedby="exp-timing-hint"
+											id="exp-due-day"
+											inputMode="numeric"
+											max="31"
+											min="1"
+											onChange={(e) => setDueDay(e.target.value)}
+											placeholder="—"
+											step="1"
+											type="number"
+											value={dueDay}
+										/>
+									</Field>
+									<Field>
+										<FieldLabel htmlFor="exp-due-month">
+											Due month
+											<FieldOptional />
+										</FieldLabel>
+										<Input
+											aria-describedby="exp-timing-hint"
+											id="exp-due-month"
+											inputMode="numeric"
+											max="12"
+											min="1"
+											onChange={(e) => setDueMonth(e.target.value)}
+											placeholder="—"
+											step="1"
+											type="number"
+											value={dueMonth}
+										/>
+									</Field>
+								</div>
+								<FieldDescription id="exp-timing-hint">
+									Set a due day for a monthly bill, or add a month too for a
+									once-a-year one. Leave blank to spread the cost evenly.
+								</FieldDescription>
+							</div>
+						)}
+					</FieldSet>
 
 					{error && (
 						<p
@@ -309,11 +328,16 @@ export function ExpenseForm({
 					)}
 
 					<DialogFooter>
-						<Button onClick={onClose} type="button" variant="outline">
+						<Button
+							disabled={isSaving}
+							onClick={onClose}
+							type="button"
+							variant="outline"
+						>
 							Cancel
 						</Button>
-						<Button disabled={isSaving} type="submit">
-							{isSaving ? "Saving…" : expense ? "Save changes" : "Add expense"}
+						<Button loading={isSaving} type="submit">
+							{expense ? "Save changes" : "Add expense"}
 						</Button>
 					</DialogFooter>
 				</form>

@@ -1,6 +1,5 @@
 "use client";
 
-import { Loader2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -68,18 +67,13 @@ export function PayCycleSection() {
 							value={draft}
 						/>
 						<Button
-							className="w-14"
-							disabled={setFortnightAnchor.isPending || draft === anchor}
+							// Fits spinner + label, so the width holds while saving.
+							className="w-20"
+							disabled={draft === anchor}
+							loading={setFortnightAnchor.isPending}
 							type="submit"
 						>
-							{setFortnightAnchor.isPending ? (
-								<Loader2Icon
-									className="animate-spin"
-									data-icon="inline-start"
-								/>
-							) : (
-								"Save"
-							)}
+							Save
 						</Button>
 					</div>
 					<FieldError id="fortnight-anchor-error">{error}</FieldError>

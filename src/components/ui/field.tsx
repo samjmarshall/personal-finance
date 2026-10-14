@@ -10,7 +10,8 @@ function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
 	return (
 		<fieldset
 			className={cn(
-				"flex flex-col gap-4 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3",
+				// min-w-0: a native fieldset sizes to min-content, so a long option name would widen the form.
+				"flex min-w-0 flex-col gap-4 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3",
 				className,
 			)}
 			data-slot="field-set"

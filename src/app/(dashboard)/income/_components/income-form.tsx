@@ -15,8 +15,10 @@ import {
 	FieldDescription,
 	FieldLabel,
 	FieldOptional,
+	FieldSet,
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { useRestoreFocus } from "~/hooks/use-restore-focus";
 import { CommitmentKind, toCommitmentKind } from "~/lib/constants";
 import { fromDateInput, toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -85,6 +87,7 @@ export function IncomeForm({
 	const create = api.income.create.useMutation({ onSuccess });
 	const update = api.income.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
+	const rememberFocus = useRestoreFocus(pending);
 
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
@@ -133,140 +136,154 @@ export function IncomeForm({
 					year: value * FORTNIGHTS_PER_YEAR,
 				};
 
+		rememberFocus();
 		if (income) update.mutate({ id: income.id, ...payload });
 		else create.mutate(payload);
 	}
 
 	return (
-		<Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+		<Dialog
+			onOpenChange={(next, eventDetails) => {
+				if (pending) eventDetails.cancel();
+				else if (!next) onClose();
+			}}
+			open={open}
+		>
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>{income ? "Edit income" : "Add income"}</DialogTitle>
 				</DialogHeader>
 				{/* noValidate: the required date input is React-validated (onSubmit), so
 			    suppress the native bubble that would clash with the error banner below. */}
-				<form className="flex flex-col gap-4" noValidate onSubmit={submit}>
-					<Field>
-						<FieldLabel htmlFor="income-person">Person</FieldLabel>
-						<Input
-							id="income-person"
-							onChange={(e) => setPerson(e.target.value)}
-							placeholder="e.g. Sam"
-							value={person}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="income-source">Source</FieldLabel>
-						<Input
-							id="income-source"
-							onChange={(e) => setSource(e.target.value)}
-							placeholder="e.g. Salary"
-							value={source}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="income-kind">Type</FieldLabel>
-						<SelectField
-							className="w-full"
-							id="income-kind"
-							items={KIND_OPTIONS}
-							onValueChange={(v) => v && setKind(v)}
-							value={kind}
-						/>
-					</Field>
-					{isOneTime ? (
-						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-							<Field>
-								<FieldLabel htmlFor="income-amount">Amount</FieldLabel>
-								<Input
-									id="income-amount"
-									inputMode="decimal"
-									min="0"
-									onChange={(e) => setAmount(e.target.value)}
-									placeholder="0.00"
-									step="0.01"
-									type="number"
-									value={amount}
-								/>
-							</Field>
-							<Field>
-								<FieldLabel htmlFor="income-date">Expected date</FieldLabel>
-								<Input
-									id="income-date"
-									onChange={(e) => setExpectedDate(e.target.value)}
-									required
-									type="date"
-									value={expectedDate}
-								/>
-							</Field>
-						</div>
-					) : (
-						<>
-							<Field>
-								<FieldLabel htmlFor="income-fortnight">
-									Amount per fortnight
-								</FieldLabel>
-								<Input
-									aria-describedby="income-fortnight-hint"
-									id="income-fortnight"
-									inputMode="decimal"
-									min="0"
-									onChange={(e) => setAmount(e.target.value)}
-									placeholder="0.00"
-									step="0.01"
-									type="number"
-									value={amount}
-								/>
-								<FieldDescription id="income-fortnight-hint">
-									Monthly and yearly figures are calculated automatically.
-								</FieldDescription>
-							</Field>
-							<div className="flex flex-col gap-2">
-								<div className="grid grid-cols-2 gap-3">
-									<Field>
-										<FieldLabel htmlFor="income-due-day">
-											Payday
-											<FieldOptional />
-										</FieldLabel>
-										<Input
-											aria-describedby="income-timing-hint"
-											id="income-due-day"
-											inputMode="numeric"
-											max="31"
-											min="1"
-											onChange={(e) => setDueDay(e.target.value)}
-											placeholder="—"
-											step="1"
-											type="number"
-											value={dueDay}
-										/>
-									</Field>
-									<Field>
-										<FieldLabel htmlFor="income-due-month">
-											Pay month
-											<FieldOptional />
-										</FieldLabel>
-										<Input
-											aria-describedby="income-timing-hint"
-											id="income-due-month"
-											inputMode="numeric"
-											max="12"
-											min="1"
-											onChange={(e) => setDueMonth(e.target.value)}
-											placeholder="—"
-											step="1"
-											type="number"
-											value={dueMonth}
-										/>
-									</Field>
-								</div>
-								<FieldDescription id="income-timing-hint">
-									Set a payday for a monthly payment, or add a pay month too for
-									a once-a-year one. Leave blank to spread it evenly.
-								</FieldDescription>
+				<form
+					className="flex min-w-0 flex-col gap-4"
+					noValidate
+					onSubmit={submit}
+				>
+					<FieldSet disabled={pending}>
+						<Field>
+							<FieldLabel htmlFor="income-person">Person</FieldLabel>
+							<Input
+								id="income-person"
+								onChange={(e) => setPerson(e.target.value)}
+								placeholder="e.g. Sam"
+								value={person}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="income-source">Source</FieldLabel>
+							<Input
+								id="income-source"
+								onChange={(e) => setSource(e.target.value)}
+								placeholder="e.g. Salary"
+								value={source}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="income-kind">Type</FieldLabel>
+							<SelectField
+								className="w-full"
+								disabled={pending}
+								id="income-kind"
+								items={KIND_OPTIONS}
+								onValueChange={(v) => v && setKind(v)}
+								value={kind}
+							/>
+						</Field>
+						{isOneTime ? (
+							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+								<Field>
+									<FieldLabel htmlFor="income-amount">Amount</FieldLabel>
+									<Input
+										id="income-amount"
+										inputMode="decimal"
+										min="0"
+										onChange={(e) => setAmount(e.target.value)}
+										placeholder="0.00"
+										step="0.01"
+										type="number"
+										value={amount}
+									/>
+								</Field>
+								<Field>
+									<FieldLabel htmlFor="income-date">Expected date</FieldLabel>
+									<Input
+										id="income-date"
+										onChange={(e) => setExpectedDate(e.target.value)}
+										required
+										type="date"
+										value={expectedDate}
+									/>
+								</Field>
 							</div>
-						</>
-					)}
+						) : (
+							<>
+								<Field>
+									<FieldLabel htmlFor="income-fortnight">
+										Amount per fortnight
+									</FieldLabel>
+									<Input
+										aria-describedby="income-fortnight-hint"
+										id="income-fortnight"
+										inputMode="decimal"
+										min="0"
+										onChange={(e) => setAmount(e.target.value)}
+										placeholder="0.00"
+										step="0.01"
+										type="number"
+										value={amount}
+									/>
+									<FieldDescription id="income-fortnight-hint">
+										Monthly and yearly figures are calculated automatically.
+									</FieldDescription>
+								</Field>
+								<div className="flex flex-col gap-2">
+									<div className="grid grid-cols-2 gap-3">
+										<Field>
+											<FieldLabel htmlFor="income-due-day">
+												Payday
+												<FieldOptional />
+											</FieldLabel>
+											<Input
+												aria-describedby="income-timing-hint"
+												id="income-due-day"
+												inputMode="numeric"
+												max="31"
+												min="1"
+												onChange={(e) => setDueDay(e.target.value)}
+												placeholder="—"
+												step="1"
+												type="number"
+												value={dueDay}
+											/>
+										</Field>
+										<Field>
+											<FieldLabel htmlFor="income-due-month">
+												Pay month
+												<FieldOptional />
+											</FieldLabel>
+											<Input
+												aria-describedby="income-timing-hint"
+												id="income-due-month"
+												inputMode="numeric"
+												max="12"
+												min="1"
+												onChange={(e) => setDueMonth(e.target.value)}
+												placeholder="—"
+												step="1"
+												type="number"
+												value={dueMonth}
+											/>
+										</Field>
+									</div>
+									<FieldDescription id="income-timing-hint">
+										Set a payday for a monthly payment, or add a pay month too
+										for a once-a-year one. Leave blank to spread it evenly.
+									</FieldDescription>
+								</div>
+							</>
+						)}
+					</FieldSet>
 
 					{error && (
 						<p
@@ -278,11 +295,16 @@ export function IncomeForm({
 					)}
 
 					<DialogFooter>
-						<Button onClick={onClose} type="button" variant="ghost">
+						<Button
+							disabled={pending}
+							onClick={onClose}
+							type="button"
+							variant="ghost"
+						>
 							Cancel
 						</Button>
-						<Button disabled={pending} type="submit">
-							{pending ? "Saving..." : income ? "Save changes" : "Add income"}
+						<Button loading={pending} type="submit">
+							{income ? "Save changes" : "Add income"}
 						</Button>
 					</DialogFooter>
 				</form>

@@ -2,11 +2,16 @@
 
 import { AtSign, CalendarClock, type LucideIcon, Palette } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { AsyncBoundary } from "~/components/async-boundary";
 import { PageHeader } from "~/components/page-header";
 import { cn } from "~/lib/utils";
 import { AllowedSendersSection } from "./allowed-senders-section";
 import { AppearanceSection } from "./appearance-section";
 import { PayCycleSection } from "./pay-cycle-section";
+import {
+	ForwardingSkeleton,
+	PayCycleSkeleton,
+} from "./settings-panel-skeleton";
 
 export type SettingsViewProps = {
 	/** Undefined when RESEND_INBOUND_ADDRESS is unset; the panel then omits it. */
@@ -37,14 +42,23 @@ const sections: Section[] = [
 		id: "pay-cycle",
 		label: "Pay cycle",
 		icon: CalendarClock,
-		render: () => <PayCycleSection />,
+		render: () => (
+			<AsyncBoundary label="pay cycle" skeleton={<PayCycleSkeleton />}>
+				<PayCycleSection />
+			</AsyncBoundary>
+		),
 	},
 	{
 		id: "forwarding",
 		label: "Forwarding",
 		icon: AtSign,
 		render: ({ inboundAddress }) => (
-			<AllowedSendersSection inboundAddress={inboundAddress} />
+			<AsyncBoundary
+				label="allowed senders"
+				skeleton={<ForwardingSkeleton hasInboundAddress={!!inboundAddress} />}
+			>
+				<AllowedSendersSection inboundAddress={inboundAddress} />
+			</AsyncBoundary>
 		),
 	},
 ];
@@ -106,10 +120,8 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 					))}
 				</nav>
 
-				{/* Every section stays mounted and the inactive ones are hidden —
-				    unmounting would silently bin a half-typed anchor or address when a
-				    member flicks to Appearance and back. The suspending queries are
-				    covered by the page prefetch, same as every other view. */}
+				{/* All stay mounted, so half-typed input survives a tab switch. Each data
+				    panel has its own boundary: one failing leaves the rest usable. */}
 				{sections.map(({ id, render }) => (
 					<div hidden={active !== id} key={id}>
 						{render({ inboundAddress })}

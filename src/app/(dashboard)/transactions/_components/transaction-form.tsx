@@ -19,9 +19,11 @@ import {
 	FieldDescription,
 	FieldLabel,
 	FieldOptional,
+	FieldSet,
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { useRestoreFocus } from "~/hooks/use-restore-focus";
 import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
 import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -88,6 +90,7 @@ export function TransactionForm({
 	const create = api.transaction.create.useMutation({ onSuccess });
 	const update = api.transaction.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
+	const rememberFocus = useRestoreFocus(pending);
 
 	const expenseOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
@@ -143,148 +146,162 @@ export function TransactionForm({
 			expenseId,
 			categoryId: expenseId === null ? categoryId : null,
 		};
+		rememberFocus();
 		if (transaction) update.mutate({ id: transaction.id, ...payload });
 		else create.mutate(payload);
 	}
 
 	return (
-		<Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+		<Dialog
+			onOpenChange={(next, eventDetails) => {
+				if (pending) eventDetails.cancel();
+				else if (!next) onClose();
+			}}
+			open={open}
+		>
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>
 						{transaction ? "Edit transaction" : "Add transaction"}
 					</DialogTitle>
 				</DialogHeader>
-				<form className="flex flex-col gap-4" onSubmit={submit}>
-					<div className="grid grid-cols-2 gap-4">
+				<form className="flex min-w-0 flex-col gap-4" onSubmit={submit}>
+					<FieldSet disabled={pending}>
+						<div className="grid grid-cols-2 gap-4">
+							<Field>
+								<FieldLabel htmlFor="tx-date">Date</FieldLabel>
+								<Input
+									id="tx-date"
+									onChange={(e) => setDate(e.target.value)}
+									required
+									type="date"
+									value={date}
+								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
+								<Input
+									aria-describedby="tx-amount-hint"
+									id="tx-amount"
+									inputMode="decimal"
+									onChange={(e) => setAmount(e.target.value)}
+									placeholder="0.00"
+									required
+									step="0.01"
+									type="number"
+									value={amount}
+								/>
+								<FieldDescription id="tx-amount-hint">
+									Positive = spend, negative = refund
+								</FieldDescription>
+							</Field>
+						</div>
 						<Field>
-							<FieldLabel htmlFor="tx-date">Date</FieldLabel>
+							<FieldLabel htmlFor="tx-description">Description</FieldLabel>
 							<Input
-								id="tx-date"
-								onChange={(e) => setDate(e.target.value)}
+								id="tx-description"
+								onChange={(e) => setDescription(e.target.value)}
+								placeholder="e.g. Woolworths"
 								required
-								type="date"
-								value={date}
+								value={description}
 							/>
 						</Field>
 						<Field>
-							<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
+							<FieldLabel htmlFor="tx-group">
+								Group
+								<FieldOptional />
+							</FieldLabel>
 							<Input
-								aria-describedby="tx-amount-hint"
-								id="tx-amount"
-								inputMode="decimal"
-								onChange={(e) => setAmount(e.target.value)}
-								placeholder="0.00"
-								required
-								step="0.01"
-								type="number"
-								value={amount}
+								id="tx-group"
+								onChange={(e) => setGroup(e.target.value)}
+								placeholder="e.g. Groceries"
+								value={group}
 							/>
-							<FieldDescription id="tx-amount-hint">
-								Positive = spend, negative = refund
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="tx-expense">
+								Expense
+								<FieldOptional />
+							</FieldLabel>
+							<SelectField
+								className="w-full"
+								disabled={pending}
+								id="tx-expense"
+								items={expenseOptions}
+								onValueChange={pickExpense}
+								value={expenseId ? String(expenseId) : ""}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="tx-category">
+								Category
+								<FieldOptional />
+							</FieldLabel>
+							{/* Locked reads muted, not faded: its value is still the answer. */}
+							<SelectField
+								aria-describedby="tx-category-hint"
+								className="w-full data-readonly:cursor-default data-readonly:bg-muted data-readonly:text-muted-foreground dark:data-readonly:bg-muted"
+								disabled={pending}
+								id="tx-category"
+								items={categoryOptions}
+								onValueChange={(v) => setCategoryId(v ? Number(v) : null)}
+								readOnly={expenseId !== null}
+								value={shownCategoryId ? String(shownCategoryId) : ""}
+							/>
+							<FieldDescription aria-live="polite" id="tx-category-hint">
+								{categoryHint}
 							</FieldDescription>
 						</Field>
-					</div>
-					<Field>
-						<FieldLabel htmlFor="tx-description">Description</FieldLabel>
-						<Input
-							id="tx-description"
-							onChange={(e) => setDescription(e.target.value)}
-							placeholder="e.g. Woolworths"
-							required
-							value={description}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="tx-group">
-							Group
-							<FieldOptional />
-						</FieldLabel>
-						<Input
-							id="tx-group"
-							onChange={(e) => setGroup(e.target.value)}
-							placeholder="e.g. Groceries"
-							value={group}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="tx-expense">
-							Expense
-							<FieldOptional />
-						</FieldLabel>
-						<SelectField
-							className="w-full"
-							id="tx-expense"
-							items={expenseOptions}
-							onValueChange={pickExpense}
-							value={expenseId ? String(expenseId) : ""}
-						/>
-					</Field>
-					<Field>
-						<FieldLabel htmlFor="tx-category">
-							Category
-							<FieldOptional />
-						</FieldLabel>
-						{/* Locked reads muted, not faded: its value is still the answer. */}
-						<SelectField
-							aria-describedby="tx-category-hint"
-							className="w-full data-readonly:cursor-default data-readonly:bg-muted data-readonly:text-muted-foreground dark:data-readonly:bg-muted"
-							id="tx-category"
-							items={categoryOptions}
-							onValueChange={(v) => setCategoryId(v ? Number(v) : null)}
-							readOnly={expenseId !== null}
-							value={shownCategoryId ? String(shownCategoryId) : ""}
-						/>
-						<FieldDescription aria-live="polite" id="tx-category-hint">
-							{categoryHint}
-						</FieldDescription>
-					</Field>
-					<div className="grid grid-cols-2 gap-4">
+						<div className="grid grid-cols-2 gap-4">
+							<Field>
+								<FieldLabel htmlFor="tx-frequency">Frequency</FieldLabel>
+								<SelectField
+									className="w-full"
+									disabled={pending}
+									id="tx-frequency"
+									items={FREQUENCY_OPTIONS}
+									onValueChange={(v) => v && setFrequency(v)}
+									value={frequency}
+								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="tx-priority">Priority</FieldLabel>
+								<SelectField
+									className="w-full"
+									disabled={pending}
+									id="tx-priority"
+									items={PRIORITY_OPTIONS}
+									onValueChange={(v) => v && setPriority(v)}
+									value={priority}
+								/>
+							</Field>
+						</div>
 						<Field>
-							<FieldLabel htmlFor="tx-frequency">Frequency</FieldLabel>
-							<SelectField
-								className="w-full"
-								id="tx-frequency"
-								items={FREQUENCY_OPTIONS}
-								onValueChange={(v) => v && setFrequency(v)}
-								value={frequency}
+							<FieldLabel htmlFor="tx-notes">
+								Notes
+								<FieldOptional />
+							</FieldLabel>
+							<Textarea
+								className="wrap-anywhere"
+								id="tx-notes"
+								onChange={(e) => setNotes(e.target.value)}
+								placeholder="Optional context"
+								rows={2}
+								value={notes}
 							/>
 						</Field>
-						<Field>
-							<FieldLabel htmlFor="tx-priority">Priority</FieldLabel>
-							<SelectField
-								className="w-full"
-								id="tx-priority"
-								items={PRIORITY_OPTIONS}
-								onValueChange={(v) => v && setPriority(v)}
-								value={priority}
-							/>
-						</Field>
-					</div>
-					<Field>
-						<FieldLabel htmlFor="tx-notes">
-							Notes
-							<FieldOptional />
-						</FieldLabel>
-						<Textarea
-							className="wrap-anywhere"
-							id="tx-notes"
-							onChange={(e) => setNotes(e.target.value)}
-							placeholder="Optional context"
-							rows={2}
-							value={notes}
-						/>
-					</Field>
+					</FieldSet>
 					<DialogFooter>
-						<Button onClick={onClose} type="button" variant="ghost">
+						<Button
+							disabled={pending}
+							onClick={onClose}
+							type="button"
+							variant="ghost"
+						>
 							Cancel
 						</Button>
-						<Button disabled={pending} type="submit">
-							{pending
-								? "Saving..."
-								: transaction
-									? "Save changes"
-									: "Add transaction"}
+						<Button loading={pending} type="submit">
+							{transaction ? "Save changes" : "Add transaction"}
 						</Button>
 					</DialogFooter>
 				</form>

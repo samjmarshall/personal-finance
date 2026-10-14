@@ -1,6 +1,7 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"root": true,
+	"plugins": ["./biome-plugins/no-namespace-suspense.grit"],
 	"vcs": {
 		"enabled": true,
 		"useIgnoreFile": true,
@@ -34,6 +35,25 @@
 		"enabled": true,
 		"rules": {
 			"preset": "recommended",
+			"style": {
+				// adr027: every loading region goes through AsyncBoundary, so skeleton,
+				// status text, fade and error card can't drift between pages.
+				"noRestrictedImports": {
+					"level": "error",
+					"options": {
+						"paths": {
+							"react": {
+								"importNames": ["Suspense"],
+								"message": "Use AsyncBoundary (src/components/async-boundary.tsx)."
+							},
+							"next/error": {
+								"importNames": ["catchError"],
+								"message": "Use AsyncBoundary (src/components/async-boundary.tsx)."
+							}
+						}
+					}
+				}
+			},
 			"nursery": {
 				"useSortedClasses": {
 					"level": "warn",
@@ -45,6 +65,19 @@
 			}
 		}
 	},
+	"overrides": [
+		{
+			// The one file allowed to build on Suspense and catchError.
+			"includes": ["src/components/async-boundary.tsx"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": "off"
+					}
+				}
+			}
+		}
+	],
 	"html": {
 		"formatter": {
 			"enabled": true

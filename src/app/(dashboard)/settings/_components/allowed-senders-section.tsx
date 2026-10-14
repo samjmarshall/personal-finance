@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2Icon, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
@@ -94,17 +94,12 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 						/>
 						<Button
 							className="w-14"
-							disabled={add.isPending || draft.trim() === ""}
+							disabled={draft.trim() === ""}
+							loading={add.isPending}
+							size="icon"
 							type="submit"
 						>
-							{add.isPending ? (
-								<Loader2Icon
-									className="animate-spin"
-									data-icon="inline-start"
-								/>
-							) : (
-								<Plus className="h-4 w-4" />
-							)}
+							<Plus />
 							<span className="sr-only">Add address</span>
 						</Button>
 					</div>
@@ -162,10 +157,15 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 			<DeleteConfirmDialog
 				label={deleteTarget?.email}
 				onConfirm={() => {
-					if (deleteTarget) remove.mutate({ id: deleteTarget.id });
+					if (deleteTarget)
+						remove.mutate(
+							{ id: deleteTarget.id },
+							{ onSuccess: () => setConfirmOpen(false) },
+						);
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
+				pending={remove.isPending}
 			/>
 		</SettingsSection>
 	);

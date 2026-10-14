@@ -1,0 +1,4 @@
+// adr027: the Suspense import ban misses `import * as React`; catch the member read too.
+`React.Suspense` as $hit where {
+	register_diagnostic(span=$hit, message="Use AsyncBoundary (src/components/async-boundary.tsx).", severity="error")
+}

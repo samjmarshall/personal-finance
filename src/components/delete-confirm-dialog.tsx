@@ -10,12 +10,14 @@ export function DeleteConfirmDialog({
 	onOpenChange,
 	label,
 	onConfirm,
+	pending,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	// The row's display name; the title reads `Delete "<label>"?`.
 	label: string | undefined;
 	onConfirm: () => void;
+	pending?: boolean;
 }) {
 	return (
 		<ConfirmDialog
@@ -25,6 +27,7 @@ export function DeleteConfirmDialog({
 			onConfirm={onConfirm}
 			onOpenChange={onOpenChange}
 			open={open}
+			pending={pending}
 			title={label ? `Delete "${label}"?` : ""}
 		/>
 	);

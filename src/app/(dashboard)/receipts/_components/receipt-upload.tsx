@@ -1,7 +1,7 @@
 "use client";
 
 import { upload } from "@vercel/blob/client";
-import { Loader2Icon, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -98,15 +98,11 @@ export function ReceiptUpload({
 				type="file"
 			/>
 			<Button
-				disabled={status !== "idle"}
+				loading={status !== "idle"}
 				onClick={() => inputRef.current?.click()}
 				type="button"
 			>
-				{status === "idle" ? (
-					<Upload data-icon="inline-start" />
-				) : (
-					<Loader2Icon className="animate-spin" data-icon="inline-start" />
-				)}
+				<Upload data-icon="inline-start" />
 				{status === "processing"
 					? "Processing…"
 					: status === "uploading"
