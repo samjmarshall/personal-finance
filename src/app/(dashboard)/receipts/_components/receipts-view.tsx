@@ -1,7 +1,7 @@
 "use client";
 
 import { RotateCw, Trash2 } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useLayoutEffect, useMemo, useState } from "react";
 
 import { AsyncBoundary } from "~/components/async-boundary";
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
@@ -80,6 +80,16 @@ export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
 	const [detailId, setDetailId] = useState<number | null>(null);
 	const [deleteTarget, setDeleteTarget] = useState<ReceiptRow | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	// Leaving the route hides this view (Activity), not unmounts it. Close the
+	// dialogs on hide so a return doesn't reopen them; filters stay.
+	useLayoutEffect(
+		() => () => {
+			setDetailId(null);
+			setDeleteTarget(null);
+			setConfirmOpen(false);
+		},
+		[],
+	);
 
 	// Memoised so it only changes with a filter, and the deferred copy below
 	// lags only while that filter's rows load.

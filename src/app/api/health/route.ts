@@ -1,20 +1,20 @@
 import { sql } from "drizzle-orm";
+import { connection } from "next/server";
 
 import { db } from "~/server/db";
 import { errorName } from "~/server/observability/errors/thrown";
 import { createRootLogger } from "~/server/observability/logging/logger";
-
-// A readiness probe the promote gate curls before flipping the production alias:
-// it must reach the db at request time, so opt out of any build-time evaluation
-// or caching that would run `select 1` during `next build` (no db there).
-export const dynamic = "force-dynamic";
 
 const logger = createRootLogger().with({
 	domain: "health",
 	component: "route",
 });
 
+// A readiness probe the promote gate curls before flipping the production alias.
 export async function GET(): Promise<Response> {
+	// It must reach the db per request, never prerender `select 1` at `next build`
+	// (no db there). Outside the try: a catch would swallow the prerender bail-out.
+	await connection();
 	try {
 		await db.execute(sql`select 1`);
 		return Response.json({ status: "ok" }, { status: 200 });

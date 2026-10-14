@@ -2,7 +2,7 @@
 
 import type { Announcements, UniqueIdentifier } from "@dnd-kit/core";
 import { GripVerticalIcon, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { toast } from "sonner";
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
 import { PageHeader } from "~/components/page-header";
@@ -51,6 +51,17 @@ export function CategoriesView() {
 	const [formKey, setFormKey] = useState(0);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+	// Leaving the route hides this view (Activity), not unmounts it. Close the
+	// dialogs on hide so a return doesn't reopen them.
+	useLayoutEffect(
+		() => () => {
+			setFormOpen(false);
+			setEditing(null);
+			setConfirmOpen(false);
+			setDeleteTarget(null);
+		},
+		[],
+	);
 
 	const handleSortOrderChange = async (next: Category[]) => {
 		// Stop a refetch already on its way, or it lands the old order on top.

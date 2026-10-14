@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { toast } from "sonner";
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
 import { Button } from "~/components/ui/button";
@@ -26,6 +26,15 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] =
 		useState<AllowedSenderListItem | null>(null);
+	// Leaving the route hides this view (Activity), not unmounts it. Close the
+	// dialog on hide so a return doesn't reopen it; the draft stays.
+	useLayoutEffect(
+		() => () => {
+			setConfirmOpen(false);
+			setDeleteTarget(null);
+		},
+		[],
+	);
 
 	const add = api.allowedSender.add.useMutation({
 		onSuccess: async () => {

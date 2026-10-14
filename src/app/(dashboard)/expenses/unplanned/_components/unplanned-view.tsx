@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { AsyncBoundary, LoadingRegion } from "~/components/async-boundary";
 import { PageHeader } from "~/components/page-header";
@@ -51,11 +51,17 @@ export function UnplannedView() {
 	// kind is co-seeded here so it can't desync from the window if the anchor
 	// arrives after mount.
 	const [range, setRange] = useState<PeriodWindow | null>(null);
+	// The anchor the window was seeded from (undefined: not yet). Leaving the
+	// route hides this view (Activity), and a return re-runs the effect; without
+	// this it would snap the member's stepped period back to today's.
+	const seededFor = useRef<string | null | undefined>(undefined);
 	useEffect(() => {
+		if (seededFor.current === anchor) return;
+		seededFor.current = anchor;
 		const now = new Date();
 		setKind(anchorDate ? "fortnight" : "month");
 		setRange(anchorDate ? fortnightWindow(anchorDate, now) : monthWindow(now));
-	}, [anchorDate]);
+	}, [anchor, anchorDate]);
 
 	// The table keeps the old period's rows (dimmed) while the new ones load,
 	// instead of suspending back to its skeleton.

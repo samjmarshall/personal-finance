@@ -7,6 +7,11 @@ const { execute } = vi.hoisted(() => ({
 	execute: vi.fn<() => Promise<unknown>>(async () => [{ "?column?": 1 }]),
 }));
 vi.mock("~/server/db", () => ({ db: { execute } }));
+// `connection()` throws outside a Next request scope, so stub it.
+const { connection } = vi.hoisted(() => ({
+	connection: vi.fn(async () => {}),
+}));
+vi.mock("next/server", () => ({ connection }));
 
 const { GET } = await import("./route");
 
@@ -20,6 +25,17 @@ describe("GET /api/health", () => {
 		expect(response.status).toBe(200);
 		await expect(response.json()).resolves.toEqual({ status: "ok" });
 		expect(execute).toHaveBeenCalledTimes(1);
+	});
+
+	// Under cacheComponents a GET with no request data prerenders at build, where
+	// there is no db. connection() must come first to keep the query per request.
+	it("waits for connection() before the readiness query", async () => {
+		await GET();
+
+		expect(connection).toHaveBeenCalledTimes(1);
+		expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
+			execute.mock.invocationCallOrder[0] ?? 0,
+		);
 	});
 
 	// A failed connection must surface as an unhealthy probe, not a thrown 500, so

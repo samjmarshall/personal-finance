@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
 import { Money } from "~/components/money";
@@ -30,6 +30,17 @@ export function IncomeView() {
 	const [editing, setEditing] = useState<Income | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
+	// Leaving the route hides this view (Activity), not unmounts it. Close the
+	// dialogs on hide so a return doesn't reopen them.
+	useLayoutEffect(
+		() => () => {
+			setFormOpen(false);
+			setEditing(null);
+			setConfirmOpen(false);
+			setDeleteTarget(null);
+		},
+		[],
+	);
 
 	const groups = useMemo(() => {
 		const map = new Map<string, Income[]>();

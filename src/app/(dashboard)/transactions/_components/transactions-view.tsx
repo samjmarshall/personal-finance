@@ -11,7 +11,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useLayoutEffect, useMemo, useState } from "react";
 
 import { AsyncBoundary } from "~/components/async-boundary";
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
@@ -73,6 +73,17 @@ export function TransactionsView() {
 	const [editing, setEditing] = useState<Transaction | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
+	// Leaving the route hides this view (Activity), not unmounts it. Close the
+	// dialogs on hide so a return doesn't reopen them; filters stay.
+	useLayoutEffect(
+		() => () => {
+			setFormOpen(false);
+			setEditing(null);
+			setConfirmOpen(false);
+			setDeleteTarget(null);
+		},
+		[],
+	);
 
 	const [categories] = api.category.list.useSuspenseQuery();
 	const [expenses] = api.expense.list.useSuspenseQuery();

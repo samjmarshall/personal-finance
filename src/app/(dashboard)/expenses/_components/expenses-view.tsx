@@ -9,7 +9,7 @@ import {
 	Repeat,
 	Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 
 import { DeleteConfirmDialog } from "~/components/delete-confirm-dialog";
 import { Money } from "~/components/money";
@@ -50,6 +50,17 @@ export function ExpensesView() {
 	const [editing, setEditing] = useState<Expense | null>(null);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+	// Leaving the route hides this view (Activity), not unmounts it. Close the
+	// dialogs on hide so a return doesn't reopen them.
+	useLayoutEffect(
+		() => () => {
+			setFormOpen(false);
+			setEditing(null);
+			setConfirmOpen(false);
+			setDeleteTarget(null);
+		},
+		[],
+	);
 	// Cards start open; this tracks closed ones. A Category can hold recurring and
 	// one-time, so each kind gets its own key.
 	const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
