@@ -30,12 +30,20 @@ describe("GET /api/health", () => {
 	// Under cacheComponents a GET with no request data prerenders at build, where
 	// there is no db. connection() must come first to keep the query per request.
 	it("waits for connection() before the readiness query", async () => {
-		await GET();
-
-		expect(connection).toHaveBeenCalledTimes(1);
-		expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-			execute.mock.invocationCallOrder[0] ?? 0,
+		let resolve = () => {};
+		connection.mockReturnValueOnce(
+			new Promise<void>((r) => {
+				resolve = r;
+			}),
 		);
+
+		const response = GET();
+		await Promise.resolve();
+		expect(execute).not.toHaveBeenCalled();
+
+		resolve();
+		expect((await response).status).toBe(200);
+		expect(execute).toHaveBeenCalledTimes(1);
 	});
 
 	// A failed connection must surface as an unhealthy probe, not a thrown 500, so
