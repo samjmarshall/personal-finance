@@ -3,11 +3,17 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 import type * as React from "react";
+import { useLayoutEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-	return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+	// A closed dialog unmounts once its fade ends, in an effect. A hidden route
+	// (Activity) runs no effects, so it would fade out again on return.
+	// Remounting on hide drops it at once.
+	const [hides, setHides] = useState(0);
+	useLayoutEffect(() => () => setHides((n) => n + 1), []);
+	return <DialogPrimitive.Root data-slot="dialog" key={hides} {...props} />;
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {

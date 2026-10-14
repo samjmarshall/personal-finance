@@ -2,11 +2,21 @@
 
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 import type * as React from "react";
+import { useLayoutEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
-	return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+	// Remount on hide so a closed dialog doesn't fade out on return; see Dialog.
+	const [hides, setHides] = useState(0);
+	useLayoutEffect(() => () => setHides((n) => n + 1), []);
+	return (
+		<AlertDialogPrimitive.Root
+			data-slot="alert-dialog"
+			key={hides}
+			{...props}
+		/>
+	);
 }
 
 function AlertDialogTrigger({ ...props }: AlertDialogPrimitive.Trigger.Props) {
