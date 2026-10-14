@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Ready for Review - Phase 7 of 7
+status: Done
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -589,6 +589,13 @@ Deviations:
   - Mediums left: link nav back to `/` shows the cash-flow skeleton ~300ms (prod, 3/3 runs; Back shows none). Dynamic data isn't kept in the router cache, so a push refetches it. Others predate this branch (Edit/Delete hidden at 640–1023px, tables with no scroll hint, no `aria-sort`, unlabeled search, chart focus, Next button shift).
 - [x] `/security-review`
   - No findings. Checked: static shell holds no per-user data (no `use cache`; every user read behind `headers()` / `getSession()` / `io()`), runtime prefetch is cached per session on the client only, Redis fail-closed paths still throw, `rethrowAuthFailure` only adds a throw and is pinned to `/sign-in`.
+- Validation 2026-10-14 (prod build, `next start` via portless):
+  - `make build`, `make check`, `make test` (1204 passing) pass. Route table: all 10 ◐, `/api/health` ƒ. No `instant = false`.
+  - curl: signed out `/` and `/expenses` 307 → `/sign-in`, `/sign-in` 200. Health 200 ×3 at ~33ms. Fake cookie: all 8 routes carry the nav and 22–112 skeleton slots (nav counted twice: HTML + Flight). `/settings` and `/receipts`: no inbound address, email or blob prefix.
+  - Design review (Phase 7 surfaces, 1440/768/375): no blockers, no Highs. Dialogs closed on return (Back/Forward and link), 0 ghost frames, Esc still fades. State kept (filters, page, tabs, draft, collapsed cards). Unplanned period kept, no snap. Stale cookie: 8/8 hard loads, 3/3 navs land on `/sign-in`, no card or empty copy. Shell paints nav + skeleton at 13–36ms, CLS 0.
+  - Code review's top claim (no `io()` in `SettingsData` / `ReceiptsData` sticks the panels on a skeleton when the cookie cache is fresh) not reproduced: cookie cache refreshed, App Shell prefetched, then nav. Settings panels filled by 500ms (2 runs), receipts rows in 368ms. 0 server log errors over the whole session.
+  - Comment judge: 1 rewrite applied (`auth-errors.test.ts`: failed queries aren't dehydrated).
+  - New Mediums, open: `/` shell body is blank until its section skeletons stream (`OverviewSkeleton` passes `null`; PPR exposes it). Code review: a non-auth prefetch failure that settles before `HydrateClient` is dropped, not dehydrated, so SSR refetches with no cookie (unverified live). Dialog remount key and view resets also fire on a Suspense re-suspend and StrictMode, not only on hide. App Shell prefetch still runs the Redis session read; the log is gone but the retries aren't.
 
 ## References
 
