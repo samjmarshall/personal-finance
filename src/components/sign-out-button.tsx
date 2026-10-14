@@ -28,6 +28,11 @@ export function SignOutButton() {
 					}
 					// Full page load: kept routes and cached queries still hold the member's
 					// data, and Back would show it.
+					// Safari can still restore this page from its back-forward cache. Reload
+					// it then, so the server sends it to sign-in.
+					window.addEventListener("pageshow", (event) => {
+						if (event.persisted) window.location.reload();
+					});
 					window.location.assign("/sign-in");
 				}}
 				type="button"
