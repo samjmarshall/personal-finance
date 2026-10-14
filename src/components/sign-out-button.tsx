@@ -1,13 +1,11 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { authClient } from "~/server/auth/client";
 
 export function SignOutButton() {
-	const router = useRouter();
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	return (
@@ -28,8 +26,9 @@ export function SignOutButton() {
 						setLoading(false);
 						return;
 					}
-					router.push("/sign-in");
-					router.refresh();
+					// Full page load: kept routes and cached queries still hold the member's
+					// data, and Back would show it.
+					window.location.assign("/sign-in");
 				}}
 				type="button"
 				variant="ghost"
