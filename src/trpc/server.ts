@@ -34,15 +34,12 @@ const caller = createCaller(createContext, {
 	onError: redirectOnUnauthorized,
 });
 
-const { trpc, HydrateClient: Hydrate } = createHydrationHelpers<AppRouter>(
-	caller,
-	getQueryClient,
-);
+const helpers = createHydrationHelpers<AppRouter>(caller, getQueryClient);
 
-export const api = trpc;
+export const api = helpers.trpc;
 
 // With PPR a stale session's prefetch can fail before this dehydrates.
 export function HydrateClient(props: { children: ReactNode }) {
 	rethrowAuthFailure(getQueryClient());
-	return createElement(Hydrate, props);
+	return createElement(helpers.HydrateClient, props);
 }

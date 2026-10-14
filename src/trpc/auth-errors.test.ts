@@ -103,7 +103,8 @@ describe("rethrowAuthFailure", () => {
 		expect(thrownBy(() => rethrowAuthFailure(queryClient))).toBe(signIn);
 	});
 
-	// Those keep their own path: dehydrated, then the card or a client retry.
+	// Only auth failures redirect early. Other errors and slow fetches take the
+	// normal path: a client retry, then the error card.
 	it("leaves other failures and pending prefetches alone", async () => {
 		const queryClient = await clientAfterPrefetches(
 			Promise.reject(new Error("boom")),
