@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deferred } from "~/test/fakes";
 
 // The route is a readiness probe: it runs one `select 1` against the module-scope
 // `db` and maps success/failure to 200/503. The db is stubbed so this stays a unit
@@ -30,12 +31,8 @@ describe("GET /api/health", () => {
 	// Under cacheComponents a GET with no request data prerenders at build, where
 	// there is no db. connection() must come first to keep the query per request.
 	it("waits for connection() before the readiness query", async () => {
-		let resolve = () => {};
-		connection.mockReturnValueOnce(
-			new Promise<void>((r) => {
-				resolve = r;
-			}),
-		);
+		const { promise, resolve } = deferred<void>();
+		connection.mockReturnValueOnce(promise);
 
 		const response = GET();
 		await Promise.resolve();

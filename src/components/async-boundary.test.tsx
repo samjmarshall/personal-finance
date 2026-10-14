@@ -13,14 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AsyncBoundary } from "~/components/async-boundary";
 import { PageSkeleton } from "~/components/page-skeleton";
 import { createAppRouter } from "~/test/app-router";
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((res) => {
-		resolve = res;
-	});
-	return { promise, resolve };
-}
+import { deferred } from "~/test/fakes";
 
 function Suspends({ promise }: { promise: Promise<string> }) {
 	return <p>{use(promise)}</p>;
