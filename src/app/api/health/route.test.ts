@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deferred } from "~/test/fakes";
 
 // The route is a readiness probe: it runs one `select 1` against the module-scope
 // `db` and maps success/failure to 200/503. The db is stubbed so this stays a unit
@@ -7,6 +8,11 @@ const { execute } = vi.hoisted(() => ({
 	execute: vi.fn<() => Promise<unknown>>(async () => [{ "?column?": 1 }]),
 }));
 vi.mock("~/server/db", () => ({ db: { execute } }));
+// `connection()` throws outside a Next request scope, so stub it.
+const { connection } = vi.hoisted(() => ({
+	connection: vi.fn(async () => {}),
+}));
+vi.mock("next/server", () => ({ connection }));
 
 const { GET } = await import("./route");
 
@@ -19,6 +25,21 @@ describe("GET /api/health", () => {
 
 		expect(response.status).toBe(200);
 		await expect(response.json()).resolves.toEqual({ status: "ok" });
+		expect(execute).toHaveBeenCalledTimes(1);
+	});
+
+	// Under cacheComponents a GET with no request data prerenders at build, where
+	// there is no db. connection() must come first to keep the query per request.
+	it("waits for connection() before the readiness query", async () => {
+		const { promise, resolve } = deferred<void>();
+		connection.mockReturnValueOnce(promise);
+
+		const response = GET();
+		await Promise.resolve();
+		expect(execute).not.toHaveBeenCalled();
+
+		resolve();
+		expect((await response).status).toBe(200);
 		expect(execute).toHaveBeenCalledTimes(1);
 	});
 

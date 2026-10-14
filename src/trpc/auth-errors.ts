@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 import type { TRPCError } from "@trpc/server";
 import { redirect } from "next/navigation";
@@ -19,4 +20,14 @@ export function isAuthError(error: unknown): boolean {
 	return (
 		typeof digest === "string" && /^NEXT_REDIRECT;\w+;\/sign-in;/.test(digest)
 	);
+}
+
+/**
+ * Throws the sign-in redirect a prefetch already failed with. Dehydrate drops a
+ * failed query, so SSR would refetch it with no cookie and log UNAUTHORIZED.
+ */
+export function rethrowAuthFailure(queryClient: QueryClient) {
+	for (const query of queryClient.getQueryCache().getAll()) {
+		if (isAuthError(query.state.error)) throw query.state.error;
+	}
 }

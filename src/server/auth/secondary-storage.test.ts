@@ -1,4 +1,5 @@
 import { errors } from "@upstash/redis";
+import { makeUntrackedHangingPromise } from "next/dist/server/dynamic-rendering-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pipeline = vi.hoisted(() => ({
@@ -210,6 +211,28 @@ describe("failure redaction", () => {
 				message: expect.not.stringContaining("victim@example.com"),
 			}),
 		);
+	});
+});
+
+describe("prerender interrupt", () => {
+	// Built by Next, not by hand: a runtime prefetch hangs every uncached fetch()
+	// and rejects it with this once the prerender ends.
+	const prerenderEnded = async () => {
+		const prerender = new AbortController();
+		const fetchCall = makeUntrackedHangingPromise(
+			prerender.signal,
+			"/receipts",
+			"fetch()",
+		);
+		prerender.abort();
+		return fetchCall.catch((error: unknown) => error);
+	};
+
+	it("logs nothing, and still presents as a miss", async () => {
+		client.get.mockRejectedValue(await prerenderEnded());
+
+		await expect(storage().get("token")).resolves.toBeNull();
+		expect(loggedOutput()).toBe("");
 	});
 });
 

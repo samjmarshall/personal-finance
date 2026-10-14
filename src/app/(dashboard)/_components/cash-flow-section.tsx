@@ -1,3 +1,5 @@
+import { io } from "next/cache";
+
 import { Card, CardContent } from "~/components/ui/card";
 import { api, HydrateClient } from "~/trpc/server";
 import {
@@ -8,7 +10,10 @@ import { CashFlowChart, CashFlowChartSkeleton } from "./cash-flow-chart";
 
 const GRID = "grid grid-cols-1 gap-4 lg:grid-cols-3";
 
-export function CashFlowSection() {
+export async function CashFlowSection() {
+	// Prefetch and dehydrate read Date.now() before tRPC reaches headers(), a
+	// sync-IO prerender error. io() ends the static shell here first.
+	await io();
 	// The cash-flow chart and balance card are client suspense components; prefetch
 	// their queries here so they hydrate from the dehydrated cache, no client spinner.
 	void api.cashflow.get.prefetch({ periodKind: "fortnight" });

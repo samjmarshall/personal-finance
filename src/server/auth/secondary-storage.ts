@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { unstable_rethrow } from "next/navigation";
 
 import { errorMessage, errorName } from "~/server/observability/errors/thrown";
 import { createRootLogger } from "~/server/observability/logging/logger";
@@ -53,12 +54,27 @@ class RedisUnavailableError extends Error {
 	}
 }
 
+/**
+ * Next's own interrupt, not a Redis fault. A runtime prefetch hangs every uncached
+ * fetch() and rejects it once the prerender ends, when its result is already thrown
+ * away. `unstable_rethrow` is the only public test for it.
+ */
+function isNextInterrupt(error: unknown) {
+	try {
+		unstable_rethrow(error);
+		return false;
+	} catch {
+		return true;
+	}
+}
+
 /** Logs the redacted reason; returns the error to rethrow on fail-closed paths. */
 function fail(operation: string, error: unknown) {
 	const reason = redactReason(error);
 	// Static body + operation as an attribute so every Redis failure lands in one
 	// filterable group, not one per operation name.
-	logger.error("redis operation failed", { operation, reason });
+	if (!isNextInterrupt(error))
+		logger.error("redis operation failed", { operation, reason });
 	return new RedisUnavailableError(
 		`[auth:redis] ${operation} failed: ${reason}`,
 	);

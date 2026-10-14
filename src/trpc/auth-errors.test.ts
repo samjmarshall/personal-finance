@@ -1,8 +1,13 @@
+import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
 import { redirect } from "next/navigation";
 import { describe, expect, it } from "vitest";
-import { isAuthError, redirectOnUnauthorized } from "~/trpc/auth-errors";
+import {
+	isAuthError,
+	redirectOnUnauthorized,
+	rethrowAuthFailure,
+} from "~/trpc/auth-errors";
 
 function thrownBy(fn: () => void): unknown {
 	try {
@@ -66,5 +71,49 @@ describe("isAuthError", () => {
 		expect(isAuthError(forbidden)).toBe(false);
 		expect(isAuthError(new Error("boom"))).toBe(false);
 		expect(isAuthError(thrownBy(() => redirect("/expenses")))).toBe(false);
+	});
+});
+
+describe("rethrowAuthFailure", () => {
+	async function clientAfterPrefetches(...outcomes: Promise<unknown>[]) {
+		const queryClient = new QueryClient();
+		await Promise.all(
+			outcomes.map((outcome, i) =>
+				queryClient.prefetchQuery({
+					queryKey: ["q", i],
+					queryFn: () => outcome,
+					retry: false,
+				}),
+			),
+		);
+		return queryClient;
+	}
+
+	it("throws the sign-in redirect a prefetch already failed with", async () => {
+		const signIn = thrownBy(() =>
+			redirectOnUnauthorized({
+				error: new TRPCError({ code: "UNAUTHORIZED" }),
+			}),
+		);
+		const queryClient = await clientAfterPrefetches(
+			Promise.resolve("ok"),
+			Promise.reject(signIn),
+		);
+
+		expect(thrownBy(() => rethrowAuthFailure(queryClient))).toBe(signIn);
+	});
+
+	// Only a stale session redirects early. Other errors retry on the client,
+	// then show the error card. Slow fetches just stream in.
+	it("leaves other failures and pending prefetches alone", async () => {
+		const queryClient = await clientAfterPrefetches(
+			Promise.reject(new Error("boom")),
+		);
+		void queryClient.prefetchQuery({
+			queryKey: ["pending"],
+			queryFn: () => new Promise(() => {}),
+		});
+
+		expect(() => rethrowAuthFailure(queryClient)).not.toThrow();
 	});
 });

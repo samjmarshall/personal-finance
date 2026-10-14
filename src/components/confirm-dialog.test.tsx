@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { Activity, useLayoutEffect, useState } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfirmDialog } from "~/components/confirm-dialog";
 
 function Harness({
@@ -111,5 +111,46 @@ describe("ConfirmDialog", () => {
 		});
 		expect(screen.getByRole("alertdialog")).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+	});
+});
+
+// A view that closes its dialog when its route hides, as the list views do.
+function HidingView() {
+	const [open, setOpen] = useState(true);
+	useLayoutEffect(() => () => setOpen(false), []);
+	return (
+		<ConfirmDialog
+			onConfirm={() => undefined}
+			onOpenChange={setOpen}
+			open={open}
+			title="Delete it?"
+		/>
+	);
+}
+
+describe("ConfirmDialog on a hidden route", () => {
+	// A browser keeps a closing dialog until its fade ends. jsdom has no
+	// animations, so it would drop it at once and hide the bug.
+	beforeEach(() => {
+		Element.prototype.getAnimations = () =>
+			[{ finished: new Promise(() => {}) }] as unknown as Animation[];
+	});
+	afterEach(() => {
+		delete (Element.prototype as Partial<Element>).getAnimations;
+	});
+
+	it("is gone, not fading out, when the route shows again", () => {
+		const route = (mode: "visible" | "hidden") => (
+			<Activity mode={mode}>
+				<HidingView />
+			</Activity>
+		);
+		const { rerender } = render(route("visible"));
+		expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+		rerender(route("hidden"));
+		rerender(route("visible"));
+
+		expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 	});
 });

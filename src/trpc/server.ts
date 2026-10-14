@@ -2,12 +2,12 @@ import "server-only";
 
 import { createHydrationHelpers } from "@trpc/react-query/rsc";
 import { headers } from "next/headers";
-import { cache } from "react";
+import { cache, createElement, type ReactNode } from "react";
 
 import { createTRPCContext } from "~/server/api/context";
 import { type AppRouter, createCaller } from "~/server/api/root";
 import { flushAfterResponse } from "~/server/observability/sdk/flush";
-import { redirectOnUnauthorized } from "./auth-errors";
+import { redirectOnUnauthorized, rethrowAuthFailure } from "./auth-errors";
 import { createQueryClient } from "./query-client";
 
 /**
@@ -34,7 +34,12 @@ const caller = createCaller(createContext, {
 	onError: redirectOnUnauthorized,
 });
 
-export const { trpc: api, HydrateClient } = createHydrationHelpers<AppRouter>(
-	caller,
-	getQueryClient,
-);
+const helpers = createHydrationHelpers<AppRouter>(caller, getQueryClient);
+
+export const api = helpers.trpc;
+
+// With PPR a stale session's prefetch can fail before this dehydrates.
+export function HydrateClient(props: { children: ReactNode }) {
+	rethrowAuthFailure(getQueryClient());
+	return createElement(helpers.HydrateClient, props);
+}

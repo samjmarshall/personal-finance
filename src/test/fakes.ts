@@ -1,9 +1,18 @@
 import { expect } from "vitest";
 
 /**
- * Stand-in methods and assertions shared by the service and controller unit
- * tests. Not a *.test.ts, so vitest never collects it.
+ * Stand-in methods and assertions shared by unit tests. Not a *.test.ts, so
+ * vitest never collects it.
  */
+
+/** A promise the test settles by hand. */
+export function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((res) => {
+		resolve = res;
+	});
+	return { promise, resolve };
+}
 
 /** A fake method that resolves `result` and keeps each call's arguments. */
 export function recorder<T>(result: T) {

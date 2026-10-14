@@ -2,7 +2,7 @@
 date: 2026-10-10
 design: thoughts/designs/2026-10-02-loading-states-and-ppr.md
 adrs: [adr026, adr027]
-status: Ready for Review - Phase 6 of 7
+status: Done
 ---
 # Loading states and Partial Prerendering Implementation Plan
 
@@ -550,20 +550,56 @@ Deviations:
     - Disclosures (`one-time-section.tsx:36` `pastOpen`, `more-details.tsx:213`) may stay open; that's the state Activity is meant to keep.
   - Mount-seeded state is not the same as today's remount. Under Activity the old state shows first, then the effect re-runs. `unplanned-view.tsx:53-58` would show the period the user stepped to, then snap to the current one. Seed only when `range` is null or `anchorDate` changed (keep the seeded anchor in a ref), so a return keeps the user's period with no snap.
 
+Deviations:
+
+- No `io()` in `SettingsData` / `ReceiptsData`: both await `getSession()` → `headers()` first, which already ends the static shell (`io.md:82`).
+- `allowed-senders-section.tsx` resets `deleteTarget` too, not just `confirmOpen`. The draft stays.
+- Unplanned seeding keeps a `seededFor` ref on `anchor` (not `anchorDate`, a new Date each parse). It guards `kind` as well as `range`.
+- `route.test.ts` mocks `next/server` to assert `connection()` runs before `select 1`.
+- `migrating-to-cache-components.md:825-829` doesn't name `connection()`; the guide does at `:101` and `:564` (plus `connection.md`).
+- Stale anchors: `receipts-view.tsx:79-81` is now 80-82; `more-details.tsx:213` is now 218.
+- Runtime prefetch (`partialPrefetching`) hangs every uncached `fetch()` and rejects it when the prerender ends. Upstash `get` rejected that way, and `secondary-storage.ts` logged each as `redis operation failed` (134 lines in one local session; Error Tracking noise in prod). `fail()` now skips the log for a Next interrupt (`unstable_rethrow` test). Control flow unchanged.
+- Stale cookie, `io()` routes: the prefetch now fails before `HydrateClient` dehydrates. Dehydrate drops failed queries, so SSR refetched over HTTP with no cookie and logged `unhandled route error` / `UNAUTHORIZED` (2 per hit; `main`: 0). `HydrateClient` (`src/trpc/server.ts`) now rethrows the stored sign-in redirect first (`rethrowAuthFailure`, `auth-errors.ts`). Dehydrating the error instead fails: Flight sends an Error prop as a bare `$Z`, so the redirect digest is lost.
+- `Dialog` / `AlertDialog` (`src/components/ui/`) remount their Base UI root on hide (`key` bumped in a `useLayoutEffect` cleanup). Base UI unmounts a closed dialog in an effect after its fade, and a hidden route runs no effects. So a dialog closed on hide stayed mounted and faded out again on return, with a blank title (design review High). Tests in `dialog.test.tsx`, `confirm-dialog.test.tsx`.
+
 ### Success
 
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make build` passes with no validation errors, and `rg "instant = false" src` finds nothing
-- [ ] The `make build` route table marks `/`, `/expenses`, `/income`, `/expenses/categories`, `/transactions`, `/receipts`, `/expenses/unplanned`, `/settings`, `/sign-in` and `/sign-up` as Partial Prerender
-- [ ] Against a production build served locally, the raw HTML of each dashboard route, fetched with any session cookie, contains the nav (`aria-label="Main navigation"`) and `data-slot="skeleton"` markup
-- [ ] `curl -I https://personal-finance.localhost/api/health` returns 200 and the database is hit per request
-- [ ] The Phase 2 signed-out and stale-cookie checks still pass
-- [ ] Leaving a route with a dialog open (browser Back) and returning shows the dialog closed. Check each listed view, incl. an open receipt detail.
-- [ ] On `/expenses/unplanned`, step back a period, leave and return: the same period shows, with no snap to the current one
-- [ ] With a fake cookie (`__Secure-better-auth.session_token=x`), the `/settings` and `/receipts` responses contain neither the inbound address nor the blob prefix
-- [ ] `/design-review`
-- [ ] `/security-review`
+- [x] `make check` passes
+- [x] `make test` passes
+  - 1204 tests, incl. health `connection()` order, Redis prerender interrupt, 2 `rethrowAuthFailure`, 2 dialog remount-on-hide.
+- [x] `make build` passes with no validation errors, and `rg "instant = false" src` finds nothing
+  - Passed first try; no `instant` anywhere.
+- [x] The `make build` route table marks `/`, `/expenses`, `/income`, `/expenses/categories`, `/transactions`, `/receipts`, `/expenses/unplanned`, `/settings`, `/sign-in` and `/sign-up` as Partial Prerender
+  - All 10 ◐. `/api/health` ƒ.
+- [x] Against a production build served locally, the raw HTML of each dashboard route, fetched with any session cookie, contains the nav (`aria-label="Main navigation"`) and `data-slot="skeleton"` markup
+  - `session_token=x`: all 8 routes have the nav once and 22–112 skeleton slots, then a streamed sign-in redirect.
+- [x] `curl -I https://personal-finance.localhost/api/health` returns 200 and the database is hit per request
+  - 200 each hit, ~0.04s (a db round trip), never cached.
+- [x] The Phase 2 signed-out and stale-cookie checks still pass
+  - Signed out: `/expenses` 307 → `/sign-in`. Stale cookie: 8/8 hard loads and 7/7 navs land on `/sign-in`, no "Couldn't load" or empty state seen (MutationObserver). Server log: 0 errors (was 12 `UNAUTHORIZED` before the `HydrateClient` fix).
+- [x] Leaving a route with a dialog open (browser Back) and returning shows the dialog closed. Check each listed view, incl. an open receipt detail.
+  - Prod build, 10 cases (add + delete on expenses, income, categories, transactions; receipt detail + delete): closed on Forward, same DOM kept. Settings Remove: closed; draft and tab kept.
+  - After the dialog remount fix: add + delete on expenses and categories, add on income. 0 frames with a popup or backdrop over 1.2s after Forward (was full opacity, then a ~100ms fade). Esc still fades out (12–24 frames).
+- [x] On `/expenses/unplanned`, step back a period, leave and return: the same period shows, with no snap to the current one
+  - Stepped to 23 Sept – 06 Oct; after Back/Forward only that period showed across 30×50ms samples. Fortnight stays pressed.
+- [x] With a fake cookie (`__Secure-better-auth.session_token=x`), the `/settings` and `/receipts` responses contain neither the inbound address nor the blob prefix
+  - No "Forward receipts to", `inboundAddress`, email address, `uploadPrefix` or `local/` prefix.
+- [x] `/design-review`: no blockers. One High fixed and checked live:
+  - Ghost dialog on return (all dialog surfaces): fixed by the remount above.
+  - Mediums left: link nav back to `/` shows the cash-flow skeleton ~300ms (prod, 3/3 runs; Back shows none). Dynamic data isn't kept in the router cache, so a push refetches it. Others predate this branch (Edit/Delete hidden at 640–1023px, tables with no scroll hint, no `aria-sort`, unlabeled search, chart focus, Next button shift).
+- [x] `/security-review`
+  - No findings. Checked: static shell holds no per-user data (no `use cache`; every user read behind `headers()` / `getSession()` / `io()`), runtime prefetch is cached per session on the client only, Redis fail-closed paths still throw, `rethrowAuthFailure` only adds a throw and is pinned to `/sign-in`.
+- Validation 2026-10-14 (prod build, `next start` via portless):
+  - `make build`, `make check`, `make test` (1204 passing) pass. Route table: all 10 ◐, `/api/health` ƒ. No `instant = false`.
+  - curl: signed out `/` and `/expenses` 307 → `/sign-in`, `/sign-in` 200. Health 200 ×3 at ~33ms. Fake cookie: all 8 routes carry the nav and 22–112 skeleton slots (nav counted twice: HTML + Flight). `/settings` and `/receipts`: no inbound address, email or blob prefix.
+  - Design review (Phase 7 surfaces, 1440/768/375): no blockers, no Highs. Dialogs closed on return (Back/Forward and link), 0 ghost frames, Esc still fades. State kept (filters, page, tabs, draft, collapsed cards). Unplanned period kept, no snap. Stale cookie: 8/8 hard loads, 3/3 navs land on `/sign-in`, no card or empty copy. Shell paints nav + skeleton at 13–36ms, CLS 0.
+  - Code review's top claim (no `io()` in `SettingsData` / `ReceiptsData` sticks the panels on a skeleton when the cookie cache is fresh) not reproduced: cookie cache refreshed, App Shell prefetched, then nav. Settings panels filled by 500ms (2 runs), receipts rows in 368ms. 0 server log errors over the whole session.
+  - Comment judge: 1 rewrite applied (`auth-errors.test.ts`: failed queries aren't dehydrated).
+  - New Mediums, open: `/` shell body is blank until its section skeletons stream (`OverviewSkeleton` passes `null`; PPR exposes it). Code review: a non-auth prefetch failure that settles before `HydrateClient` is dropped, not dehydrated, so SSR refetches with no cookie (unverified live). Dialog remount key and view resets also fire on a Suspense re-suspend and StrictMode, not only on hide. App Shell prefetch still runs the Redis session read; the log is gone but the retries aren't.
+- Re-validation 2026-10-14, after resolve-findings (`be0009a`, `591a83b`, `f78dcf7`):
+  - Sign-out now does a full page load to `/sign-in`, so Back can't show kept routes or cached queries. `make build`/`check`/`test` (1204) pass, route table unchanged. curl on prod build: same redirects, health 200 ×3 ~30ms, fake cookie 8 routes nav + skeletons. Dashboard docs send `no-store`, so no bfcache restore in Chrome.
+  - Code review, security review: no Highs/Mediums. Low (0.4): Safari may restore a `no-store` page from bfcache on Back; fixed in `9da5d8e` (a restored page reloads). Comment judge: 1 rewrite applied (`auth-errors.test.ts`: slow fetches stream in).
+  - adr007 now names `sign-out-button.tsx` for the sign-out error (`70b6782`). Sign out + Back checked by hand in Chrome and Safari.
 
 ## References
 
