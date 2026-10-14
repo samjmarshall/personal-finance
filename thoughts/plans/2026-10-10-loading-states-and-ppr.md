@@ -598,8 +598,8 @@ Deviations:
   - New Mediums, open: `/` shell body is blank until its section skeletons stream (`OverviewSkeleton` passes `null`; PPR exposes it). Code review: a non-auth prefetch failure that settles before `HydrateClient` is dropped, not dehydrated, so SSR refetches with no cookie (unverified live). Dialog remount key and view resets also fire on a Suspense re-suspend and StrictMode, not only on hide. App Shell prefetch still runs the Redis session read; the log is gone but the retries aren't.
 - Re-validation 2026-10-14, after resolve-findings (`be0009a`, `591a83b`, `f78dcf7`):
   - Sign-out now does a full page load to `/sign-in`, so Back can't show kept routes or cached queries. `make build`/`check`/`test` (1204) pass, route table unchanged. curl on prod build: same redirects, health 200 ×3 ~30ms, fake cookie 8 routes nav + skeletons. Dashboard docs send `no-store`, so no bfcache restore in Chrome.
-  - Code review, security review: no Highs/Mediums. Low (0.4): Safari may still restore a `no-store` page from bfcache on Back (not tested). Comment judge: 1 rewrite applied (`auth-errors.test.ts`: slow fetches stream in).
-  - Open: adr007 consequences still name `app-nav.tsx` for the sign-out error (moved to `sign-out-button.tsx` in Phase 2). Sign out + Back not tried in a real browser: no credentials.
+  - Code review, security review: no Highs/Mediums. Low (0.4): Safari may restore a `no-store` page from bfcache on Back; fixed in `9da5d8e` (a restored page reloads). Comment judge: 1 rewrite applied (`auth-errors.test.ts`: slow fetches stream in).
+  - adr007 now names `sign-out-button.tsx` for the sign-out error (`70b6782`). Sign out + Back checked by hand in Chrome and Safari.
 
 ## References
 
