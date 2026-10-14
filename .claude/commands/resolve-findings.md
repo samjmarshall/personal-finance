@@ -1,5 +1,6 @@
 ---
 description: Triage then resolve the Code Review findings and Design smells from the Validation Report above, one at a time — a real applied diff for each fix, a reasoned skip for the rest, pausing for your decision on each.
+argument-hint: "[--auto-skip]"
 model: opus
 effort: high
 ---
@@ -7,6 +8,16 @@ effort: high
 Work through **every** Code Review Finding and Design smell in the Validation Report above. One finding at a time. For each: judge again, deeply, whether fixing it is worth it. Then either write the real fix and show the diff, or recommend a skip with reasons. Stop after each.
 
 I review code, not proposals. Never describe a fix you could have written. A skip is a reasoned verdict, not a proposal.
+
+## Arguments
+
+`$ARGUMENTS`
+
+**`--auto-skip`** — don't stop on a skip. Print one line, record it, go straight to the next finding:
+
+> **Skipped N of M — `<id>`** — <problem in a few words>. Why: <reason> (`file:line` / rule / ADR).
+
+Only fixes and blocks stop for my decision. Without the flag, every finding stops.
 
 ## Order
 
@@ -17,7 +28,7 @@ Worst-first: correctness bugs → rule/ADR violations → accessibility → othe
 For each finding in order:
 
 0. **Triage it.** Check the claim against the code first, since reviewers can be wrong. Weigh the real cost of leaving it (how likely × how bad) against the cost of the fix (churn, new indirection, a behaviour change). Decide **fix** or **skip**.
-   - **Skip** → no edit. Show **Problem**, **Impact**, **Why skip**, and **Recommend: skip**, then STOP.
+   - **Skip** → no edit. Show **Problem**, **Impact**, **Why skip**, and **Recommend: skip**, then STOP (with `--auto-skip`: one-line skip, no stop).
      - **Why skip** must cite what the call rests on: `file:line`, rule, ADR or plan line.
      - That way, a skip I overrule points at the context or doc that misled you.
      - If I say fix, run steps 1–3.
@@ -49,5 +60,6 @@ Rules:
 
 1. Run `make check` and `make test` once over the full set of kept fixes; report the result.
 2. Summarise: **kept** (one line each), **skipped** (with reason), **newly surfaced**.
+   - With `--auto-skip`, number the skips so I can say "fix 3" to reopen one. A reopened skip runs steps 1–3 like a normal fix and counts as an overruled skip for **Doc gaps**.
 3. **Doc gaps**: list each skip I overruled, and the doc, rule or context that should change so the next triage gets it right.
 4. Next: `/commit`, then re-run `/validate` if a correctness fix changed behaviour.
