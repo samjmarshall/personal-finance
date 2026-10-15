@@ -64,6 +64,11 @@ export function SelectField<T>({
 		<Select
 			disabled={disabled || loading}
 			items={items}
+			onOpenChange={(open, eventDetails) => {
+				// Base UI lets a read-only popup open for browsing, but its options
+				// look pickable and do nothing — keep it shut instead.
+				if (open && readOnly) eventDetails.cancel();
+			}}
 			onValueChange={onValueChange}
 			readOnly={readOnly}
 			value={value}
