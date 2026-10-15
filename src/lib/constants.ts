@@ -45,6 +45,17 @@ export enum Provenance {
 	Paypal = "paypal",
 }
 
+// A RedBark bank connection's consent state, verbatim from its API. Expired,
+// invalidated and revoked are terminal: the member re-links in RedBark.
+export enum CdrConnectionStatus {
+	Pending = "pending",
+	Active = "active",
+	Expiring = "expiring",
+	Expired = "expired",
+	Invalidated = "invalidated",
+	Revoked = "revoked",
+}
+
 // Stored frequency/priority are free-text; coerce a read value to the managed
 // vocab, falling back to the default when it is outside the current set (e.g.
 // legacy/imported data) so a form seed can never hold an unknown value.

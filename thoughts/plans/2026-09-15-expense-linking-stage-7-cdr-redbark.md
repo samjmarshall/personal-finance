@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Ready for Review - Phase 1 of 7
+status: In Progress - Phase 2 of 7
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -262,12 +262,15 @@ Question #1. **Prerequisite:** a RedBark `livemode:false` sandbox API key.
     - A `503` and a network failure are retryable; a `400` is a plain `Error`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `/security-review` (touches `src/env.ts`; new outbound HTTP with a bearer key)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `/security-review` (touches `src/env.ts`; new outbound HTTP with a bearer key)
 - [ ] The sandbox spike is done and `mapRedbarkTransaction` is pinned against real sandbox rows;
       adr017 facet 4 no longer says "pending spike"
-- [ ] A `credit` row maps to a negative amount and a `debit` row to a positive amount; a row
+      — RedBark has no sandbox, so the spike ran live (read-only, 2026-10-16) and adr017 facet 4
+      records it. Fixtures are made-up values in the live field shape: real bank rows were kept
+      out of this public repo. Open: does that satisfy "pinned against real rows"?
+- [x] A `credit` row maps to a negative amount and a `debit` row to a positive amount; a row
       whose `direction` and numeric sign disagree throws; a non-AUD row throws
 
 ---

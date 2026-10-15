@@ -26,6 +26,8 @@ Validated in `src/env.ts`. Pull them locally with `vercel env pull`; set them pe
 | `AWS_REGION` | optional | Bedrock region, default `ap-southeast-2`. Terraform sets it on Vercel; `assume` exports it locally. |
 | `AWS_ROLE_ARN` | Vercel only | IAM role the deployment's OIDC token is exchanged for (`src/server/aws/credentials.ts`). Set by Terraform per environment; leave unset locally. |
 | `BEDROCK_RECEIPT_MODEL` | optional | Bedrock inference-profile id the `process-receipt` worker calls, default `au.anthropic.claude-sonnet-4-6`. Set by Terraform from `infrastructure/locals.tf`. |
+| `REDBARK_API_KEY` | optional | RedBark account key for the daily CDR bank sync ([adr017](adr/adr017-external-transaction-sync-via-cdr-redbark.md)). Unset: the sync is a logged no-op. Vercel dashboard secret; don't set it in production until RedBark v2 is GA. |
+| `REDBARK_API_URL` | optional | RedBark API origin, default `https://api.redbark.com` (the client adds `/v2`). |
 | `RESEND_API_KEY` | production | Resend key the inbound webhook uses to fetch the email body and attachment bytes, which the `email.received` payload omits. |
 | `RESEND_WEBHOOK_SECRET` | production | Svix signing secret verifying the raw body at `/api/receipts/inbound`. Without it the route refuses every request. |
 | `RESEND_INBOUND_ADDRESS` | optional | The address members forward receipts to. Display-only, shown on `/settings`; nothing routes on it. |

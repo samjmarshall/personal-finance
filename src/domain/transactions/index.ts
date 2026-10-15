@@ -13,6 +13,7 @@ import {
 } from "./transaction.dto";
 import type {
 	ExpenseConsumption,
+	SyncedTransaction,
 	Transaction,
 	TransactionListItem,
 	TransactionListResult,
@@ -22,6 +23,7 @@ import type {
 export type {
 	ExpenseConsumption,
 	LinkExpenseInput,
+	SyncedTransaction,
 	Transaction,
 	TransactionCreateInput,
 	TransactionListItem,

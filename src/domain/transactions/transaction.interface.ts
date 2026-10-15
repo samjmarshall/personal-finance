@@ -19,6 +19,18 @@ export interface Transaction {
 	updatedAt: Date | null;
 }
 
+// A row an external sync owns, matched on (provenance, externalId). Carries only
+// the bank-owned fields; member edits (Category, Group, Expense link) are never
+// part of it, so a re-sync can't overwrite them.
+export interface SyncedTransaction {
+	provenance: Provenance;
+	externalId: string;
+	accountName: string;
+	amount: number;
+	date: Date;
+	description: string;
+}
+
 // One Expense's Consumed: linked Spend net of refunds
 export interface ExpenseConsumption {
 	expenseId: number;
