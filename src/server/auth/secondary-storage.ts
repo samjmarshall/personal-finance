@@ -106,6 +106,19 @@ export function createSecondaryStorage({ url, token, prefix }: Options) {
 			}
 		},
 
+		// Atomic consume of a single-use value. Better Auth calls it only with
+		// `verification.storeInDatabase: false`; we store in Postgres, so it is
+		// unused today. Fails closed: no Postgres copy to fall back to.
+		getAndDelete: async (key: string) => {
+			try {
+				const value = await redis.getdel(k(key));
+				if (value === null || value === undefined) return null;
+				return typeof value === "string" ? value : JSON.stringify(value);
+			} catch (error) {
+				throw fail("getAndDelete", error);
+			}
+		},
+
 		set: async (key: string, value: string, ttl?: number) => {
 			// A TTL of 0 means already expired, not "keep forever": `getTTLSeconds`
 			// floors at 0 and callers pass it straight through (`internal-adapter.mjs:37`).
