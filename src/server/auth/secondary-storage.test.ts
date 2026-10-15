@@ -10,6 +10,7 @@ const pipeline = vi.hoisted(() => ({
 
 const client = vi.hoisted(() => ({
 	get: vi.fn(),
+	getdel: vi.fn(),
 	set: vi.fn(),
 	del: vi.fn(),
 	pipeline: vi.fn(),
@@ -83,6 +84,32 @@ describe("get", () => {
 
 		await expect(storage().get("active-sessions-usr_42")).rejects.toThrow(
 			"get failed",
+		);
+	});
+});
+
+describe("getAndDelete", () => {
+	// One GETDEL, so a single-use value can't be read twice between a GET and a DEL.
+	it("consumes with one GETDEL and re-stringifies a parsed object", async () => {
+		client.getdel.mockResolvedValue({ value: "otp" });
+
+		await expect(storage().getAndDelete("verification:x")).resolves.toBe(
+			'{"value":"otp"}',
+		);
+		expect(client.getdel).toHaveBeenCalledWith("ba:test:verification:x");
+	});
+
+	it("returns null on a miss", async () => {
+		client.getdel.mockResolvedValue(null);
+
+		await expect(storage().getAndDelete("verification:x")).resolves.toBeNull();
+	});
+
+	it("propagates a throw — there is no Postgres copy to fall back to", async () => {
+		client.getdel.mockRejectedValue(new Error("upstash down"));
+
+		await expect(storage().getAndDelete("verification:x")).rejects.toThrow(
+			"getAndDelete failed",
 		);
 	});
 });
@@ -247,12 +274,14 @@ describe("prefixing", () => {
 		});
 
 		await store.get("k");
+		await store.getAndDelete("k");
 		await store.set("k", "v");
 		await store.delete("k");
 		await store.increment("k", 60);
 
 		const keyed = [
 			client.get,
+			client.getdel,
 			client.set,
 			client.del,
 			pipeline.incr,
