@@ -111,8 +111,8 @@ importers:
         specifier: 1.5.2
         version: 1.5.2
       inngest:
-        specifier: 4.22.0
-        version: 4.22.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3)
+        specifier: 4.24.0
+        version: 4.24.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3)
       lucide-react:
         specifier: 1.31.0
         version: 1.31.0(react@19.2.9)
@@ -3520,8 +3520,8 @@ packages:
     resolution: {integrity: sha512-1m8kiPEq0CTqrz5/kdQ75pgLu6dNmpPWbL8fwX+mTGKoVPfljaNMxoVcLIc+yCA1I/jLST04i0EADFeRmRHmwA==}
     hasBin: true
 
-  inngest@4.22.0:
-    resolution: {integrity: sha512-lxjkD9mDAQct+At7+STbrJIIVQoEq12GyZPzsgZSwRQV3QKKtho7sGv/PgWZ+gSmfsyB9J3G4axLBrkNj0zHbw==}
+  inngest@4.24.0:
+    resolution: {integrity: sha512-SYBaUgegarDQs97zja9ouwwd/rx4W8481jw3GAalHWfT0Pq99EHlfZ8+j9lXX82nV6LPIrDd2OVCieIoV+yoyg==}
     engines: {node: '>=20'}
     peerDependencies:
       '@sveltejs/kit': '>=1.27.3'
@@ -8130,7 +8130,7 @@ snapshots:
       - encoding
       - supports-color
 
-  inngest@4.22.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3):
+  inngest@4.24.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3):
     dependencies:
       '@bufbuild/protobuf': 2.16.0
       '@inngest/ai': 0.1.8
