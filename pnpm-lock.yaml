@@ -108,8 +108,8 @@ importers:
         specifier: 0.45.4
         version: 0.45.4(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.39.0)(kysely@0.29.6)(postgres@3.4.9)
       heic-to:
-        specifier: 1.5.2
-        version: 1.5.2
+        specifier: 1.6.6
+        version: 1.6.6
       inngest:
         specifier: 4.22.0
         version: 4.22.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.1(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3)
@@ -3450,8 +3450,8 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
-  heic-to@1.5.2:
-    resolution: {integrity: sha512-8Fns+lZHAWmz5U5IUxDeXKwIf3foBoKNPLxxFY4B0MkLjNuomEIHCoDbDE+x/llFK3NCEO1cu4+n3iUKY+Svmw==}
+  heic-to@1.6.6:
+    resolution: {integrity: sha512-PYpOtPFEzgPxIoGF4LQ+oBD8o/tMvcFDNynrNzK1fLXfE6mTe2W+AHOvBKc5MwnVak4/Pnb51g9CJAtWL5YGWA==}
 
   hono@4.13.13:
     resolution: {integrity: sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA==}
@@ -8063,7 +8063,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  heic-to@1.5.2: {}
+  heic-to@1.6.6: {}
 
   hono@4.13.13: {}
 
