@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction, TransactionSummary } from "~/domain/transactions";
-import { Frequency, Priority } from "~/lib/constants";
+import { Frequency, Priority, Provenance } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
 import { NotFoundError } from "~/server/errors/domain-errors";
@@ -29,6 +29,9 @@ const TRANSACTION: Transaction = {
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
+	provenance: Provenance.Manual,
+	externalId: null,
+	accountName: null,
 	createdAt: new Date("2026-09-01T01:00:00.000Z"),
 	updatedAt: null,
 };

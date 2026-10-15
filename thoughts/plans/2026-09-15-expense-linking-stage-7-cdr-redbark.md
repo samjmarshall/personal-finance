@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Ready to implement
+status: Ready for Review - Phase 1 of 7
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -186,12 +186,13 @@ Implements adr017 facet 1 (provenance model). Backend only, no UI.
   branch.
 
 ### Success
-- [ ] `make check` passes (incl. `db:check` and the schema↔interface contract)
-- [ ] `make test` passes
-- [ ] `/security-review` (touches `src/lib/**`)
-- [ ] Migration applies cleanly on the branch DB; a transaction created through the app reads
-      back `provenance = 'manual'`, `externalId = null`
-- [ ] Two manual rows with NULL `externalId` insert fine; two rows with the same
+- [x] `make check` passes (incl. `db:check` and the schema↔interface contract)
+- [x] `make test` passes
+- [x] `/security-review` (touches `src/lib/**`) — no findings
+- [x] Migration applies cleanly on the branch DB; a transaction created through the app reads
+      back `provenance = 'manual'`, `externalId = null` (checked with the app's insert column
+      set in a rolled-back transaction; the repository snapshot pins `default` for all three)
+- [x] Two manual rows with NULL `externalId` insert fine; two rows with the same
       `(cdr, 'txn_x')` violate the partial unique index
 
 ---

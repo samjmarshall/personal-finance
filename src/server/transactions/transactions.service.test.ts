@@ -4,7 +4,7 @@ import type {
 	Transaction,
 	TransactionSummary,
 } from "~/domain/transactions";
-import { Frequency, Priority } from "~/lib/constants";
+import { Frequency, Priority, Provenance } from "~/lib/constants";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
@@ -63,6 +63,9 @@ const TRANSACTION: Transaction = {
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
+	provenance: Provenance.Manual,
+	externalId: null,
+	accountName: null,
 	createdAt: new Date("2026-09-01T01:00:00.000Z"),
 	updatedAt: null,
 };

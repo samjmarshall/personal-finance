@@ -1,17 +1,20 @@
-import type { Frequency, Priority } from "~/lib/constants";
+import type { Frequency, Priority, Provenance } from "~/lib/constants";
 
 export interface Transaction {
 	id: number;
+	accountName: string | null;
 	amount: number;
 	categoryId: number | null;
 	createdAt: Date;
 	date: Date;
 	description: string;
 	expenseId: number | null;
+	externalId: string | null;
 	frequency: Frequency;
 	group: string;
 	notes: string | null;
 	priority: Priority;
+	provenance: Provenance;
 	receiptDescription: string | null;
 	updatedAt: Date | null;
 }

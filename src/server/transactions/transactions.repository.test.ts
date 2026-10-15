@@ -1,7 +1,7 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Transaction, TransactionListQuery } from "~/domain/transactions";
-import { Frequency, Priority } from "~/lib/constants";
+import { Frequency, Priority, Provenance } from "~/lib/constants";
 import {
 	pgError,
 	type Respond,
@@ -36,6 +36,9 @@ const TRANSACTION = {
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
+	provenance: Provenance.Manual,
+	externalId: null,
+	accountName: null,
 	createdAt: new Date("2026-09-01T01:00:00.000Z"),
 	updatedAt: null,
 } satisfies Transaction;
@@ -88,7 +91,7 @@ describe("list", () => {
 			    "params": [
 			      50,
 			    ],
-			    "sql": "select "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt" from "transaction" order by "transaction"."date" desc, "transaction"."id" desc limit $1",
+			    "sql": "select "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "accountName", "createdAt", "updatedAt" from "transaction" order by "transaction"."date" desc, "transaction"."id" desc limit $1",
 			  },
 			  {
 			    "method": "all",
@@ -370,7 +373,7 @@ describe("insert", () => {
 			      "2026-09-29T00:00:00.000Z",
 			      "2026-09-29T00:00:00.000Z",
 			    ],
-			    "sql": "insert into "transaction" ("id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, default, $5, $6, $7, $8, $9, $10, $11) returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			    "sql": "insert into "transaction" ("id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "accountName", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, default, $5, $6, $7, $8, $9, default, default, default, $10, $11) returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "accountName", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
@@ -417,7 +420,7 @@ describe("update", () => {
 			      "2026-09-29T00:00:00.000Z",
 			      1,
 			    ],
-			    "sql": "update "transaction" set "expenseId" = $1, "categoryId" = $2, "date" = $3, "description" = $4, "amount" = $5, "group" = $6, "frequency" = $7, "priority" = $8, "notes" = $9, "updatedAt" = $10 where "transaction"."id" = $11 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			    "sql": "update "transaction" set "expenseId" = $1, "categoryId" = $2, "date" = $3, "description" = $4, "amount" = $5, "group" = $6, "frequency" = $7, "priority" = $8, "notes" = $9, "updatedAt" = $10 where "transaction"."id" = $11 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "accountName", "createdAt", "updatedAt"",
 			  },
 			]
 		`);
@@ -451,7 +454,7 @@ describe("findUnplanned", () => {
 			      "2026-09-01T00:00:00.000Z",
 			      "2026-09-15T00:00:00.000Z",
 			    ],
-			    "sql": "select "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt" from "transaction" where ("transaction"."amount" > $1 and "transaction"."expenseId" is null and "transaction"."date" >= $2 and "transaction"."date" < $3) order by "transaction"."categoryId" asc, "transaction"."date" desc, "transaction"."id" desc",
+			    "sql": "select "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "accountName", "createdAt", "updatedAt" from "transaction" where ("transaction"."amount" > $1 and "transaction"."expenseId" is null and "transaction"."date" >= $2 and "transaction"."date" < $3) order by "transaction"."categoryId" asc, "transaction"."date" desc, "transaction"."id" desc",
 			  },
 			]
 		`);
@@ -561,7 +564,7 @@ describe("setLink", () => {
 			      "2026-09-29T00:00:00.000Z",
 			      1,
 			    ],
-			    "sql": "update "transaction" set "expenseId" = $1, "categoryId" = $2, "updatedAt" = $3 where "transaction"."id" = $4 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "createdAt", "updatedAt"",
+			    "sql": "update "transaction" set "expenseId" = $1, "categoryId" = $2, "updatedAt" = $3 where "transaction"."id" = $4 returning "id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "accountName", "createdAt", "updatedAt"",
 			  },
 			]
 		`);

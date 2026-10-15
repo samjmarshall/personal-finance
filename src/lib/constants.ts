@@ -36,6 +36,15 @@ export enum ReceiptChannel {
 	Email = "email",
 }
 
+// Which system a Transaction lives in. PayPal is defined now so its sync adds
+// no migration.
+export enum Provenance {
+	Manual = "manual",
+	Import = "import",
+	Cdr = "cdr",
+	Paypal = "paypal",
+}
+
 // Stored frequency/priority are free-text; coerce a read value to the managed
 // vocab, falling back to the default when it is outside the current set (e.g.
 // legacy/imported data) so a form seed can never hold an unknown value.

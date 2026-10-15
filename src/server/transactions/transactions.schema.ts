@@ -1,6 +1,12 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgEnum, pgTable } from "drizzle-orm/pg-core";
-import { Frequency, Priority } from "~/lib/constants";
+import {
+	check,
+	index,
+	pgEnum,
+	pgTable,
+	uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { Frequency, Priority, Provenance } from "~/lib/constants";
 import { categories } from "~/server/categories/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 
@@ -11,6 +17,10 @@ export const transactionFrequency = pgEnum(
 export const transactionPriority = pgEnum(
 	"transaction_priority",
 	Object.values(Priority) as [Priority, ...Priority[]],
+);
+export const transactionProvenance = pgEnum(
+	"transaction_provenance",
+	Object.values(Provenance) as [Provenance, ...Provenance[]],
 );
 
 export const transactions = pgTable(
@@ -32,6 +42,10 @@ export const transactions = pgTable(
 		frequency: transactionFrequency().notNull().default(Frequency.OneOff),
 		priority: transactionPriority().notNull().default(Priority.NiceToHave),
 		notes: d.text(),
+		provenance: transactionProvenance().notNull().default(Provenance.Manual),
+		// The provider's own id; null on a manual row.
+		externalId: d.text(),
+		accountName: d.text(),
 		createdAt: d
 			.timestamp({ withTimezone: true })
 			.$defaultFn(() => new Date())
@@ -43,6 +57,11 @@ export const transactions = pgTable(
 		index("transaction_priority_idx").on(t.priority),
 		index("transaction_expense_idx").on(t.expenseId),
 		index("transaction_category_idx").on(t.categoryId),
+		// adr017: a re-sync updates its row instead of duplicating it. Partial, so
+		// unlimited manual rows (null externalId) coexist.
+		uniqueIndex("transaction_provenance_external_idx")
+			.on(t.provenance, t.externalId)
+			.where(sql`${t.externalId} is not null`),
 		// adr025: a linked Transaction takes its Category from the Expense.
 		check(
 			"transaction_expense_or_category_check",
