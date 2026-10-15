@@ -15,8 +15,8 @@ importers:
         specifier: 5.0.82
         version: 5.0.82(zod@4.4.3)
       '@ai-sdk/otel':
-        specifier: 1.0.101
-        version: 1.0.101(zod@4.4.3)
+        specifier: 1.0.140
+        version: 1.0.140(zod@4.4.3)
       '@base-ui/react':
         specifier: 1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -249,20 +249,14 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/gateway@4.0.81':
-    resolution: {integrity: sha512-9TdKEg2l/qfaK7L4gC1FkrHNBrEXQjZSV3DvkRLCXkOSJTzojmarCn19ROWBbrlHqFVbW7OSOwQqz1n7ku9HQA==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
   '@ai-sdk/openai@4.0.66':
     resolution: {integrity: sha512-W4GooZjROdOmf7dfjWlRWNVs+Vvr7ZwfDZbyAJRPo1bgQbpRoDd9ZcCwy/PX1X0s2G7B/dhN2RWOORsHtr0wGg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/otel@1.0.101':
-    resolution: {integrity: sha512-FrtXUEax3F1zfuZUaavYT0brgFBtswKw3AkFNLzvlNS7fnjZpBeBO4wZ8gVAzO/8ICOmqcDs5tIUQxfAWjR0RA==}
+  '@ai-sdk/otel@1.0.140':
+    resolution: {integrity: sha512-nKahLzz1/BjbgyPbEy4mHszr6qzJDH1v1Q5Tr9ZY/KBHmhN8qIB4jDPJSlWTr27UFxRlx9SXlfhbGdY+eskDcg==}
     engines: {node: '>=22'}
 
   '@ai-sdk/provider-utils@5.0.40':
@@ -2604,12 +2598,6 @@ packages:
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
-
-  ai@7.0.101:
-    resolution: {integrity: sha512-EOhih2g2Gu6TJdnkBojXORtNT6oZ6J4YeVeJhZXFO384ONLdXpPa+VPH183IMpSB8SkswQHTYRRoZ1tt+9Jt3Q==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
 
   ai@7.0.140:
     resolution: {integrity: sha512-GHWqpUcY7EsRHc7jC99SqzpgabExb9w7anxDYa5N79AIVsGavIZFxZKhVQ/SORkuXFkPO4FG8cCSweaGutvwSw==}
@@ -5050,24 +5038,17 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
-  '@ai-sdk/gateway@4.0.81(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.14
-      '@ai-sdk/provider-utils': 5.0.40(zod@4.4.3)
-      '@vercel/oidc': 3.2.0
-      zod: 4.4.3
-
   '@ai-sdk/openai@4.0.66(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.14
       '@ai-sdk/provider-utils': 5.0.40(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/otel@1.0.101(zod@4.4.3)':
+  '@ai-sdk/otel@1.0.140(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 4.0.14
+      '@ai-sdk/provider': 4.0.27
       '@opentelemetry/api': 1.9.1
-      ai: 7.0.101(zod@4.4.3)
+      ai: 7.0.140(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
@@ -7336,13 +7317,6 @@ snapshots:
   adm-zip@0.5.18: {}
 
   agent-base@7.1.4: {}
-
-  ai@7.0.101(zod@4.4.3):
-    dependencies:
-      '@ai-sdk/gateway': 4.0.81(zod@4.4.3)
-      '@ai-sdk/provider': 4.0.14
-      '@ai-sdk/provider-utils': 5.0.40(zod@4.4.3)
-      zod: 4.4.3
 
   ai@7.0.140(zod@4.4.3):
     dependencies:
