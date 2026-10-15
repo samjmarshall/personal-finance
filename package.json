@@ -2,6 +2,7 @@
 	"name": "personal-finance",
 	"version": "0.1.0",
 	"private": true,
+	"license": "MIT",
 	"type": "module",
 	"packageManager": "pnpm@10.18.3",
 	"engines": {
