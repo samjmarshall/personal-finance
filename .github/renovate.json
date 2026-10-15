@@ -12,6 +12,11 @@
 			],
 			"matchPackageNames": ["pnpm"],
 			"allowedVersions": "<11.0.0"
+		},
+		{
+			"description": "@ai-sdk/* pin exact ai and @ai-sdk/provider versions. Bumping one alone installs two provider copies and breaks typecheck (https://github.com/samjmarshall/personal-finance/pull/52).",
+			"matchPackageNames": ["ai", "@ai-sdk/**"],
+			"groupName": "ai-sdk"
 		}
 	]
 }
