@@ -82,7 +82,9 @@ export class HttpRedbarkClient implements RedbarkClient {
 			"/transactions",
 			{
 				account: accountId,
-				from: from.toISOString(),
+				// A full timestamp is an instant to RedBark (UTC midnight = Sydney mid-morning);
+				// a bare date is the whole day in the member's zone, like each row's date.
+				from: from.toISOString().slice(0, 10),
 				// adr017 facet 3: a pending row can still change amount or vanish.
 				include_pending: "false",
 			},
@@ -138,10 +140,10 @@ export class HttpRedbarkClient implements RedbarkClient {
 		}
 
 		if (!response.ok) {
-			const message = `redbark GET ${path} failed: ${response.status} ${await errorCode(response)}`;
+			const message = `redbark GET ${path} failed: ${response.status} ${await readErrorCode(response)}`;
 			if (response.status === 429 || response.status >= 500)
 				throw new RedbarkRetryableError(message, {
-					retryAfterMs: retryAfterMs(response.headers.get("retry-after")),
+					retryAfterMs: parseRetryAfter(response.headers.get("retry-after")),
 				});
 			throw new Error(message);
 		}
@@ -149,7 +151,7 @@ export class HttpRedbarkClient implements RedbarkClient {
 	}
 }
 
-async function errorCode(response: Response): Promise<string> {
+async function readErrorCode(response: Response): Promise<string> {
 	const parsed = errorBodyDto.safeParse(
 		await response.json().catch(() => null),
 	);
@@ -157,7 +159,7 @@ async function errorCode(response: Response): Promise<string> {
 }
 
 // RFC 9110 §10.2.3: delta-seconds or an HTTP-date.
-function retryAfterMs(header: string | null): number | null {
+function parseRetryAfter(header: string | null): number | null {
 	if (!header) return null;
 	if (/^\d+$/.test(header.trim())) return Number(header) * 1000;
 	const ms = Date.parse(header) - Date.now();

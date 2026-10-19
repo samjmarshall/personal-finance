@@ -109,7 +109,7 @@ describe("HttpRedbarkClient.listTransactions", () => {
 		expect(url.pathname).toBe("/v2/transactions");
 		expect(Object.fromEntries(url.searchParams)).toEqual({
 			account: "acct_1",
-			from: "2026-09-01T00:00:00.000Z",
+			from: "2026-09-01",
 			include_pending: "false",
 			limit: "100",
 		});
