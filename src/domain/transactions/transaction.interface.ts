@@ -23,7 +23,8 @@ export interface Transaction {
 // the bank-owned fields; member edits (Category, Group, Expense link) are never
 // part of it, so a re-sync can't overwrite them.
 export interface SyncedTransaction {
-	provenance: Provenance;
+	// Never manual: the edit guard trusts a manual row to be member-owned.
+	provenance: Exclude<Provenance, Provenance.Manual>;
 	externalId: string;
 	accountName: string;
 	amount: number;

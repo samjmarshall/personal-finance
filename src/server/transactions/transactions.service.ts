@@ -125,9 +125,12 @@ export class TransactionsService {
 		id,
 		...values
 	}: TransactionUpdateInput): Promise<Transaction> {
-		await this.assertBankValuesKept(id, values);
+		const synced = await this.guardBankValues(id, values);
+		// Left out on a synced row, so a sync landing mid-edit isn't written over.
+		const { amount, date, ...rest } = values;
+		const patch = synced ? rest : values;
 		const row = await this.repository
-			.update(id, { ...values, ...(await this.categoryPatch(values, id)) })
+			.update(id, { ...patch, ...(await this.categoryPatch(values, id)) })
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, FK_CONFLICT_MESSAGE),
 			);
@@ -174,16 +177,18 @@ export class TransactionsService {
 		return this.repository.datedAmounts();
 	}
 
-	private async assertBankValuesKept(
+	/** 404s a missing row; refuses a changed amount or date on a synced row. True when synced. */
+	private async guardBankValues(
 		id: number,
 		{ amount, date }: Pick<TransactionUpdateInput, "amount" | "date">,
-	): Promise<void> {
+	): Promise<boolean> {
 		const saved = await this.repository.findSyncedValues(id);
 		if (!saved) throw new NotFoundError(NOT_FOUND_MESSAGE);
-		if (saved.provenance === Provenance.Manual) return;
+		if (saved.provenance === Provenance.Manual) return false;
 		if (amount !== saved.amount || date.getTime() !== saved.date.getTime()) {
 			throw new InvalidInputError(BANK_OWNED_MESSAGE);
 		}
+		return true;
 	}
 
 	// A linked Transaction takes its Category from the Expense (adr025), so

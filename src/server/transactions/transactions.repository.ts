@@ -32,8 +32,14 @@ import type { db as realDb } from "~/server/db";
 import { transactions } from "./transactions.schema";
 
 export type TransactionLink = Pick<Transaction, "expenseId" | "categoryId">;
-/** What a member may not change on a synced row. */
+/** A row's bank-owned values, plus provenance to tell if it is synced. */
 export type SyncedValues = Pick<Transaction, "provenance" | "amount" | "date">;
+/** A synced row's write leaves out amount and date. */
+export type TransactionPatch = Omit<
+	TransactionUpdateInput,
+	"id" | "amount" | "date"
+> &
+	Partial<Pick<TransactionUpdateInput, "amount" | "date">>;
 export type TransactionDescription = Pick<Transaction, "id" | "description">;
 /** Half-open `[from, to)`. */
 export interface DateWindow {
@@ -63,7 +69,7 @@ export interface TransactionsRepository {
 	/** `undefined` when no row has the id. */
 	update(
 		id: number,
-		values: Omit<TransactionUpdateInput, "id">,
+		values: TransactionPatch,
 	): Promise<Transaction | undefined>;
 	/** Unlinked Spend in the half-open `[from, to)` window. */
 	findUnplanned(window: UnplannedWindow): Promise<Transaction[]>;
@@ -215,8 +221,8 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		return row;
 	}
 
-	// description is INSERT-only, and member edits (Expense link, Category,
-	// Group, notes) are never in the set, so a re-sync can't overwrite them.
+	// A re-sync refreshes only amount, date and account name. The description and
+	// member edits (Expense link, Category, Group, notes) stay put.
 	async upsertSynced(rows: SyncedTransaction[]): Promise<void> {
 		if (!rows.length) return;
 		await this.db
@@ -248,7 +254,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 
 	async update(
 		id: number,
-		values: Omit<TransactionUpdateInput, "id">,
+		values: TransactionPatch,
 	): Promise<Transaction | undefined> {
 		const [row] = await this.db
 			.update(transactions)

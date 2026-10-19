@@ -83,7 +83,7 @@ const FIELDS = {
 	amount: TRANSACTION.amount,
 };
 
-// update reads the saved bank-owned values first; a manual row may change them.
+// An edit reads the saved row first; a manual row may change amount and date.
 const MANUAL_ROW: Pick<TransactionsRepository, "findSyncedValues"> = {
 	findSyncedValues: async () => ({
 		provenance: Provenance.Manual,
@@ -300,7 +300,7 @@ describe("update", () => {
 		]);
 	});
 
-	// No stored link is set up, so any read before the write fails the test.
+	// No stored link is set up, so reading the old link before the write fails the test.
 	it("keeps the Category sent when unlinking", async () => {
 		const { service, written } = writing();
 
@@ -414,7 +414,8 @@ describe("update", () => {
 				notes: "member note",
 			});
 
-			expect(written).toEqual([[1, { ...FIELDS, notes: "member note" }]]);
+			const { amount, date, ...rest } = FIELDS;
+			expect(written).toEqual([[1, { ...rest, notes: "member note" }]]);
 		});
 	});
 
