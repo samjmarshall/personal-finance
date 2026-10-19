@@ -90,7 +90,10 @@ an id.
 - **Retry contract.** Inngest passes `attempt`; the controller maps it to
   `isFinalAttempt: attempt >= RETRIES`. The service rethrows a retryable error
   while attempts remain and parks the row (`markFailed`) on the final or a
-  deterministic one. `RETRIES` lives in the controller.
+  deterministic one. `RETRIES` lives in the controller. Exception: a whole-run
+  worker with no row to park (`cdr-sync`) records each failure as it happens and
+  throws one error saying whether it is retryable; the controller turns a
+  deterministic one into `NonRetriableError`, so it needs no `isFinalAttempt`.
 - **Error capture choke points only.** Services and repositories never call
   `captureException`. Exceptions are captured only at the four choke points:
   `onRequestError` (`src/instrumentation.ts`), the tRPC `observabilityMiddleware`,
