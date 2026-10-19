@@ -9,8 +9,8 @@ export const cdrConnectionStatus = pgEnum(
 	],
 );
 
-// adr017 facet 5: one row per RedBark account. highWaterMark is the sync
-// cursor; it only moves forward, and only after that account's rows are saved.
+// adr017 facet 5: one row per RedBark account. The sync cursor only moves
+// forward, and only after that account's rows are saved.
 export const cdrSyncState = pgTable("cdr_sync_state", (d) => ({
 	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
 	accountId: d.text().notNull().unique(),
@@ -23,7 +23,7 @@ export const cdrSyncState = pgTable("cdr_sync_state", (d) => ({
 		.default(CdrConnectionStatus.Pending),
 	lastSyncedAt: d.timestamp({ withTimezone: true }),
 	lastError: d.text(),
-	// A DB default, not $defaultFn: the seed script inserts with raw SQL.
+	// A DB default, not a JS one: the seed script inserts with raw SQL.
 	createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
 	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
 }));

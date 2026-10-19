@@ -21,7 +21,7 @@ describe("cdr_sync_state table shape (adr017 facet 5)", () => {
 		expect(cols.connectionStatus.notNull).toBe(true);
 	});
 
-	// The seed script inserts with raw SQL, so createdAt needs a DB default, not a JS one.
+	// The seed script inserts with raw SQL, so this needs a DB default, not a JS one.
 	it("stamps createdAt in the database", () => {
 		expect(cols.createdAt.hasDefault).toBe(true);
 		expect(cols.createdAt.defaultFn).toBeUndefined();

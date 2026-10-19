@@ -36,7 +36,7 @@ const SYNC_STATE = {
 	updatedAt: null,
 } satisfies CdrSyncState;
 
-// Freeze Date only, so $onUpdate stamps a stable updatedAt.
+// Freeze Date only, so the auto update time stays stable.
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["Date"] });
 	vi.setSystemTime(NOW);
