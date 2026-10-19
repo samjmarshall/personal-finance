@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	SelectField,
 	type SelectFieldOption,
@@ -24,12 +24,22 @@ import {
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { useRestoreFocus } from "~/hooks/use-restore-focus";
-import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
+import {
+	Frequency,
+	Priority,
+	Provenance,
+	toFrequency,
+	toPriority,
+} from "~/lib/constants";
 import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { submittedDate } from "./submitted-date";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
+
+// Locked reads muted, not faded, like a Category set by its Expense.
+const BANK_OWNED_CLASS =
+	"read-only:cursor-default read-only:bg-muted read-only:text-muted-foreground dark:read-only:bg-muted";
 
 const FREQUENCY_OPTIONS: SelectFieldOption<Frequency>[] = toOptions(
 	Object.values(Frequency),
@@ -92,6 +102,7 @@ export function TransactionForm({
 	const update = api.transaction.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
 	const rememberFocus = useRestoreFocus(pending);
+	const descriptionRef = useRef<HTMLInputElement>(null);
 
 	const expenseOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
@@ -105,6 +116,9 @@ export function TransactionForm({
 	const shownCategoryId =
 		linkedExpense?.categoryId ??
 		(categoryId === undefined ? savedExpense?.categoryId : categoryId);
+	// Each sync rewrites a synced row's date and amount, so the server refuses an edit.
+	const bankOwned =
+		!!transaction && transaction.provenance !== Provenance.Manual;
 	// One line in both states, so the swap never resizes the centred dialog.
 	const categoryHint =
 		expenseId === null
@@ -160,7 +174,8 @@ export function TransactionForm({
 			}}
 			open={open}
 		>
-			<DialogContent>
+			{/* A synced row opens on its first field you can change. */}
+			<DialogContent initialFocus={bankOwned ? descriptionRef : undefined}>
 				<DialogHeader>
 					<DialogTitle>
 						{transaction ? "Edit transaction" : "Add transaction"}
@@ -172,9 +187,14 @@ export function TransactionForm({
 							<Field>
 								<FieldLabel htmlFor="tx-date">Date</FieldLabel>
 								<Input
+									aria-describedby={bankOwned ? "tx-amount-hint" : undefined}
+									className={BANK_OWNED_CLASS}
 									id="tx-date"
 									onChange={(e) => setDate(e.target.value)}
+									readOnly={bankOwned}
 									required
+									// Its 3 day/month/year stops do nothing when locked.
+									tabIndex={bankOwned ? -1 : undefined}
 									type="date"
 									value={date}
 								/>
@@ -183,17 +203,21 @@ export function TransactionForm({
 								<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
 								<Input
 									aria-describedby="tx-amount-hint"
+									className={BANK_OWNED_CLASS}
 									id="tx-amount"
 									inputMode="decimal"
 									onChange={(e) => setAmount(e.target.value)}
 									placeholder="0.00"
+									readOnly={bankOwned}
 									required
 									step="0.01"
 									type="number"
 									value={amount}
 								/>
 								<FieldDescription id="tx-amount-hint">
-									Positive = spend, negative = refund
+									{bankOwned
+										? "Date and amount come from your bank."
+										: "Positive = spend, negative = refund"}
 								</FieldDescription>
 							</Field>
 						</div>
@@ -203,6 +227,7 @@ export function TransactionForm({
 								id="tx-description"
 								onChange={(e) => setDescription(e.target.value)}
 								placeholder="e.g. Woolworths"
+								ref={descriptionRef}
 								required
 								value={description}
 							/>
