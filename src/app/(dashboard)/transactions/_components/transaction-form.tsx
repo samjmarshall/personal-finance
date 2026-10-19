@@ -27,6 +27,7 @@ import { useRestoreFocus } from "~/hooks/use-restore-focus";
 import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
 import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { submittedDate } from "./submitted-date";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
 
@@ -136,7 +137,7 @@ export function TransactionForm({
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
 		const payload = {
-			date: new Date(`${date}T00:00:00`),
+			date: submittedDate(date, transaction?.date),
 			description: description.trim(),
 			amount: Number(amount) || 0,
 			group: group.trim() || "Uncategorised",
