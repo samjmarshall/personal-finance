@@ -57,8 +57,8 @@ export const transactions = pgTable(
 		index("transaction_priority_idx").on(t.priority),
 		index("transaction_expense_idx").on(t.expenseId),
 		index("transaction_category_idx").on(t.categoryId),
-		// adr017: a re-sync updates its row instead of duplicating it. Partial, so
-		// unlimited manual rows (null externalId) coexist.
+		// adr017: re-sync updates its row, never duplicates. Partial, so manual
+		// rows (no provider id) can repeat.
 		uniqueIndex("transaction_provenance_external_idx")
 			.on(t.provenance, t.externalId)
 			.where(sql`${t.externalId} is not null`),
