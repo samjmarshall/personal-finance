@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: In Progress - Phase 2 of 7
+status: Validated - Phase 2 of 7
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -212,8 +212,9 @@ Question #1. **Prerequisite:** a RedBark `livemode:false` sandbox API key.
   a one-line comment that the key is optional.
 - `src/domain/cdr/cdr.dto.ts` + `index.ts` — Zod DTOs for RedBark `Transaction` (`Money` =
   integer minor units + `currency`; optional `direction` / `status`), `Account`, `Connection`
-  (`status: z.enum(CdrConnectionStatus)`), and `Balance` (`current`, `available`, `freshness`,
-  `observed_at`). **No `cdr.interface.ts` yet**: `schema-interface-contract.test.ts:66-74` wants a
+  (`status: z.enum(CdrConnectionStatus)`), and `Balance` (`current`, `freshness`, `observed_at`).
+  Fields the sync never reads (`available`, an account's `currency`) are left out: each one
+  parsed is one more way for the parse to fail. **No `cdr.interface.ts` yet**: `schema-interface-contract.test.ts:66-74` wants a
   table pair for every domain interface file, and the table lands in Phase 3.
 - `src/domain/transactions/transaction.interface.ts` — add `SyncedTransaction` (`provenance`,
   `externalId`, `accountName`, `date`, `description`, `amount`). This is the upsert input the
@@ -293,8 +294,8 @@ Implements adr017 facets 2 (dedup upsert) and 5 (store-of-record via `cdr_sync_s
   | `connectionStatus` | enum, not null, default `pending` |
   | `lastSyncedAt` | timestamptz, null |
   | `lastError` | text, null |
-  | `createdAt` | timestamptz |
-  | `updatedAt` | timestamptz |
+  | `createdAt` | timestamptz, not null, **DB** default `.defaultNow()` (as `outbox.schema.ts:19`, not `$defaultFn`: the Phase 6 seed inserts with raw SQL) |
+  | `updatedAt` | timestamptz, null |
 - `src/server/db/index.ts` — add `cdrSchema` to the imports (`:5-14`) and the merged `schema`
   (`:17-28`).
 - `src/domain/cdr/cdr.interface.ts` — `CdrSyncState`. Add the pair to
@@ -313,12 +314,17 @@ Implements adr017 facets 2 (dedup upsert) and 5 (store-of-record via `cdr_sync_s
   - `recordError(accountId, message)`
 - `src/server/transactions/transactions.repository.ts` + `transactions.service.ts` — add
   `upsertSynced(rows: SyncedTransaction[])` to the repository interface (`:52-73`), the class, and
-  the service (a one-line delegate, like `unplanned` at `:120-122`).
+  the service.
+  - The service drops repeats of the same `(provenance, externalId)`, keeping the last, then
+    delegates. Postgres refuses one `ON CONFLICT DO UPDATE` that hits a row twice (SQLSTATE
+    21000), and a page that shifts mid-fetch can return a row twice.
   - The repository runs one multi-row `insert(...).onConflictDoUpdate`.
   - `target` is `[provenance, externalId]`.
   - ``targetWhere: sql`${transactions.externalId} is not null` `` is required: Postgres only
     infers a partial unique index when the predicate is in the conflict target (drizzle 0.45).
-  - `set` takes the `excluded` values for **only** `amount`, `date` and `accountName`.
+  - `set` takes the `excluded` values for **only** `amount`, `date` and `accountName`. Drizzle
+    adds `updatedAt` itself (its `$onUpdate` at `transactions.schema.ts:53` runs on
+    `onConflictDoUpdate` too); leave it.
   - It never sets `description` (INSERT-only) or the member-owned `expenseId`, `categoryId`,
     `group`, `priority`, `frequency` and `notes`.
   - Empty `rows` runs no statement.
@@ -333,9 +339,10 @@ Implements adr017 facets 2 (dedup upsert) and 5 (store-of-record via `cdr_sync_s
   - `src/server/transactions/transactions.repository.test.ts` — inline snapshot of
     `upsertSynced`:
     - The conflict target `("provenance", "externalId") where "externalId" is not null`.
-    - `do update set` lists only `amount`, `date` and `accountName`.
+    - `do update set` lists only `amount`, `date`, `accountName` and the automatic `updatedAt`.
     - Empty input runs no statement.
-  - `transactions.service.test.ts` — `upsertSynced` delegates.
+  - `transactions.service.test.ts` — `upsertSynced` delegates; two rows with the same
+    `externalId` reach the repository as one (the later one).
 - `drizzle/0020_*.sql` — `make db_generate` + `make db_migrate`.
 
 ### Success
@@ -361,7 +368,9 @@ pinned mapping.**
   logger: Logger }`. `run()` is idempotent:
   - **No key.** `redbark === null` → `logger.info` and return.
   - **Discover.** List connections and accounts, then `upsertAccount` each one, mirroring
-    connection status.
+    connection status. Any error here is rethrown as a `CdrSyncError` with the original as
+    `cause`; a `RedbarkRetryableError` passes on its `retryAfterMs` and makes it `retryable`. The
+    controller reads only `CdrSyncError`, and a 429 is most likely on the run's first call.
   - **Consent** (adr017 credential posture):
     - `revoked | expired | invalidated` → skip that connection's accounts and `logger.warn`.
       Never retried.
@@ -372,15 +381,21 @@ pinned mapping.**
     2. Fetch every settled page.
     3. Map each row with `mapRedbarkTransaction`.
     4. `transactions.upsertSynced(rows)`.
-    5. **Then** `repository.advanceHighWaterMark(accountId, newest row date ?? current mark,
-       now)`.
+    5. **Then** `repository.advanceHighWaterMark(accountId, min(newest row date, now) ?? current
+       mark, now)`. The mark is monotonic, so one bad future date would stop the account for
+       good; the cap keeps it at most today.
   - **Failures.** Each account runs in its own try/catch. A failure (`RedbarkRetryableError`, a
     driver error or a mapping throw) does `recordError` + `logger.error`, and the loop moves on.
     After the loop, if any account failed, `run()` throws one `CdrSyncError`
     (`src/server/cdr/cdr.errors.ts`). It names the failed accounts, keeps the first error as
     `cause`, and carries `retryAfterMs`: the longest wait among the failed accounts'
-    `RedbarkRetryableError`s, or `null` when none gave one. Inngest then retries the whole
-    idempotent run, and `TracingMiddleware.onRunError` reports the final failure. So there is no
+    `RedbarkRetryableError`s, or `null` when none gave one. It also carries `retryable`: true
+    when any failed account threw a `RedbarkRetryableError`. A mapping throw or a RedBark 4xx
+    fails the same way every attempt, so retrying it only re-fetches every account
+    (`.claude/rules/server-architecture.md` retry contract: park on a deterministic error;
+    `recordError` is the park). A driver error isn't retried either: the cursor didn't move, so
+    the next daily run picks it up. When `retryable`, Inngest retries the whole idempotent run,
+    and `TracingMiddleware.onRunError` reports the final failure. So there is no
     `isFinalAttempt` and no `errorReporter` dep, and one bad account never blocks the others.
     The service never imports `inngest`: the wait is plain data, and the controller turns it
     into Inngest's signal.
@@ -390,8 +405,11 @@ pinned mapping.**
   "cdr-sync"`, `retries: RETRIES`, `concurrency: { limit: 1 }`, `triggers: [{ cron: "0 18 * * *"
   }]` (UTC, about 4–5 am Sydney; frozen once shipped). The handler closes over `this.service`
   lazily (as `outbox.inngest.controller.ts:25-32`) and calls `this.service.run()`.
-  - **Honour `Retry-After`** (adr017 credential posture). The handler catches only a
-    `CdrSyncError` with a non-null `retryAfterMs`. It rethrows it as inngest's
+  - **Don't retry a deterministic failure.** The handler catches only a `CdrSyncError`. Not
+    `retryable` → inngest's `NonRetriableError(message, { cause: error })`
+    (`node_modules/inngest/components/NonRetriableError.d.ts`), so the run fails at once.
+  - **Honour `Retry-After`** (adr017 credential posture). A `retryable` `CdrSyncError` with a
+    non-null `retryAfterMs` is rethrown as inngest's
     `RetryAfterError(message, Math.min(retryAfterMs, MAX_RETRY_AFTER_MS), { cause: error })`
     (inngest 4.22, `node_modules/inngest/components/RetryAfterError.d.ts`).
   - `MAX_RETRY_AFTER_MS = 60 * 60 * 1000` sits beside `RETRIES`. A longer wait is left to the
@@ -420,11 +438,15 @@ pinned mapping.**
     - Every page is consumed and the mapping is applied.
     - `upsertSynced` is called **before** `advanceHighWaterMark`, and advance is skipped when
       the upsert throws.
+    - A row dated after `now` advances the mark only to `now`.
     - A terminal consent skips its accounts without retry; `expiring` warns and syncs.
     - One failing account still lets the others sync, records `lastError`, then `run()` throws
       a `CdrSyncError`.
     - Two accounts failing with `retryAfterMs` 30 000 and 90 000 give `retryAfterMs: 90000`. A
-      mapping throw alone gives `null`.
+      mapping throw alone gives `null` and `retryable: false`; one `RedbarkRetryableError`
+      among the failures gives `retryable: true`.
+    - `listConnections` throwing `RedbarkRetryableError` with `retryAfterMs: 30000` → a
+      `CdrSyncError` with `retryAfterMs: 30000`; no account is fetched.
     - `redbark: null` makes no calls.
   - `src/server/cdr/cdr.inngest.controller.test.ts` — spy `createFunction` (pattern
     `outbox.inngest.controller.test.ts:5-32`). Assert the frozen id, retries, concurrency and
@@ -433,7 +455,10 @@ pinned mapping.**
       and the original as `cause`. Inngest stores a number as whole seconds, rounded up
       (`node_modules/inngest/components/RetryAfterError.js`), despite its doc comment.
     - `retryAfterMs` over 1 h is capped: `retryAfter` is `"3600"`.
-    - A `CdrSyncError` with `null`, or any other error, is rethrown as the same object.
+    - A `CdrSyncError` with `retryable: false` → `NonRetriableError` with the original as
+      `cause`.
+    - A `retryable` `CdrSyncError` with `null`, or any other error, is rethrown as the same
+      object.
 
 ### Success
 - [ ] `make check` passes
@@ -474,10 +499,16 @@ Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label)
   Otherwise `amount` = Σ `current` ÷ 100 (settled ledger, not `available`) and `asOf` = the
   oldest `observed_at`. Non-AUD throws.
 - `src/server/cdr/cdr-sync.service.ts` — add dep `balances: Pick<BalancesService,
-  "recordSynced">`. After the account loop, and only when no account failed:
-  1. Read `getAccountBalance` for each syncable (`active` / `expiring`) account.
+  "recordSynced">`. After the account loop, and only when no account failed **and every
+  account is syncable** (`active` / `expiring`). A dead or pending consent skips the anchor
+  with `logger.info`: dropping that account would shrink the sum while every balance read
+  still passes the freshness gate.
+  1. Read `getAccountBalance` for each account.
   2. Call `anchorFromBalances`.
   3. Non-null → `balances.recordSynced(...)`; null → `logger.info` and skip.
+  A balance read that throws skips the anchor with `logger.error` and never fails the run.
+  A retry would re-fetch every account's transactions, so a 429 here would only draw more 429s;
+  the next daily run anchors.
   `functions.ts` passes `balancesService`.
 - `src/app/(dashboard)/_components/balance-snapshot.display.ts` — pure
   `balanceSourceLabel(source)` ("Synced from bank" / "Entered by you").
@@ -493,16 +524,17 @@ Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label)
     service.
   - `map-redbark.test.ts` — all fresh → sum + oldest `observed_at`; any stale → null; empty →
     null.
-  - `cdr-sync.service.test.ts` — one anchor when all fresh; none when stale or an account
-    failed; terminal accounts excluded.
+  - `cdr-sync.service.test.ts` — one anchor when all fresh; none when stale, an account
+    failed, or any account is `revoked` / `expired` / `invalidated` / `pending`. A throwing
+    balance read logs an error, writes no anchor, and `run()` resolves.
   - `balance-snapshot.display.test.ts` — the label for each source.
 
 ### Success
 - [ ] `make check` passes (incl. `db:check` and the contract)
 - [ ] `make test` passes
 - [ ] `/design-review` (balance card gains the source label)
-- [ ] A sync with all accounts `fresh` writes exactly one `cdr` snapshot; a stale account leaves
-      the balance line unchanged
+- [ ] A sync with all accounts `fresh` writes exactly one `cdr` snapshot; a stale account, or
+      one with a dead consent, leaves the balance line unchanged
 - [ ] A manual `balance.set` still wins when it is the latest `asOf` (source is label-only)
 
 ---
@@ -526,7 +558,8 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
     It has no app imports and no `~/` aliases; it uses the `postgres` driver and
     `process.loadEnvFile()`.
   - Args: `account` (the RedBark account id from its dashboard) and `from` (the first day CDR
-    owns — the day after the last manual row).
+    owns — the day after the last manual row), read as UTC midnight like the mapper's row dates
+    (`src/domain/cdr/map-redbark.ts:39`).
   - It upserts that account's `cdr_sync_state` row with `highWaterMark = from + 4 days`, so the
     first fetch (`hwm − 4d`) starts exactly at `from`. The monotonic cursor (Phase 3) keeps every
     later fetch at or after it, so there is no cross-provenance duplicate period.
@@ -568,6 +601,9 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
 - [ ] `/design-review` (connection-status banner)
 - [ ] After `make cdr_seed` on the branch DB, the first run fetches from the seeded `from` (no
       90-day backfill over already-imported rows)
+- [ ] On the first live run after seeding, rows dated `from` match the bank statement for that
+      day: none missing, none repeating a manual row. The client sends `from` as a timestamp, and
+      UTC midnight is 10–11 am in Sydney, so a time-based filter would drop that morning.
 - [ ] A `revoked` connection shows the re-link banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
 
