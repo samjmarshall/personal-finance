@@ -9,9 +9,11 @@ import {
 	redbarkPageDto,
 	redbarkTransactionDto,
 } from "./cdr.dto";
+import type { CdrSyncState } from "./cdr.interface";
 import { mapRedbarkTransaction } from "./map-redbark";
 
 export type {
+	CdrSyncState,
 	RedbarkAccount,
 	RedbarkBalance,
 	RedbarkConnection,

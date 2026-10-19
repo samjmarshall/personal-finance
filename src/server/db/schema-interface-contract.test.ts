@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { AllowedSender } from "~/domain/allowed-senders/allowed-sender.interface";
 import type { BalanceSnapshot } from "~/domain/balances/balance.interface";
 import type { Category } from "~/domain/categories/category.interface";
+import type { CdrSyncState } from "~/domain/cdr/cdr.interface";
 import type { Expense } from "~/domain/expenses/expense.interface";
 import type { Income } from "~/domain/income/income.interface";
 import type { Receipt, ReceiptItem } from "~/domain/receipts/receipt.interface";
@@ -11,6 +12,7 @@ import type { Transaction } from "~/domain/transactions/transaction.interface";
 import type { allowedSenders } from "~/server/allowed-senders/allowed-senders.schema";
 import type { balanceSnapshots } from "~/server/balances/balances.schema";
 import type { categories } from "~/server/categories/categories.schema";
+import type { cdrSyncState } from "~/server/cdr/cdr.schema";
 import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
 import type { receiptItems, receipts } from "~/server/receipts/receipts.schema";
@@ -29,6 +31,7 @@ type Contracts = [
 	Expect<Equal<typeof categories.$inferSelect, Category>>,
 	Expect<Equal<typeof receipts.$inferSelect, Receipt>>,
 	Expect<Equal<typeof allowedSenders.$inferSelect, AllowedSender>>,
+	Expect<Equal<typeof cdrSyncState.$inferSelect, CdrSyncState>>,
 ];
 
 // receipt_item shares receipt.interface.ts, so it can't get its own COVERED slug;
@@ -43,6 +46,7 @@ const COVERED = [
 	"allowed-sender",
 	"balance",
 	"category",
+	"cdr",
 	"expense",
 	"income",
 	"receipt",
@@ -58,7 +62,7 @@ describe("schema ↔ interface contract", () => {
 	it("keeps each *.schema.ts read model equal to its *.interface.ts", () => {
 		// Annotating with `Contracts` makes tsc evaluate every pair above; the array is
 		// contextually typed to the tuple, so it stays a genuine compile-time gate.
-		const aligned: Contracts = [true, true, true, true, true, true, true];
+		const aligned: Contracts = [true, true, true, true, true, true, true, true];
 
 		expect(aligned).toHaveLength(COVERED.length);
 	});

@@ -1,6 +1,10 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Transaction, TransactionListQuery } from "~/domain/transactions";
+import type {
+	SyncedTransaction,
+	Transaction,
+	TransactionListQuery,
+} from "~/domain/transactions";
 import { Frequency, Priority, Provenance } from "~/lib/constants";
 import {
 	pgError,
@@ -433,6 +437,70 @@ describe("update", () => {
 	});
 });
 
+describe("upsertSynced", () => {
+	const SYNCED: SyncedTransaction = {
+		provenance: Provenance.Cdr,
+		externalId: "txn_1",
+		accountName: "Everyday",
+		date: new Date("2026-10-15T00:00:00.000Z"),
+		description: "WOOLWORTHS",
+		amount: 42.5,
+	};
+
+	it("inserts new rows and refreshes only the bank-owned columns on a match", async () => {
+		const { repository, queries } = harness();
+
+		await repository.upsertSynced([
+			SYNCED,
+			{ ...SYNCED, externalId: "txn_2", amount: -10 },
+		]);
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [
+			      "2026-10-15T00:00:00.000Z",
+			      "WOOLWORTHS",
+			      42.5,
+			      "cdr",
+			      "txn_1",
+			      "Everyday",
+			      "2026-09-29T00:00:00.000Z",
+			      "2026-09-29T00:00:00.000Z",
+			      "2026-10-15T00:00:00.000Z",
+			      "WOOLWORTHS",
+			      -10,
+			      "cdr",
+			      "txn_2",
+			      "Everyday",
+			      "2026-09-29T00:00:00.000Z",
+			      "2026-09-29T00:00:00.000Z",
+			      "2026-09-29T00:00:00.000Z",
+			    ],
+			    "sql": "insert into "transaction" ("id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "accountName", "createdAt", "updatedAt") values (default, default, default, $1, $2, default, $3, default, default, default, default, $4, $5, $6, $7, $8), (default, default, default, $9, $10, default, $11, default, default, default, default, $12, $13, $14, $15, $16) on conflict ("provenance","externalId") where "transaction"."externalId" is not null do update set "date" = excluded."date", "amount" = excluded."amount", "accountName" = excluded."accountName", "updatedAt" = $17",
+			  },
+			]
+		`);
+	});
+
+	it("runs no statement for no rows", async () => {
+		const { repository, queries } = harness();
+
+		await repository.upsertSynced([]);
+
+		expect(queries).toEqual([]);
+	});
+
+	it("lets a driver error bubble", async () => {
+		const { repository } = harness(() => pgError("21000"));
+
+		await expect(repository.upsertSynced([SYNCED])).rejects.toMatchObject({
+			cause: { code: "21000" },
+		});
+	});
+});
+
 describe("findUnplanned", () => {
 	it("selects unlinked Spend in the half-open window, by Group then newest", async () => {
 		const { repository, queries } = harness(() => [
@@ -514,6 +582,37 @@ describe("findInDateWindow", () => {
 			  },
 			]
 		`);
+	});
+});
+
+describe("findSyncedValues", () => {
+	it("selects the provenance and bank-owned values of the id", async () => {
+		const { repository, queries } = harness(() => [
+			["cdr", 42.5, "2026-09-01T00:00:00.000Z"],
+		]);
+
+		await expect(repository.findSyncedValues(1)).resolves.toEqual({
+			provenance: Provenance.Cdr,
+			amount: 42.5,
+			date: TRANSACTION.date,
+		});
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      1,
+			    ],
+			    "sql": "select "provenance", "amount", "date" from "transaction" where "transaction"."id" = $1",
+			  },
+			]
+		`);
+	});
+
+	it("returns undefined when no row matches the id", async () => {
+		const { repository } = harness();
+
+		await expect(repository.findSyncedValues(1)).resolves.toBeUndefined();
 	});
 });
 

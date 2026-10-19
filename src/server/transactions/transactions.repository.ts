@@ -19,6 +19,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type {
 	ExpenseConsumption,
+	SyncedTransaction,
 	Transaction,
 	TransactionCreateInput,
 	TransactionListQuery,
@@ -31,6 +32,8 @@ import type { db as realDb } from "~/server/db";
 import { transactions } from "./transactions.schema";
 
 export type TransactionLink = Pick<Transaction, "expenseId" | "categoryId">;
+/** What a member may not change on a synced row. */
+export type SyncedValues = Pick<Transaction, "provenance" | "amount" | "date">;
 export type TransactionDescription = Pick<Transaction, "id" | "description">;
 /** Half-open `[from, to)`. */
 export interface DateWindow {
@@ -53,6 +56,10 @@ export interface TransactionsRepository {
 	list(query: TransactionListQuery): Promise<TransactionPage>;
 	summary(): Promise<TransactionSummary>;
 	insert(values: TransactionCreateInput): Promise<Transaction | undefined>;
+	/** Matches on (provenance, externalId); a match gets only the bank-owned columns. */
+	upsertSynced(rows: SyncedTransaction[]): Promise<void>;
+	/** `undefined` when no row has the id. */
+	findSyncedValues(id: number): Promise<SyncedValues | undefined>;
 	/** `undefined` when no row has the id. */
 	update(
 		id: number,
@@ -71,6 +78,10 @@ export interface TransactionsRepository {
 	/** Every Transaction's date and amount: the cash flow actuals. */
 	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]>;
 }
+
+// The value the conflicting INSERT row tried to write.
+const excluded = (column: PgColumn) =>
+	sql`excluded.${sql.identifier(column.name)}`;
 
 // Spend is a positive amount; a refund (negative) counts as 0 toward it.
 const spendAmount = sql`case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end`;
@@ -201,6 +212,37 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		values: TransactionCreateInput,
 	): Promise<Transaction | undefined> {
 		const [row] = await this.db.insert(transactions).values(values).returning();
+		return row;
+	}
+
+	// description is INSERT-only, and member edits (Expense link, Category,
+	// Group, notes) are never in the set, so a re-sync can't overwrite them.
+	async upsertSynced(rows: SyncedTransaction[]): Promise<void> {
+		if (!rows.length) return;
+		await this.db
+			.insert(transactions)
+			.values(rows)
+			.onConflictDoUpdate({
+				target: [transactions.provenance, transactions.externalId],
+				// Postgres matches a partial unique index only when given its predicate.
+				targetWhere: sql`${transactions.externalId} is not null`,
+				set: {
+					amount: excluded(transactions.amount),
+					date: excluded(transactions.date),
+					accountName: excluded(transactions.accountName),
+				},
+			});
+	}
+
+	async findSyncedValues(id: number): Promise<SyncedValues | undefined> {
+		const [row] = await this.db
+			.select({
+				provenance: transactions.provenance,
+				amount: transactions.amount,
+				date: transactions.date,
+			})
+			.from(transactions)
+			.where(eq(transactions.id, id));
 		return row;
 	}
 

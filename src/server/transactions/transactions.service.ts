@@ -1,6 +1,7 @@
 import type {
 	ExpenseConsumption,
 	LinkExpenseInput,
+	SyncedTransaction,
 	Transaction,
 	TransactionCreateInput,
 	TransactionListQuery,
@@ -9,9 +10,14 @@ import type {
 	TransactionUpdateInput,
 	UnplannedWindow,
 } from "~/domain/transactions";
+import { Provenance } from "~/lib/constants";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { assertRow } from "~/server/errors/assert-row";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
@@ -32,6 +38,8 @@ const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
 const LINKED_CATEGORY_MESSAGE =
 	"A Transaction linked to an Expense takes its Category from the Expense.";
 const NOT_FOUND_MESSAGE = "Transaction not found.";
+// Each re-sync rewrites a synced row's amount and date, so an edit would vanish.
+const BANK_OWNED_MESSAGE = "Amount and date come from the bank.";
 
 const rethrowWriteConflict = (error: unknown, fkMessage: string): never => {
 	if (isPgViolation(error, PgViolation.CheckViolation)) {
@@ -102,12 +110,22 @@ export class TransactionsService {
 		return assertRow(row, "create transaction");
 	}
 
-	// A missing id matches no row, so the write itself 404s. Only an unlink
-	// reads first; a row deleted between that read and the write still 404s.
+	// A page that shifts mid-fetch can repeat a row, and Postgres refuses one
+	// upsert that hits the same row twice (SQLSTATE 21000). The later copy wins.
+	upsertSynced(rows: SyncedTransaction[]): Promise<void> {
+		const unique = new Map(
+			rows.map((row) => [`${row.provenance}:${row.externalId}`, row]),
+		);
+		return this.repository.upsertSynced([...unique.values()]);
+	}
+
+	// A missing id 404s at the first read; a row deleted between that read and
+	// the write still 404s.
 	async update({
 		id,
 		...values
 	}: TransactionUpdateInput): Promise<Transaction> {
+		await this.assertBankValuesKept(id, values);
 		const row = await this.repository
 			.update(id, { ...values, ...(await this.categoryPatch(values, id)) })
 			.catch((error: unknown) =>
@@ -154,6 +172,18 @@ export class TransactionsService {
 
 	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]> {
 		return this.repository.datedAmounts();
+	}
+
+	private async assertBankValuesKept(
+		id: number,
+		{ amount, date }: Pick<TransactionUpdateInput, "amount" | "date">,
+	): Promise<void> {
+		const saved = await this.repository.findSyncedValues(id);
+		if (!saved) throw new NotFoundError(NOT_FOUND_MESSAGE);
+		if (saved.provenance === Provenance.Manual) return;
+		if (amount !== saved.amount || date.getTime() !== saved.date.getTime()) {
+			throw new InvalidInputError(BANK_OWNED_MESSAGE);
+		}
 	}
 
 	// A linked Transaction takes its Category from the Expense (adr025), so

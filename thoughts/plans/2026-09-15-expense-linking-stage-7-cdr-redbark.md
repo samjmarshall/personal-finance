@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Validated - Phase 2 of 7
+status: Ready for Review - Phase 3 of 7
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -353,6 +353,10 @@ Implements adr017 facets 2 (dedup upsert) and 5 (store-of-record via `cdr_sync_s
   - When the row isn't `manual` and `amount` or `date` differs from the stored value, `update`
     throws `InvalidInputError` ("Amount and date come from the bank") before writing.
   - Unchanged values pass, so editing a synced row's notes or group still works.
+  - *Added in build:* `transactions/_components/submitted-date.ts` (+ test). The form parsed
+    the day as local midnight, but a synced row is stored at UTC midnight, so an untouched day
+    posted a new instant and the exact guard refused it. An untouched day now sends back the
+    saved `Date`.
 - Tests:
   - `src/server/cdr/cdr.repository.test.ts` — `recordingDb()` (`src/server/db/recording-db.fake.ts`;
     usage `src/server/settings/settings.repository.test.ts:9-16`) with inline SQL snapshots:
@@ -373,14 +377,14 @@ Implements adr017 facets 2 (dedup upsert) and 5 (store-of-record via `cdr_sync_s
 - `drizzle/0020_*.sql` — `make db_generate` + `make db_migrate`.
 
 ### Success
-- [ ] `make check` passes (incl. `db:check`, the contract, and `architecture.test.ts` with its
+- [x] `make check` passes (incl. `db:check`, the contract, and `architecture.test.ts` with its
       TODO list still empty)
-- [ ] `make test` passes
-- [ ] The upsert's `DO UPDATE` touches only bank-owned columns (asserted in the repository
+- [x] `make test` passes
+- [x] The upsert's `DO UPDATE` touches only bank-owned columns (asserted in the repository
       test); on the branch DB, re-upserting an existing `(cdr, txn.id)` leaves `expenseId`,
       `categoryId`, `group` and `description` untouched
-- [ ] Editing a synced row's amount is refused; editing its notes saves
-- [ ] Advancing the cursor to an older mark leaves it unchanged
+- [x] Editing a synced row's amount is refused; editing its notes saves
+- [x] Advancing the cursor to an older mark leaves it unchanged
 
 ---
 
