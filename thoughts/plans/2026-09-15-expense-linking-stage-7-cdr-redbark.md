@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Ready for Review - Phase 3 of 7
+status: Validated - Phase 3 of 7
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -97,8 +97,10 @@ left for Phase 2.
   (`.claude/rules/unit-testing.md`); pure UI logic goes in a `.ts` file
   (`src/app/(dashboard)/receipts/_components/more-details.display.ts` + `.test.ts`). Service
   tests use a fake `logger`, never a `console.error` spy.
-- **`cdr` code so far** (Phases 1–2): `src/domain/cdr/` (DTOs, `map-redbark.ts`) and
-  `src/server/cdr/cdr.redbark.ts`. Latest migration is `drizzle/0019_short_ink.sql`.
+- **`cdr` code so far** (Phases 1–3): `src/domain/cdr/` (DTOs, `map-redbark.ts`,
+  `cdr.interface.ts`), `src/server/cdr/cdr.redbark.ts`, `cdr.schema.ts` and `cdr.repository.ts`;
+  `TransactionsService.upsertSynced` (`transactions.service.ts:113-119`). Latest migration is
+  `drizzle/0020_wise_penance.sql`.
 - **Scripts.** One TS script exists: `scripts/blob-prefix-delete.ts` (Node type stripping, run
   by `make db_branch_delete`). It imports app code; Phase 5/6 scripts don't.
 
