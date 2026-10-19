@@ -51,7 +51,6 @@ describe("transaction constraints", () => {
 		expect(names).toEqual(["transaction_expense_or_category_check"]);
 	});
 
-	// adr017: many manual rows have no externalId; a synced row is unique per provenance.
 	it("dedups synced rows on (provenance, externalId) only when externalId is set", () => {
 		const index = getTableConfig(transactions).indexes.find(
 			(i) => i.config.name === "transaction_provenance_external_idx",

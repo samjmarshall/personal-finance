@@ -34,8 +34,7 @@ export function mapRedbarkTransaction(
 		externalId: row.id,
 		accountName,
 		amount,
-		// A bare calendar day with no member zone on a cron; UTC midnight keeps
-		// the day for any zone east of UTC.
+		// Bank date has no time or zone. UTC midnight shows the same day in Australia.
 		date: new Date(`${row.date}T00:00:00.000Z`),
 		description: row.description,
 	};
