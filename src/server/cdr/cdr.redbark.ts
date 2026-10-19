@@ -137,15 +137,14 @@ export class HttpRedbarkClient implements RedbarkClient {
 			throw new RedbarkRetryableError(`redbark GET ${path} failed`, { cause });
 		}
 
-		if (response.status === 429 || response.status >= 500)
-			throw new RedbarkRetryableError(
-				`redbark GET ${path} failed: ${response.status} ${await errorCode(response)}`,
-				{ retryAfterMs: retryAfterMs(response.headers.get("retry-after")) },
-			);
-		if (!response.ok)
-			throw new Error(
-				`redbark GET ${path} failed: ${response.status} ${await errorCode(response)}`,
-			);
+		if (!response.ok) {
+			const message = `redbark GET ${path} failed: ${response.status} ${await errorCode(response)}`;
+			if (response.status === 429 || response.status >= 500)
+				throw new RedbarkRetryableError(message, {
+					retryAfterMs: retryAfterMs(response.headers.get("retry-after")),
+				});
+			throw new Error(message);
+		}
 		return { body: await response.json(), headers: response.headers };
 	}
 }

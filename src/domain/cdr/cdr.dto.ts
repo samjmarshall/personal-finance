@@ -28,7 +28,6 @@ export const redbarkAccountDto = z.object({
 	id: z.string(),
 	connection: z.string(),
 	name: z.string(),
-	currency: z.string().nullish(),
 });
 
 export const redbarkConnectionDto = z.object({
@@ -39,7 +38,6 @@ export const redbarkConnectionDto = z.object({
 export const redbarkBalanceDto = z.object({
 	account: z.string(),
 	current: redbarkMoneyDto.nullable(),
-	available: redbarkMoneyDto.nullable(),
 	freshness: z.enum(["fresh", "stale", "unavailable"]).nullable(),
 	observed_at: z.iso.datetime({ offset: true }).nullable(),
 });

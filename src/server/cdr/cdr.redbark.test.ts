@@ -84,7 +84,6 @@ describe("HttpRedbarkClient requests", () => {
 		const balance = {
 			account: "acct_1",
 			current: { amount: 123456, currency: "aud" },
-			available: null,
 			freshness: "fresh",
 			observed_at: "2026-10-15T01:00:00Z",
 		};

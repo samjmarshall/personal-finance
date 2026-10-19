@@ -67,6 +67,17 @@ describe("mapRedbarkTransaction", () => {
 		).toBe(1);
 	});
 
+	// Settled-only must not rest on one query param of a beta API (adr017 facet 3).
+	it("throws on a pending row", () => {
+		expect(() =>
+			mapRedbarkTransaction(row({ status: "pending" }), "a"),
+		).toThrow(/not settled/);
+	});
+
+	it.each([null, undefined])("maps a row with %s status", (status) => {
+		expect(mapRedbarkTransaction(row({ status }), "a").amount).toBe(42.5);
+	});
+
 	it("throws on a row with no amount", () => {
 		expect(() => mapRedbarkTransaction(row({ amount: null }), "a")).toThrow(
 			/no amount/,
