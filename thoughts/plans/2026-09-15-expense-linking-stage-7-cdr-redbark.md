@@ -28,12 +28,11 @@ left for Phase 2.
 
 ## Current State
 
-- **No provenance columns.** `src/server/transactions/transactions.schema.ts:16-52` (columns
-  `:18-40`) has no `provenance` / `externalId` / `accountName` and no unique index. pgEnums at
-  `:7-14` are built from TS enums in `src/lib/constants.ts` (`Object.values(X) as [X, ...X[]]`);
-  the index + check block is `:41-51`. Closest enum precedent: `ReceiptChannel`
-  (`constants.ts:34-37` → `src/server/receipts/receipts.schema.ts:18-21`, column default `:28`).
-  DB column names are camelCase (`"asOf"`, `"externalId"`), not snake_case.
+- **Provenance columns landed (Phase 1).** `src/server/transactions/transactions.schema.ts:26-71`
+  (columns `:28-54`) has `provenance` / `externalId` / `accountName`; the partial unique index
+  sits in the `:55-70` block. pgEnums at `:13-24` are built from TS enums in
+  `src/lib/constants.ts` (`Object.values(X) as [X, ...X[]]`). DB column names are camelCase
+  (`"asOf"`, `"externalId"`), not snake_case.
 - **Transactions is the 3-tier tRPC reference.** Create runs
   `transactions.trpc.controller.ts:20-22` → `TransactionsService.create`
   (`transactions.service.ts:96-103`) → `DrizzleTransactionsRepository.insert`
@@ -62,11 +61,12 @@ left for Phase 2.
 - **3-tier references** (adr004 / adr021, `.claude/rules/server-architecture.md`). Worker
   service: `src/server/receipts/receipt-extraction.service.ts` (Deps `:220-229` incl.
   `logger: Logger`; retryable rethrow `:343-353`). Adapter interface + class in one file:
-  `src/server/email/email.mailbox.ts:19-25`, `:38-86` — the only hand-written `fetch` in
-  `src/server` (`:64-70`, `AbortSignal.timeout`). No retryable-error class exists. HTTP root:
+  `src/server/email/email.mailbox.ts:19-25`, `:38-86` (`fetch` at `:64-70`,
+  `AbortSignal.timeout`); Phase 2's `src/server/cdr/cdr.redbark.ts` follows it and adds
+  `RedbarkRetryableError`. HTTP root:
   `src/app/api/receipts/inbound/route.ts:25-58` (env gate → 500, `compose()` memo, `withFlush`);
   verifier inside the controller: `src/server/email/email.http.controller.ts:40-57`; one
-  controller serving two routes: `receipts.http.controller.ts:91` (`image`), `:122` (`upload`).
+  controller serving two routes: `receipts.http.controller.ts:113` (`image`), `:170` (`upload`).
   tRPC root: `src/server/api/services.ts:15-45` + `root.ts:13-23`; smallest template
   `src/server/balances/balances.trpc.controller.ts:4-10`. Only `protectedProcedure` exists
   (`src/server/api/trpc.ts:184-199`) — no admin role.
@@ -78,18 +78,28 @@ left for Phase 2.
   and shared with `CashflowService` (pivot read `cashflow.service.ts:56`, anchor `:73-75`);
   pivot maths `src/domain/cashflow/cashflow.ts:271-304`, `:452-458`. `BalanceSnapshot` pinned at
   `schema-interface-contract.test.ts:25`. UI: `src/app/(dashboard)/_components/balance-snapshot-card.tsx`
-  (`latest` `:14`, "As of" `:58-60`), mounted at `src/app/(dashboard)/page.tsx:119-130`.
+  (`latest` `:14`, "As of" `:55-57`), mounted in `cash-flow-section.tsx:32`.
+- **Dashboard streams by section** ([adr027](../../docs/adr/adr027-async-boundary-for-loading-regions.md)).
+  `src/app/(dashboard)/page.tsx` is sync: `PageHeader` `:15-18`, then each section in its own
+  `AsyncBoundary` (summary `:22-26`, cash flow `:28-32`, spending `:34-38`; spacing sits on a
+  wrapper `div` outside each boundary). A section fetches
+  for itself: `StatCards` is an async server component reading `api.*` through
+  `overview-data.ts` (`cache()`); `cash-flow-section.tsx:19-20` prefetches for client suspense
+  children inside `HydrateClient`. `skeleton={null}` is an invisible gate: nothing while
+  loading, and a failure hides the region (still logged) (`async-boundary.tsx:63-69`, `:200`).
 - **Env.** `src/env.ts` (not `.js`): `requiredInProd` `:18-21`; optional server-secret precedent
-  `RESEND_INBOUND_ADDRESS` (`:102`, runtimeEnv `:158`). `.env.example:33-35` already lists
-  `REDBARK_API_KEY` and `REDBARK_API_URL`; `src/env.ts` has neither. Resend keys are Vercel
+  `RESEND_INBOUND_ADDRESS` (`:130`, runtimeEnv `:186`). Phase 2 added `REDBARK_API_KEY` and
+  `REDBARK_API_URL` (`.env.example:39-42`). Resend keys are Vercel
   dashboard secrets, not Terraform (`infrastructure/vercel.tf:55-56`) — adr017's "same
   Terraform→Vercel path as `RESEND_API_KEY`" is wrong.
-- **Tests.** No `.test.tsx` runner (`vitest.config.ts` collects `src/**/*.test.ts`, node env) —
-  UI logic is tested by pulling it into a `.ts` file
+- **Tests.** `vitest.config.ts` runs `src/**/*.test.ts` in node (`:21-22`) and
+  `src/**/*.test.tsx` in jsdom (`:29-30`). Component tests cover props-driven components only
+  (`.claude/rules/unit-testing.md`); pure UI logic goes in a `.ts` file
   (`src/app/(dashboard)/receipts/_components/more-details.display.ts` + `.test.ts`). Service
   tests use a fake `logger`, never a `console.error` spy.
-- **No `cdr` code, no `scripts/*.ts`** exist. Latest migration is
-  `drizzle/0018_rename_category_pkey.sql`.
+- **`cdr` code so far** (Phases 1–2): `src/domain/cdr/` (DTOs, `map-redbark.ts`) and
+  `src/server/cdr/cdr.redbark.ts`. No `scripts/*.ts` exist. Latest migration is
+  `drizzle/0019_short_ink.sql`.
 
 ## Desired End State
 
@@ -98,8 +108,11 @@ that, per linked account: pulls settled transactions from RedBark (`from = highW
 90-day backfill on first run), maps them into the app's Spend-positive glossary with a
 fail-loud sign check, upserts them through `TransactionsService.upsertSynced` keyed on
 `(provenance, externalId)` touching **bank-owned columns only**, and only then advances the
-account's cursor in `cdr_sync_state` (never backwards). When every account reports `fresh`, it
-anchors one household `balance_snapshot` row through `BalancesService.recordSynced`. A dead
+account's cursor in `cdr_sync_state` (never backwards). When every account counted toward cash
+(`inBalance`: transaction, savings and credit-card accounts by default, never loans) is syncable
+and reports `fresh`, it anchors one household `balance_snapshot` row through
+`BalancesService.recordSynced`; that row replaces a typed balance until the member types a newer
+one. A dead
 consent (`revoked|expired|invalidated`) stops that connection and shows on the dashboard; it is
 not retried. An unset `REDBARK_API_KEY` makes the whole cron a no-op. A signed RedBark webhook
 can trigger the same idempotent `run()` early. Every member edit (description, category, group,
@@ -123,6 +136,9 @@ expense link, notes) survives every re-sync.
 - **Adopting RedBark's hierarchical categories** — synced rows land uncategorised.
 - **Household scoping** — new tables follow the current unscoped pattern.
 - **A settings-page status surface** — the connection banner is dashboard-only.
+- **An in-app `inBalance` toggle** — a member changes it with `make cdr_in_balance` (Phase 5).
+- **Unlinked money in the balance line** — a synced anchor replaces a typed balance (adr017
+  facet 6); no "unlinked funds" setting is added to the sum.
 
 ## Approach
 
@@ -163,9 +179,9 @@ Implements adr017 facet 1 (provenance model). Backend only, no UI.
 - `src/lib/constants.ts` — add `export enum Provenance { Manual = "manual", Import = "import",
   Cdr = "cdr", Paypal = "paypal" }`, shaped like `ReceiptChannel` (`:34-37`).
 - `src/server/transactions/transactions.schema.ts` — add pgEnum `transactionProvenance`
-  (`"transaction_provenance"`) beside `:7-14`; columns `provenance`
+  (`"transaction_provenance"`, now `:21-24`); columns `provenance`
   (`.notNull().default(Provenance.Manual)`), `externalId` (text, null), `accountName` (text,
-  null) in `:18-40`; in the `:41-51` block a **partial**
+  null) in `:28-54`; in the `:55-70` block a **partial**
   ``uniqueIndex("transaction_provenance_external_idx").on(t.provenance, t.externalId).where(sql`${t.externalId} is not null`)``
   (partial-index precedent `src/server/outbox/outbox.schema.ts:30`). Unlimited NULL-`externalId`
   manual rows coexist with one row per `(cdr, txn.id)`.
@@ -176,8 +192,8 @@ Implements adr017 facet 1 (provenance model). Backend only, no UI.
   stays provenance-free, so a member can't set or change provenance; the DB default stamps
   `manual` on `create` (`transactions.repository.ts:200-205` unchanged).
 - Transactions test fixtures — add the three fields to the `Transaction` fixtures in
-  `transactions.repository.test.ts:10-24`, `transactions.service.test.ts:15-29`,
-  `transactions.trpc.controller.test.ts:9-23`; refresh the column-list inline SQL snapshots in
+  `transactions.repository.test.ts:27-44`, `transactions.service.test.ts:54-71`,
+  `transactions.trpc.controller.test.ts:20-37`; refresh the column-list inline SQL snapshots in
   `transactions.repository.test.ts` (`:91`, `:373`, `:420`, `:454`, `:564`).
 - `src/server/transactions/transactions.schema.test.ts` — assert `provenance` defaults to
   `Provenance.Manual`, `externalId` / `accountName` are nullable, and the unique index exists
@@ -208,7 +224,7 @@ Question #1. **Prerequisite:** a RedBark `livemode:false` sandbox API key.
 - `src/env.ts` — add `REDBARK_API_KEY: z.string().optional()` (server-only, **not**
   `requiredInProd`: an unset key no-ops the cron, adr017 credential posture) and
   `REDBARK_API_URL: z.url().default("https://api.redbark.com")`, plus both `runtimeEnv` lines.
-  Mirror `RESEND_INBOUND_ADDRESS` (`:102`, `:158`). `.env.example:33-35` already lists both; add
+  Mirror `RESEND_INBOUND_ADDRESS` (`:130`, `:186`). `.env.example:39-42` already lists both; add
   a one-line comment that the key is optional.
 - `src/domain/cdr/cdr.dto.ts` + `index.ts` — Zod DTOs for RedBark `Transaction` (`Money` =
   integer minor units + `currency`; optional `direction` / `status`), `Account`, `Connection`
@@ -371,6 +387,12 @@ pinned mapping.**
     connection status. Any error here is rethrown as a `CdrSyncError` with the original as
     `cause`; a `RedbarkRetryableError` passes on its `retryAfterMs` and makes it `retryable`. The
     controller reads only `CdrSyncError`, and a 429 is most likely on the run's first call.
+  - **Saved account RedBark didn't return.** A `cdr_sync_state` row whose `accountId` is not in
+    the discovered list (a wrong seeded id, or a bank removed from RedBark) would stay `pending`
+    and never sync, with nothing saying why. It counts as a failed account instead (see
+    Failures): `recordError(accountId, "not in RedBark")` + `logger.error` naming the id. It is
+    not retryable, so the run fails loud. Fix: delete that row in the Neon SQL editor, then
+    re-seed with the right id.
   - **Consent** (adr017 credential posture):
     - `revoked | expired | invalidated` → skip that connection's accounts and `logger.warn`.
       Never retried.
@@ -385,7 +407,8 @@ pinned mapping.**
        mark, now)`. The mark is monotonic, so one bad future date would stop the account for
        good; the cap keeps it at most today.
   - **Failures.** Each account runs in its own try/catch. A failure (`RedbarkRetryableError`, a
-    driver error or a mapping throw) does `recordError` + `logger.error`, and the loop moves on.
+    driver error, a mapping throw, or a saved account RedBark didn't return) does
+    `recordError` + `logger.error`, and the loop moves on.
     After the loop, if any account failed, `run()` throws one `CdrSyncError`
     (`src/server/cdr/cdr.errors.ts`). It names the failed accounts, keeps the first error as
     `cause`, and carries `retryAfterMs`: the longest wait among the failed accounts'
@@ -447,6 +470,8 @@ pinned mapping.**
       among the failures gives `retryable: true`.
     - `listConnections` throwing `RedbarkRetryableError` with `retryAfterMs: 30000` → a
       `CdrSyncError` with `retryAfterMs: 30000`; no account is fetched.
+    - A saved row RedBark didn't return gets `recordError` and an error log naming its id; the
+      other accounts still sync; `run()` throws a `CdrSyncError` with `retryable: false`.
     - `redbark: null` makes no calls.
   - `src/server/cdr/cdr.inngest.controller.test.ts` — spy `createFunction` (pattern
     `outbox.inngest.controller.test.ts:5-32`). Assert the frozen id, retries, concurrency and
@@ -476,12 +501,42 @@ pinned mapping.**
 
 Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label).
 
+**Which accounts count** (decided 2026-10-19). Each account has its own `inBalance` flag. Credit
+cards count: they are paid in full each month, so their negative balance shows money already
+spent. Car and home loans don't. RedBark's account `type` is free text with no documented list
+(`AccountItem.type` in `https://api.redbark.com/v2/openapi.json`); the live spike saw
+`transaction`, `loan` and `credit-card`.
+
+**Synced vs typed balance** (decided 2026-10-19). The daily synced row replaces a typed one;
+money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
+
 ### Changes
 - `src/lib/constants.ts` — add `export enum BalanceSource { Manual = "manual", Cdr = "cdr" }`.
 - `src/server/balances/balances.schema.ts` — pgEnum `balance_source` and a `source` column
   (`.notNull().default(BalanceSource.Manual)`) in `:6-14`. **Label only**: precedence stays pure
   latest-`asOf`, tiebreak `id desc` (`balances.repository.ts:24-31` unchanged; adr017 facet 6).
-  `drizzle/0021_*.sql` via `make db_generate` + `make db_migrate`.
+- `src/server/cdr/cdr.schema.ts` — add `inBalance` (boolean, **null**) to `cdr_sync_state`.
+  Null means "not decided yet": a seeded row has no type until its first discovery.
+  `src/domain/cdr/cdr.interface.ts` gains `inBalance: boolean | null`.
+- `drizzle/0021_*.sql` (both changes) via `make db_generate` + `make db_migrate`.
+- `src/domain/cdr/cdr.dto.ts` — `redbarkAccountDto` gains `type: z.string()`. A string, not an
+  enum, so a new RedBark type can't fail discovery.
+- `src/domain/cdr/map-redbark.ts` — pure `inBalanceByDefault(type): boolean | null`:
+  `transaction`, `savings` and `credit-card` → true; `loan` → false; any other type → null
+  (undecided, so not counted).
+- `src/server/cdr/cdr.repository.ts` — `upsertAccount` takes `inBalance`. Its `set` writes
+  ``sql`coalesce(${cdrSyncState.inBalance}, excluded."inBalance")` ``, so discovery fills the
+  flag once and never overwrites a member's choice.
+- `src/server/cdr/cdr-sync.service.ts` (discovery) — passes `inBalanceByDefault(account.type)`
+  to `upsertAccount`. Each run, an account whose flag is still null logs `warn` with its type
+  until the member sets it, so a savings account under an unexpected type name shows up.
+- `scripts/cdr-in-balance.ts` + `Makefile` `cdr_in_balance: install` → `node
+  scripts/cdr-in-balance.ts $(account) $(value)` (arg style of `db_custom`, `Makefile:62`).
+  Plain TS run by Node 24's type stripping, with the `postgres` driver,
+  `process.loadEnvFile()` and no app imports; Phase 6's seed script copies this style. Against
+  production, run it from `main` (whose `.env` is production). It updates one
+  row's `inBalance` and exits non-zero when no row has that `accountId` (run the sync or seed
+  first).
 - `src/domain/balances/balance.interface.ts` — add `source: BalanceSource` (forced by
   `schema-interface-contract.test.ts:25`). `balance.dto.ts` is **unchanged**: `balanceSetDto`
   stays `{ amount, asOf }`, so a member can't post `source`.
@@ -500,10 +555,11 @@ Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label)
   oldest `observed_at`. Non-AUD throws.
 - `src/server/cdr/cdr-sync.service.ts` — add dep `balances: Pick<BalancesService,
   "recordSynced">`. After the account loop, and only when no account failed **and every
-  account is syncable** (`active` / `expiring`). A dead or pending consent skips the anchor
-  with `logger.info`: dropping that account would shrink the sum while every balance read
-  still passes the freshness gate.
-  1. Read `getAccountBalance` for each account.
+  counted account (`inBalance` true) is syncable** (`active` / `expiring`). A counted account
+  with a dead or pending consent skips the anchor with `logger.info`: dropping it would shrink
+  the sum while every balance read still passes the freshness gate. An account with
+  `inBalance` false or null is ignored here, so a pending loan never blocks the cash line.
+  1. Read `getAccountBalance` for each counted account.
   2. Call `anchorFromBalances`.
   3. Non-null → `balances.recordSynced(...)`; null → `logger.info` and skip.
   A balance read that throws skips the anchor with `logger.error` and never fails the run.
@@ -512,7 +568,7 @@ Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label)
   `functions.ts` passes `balancesService`.
 - `src/app/(dashboard)/_components/balance-snapshot.display.ts` — pure
   `balanceSourceLabel(source)` ("Synced from bank" / "Entered by you").
-  `balance-snapshot-card.tsx:58-60` shows it after "As of …".
+  `balance-snapshot-card.tsx:55-57` shows it after "As of …".
 - Cashflow is untouched: `cashflow.service.ts:73-75` passes only `amount` / `asOf`, and the
   pivot maths (`cashflow.ts:271-304`) is unchanged.
 - Tests:
@@ -522,20 +578,33 @@ Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label)
   - `balances.service.test.ts` — `set` stamps `manual`; `recordSynced` stamps `cdr`.
   - `balances.trpc.controller.test.ts` — a `source` key posted to `set` never reaches the
     service.
-  - `map-redbark.test.ts` — all fresh → sum + oldest `observed_at`; any stale → null; empty →
-    null.
-  - `cdr-sync.service.test.ts` — one anchor when all fresh; none when stale, an account
-    failed, or any account is `revoked` / `expired` / `invalidated` / `pending`. A throwing
-    balance read logs an error, writes no anchor, and `run()` resolves.
+  - `map-redbark.test.ts` — all fresh → sum + oldest `observed_at`; a credit card's negative
+    `current` lowers the sum; any stale → null; empty → null. `inBalanceByDefault`:
+    `transaction` / `savings` / `credit-card` → true, `loan` → false, any other type → null.
+  - `cdr.dto.test.ts` — an account parses with `type`; an unseen type string still parses.
+  - `cdr.schema.test.ts` — `inBalance` is nullable with no default.
+  - `cdr.repository.test.ts` — the `upsertAccount` snapshot sets
+    `coalesce("inBalance", excluded."inBalance")`.
+  - `cdr-sync.service.test.ts`:
+    - Discovery passes each account's default flag; a null flag logs `warn` with its type.
+    - One anchor when every counted account is fresh, summing counted accounts only. An
+      account with `inBalance` false or null is never read, even when it is `pending`.
+    - No anchor when a counted account is stale or `revoked` / `expired` / `invalidated` /
+      `pending`, or when any account failed.
+    - A throwing balance read logs an error, writes no anchor, and `run()` resolves.
   - `balance-snapshot.display.test.ts` — the label for each source.
 
 ### Success
 - [ ] `make check` passes (incl. `db:check` and the contract)
 - [ ] `make test` passes
 - [ ] `/design-review` (balance card gains the source label)
-- [ ] A sync with all accounts `fresh` writes exactly one `cdr` snapshot; a stale account, or
-      one with a dead consent, leaves the balance line unchanged
-- [ ] A manual `balance.set` still wins when it is the latest `asOf` (source is label-only)
+- [ ] A sync writes exactly one `cdr` snapshot summing only `inBalance` accounts: a credit
+      card's balance lowers it and a loan is left out. A stale counted account, or one with a
+      dead consent, leaves the balance line unchanged
+- [ ] `make cdr_in_balance account=… value=false` drops that account from the next anchor, a
+      later sync doesn't flip it back, and an unknown account id exits non-zero
+- [ ] A typed `balance.set` shows until the next sync writes a newer `cdr` row (source is a
+      label only)
 
 ---
 
@@ -554,9 +623,9 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
   build `cdr: new CdrService({ repository: new DrizzleCdrRepository({ db }) })` in
   `services.ts:29-45`.
 - **Seed the pre-imported account** (adr017 facet 5) with `scripts/cdr-seed.ts`:
-  - Plain TS, run by Node 24's built-in type stripping (`package.json` is `"type": "module"`).
-    It has no app imports and no `~/` aliases; it uses the `postgres` driver and
-    `process.loadEnvFile()`.
+  - Same style as Phase 5's `scripts/cdr-in-balance.ts`: plain TS run by Node 24's type
+    stripping (`package.json` is `"type": "module"`), the `postgres` driver,
+    `process.loadEnvFile()`, no app imports or `~/` aliases.
   - Args: `account` (the RedBark account id from its dashboard) and `from` (the first day CDR
     owns — the day after the last manual row), read as UTC midnight like the mapper's row dates
     (`src/domain/cdr/map-redbark.ts:39`).
@@ -564,9 +633,11 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
     first fetch (`hwm − 4d`) starts exactly at `from`. The monotonic cursor (Phase 3) keeps every
     later fetch at or after it, so there is no cross-provenance duplicate period.
   - It refuses to lower an existing mark.
+  - It leaves `inBalance` null; the first discovery fills it from the account's type.
+  - A wrong id is caught on the first run: discovery fails it loud (Phase 4).
 - `Makefile` — `cdr_seed: install` runs `node scripts/cdr-seed.ts $(account) $(from)` (arg style of
-  `db_custom`). Production setup order: migrations → `make cdr_seed` against production (`main`
-  `.env`) → set the key.
+  `db_custom`, `Makefile:62`). Production setup order: migrations → `make cdr_seed` against
+  production (`main` `.env`) → set the key.
 - `src/app/(dashboard)/_components/cdr-connection.display.ts` — pure
   `connectionNotice(states: CdrSyncState[])`:
   - Returns `null` when nothing needs attention: no accounts, or all `active` / `pending`.
@@ -574,14 +645,22 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
   - `expired | revoked | invalidated` → `{ tone: "alert", … }`. It names the accounts and tells
     the member to re-link the bank in RedBark's dashboard.
   - When both kinds are present, alert wins.
-- `src/app/(dashboard)/_components/cdr-connection-banner.tsx` — client component. It calls
-  `api.cdr.syncState.useSuspenseQuery()` and renders nothing for `null`. Otherwise it shows a
-  `role="status"` (warn) or `role="alert"` (alert) banner:
+- `src/app/(dashboard)/_components/cdr-connection-notice.tsx` — props-driven
+  `CdrConnectionNotice({ notice })`, no data calls. It shows a `role="status"` (warn) or
+  `role="alert"` (alert) banner:
   - Tokens: `--badge-warn-*` / `--badge-spend-*` (`src/styles/globals.css:78-90`).
-  - Shape: like `MatchBanner` (`src/app/(dashboard)/receipts/_components/receipt-detail.tsx:116-166`).
-- `src/app/(dashboard)/page.tsx` — prefetch `api.cdr.syncState` next to `:29-30`, and mount the
-  banner between `PageHeader` (`:85-88`) and the stats grid (`:90`). Dashboard only:
-  `(dashboard)/_components/` is the home page's folder (`.claude/rules/ui-components.md`).
+  - Shape: like `MatchBanner` (`src/app/(dashboard)/receipts/_components/receipt-detail.tsx:89-213`).
+- `src/app/(dashboard)/_components/cdr-connection-banner.tsx` — async **server** component
+  `CdrConnectionBanner`, built like `StatCards` (no client query, no prefetch, no
+  `HydrateClient`). It awaits `api.cdr.syncState()` (`~/trpc/server`), runs
+  `connectionNotice`, and renders nothing for `null`, else `CdrConnectionNotice`. The banner
+  carries its own top margin, since it usually renders nothing.
+- `src/app/(dashboard)/page.tsx` — mount
+  `<AsyncBoundary label="bank connections" skeleton={null}><CdrConnectionBanner /></AsyncBoundary>`
+  between `PageHeader` (`:15-18`) and the summary section (`:22-26`). The invisible gate
+  (adr027) shows nothing while loading, and a failed read hides the banner (still logged)
+  instead of putting an error card above the page. Dashboard only: `(dashboard)/_components/`
+  is the home page's folder (`.claude/rules/ui-components.md`).
 - **Unplanned:** synced Spend with no `expenseId` already lands in the queue
   (`transactions.repository.ts:222-243`: `amount > 0 AND expenseId IS NULL`). Verify; no new
   surface (adr017 Positive Consequences).
@@ -592,6 +671,9 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
     gets `UNAUTHORIZED`.
   - `cdr-connection.display.test.ts` — each status → its notice; mixed → alert wins; empty →
     null.
+  - `cdr-connection-notice.test.tsx` (jsdom) — a warn notice renders `role="status"`, an alert
+    notice renders `role="alert"` with the account names and the re-link copy (queried by role
+    and text).
   - `cdr-sync.service.test.ts` — a seeded mark makes the fetch start at the seeded `from`, not
     the 90-day backfill.
 
@@ -606,6 +688,10 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
       UTC midnight is 10–11 am in Sydney, so a time-based filter would drop that morning.
 - [ ] A `revoked` connection shows the re-link banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
+- [ ] A failing `cdr.syncState` read hides the banner; the header and every other section
+      still render
+- [ ] A seed with an account id RedBark doesn't return fails the first run with an error naming
+      that id, and the other accounts still sync
 
 ---
 
@@ -707,6 +793,8 @@ unpublished today.
   2. `make cdr_seed account=… from=…` against production.
   3. Set `REDBARK_API_KEY` (and the webhook secrets once Phase 7 ships) as Vercel dashboard
      secrets.
+  4. After the first run, check the logs for an unknown-account-type `warn`. Set each one with
+     `make cdr_in_balance account=… value=true|false` from `main`.
 
 ## References
 
@@ -719,7 +807,7 @@ unpublished today.
   - facets 3, 4 (settled-only, sign mapping) → Phase 2 (spike resolves Open Question #1)
   - facets 2, 5 (dedup upsert, `cdr_sync_state`) → Phases 3, 4, 6
   - facet 7 (poll-first / webhook-later) → Phases 4, 7
-  - facet 6 (balance auto-anchor) → Phase 5
+  - facet 6 (balance auto-anchor, `inBalance` scope resolved 2026-10-19) → Phase 5
   - credential & consent posture → Phases 2, 4, 6
 - Composed with (Accepted):
   - `adr002` — outbox + Inngest rails
@@ -728,7 +816,8 @@ unpublished today.
   - `adr013` — Terraform→Vercel env
   - `adr021` — `<domain>.<transport>.controller.ts`, tRPC router is the controller
   - `adr022` — cross-domain data through the owning service
-- Proposed: `adr023` (`cdr/` is its own top-level domain).
+  - `adr023` — `cdr/` is its own top-level domain
+  - `adr027` — `AsyncBoundary` is the only loading region (Phase 6 banner)
 - Contrasts: `adr006` / `adr007` (inbound session creds), `adr014` (Bedrock OIDC creds).
 - Rules: `.claude/rules/server-architecture.md` (tier map, construction, tests, FROZEN),
   `ui-components.md`, `unit-testing.md`.
@@ -759,4 +848,5 @@ unpublished today.
   - Composition: `src/server/api/{services,root,trpc}.ts`, `src/server/db/index.ts`
   - Env: `src/env.ts`
   - UI: `src/app/(dashboard)/page.tsx`,
-    `src/app/(dashboard)/_components/balance-snapshot-card.tsx`
+    `src/app/(dashboard)/_components/{balance-snapshot-card,cash-flow-section,stat-cards}.tsx`,
+    `src/app/(dashboard)/_components/overview-data.ts`, `src/components/async-boundary.tsx`
