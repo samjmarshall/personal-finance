@@ -147,7 +147,13 @@ export class HttpRedbarkClient implements RedbarkClient {
 				});
 			throw new Error(message);
 		}
-		return { body: await response.json(), headers: response.headers };
+		try {
+			return { body: await response.json(), headers: response.headers };
+		} catch (cause) {
+			// Bad JSON won't heal on retry; a body cut off by a reset or timeout will.
+			if (cause instanceof SyntaxError) throw cause;
+			throw new RedbarkRetryableError(`redbark GET ${path} failed`, { cause });
+		}
 	}
 }
 

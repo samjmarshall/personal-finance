@@ -238,6 +238,26 @@ describe("HttpRedbarkClient failures", () => {
 		expect(error.cause).toBe(cause);
 	});
 
+	it("treats a body cut off mid-read as retryable, keeping the cause", async () => {
+		const cause = new TypeError("terminated");
+		const response = new Response("{}");
+		vi.spyOn(response, "json").mockRejectedValue(cause);
+		fetchMock.mockResolvedValue(response);
+
+		const error = await rejection();
+
+		expect(error).toBeInstanceOf(RedbarkRetryableError);
+		expect(error.cause).toBe(cause);
+	});
+
+	it("throws a plain error on a body that isn't JSON", async () => {
+		fetchMock.mockResolvedValue(new Response("<html>"));
+
+		const error = await rejection();
+
+		expect(error).toBeInstanceOf(SyntaxError);
+	});
+
 	it("throws a plain error naming RedBark's code on a 400", async () => {
 		fetchMock.mockResolvedValue(fail(400));
 
