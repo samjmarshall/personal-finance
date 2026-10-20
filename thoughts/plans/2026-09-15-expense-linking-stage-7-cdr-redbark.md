@@ -545,6 +545,10 @@ pinned mapping.**
       not on Inngest's default backoff
       — 2026-10-20, stub `REDBARK_API_URL` answering 429: `Retry-After: 90` → next attempt
       89 s later; `Retry-After: 7200` → one attempt, run FAILED at once.
+- [x] *Added in validation:* a body cut off mid-read (reset, or the 15 s timeout) retries;
+      bad JSON fails at once
+      — 2026-10-20, stub answering 200 then breaking the body: reset → next attempt 26 s later;
+      stall → timeout, next attempt; `<html>` body → one attempt, run FAILED.
 
 ---
 
