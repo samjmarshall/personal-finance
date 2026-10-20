@@ -35,7 +35,7 @@ left for Phase 2.
   (`"asOf"`, `"externalId"`), not snake_case.
 - **Transactions is the 3-tier tRPC reference.** Create runs
   `transactions.trpc.controller.ts:20-22` → `TransactionsService.create`
-  (`transactions.service.ts:96-103`) → `DrizzleTransactionsRepository.insert`
+  (`transactions.service.ts:104-111`) → `DrizzleTransactionsRepository.insert`
   (`transactions.repository.ts:217-222`, inserts the DTO as-is). Member-editable fields are
   `transactionFields` (`src/domain/transactions/transaction.dto.ts:31-41`). The read type
   `Transaction` (`src/domain/transactions/transaction.interface.ts:3-20`) is pinned to the table
@@ -535,17 +535,16 @@ pinned mapping.**
 - [x] `make check` passes
 - [x] `make test` passes
 - [x] `registry-golden.test.ts` pins `cdr-sync` and its cron trigger (deliberate update)
-- [ ] With the live key on the branch DB (RedBark has no sandbox; the run only reads RedBark),
+- [x] With the live key on the branch DB (RedBark has no sandbox; the run only reads RedBark),
       invoking `cdr-sync` from the Inngest dev server ingests settled rows, and a second invoke
       adds no new rows; with the key unset the run is a logged no-op
-      — needs a human: the live key + a running dev server. The no-key no-op, upsert-then-advance
-      order and idempotent upsert are unit-tested (`cdr-sync.service.test.ts`).
-- [ ] When RedBark answers `429` with `Retry-After`, the Inngest dev server shows the next
+      — 2026-10-20: run 1 ingested 1015 rows over 11 accounts, all `active`, no `lastError`;
+      run 2 COMPLETED with the count unchanged. Key unset: "cdr sync skipped" log, COMPLETED.
+- [x] When RedBark answers `429` with `Retry-After`, the Inngest dev server shows the next
       attempt scheduled after that wait (a wait over 1 h fails the run until the next cron),
       not on Inngest's default backoff
-      — needs a human: forcing a live 429 means hammering RedBark. The mapping to
-      `RetryAfterError` / `NonRetriableError` is unit-tested (`cdr.inngest.controller.test.ts`);
-      a stub `REDBARK_API_URL` answering 429 would show it in the dev server.
+      — 2026-10-20, stub `REDBARK_API_URL` answering 429: `Retry-After: 90` → next attempt
+      89 s later; `Retry-After: 7200` → one attempt, run FAILED at once.
 
 ---
 
