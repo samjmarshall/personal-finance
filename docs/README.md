@@ -65,15 +65,16 @@ An hourly PostHog alert emails the owner once a day's AI cost passes `ai_daily_c
 
 Side-effecting writes commit their canonical rows and an `outbox` row in one `db.transaction()`, then best-effort `inngest.send`; a cron re-delivers anything the send missed. At-least-once, idempotent on the outbox row `id`. See [adr002](adr/adr002-canonical-postgres-store-transactional-outbox.md); event names live in `src/server/inngest/events.ts` (`EVENT_REGISTRY`).
 
-Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), which serves two scheduled functions and one event-driven worker:
+Inngest reaches the app at `src/app/api/inngest/route.ts` (`/api/inngest`), which serves three scheduled functions and one event-driven worker:
 
 | Function | Trigger | Purpose |
 | --- | --- | --- |
 | `outbox-sweep` | `0 * * * *` | Re-deliver unacked rows older than 30s; failures stay unacked for the next run. |
 | `outbox-prune` | `0 3 * * *` | Delete rows acked over 7 days ago; never touches unacked or stuck rows. |
+| `cdr-sync` | `0 18 * * *` (UTC, ~4–5 am Sydney) | Pull settled bank rows from RedBark per linked account, upsert them, then advance that account's cursor. One failed account doesn't block the others. Honours `Retry-After` up to 1 h; a deterministic failure doesn't retry. No-op when `REDBARK_API_KEY` is unset. See [adr017](adr/adr017-external-transaction-sync-via-cdr-redbark.md). |
 | `process-receipt` | `receipt/uploaded`, `receipt/retry`, `receipt/email.received` | Extract vendor/total/date + line items from a receipt via Claude on Bedrock, or short-circuit an identical re-upload as a `duplicate` on its content hash. All three triggers carry the same `{ receiptId }`, so an emailed receipt rides the upload path unchanged. |
 
-Local runs use the Inngest Dev Server (no keys needed). Run `make setup` once — it trusts the Portless CA so the Go Dev Server binary trusts the app's HTTPS cert — then `make start` boots the app plus the Dev Server as sibling Portless processes. The Dev Server syncs the app's `/api/inngest`, lists `outbox-sweep` + `outbox-prune` + `process-receipt`, and can invoke them from its dashboard at `https://inngest.personal-finance.localhost` (worktree: `https://<branch>.inngest.personal-finance.localhost`).
+Local runs use the Inngest Dev Server (no keys needed). Run `make setup` once — it trusts the Portless CA so the Go Dev Server binary trusts the app's HTTPS cert — then `make start` boots the app plus the Dev Server as sibling Portless processes. The Dev Server syncs the app's `/api/inngest`, lists `outbox-sweep` + `outbox-prune` + `process-receipt` + `cdr-sync`, and can invoke them from its dashboard at `https://inngest.personal-finance.localhost` (worktree: `https://<branch>.inngest.personal-finance.localhost`).
 
 ## Deploy
 
