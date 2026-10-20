@@ -19,9 +19,8 @@ export interface Transaction {
 	updatedAt: Date | null;
 }
 
-// A row an external sync owns, matched on (provenance, externalId). Carries only
-// the bank-owned fields; member edits (Category, Group, Expense link) are never
-// part of it, so a re-sync can't overwrite them.
+// A row a bank sync owns, found again by provider + its bank id. Holds no member
+// edits, so a re-sync can't overwrite them.
 export interface SyncedTransaction {
 	// Never manual: the edit guard trusts a manual row to be member-owned.
 	provenance: Exclude<Provenance, Provenance.Manual>;

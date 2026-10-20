@@ -54,8 +54,7 @@ export class CdrInngestController {
 	}
 }
 
-// The one try/catch in an Inngest controller: it maps the service's transport-free
-// error to Inngest's retry signal, as the tRPC error middleware maps error codes.
+// Turns the service's plain failure into retry, wait-then-retry, or give up.
 function toInngestError(error: unknown): unknown {
 	if (!(error instanceof CdrSyncError)) return error;
 	if (!error.retryable)

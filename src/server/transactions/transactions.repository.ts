@@ -62,7 +62,7 @@ export interface TransactionsRepository {
 	list(query: TransactionListQuery): Promise<TransactionPage>;
 	summary(): Promise<TransactionSummary>;
 	insert(values: TransactionCreateInput): Promise<Transaction | undefined>;
-	/** Matches on (provenance, externalId); a match gets only the bank-owned columns. */
+	/** Insert, or on a repeat bank id refresh only amount, date and account name. */
 	upsertSynced(rows: SyncedTransaction[]): Promise<void>;
 	/** `undefined` when no row has the id. */
 	findSyncedValues(id: number): Promise<SyncedValues | undefined>;
