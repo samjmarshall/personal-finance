@@ -54,7 +54,7 @@ export class CdrInngestController {
 	}
 }
 
-// Turns the service's plain failure into retry, wait-then-retry, or give up.
+// Service errors know nothing about the job runner; translate them to its retry rules here.
 function toInngestError(error: unknown): unknown {
 	if (!(error instanceof CdrSyncError)) return error;
 	if (!error.retryable)
