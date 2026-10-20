@@ -240,7 +240,7 @@ repository that is `this.db.transaction(...)` (`saveExtraction`,
 
 `EVENT_REGISTRY` keys, the Inngest app id (the `package.json` `name`, via
 `env.PROJECT_NAME`), Inngest function ids (`outbox-sweep`, `outbox-prune`,
-`process-receipt`), their crons / event triggers, and concurrency keys are
+`process-receipt`, `cdr-sync`), their crons / event triggers, and concurrency keys are
 byte-stable wire strings: Inngest keys schedules and runs by them.
 `src/server/inngest/registry-golden.test.ts` pins them. Changing one requires
 updating the golden test **deliberately** and recording the rename in an ADR

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CdrConnectionStatus } from "~/lib/constants";
 import {
+	redbarkAccountDto,
 	redbarkBalanceDto,
 	redbarkConnectionDto,
 	redbarkPageDto,
@@ -68,6 +69,26 @@ describe("redbarkConnectionDto", () => {
 		expect(
 			redbarkConnectionDto.safeParse({ id: "conn_1", status: "paused" })
 				.success,
+		).toBe(false);
+	});
+});
+
+describe("redbarkAccountDto", () => {
+	const account = { id: "acct_1", connection: "conn_1", name: "Everyday" };
+
+	it.each(["available", "syncing", "unavailable"])(
+		"accepts status %s",
+		(status) => {
+			expect(redbarkAccountDto.parse({ ...account, status }).status).toBe(
+				status,
+			);
+		},
+	);
+
+	// A new account state must fail loud, not sync as if it were available.
+	it("rejects an unknown account status", () => {
+		expect(
+			redbarkAccountDto.safeParse({ ...account, status: "paused" }).success,
 		).toBe(false);
 	});
 });

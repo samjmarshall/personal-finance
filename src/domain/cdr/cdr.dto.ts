@@ -28,6 +28,7 @@ export const redbarkAccountDto = z.object({
 	id: z.string(),
 	connection: z.string(),
 	name: z.string(),
+	status: z.enum(["available", "syncing", "unavailable"]),
 });
 
 export const redbarkConnectionDto = z.object({

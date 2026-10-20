@@ -67,7 +67,14 @@ describe("HttpRedbarkClient requests", () => {
 				page([{ id: "conn_1", status: "active", provider: "fiskil" }]),
 			)
 			.mockResolvedValueOnce(
-				page([{ id: "acct_1", connection: "conn_1", name: "Everyday" }]),
+				page([
+					{
+						id: "acct_1",
+						connection: "conn_1",
+						name: "Everyday",
+						status: "available",
+					},
+				]),
 			);
 		const c = client();
 
@@ -75,7 +82,12 @@ describe("HttpRedbarkClient requests", () => {
 			{ id: "conn_1", status: "active" },
 		]);
 		await expect(c.listAccounts()).resolves.toEqual([
-			{ id: "acct_1", connection: "conn_1", name: "Everyday" },
+			{
+				id: "acct_1",
+				connection: "conn_1",
+				name: "Everyday",
+				status: "available",
+			},
 		]);
 		expect(calledUrl(1).pathname).toBe("/v2/accounts");
 	});

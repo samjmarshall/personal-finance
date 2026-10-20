@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CdrInngestController } from "~/server/cdr/cdr.inngest.controller";
 import { OutboxInngestController } from "~/server/outbox/outbox.inngest.controller";
 import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
 import pkg from "../../../package.json" with { type: "json" };
@@ -36,6 +37,7 @@ describe("worker golden", () => {
 
 		new OutboxInngestController({ inngest: spy, service: {} as never });
 		new ReceiptsInngestController({ inngest: spy, service: {} as never });
+		new CdrInngestController({ inngest: spy, service: {} as never });
 
 		expect(declared).toEqual([
 			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },
@@ -48,6 +50,7 @@ describe("worker golden", () => {
 					{ event: "receipt/email.received" },
 				],
 			},
+			{ id: "cdr-sync", triggers: [{ cron: "0 18 * * *" }] },
 		]);
 	});
 });
