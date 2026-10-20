@@ -2,7 +2,6 @@ import {
 	type CdrSyncState,
 	mapRedbarkTransaction,
 	type RedbarkAccount,
-	type RedbarkConnection,
 } from "~/domain/cdr";
 import { CdrConnectionStatus } from "~/lib/constants";
 import type { Logger } from "~/server/observability/logging/logger";
@@ -13,7 +12,7 @@ import type { CdrRepository } from "./cdr.repository";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BACKFILL_DAYS = 90;
-// `from` filters on `date`, but a card row can post 5+ days after it (long weekend).
+// Fetch filters by txn date, but a card row can post 5+ days later (long weekend).
 const OVERLAP_DAYS = 14;
 
 const DEAD_CONSENT: CdrConnectionStatus[] = [
@@ -21,6 +20,11 @@ const DEAD_CONSENT: CdrConnectionStatus[] = [
 	CdrConnectionStatus.Expired,
 	CdrConnectionStatus.Invalidated,
 ];
+
+interface AccountFailure {
+	accountId: string;
+	error: unknown;
+}
 
 interface CdrSyncServiceDeps {
 	repository: CdrRepository;
@@ -30,15 +34,9 @@ interface CdrSyncServiceDeps {
 	logger: Logger;
 }
 
-interface AccountFailure {
-	accountId: string;
-	error: unknown;
-}
-
 /**
  * Application tier for the daily bank sync. Idempotent: a re-run re-fetches the
- * overlap and the upsert absorbs it. Per account, rows are upserted before the
- * cursor advances, so a failure never moves the cursor past un-ingested rows.
+ * overlap. Rows land before the cursor moves, so a failure never skips rows.
  */
 export class CdrSyncService {
 	private readonly repository: CdrRepository;
@@ -65,39 +63,49 @@ export class CdrSyncService {
 			return;
 		}
 
-		const { connections, accounts } = await this.discover(this.redbark);
-		const connectionStatuses = new Map(
-			connections.map((c) => [c.id, c.status]),
-		);
+		const { statuses, accounts } = await this.discover(this.redbark);
 		const accountsById = new Map(accounts.map((a) => [a.id, a]));
 
 		const failures: AccountFailure[] = [];
 		for (const saved of await this.repository.listSyncState()) {
 			const account = accountsById.get(saved.accountId);
-			const consent = connectionStatuses.get(
+			const consent = statuses.get(
 				account?.connection ?? saved.connectionId ?? "",
 			);
 			try {
-				await this.syncSaved(this.redbark, saved, account, consent);
+				await this.syncIfReady(this.redbark, saved, account, consent);
 			} catch (error) {
 				failures.push({ accountId: saved.accountId, error });
 				this.logger.error("cdr account sync failed", {
 					accountId: saved.accountId,
 					error,
 				});
-				await this.repository.recordError(
-					saved.accountId,
-					error instanceof Error ? error.message : String(error),
-				);
+				try {
+					await this.repository.recordError(
+						saved.accountId,
+						error instanceof Error ? error.message : String(error),
+					);
+				} catch (recordFailure) {
+					// A failed note must not stop the other accounts or lose this failure.
+					this.logger.error("cdr account error not saved", {
+						accountId: saved.accountId,
+						error: recordFailure,
+					});
+				}
 			}
 		}
 
-		if (failures.length > 0) throw this.syncError(failures);
+		if (failures.length > 0)
+			throw syncError(
+				`cdr sync failed for ${failures.map((f) => f.accountId).join(", ")}`,
+				failures.map((f) => f.error),
+			);
 	}
 
-	private async discover(
-		redbark: RedbarkClient,
-	): Promise<{ connections: RedbarkConnection[]; accounts: RedbarkAccount[] }> {
+	private async discover(redbark: RedbarkClient): Promise<{
+		statuses: Map<string, CdrConnectionStatus>;
+		accounts: RedbarkAccount[];
+	}> {
 		try {
 			const [connections, accounts] = await Promise.all([
 				redbark.listConnections(),
@@ -114,23 +122,15 @@ export class CdrSyncService {
 						statuses.get(account.connection) ?? CdrConnectionStatus.Pending,
 				});
 			// A dead bank may stop listing its accounts; its saved rows still need the status.
-			for (const connection of connections)
-				await this.repository.setConnectionStatus(
-					connection.id,
-					connection.status,
-				);
-			return { connections, accounts };
+			for (const [connectionId, status] of statuses)
+				await this.repository.setConnectionStatus(connectionId, status);
+			return { statuses, accounts };
 		} catch (cause) {
-			throw new CdrSyncError("cdr discovery failed", {
-				retryable: cause instanceof RedbarkRetryableError,
-				retryAfterMs:
-					cause instanceof RedbarkRetryableError ? cause.retryAfterMs : null,
-				cause,
-			});
+			throw syncError("cdr discovery failed", [cause]);
 		}
 	}
 
-	private async syncSaved(
+	private async syncIfReady(
 		redbark: RedbarkClient,
 		{ accountId, highWaterMark }: CdrSyncState,
 		account: RedbarkAccount | undefined,
@@ -195,24 +195,20 @@ export class CdrSyncService {
 			now,
 		);
 	}
+}
 
-	// A mapping throw or a 4xx fails the same way every attempt, so only a
-	// RedbarkRetryableError makes the run worth retrying.
-	private syncError(failures: AccountFailure[]): CdrSyncError {
-		const waits = failures.flatMap(({ error }) =>
-			error instanceof RedbarkRetryableError && error.retryAfterMs !== null
-				? [error.retryAfterMs]
-				: [],
-		);
-		return new CdrSyncError(
-			`cdr sync failed for ${failures.map((f) => f.accountId).join(", ")}`,
-			{
-				retryable: failures.some(
-					({ error }) => error instanceof RedbarkRetryableError,
-				),
-				retryAfterMs: waits.length > 0 ? Math.max(...waits) : null,
-				cause: failures[0]?.error,
-			},
-		);
-	}
+// A mapping throw or a 4xx fails the same way every attempt; only a
+// transient error is worth a retry.
+function syncError(message: string, errors: unknown[]): CdrSyncError {
+	const transient = errors.filter(
+		(error) => error instanceof RedbarkRetryableError,
+	);
+	const waits = transient.flatMap(({ retryAfterMs }) =>
+		retryAfterMs === null ? [] : [retryAfterMs],
+	);
+	return new CdrSyncError(message, {
+		retryable: transient.length > 0,
+		retryAfterMs: waits.length > 0 ? Math.max(...waits) : null,
+		cause: errors[0],
+	});
 }

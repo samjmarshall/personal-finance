@@ -20,9 +20,9 @@ import { inngest } from "./client";
 
 // Composition root: every tier built once with the real db + client. The route
 // handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
-// function's cron/event triggers from it. The outbox and categories services are
-// shared with other roots, so they come from their *.module.ts files rather than
-// being built here (as is the transactions service).
+// function's cron/event triggers from it. The outbox, categories and transactions
+// services are shared with other roots, so they come from their *.module.ts files
+// rather than being built here.
 const outboxController = new OutboxInngestController({
 	inngest,
 	service: outboxService,

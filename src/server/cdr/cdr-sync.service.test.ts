@@ -74,11 +74,11 @@ interface HarnessOptions {
 	listConnections?: () => Promise<RedbarkConnection[]>;
 	listTransactions?: (accountId: string) => Promise<RedbarkTransaction[]>;
 	upsertSynced?: (rows: SyncedTransaction[]) => Promise<void>;
+	recordError?: (accountId: string) => Promise<void>;
 	redbark?: null;
 }
 
-// Fakes are object literals against the interfaces. `calls` keeps the cross-port
-// order so a test can assert what happened before what.
+// Records call order across ports so a test can assert what ran before what.
 function harness(opts: HarnessOptions = {}) {
 	const calls: string[] = [];
 	const states = new Map<string, CdrSyncState>(
@@ -116,6 +116,7 @@ function harness(opts: HarnessOptions = {}) {
 		recordError: async (accountId, message) => {
 			calls.push(`recordError ${accountId}`);
 			errors.push({ accountId, message });
+			await opts.recordError?.(accountId);
 		},
 	};
 	const redbark: RedbarkClient = {
@@ -157,6 +158,7 @@ function harness(opts: HarnessOptions = {}) {
 	return {
 		service,
 		calls,
+		states,
 		fetches,
 		upserts,
 		advances,
@@ -378,6 +380,21 @@ describe("CdrSyncService.run", () => {
 			expect(h.errors).toEqual([]);
 		});
 
+		it("saves an account on a connection RedBark doesn't list as pending, and skips it", async () => {
+			const h = harness({
+				connections: [],
+				accounts: [account("acct_1", { connection: "conn_unlisted" })],
+			});
+
+			await expect(h.service.run()).resolves.toBeUndefined();
+
+			expect(h.states.get("acct_1")?.connectionStatus).toBe(
+				CdrConnectionStatus.Pending,
+			);
+			expect(h.fetches).toEqual([]);
+			expect(h.errors).toEqual([]);
+		});
+
 		it("warns on an expiring connection and syncs it", async () => {
 			const h = harness({
 				connections: [connection("conn_1", CdrConnectionStatus.Expiring)],
@@ -441,7 +458,6 @@ describe("CdrSyncService.run", () => {
 		it("lets the other accounts sync, records the error, then throws", async () => {
 			const h = harness({
 				accounts: [account("acct_bad"), account("acct_ok")],
-				rows: { acct_ok: [row("t1", "2026-10-01")] },
 				listTransactions: async (accountId) => {
 					if (accountId === "acct_bad") throw new Error("boom");
 					return [row("t1", "2026-10-01")];
@@ -455,6 +471,25 @@ describe("CdrSyncService.run", () => {
 			expect(h.logs.some((l) => l.level === "error")).toBe(true);
 			expect(error).toBeInstanceOf(CdrSyncError);
 			expect((error as Error).message).toContain("acct_bad");
+		});
+
+		it("keeps going when saving an account's error fails", async () => {
+			const h = harness({
+				accounts: [account("acct_bad"), account("acct_ok")],
+				listTransactions: async (accountId) => {
+					if (accountId === "acct_bad") throw new RedbarkRetryableError("503");
+					return [row("t1", "2026-10-01")];
+				},
+				recordError: async () => {
+					throw new Error("db blip");
+				},
+			});
+
+			const error = await caught(h.service.run());
+
+			expect(h.advances.map((a) => a.accountId)).toEqual(["acct_ok"]);
+			expect(error).toBeInstanceOf(CdrSyncError);
+			expect(error).toMatchObject({ retryable: true });
 		});
 
 		it("reports the longest Retry-After among failed accounts", async () => {
