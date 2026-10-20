@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: In Progress - Phase 4 of 7
+status: Validated - Phase 4 of 7
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -36,12 +36,12 @@ left for Phase 2.
 - **Transactions is the 3-tier tRPC reference.** Create runs
   `transactions.trpc.controller.ts:20-22` → `TransactionsService.create`
   (`transactions.service.ts:96-103`) → `DrizzleTransactionsRepository.insert`
-  (`transactions.repository.ts:200-205`, inserts the DTO as-is). Member-editable fields are
+  (`transactions.repository.ts:217-222`, inserts the DTO as-is). Member-editable fields are
   `transactionFields` (`src/domain/transactions/transaction.dto.ts:31-41`). The read type
   `Transaction` (`src/domain/transactions/transaction.interface.ts:3-20`) is pinned to the table
   by `src/server/db/schema-interface-contract.test.ts:28` — a new column without an interface
-  field fails `make check`. Shared instance: `transactions.module.ts`. Only upsert precedent:
-  `src/server/settings/settings.repository.ts:41` (`onConflictDoUpdate`).
+  field fails `make check`. Shared instance: `transactions.module.ts`. Upsert precedents (`onConflictDoUpdate`):
+  `src/server/settings/settings.repository.ts:41`, `cdr.repository.ts:67`.
 - **adr022 owns cross-domain data.** A repository touches only its own domain's tables; other
   domains' reads *and* writes go through the owning service as a narrow `Pick` port.
   `src/server/architecture.test.ts` enforces it (TODO list empty, shrink-only): a
@@ -51,10 +51,11 @@ left for Phase 2.
   `receipts.module.ts`.
 - **Inngest rails.** Client `src/server/inngest/client.ts:17-22`. `EVENT_REGISTRY`
   `events.ts:13-17` (three `receipt/*` keys); `buildOutboxEvent` `:31-43` always mints a random
-  uuid id. Worker root `functions.ts` (logger wiring `:26-35`, exported array `:41-44`), served
+  uuid id. Worker root `functions.ts` (logger wiring `:31-40`, `cdrSyncService` build `:46-56`,
+  exported array `:63-67`), served
   by `src/app/api/inngest/route.ts` (`maxDuration = 300`, `:11`). Golden: keys
-  `registry-golden.test.ts:11-19`, controllers built with `service: {} as never` `:37-38`,
-  ids/triggers `:40-51`. Cron precedent `outbox.inngest.controller.ts:25-32` (sets no retries or
+  `registry-golden.test.ts:12-20`, controllers built with `service: {} as never` `:38-40`,
+  ids/triggers `:42-54` (`cdr-sync` pinned at `:53`). Cron precedent `outbox.inngest.controller.ts:25-32` (sets no retries or
   concurrency); retry precedent `receipts.inngest.controller.ts:8` (`RETRIES`), `:27-49`.
   `TracingMiddleware.onRunError` reports a run's error on its final attempt only
   (`src/server/inngest/middleware.ts:113-148`).
@@ -97,9 +98,10 @@ left for Phase 2.
   (`.claude/rules/unit-testing.md`); pure UI logic goes in a `.ts` file
   (`src/app/(dashboard)/receipts/_components/more-details.display.ts` + `.test.ts`). Service
   tests use a fake `logger`, never a `console.error` spy.
-- **`cdr` code so far** (Phases 1–3): `src/domain/cdr/` (DTOs, `map-redbark.ts`,
-  `cdr.interface.ts`), `src/server/cdr/cdr.redbark.ts`, `cdr.schema.ts` and `cdr.repository.ts`;
-  `TransactionsService.upsertSynced` (`transactions.service.ts:113-119`). Latest migration is
+- **`cdr` code so far** (Phases 1–4): `src/domain/cdr/` (DTOs, `map-redbark.ts`,
+  `cdr.interface.ts`), `src/server/cdr/cdr.redbark.ts`, `cdr.schema.ts`, `cdr.repository.ts`,
+  `cdr-sync.service.ts`, `cdr.errors.ts` and `cdr.inngest.controller.ts` (wired in
+  `functions.ts:45-60`); `TransactionsService.upsertSynced` (`transactions.service.ts:113-120`). Latest migration is
   `drizzle/0020_wise_penance.sql`.
 - **Scripts.** One TS script exists: `scripts/blob-prefix-delete.ts` (Node type stripping, run
   by `make db_branch_delete`). It imports app code; Phase 5/6 scripts don't.
@@ -536,9 +538,14 @@ pinned mapping.**
 - [ ] With the live key on the branch DB (RedBark has no sandbox; the run only reads RedBark),
       invoking `cdr-sync` from the Inngest dev server ingests settled rows, and a second invoke
       adds no new rows; with the key unset the run is a logged no-op
+      — needs a human: the live key + a running dev server. The no-key no-op, upsert-then-advance
+      order and idempotent upsert are unit-tested (`cdr-sync.service.test.ts`).
 - [ ] When RedBark answers `429` with `Retry-After`, the Inngest dev server shows the next
       attempt scheduled after that wait (a wait over 1 h fails the run until the next cron),
       not on Inngest's default backoff
+      — needs a human: forcing a live 429 means hammering RedBark. The mapping to
+      `RetryAfterError` / `NonRetriableError` is unit-tested (`cdr.inngest.controller.test.ts`);
+      a stub `REDBARK_API_URL` answering 429 would show it in the dev server.
 
 ---
 
@@ -757,7 +764,7 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
   instead of putting an error card above the page. Dashboard only: `(dashboard)/_components/`
   is the home page's folder (`.claude/rules/ui-components.md`).
 - **Unplanned:** synced Spend with no `expenseId` already lands in the queue
-  (`transactions.repository.ts:222-243`: `amount > 0 AND expenseId IS NULL`). Verify; no new
+  (`transactions.repository.ts:267-291`: `amount > 0 AND expenseId IS NULL`). Verify; no new
   surface (adr017 Positive Consequences).
 - Tests:
   - `cdr.service.test.ts` — `listSyncState` delegates.
