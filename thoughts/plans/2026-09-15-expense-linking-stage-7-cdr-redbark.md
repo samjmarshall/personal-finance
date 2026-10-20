@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Validated - Phase 3 of 7
+status: In Progress - Phase 4 of 7
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -422,6 +422,8 @@ pinned mapping.**
       Never retried.
     - `expiring` → `logger.warn`, then sync as normal.
     - `pending` → skip.
+    - *Added in build:* an account whose connection RedBark doesn't list is saved as
+      `pending`, so it waits until RedBark lists that connection.
   - **Account status** (RedBark's per-account `status`, apart from consent):
     - `syncing` → skip this run with `logger.info`. Its first history is still arriving, so
       syncing now could move the mark past rows that land later.
@@ -440,6 +442,8 @@ pinned mapping.**
     5. **Then** `repository.advanceHighWaterMark(accountId, min(newest row date, now) ?? current
        mark, now)`. The mark is monotonic, so one bad future date would stop the account for
        good; the cap keeps it at most today.
+       *Added in build:* a first run that finds no rows has no mark to keep, so the mark
+       starts at `from`; the next run only widens its window.
   - **Failures.** Each account runs in its own try/catch. A failure (`RedbarkRetryableError`, a
     driver error, a mapping throw, or a saved account RedBark didn't return) does
     `recordError` + `logger.error`, and the loop moves on.
@@ -526,9 +530,9 @@ pinned mapping.**
       object.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `registry-golden.test.ts` pins `cdr-sync` and its cron trigger (deliberate update)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `registry-golden.test.ts` pins `cdr-sync` and its cron trigger (deliberate update)
 - [ ] With the live key on the branch DB (RedBark has no sandbox; the run only reads RedBark),
       invoking `cdr-sync` from the Inngest dev server ingests settled rows, and a second invoke
       adds no new rows; with the key unset the run is a logged no-op
