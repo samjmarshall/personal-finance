@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BalanceSnapshot } from "~/domain/balances";
+import { BalanceSource } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
 import { recorder } from "~/test/fakes";
@@ -17,6 +18,7 @@ const SNAPSHOT: BalanceSnapshot = {
 	amount: 12500.5,
 	asOf: new Date("2026-10-01T00:00:00.000Z"),
 	createdAt: new Date("2026-10-01T01:00:00.000Z"),
+	source: BalanceSource.Manual,
 };
 
 describe("balance router", () => {
@@ -36,6 +38,17 @@ describe("balance router", () => {
 		await expect(
 			callerWith({ set: method }).balance.set(input),
 		).resolves.toEqual(SNAPSHOT);
+		expect(calls).toEqual([[input]]);
+	});
+
+	it("set drops a posted source, so a member can't label a balance synced", async () => {
+		const { method, calls } = recorder(SNAPSHOT);
+		const input = { amount: 12500.5, asOf: SNAPSHOT.asOf };
+
+		await callerWith({ set: method }).balance.set({
+			...input,
+			source: BalanceSource.Cdr,
+		} as never);
 		expect(calls).toEqual([[input]]);
 	});
 

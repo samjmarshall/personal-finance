@@ -1,16 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BalanceSetInput } from "~/domain/balances";
 import type {
 	CdrSyncState,
 	RedbarkAccount,
+	RedbarkBalance,
 	RedbarkConnection,
 	RedbarkTransaction,
 } from "~/domain/cdr";
 import type { SyncedTransaction } from "~/domain/transactions";
-import { CdrConnectionStatus, Provenance } from "~/lib/constants";
+import {
+	BalanceSource,
+	CdrConnectionStatus,
+	Provenance,
+} from "~/lib/constants";
 import type {
 	LogAttributes,
 	Logger,
 } from "~/server/observability/logging/logger";
+import { unstaged } from "~/test/fakes";
 import { CdrSyncError } from "./cdr.errors";
 import { type RedbarkClient, RedbarkRetryableError } from "./cdr.redbark";
 import type { CdrRepository } from "./cdr.repository";
@@ -45,7 +52,21 @@ const account = (
 	id,
 	connection: "conn_1",
 	name: `Name ${id}`,
+	institution: { name: "CommBank" },
+	account_number: "xxxx8273",
+	type: "transaction",
 	status: "available",
+	...over,
+});
+
+const balance = (
+	account: string,
+	over: Partial<RedbarkBalance> = {},
+): RedbarkBalance => ({
+	account,
+	current: { amount: 100_00, currency: "aud" },
+	freshness: "fresh",
+	observed_at: "2026-10-19T20:00:00Z",
 	...over,
 });
 
@@ -56,12 +77,18 @@ const savedState = (
 	id: 1,
 	accountId,
 	accountName: null,
+	accountNumber: null,
+	balance: null,
+	balanceAsOf: null,
 	connectionId: "conn_1",
 	connectionStatus: CdrConnectionStatus.Active,
 	createdAt: NOW,
 	highWaterMark: null,
+	inBalance: null,
+	institutionName: null,
 	lastError: null,
 	lastSyncedAt: null,
+	nickname: null,
 	updatedAt: null,
 	...over,
 });
@@ -75,6 +102,9 @@ interface HarnessOptions {
 	listTransactions?: (accountId: string) => Promise<RedbarkTransaction[]>;
 	upsertSynced?: (rows: SyncedTransaction[]) => Promise<void>;
 	recordError?: (accountId: string) => Promise<void>;
+	balances?: Record<string, RedbarkBalance>;
+	listBalances?: (accountIds: string[]) => Promise<RedbarkBalance[]>;
+	recordSynced?: (input: BalanceSetInput) => Promise<void>;
 	redbark?: null;
 }
 
@@ -90,6 +120,9 @@ function harness(opts: HarnessOptions = {}) {
 	const errors: { accountId: string; message: string }[] = [];
 	const statusSets: { connectionId: string; status: CdrConnectionStatus }[] =
 		[];
+	const balanceReads: string[][] = [];
+	const savedBalances: ({ accountId: string } & BalanceSetInput)[] = [];
+	const anchors: BalanceSetInput[] = [];
 	const logs: LogEntry[] = [];
 
 	const repository: CdrRepository = {
@@ -97,9 +130,12 @@ function harness(opts: HarnessOptions = {}) {
 		findSyncState: async (accountId) => states.get(accountId),
 		upsertAccount: async (a) => {
 			calls.push(`upsertAccount ${a.accountId}`);
+			const prev = states.get(a.accountId) ?? savedState(a.accountId);
+			// Mirrors the SQL coalesce: a saved flag wins over discovery's default.
 			states.set(a.accountId, {
-				...(states.get(a.accountId) ?? savedState(a.accountId)),
+				...prev,
 				...a,
+				inBalance: prev.inBalance ?? a.inBalance,
 			});
 		},
 		advanceHighWaterMark: async (accountId, mark, syncedAt) => {
@@ -118,6 +154,13 @@ function harness(opts: HarnessOptions = {}) {
 			errors.push({ accountId, message });
 			await opts.recordError?.(accountId);
 		},
+		recordBalance: async (accountId, latest) => {
+			calls.push(`recordBalance ${accountId}`);
+			savedBalances.push({ accountId, ...latest });
+		},
+		// A member's choices; the sync never writes them.
+		setInBalance: unstaged,
+		setNickname: unstaged,
 	};
 	const redbark: RedbarkClient = {
 		listConnections:
@@ -131,8 +174,12 @@ function harness(opts: HarnessOptions = {}) {
 				? opts.listTransactions(accountId)
 				: (opts.rows?.[accountId] ?? []);
 		},
-		getAccountBalance: async () => {
-			throw new Error("unused in Phase 4");
+		listBalances: async (accountIds) => {
+			calls.push("listBalances");
+			balanceReads.push(accountIds);
+			return opts.listBalances
+				? opts.listBalances(accountIds)
+				: accountIds.map((id) => opts.balances?.[id] ?? balance(id));
 		},
 	};
 	const transactions = {
@@ -140,6 +187,14 @@ function harness(opts: HarnessOptions = {}) {
 			calls.push("upsertSynced");
 			upserts.push(rows);
 			await opts.upsertSynced?.(rows);
+		},
+	};
+	const balances = {
+		recordSynced: async (input: BalanceSetInput) => {
+			calls.push("recordSynced");
+			await opts.recordSynced?.(input);
+			anchors.push(input);
+			return { ...input, id: 1, createdAt: NOW, source: BalanceSource.Cdr };
 		},
 	};
 	const logger: Logger = {
@@ -153,6 +208,7 @@ function harness(opts: HarnessOptions = {}) {
 		repository,
 		redbark: opts.redbark === null ? null : redbark,
 		transactions,
+		balances,
 		logger,
 	});
 	return {
@@ -164,6 +220,9 @@ function harness(opts: HarnessOptions = {}) {
 		advances,
 		errors,
 		statusSets,
+		balanceReads,
+		savedBalances,
+		anchors,
 		logs,
 	};
 }
@@ -558,6 +617,338 @@ describe("CdrSyncService.run", () => {
 			).toBe(true);
 			expect(h.fetches.map((f) => f.accountId)).toEqual(["acct_1"]);
 			expect(error).toMatchObject({ retryable: false, retryAfterMs: null });
+		});
+	});
+
+	describe("balance anchor", () => {
+		const OLDEST = "2026-10-19T19:00:00Z";
+
+		it("saves each account's default flag from its type", async () => {
+			const h = harness({
+				accounts: [
+					account("acct_tx"),
+					account("acct_card", { type: "credit-card" }),
+					account("acct_loan", { type: "loan" }),
+					account("acct_td", { type: "term-deposit" }),
+				],
+			});
+
+			await h.service.run();
+
+			expect(
+				Object.fromEntries(
+					[...h.states.values()].map((s) => [s.accountId, s.inBalance]),
+				),
+			).toEqual({
+				acct_tx: true,
+				acct_card: true,
+				acct_loan: false,
+				acct_td: null,
+			});
+		});
+
+		it("writes one anchor summing only counted accounts, a card lowering it", async () => {
+			const h = harness({
+				accounts: [
+					account("acct_tx"),
+					account("acct_card", { type: "credit-card" }),
+					account("acct_loan", { type: "loan" }),
+				],
+				balances: {
+					acct_tx: balance("acct_tx", {
+						current: { amount: 1_000_00, currency: "aud" },
+						observed_at: OLDEST,
+					}),
+					acct_card: balance("acct_card", {
+						current: { amount: -300_00, currency: "aud" },
+					}),
+					acct_loan: balance("acct_loan", {
+						current: { amount: -50_000_00, currency: "aud" },
+					}),
+				},
+			});
+
+			await expect(h.service.run()).resolves.toBeUndefined();
+
+			expect(h.anchors).toEqual([{ amount: 700, asOf: new Date(OLDEST) }]);
+		});
+
+		it("never lets a left-out account block it, even one pending or unavailable", async () => {
+			const h = harness({
+				connections: [
+					connection("conn_1"),
+					connection("conn_2", CdrConnectionStatus.Pending),
+				],
+				accounts: [
+					account("acct_tx"),
+					account("acct_loan", { type: "loan", connection: "conn_2" }),
+					account("acct_old", { type: "loan", status: "unavailable" }),
+				],
+			});
+
+			await h.service.run();
+
+			expect(h.anchors).toHaveLength(1);
+		});
+
+		it("keeps a card the member set to false out of the sum", async () => {
+			const h = harness({
+				accounts: [
+					account("acct_tx"),
+					account("acct_card", { type: "credit-card" }),
+				],
+				saved: [savedState("acct_card", { id: 2, inBalance: false })],
+			});
+
+			await h.service.run();
+
+			expect(h.states.get("acct_card")?.inBalance).toBe(false);
+			expect(h.anchors).toEqual([
+				{ amount: 100, asOf: new Date("2026-10-19T20:00:00Z") },
+			]);
+		});
+
+		it("skips the anchor while any account is undecided, warning with its type", async () => {
+			const h = harness({
+				accounts: [
+					account("acct_tx"),
+					account("acct_td", { type: "term-deposit" }),
+				],
+			});
+
+			await expect(h.service.run()).resolves.toBeUndefined();
+
+			expect(h.anchors).toEqual([]);
+			expect(h.logs).toContainEqual({
+				level: "warn",
+				msg: expect.any(String),
+				attrs: { accountId: "acct_td", type: "term-deposit" },
+			});
+			expect(
+				h.logs.some((l) => l.level === "info" && /anchor/.test(l.msg)),
+			).toBe(true);
+		});
+
+		it("skips the anchor when no account counts", async () => {
+			const h = harness({ accounts: [account("acct_loan", { type: "loan" })] });
+
+			await h.service.run();
+
+			expect(h.anchors).toEqual([]);
+		});
+
+		it("skips the anchor when a counted balance is stale", async () => {
+			const h = harness({
+				balances: { acct_1: balance("acct_1", { freshness: "stale" }) },
+			});
+
+			await expect(h.service.run()).resolves.toBeUndefined();
+
+			expect(h.anchors).toEqual([]);
+			expect(
+				h.logs.some((l) => l.level === "info" && /anchor/.test(l.msg)),
+			).toBe(true);
+		});
+
+		it.each([
+			CdrConnectionStatus.Revoked,
+			CdrConnectionStatus.Expired,
+			CdrConnectionStatus.Invalidated,
+			CdrConnectionStatus.Pending,
+		])(
+			"skips the anchor when a counted account's consent is %s",
+			async (status) => {
+				const h = harness({
+					connections: [connection("conn_1"), connection("conn_2", status)],
+					accounts: [
+						account("acct_1"),
+						account("acct_2", { connection: "conn_2" }),
+					],
+				});
+
+				await h.service.run();
+
+				expect(h.anchors).toEqual([]);
+			},
+		);
+
+		it.each(["syncing", "unavailable"] as const)(
+			"skips the anchor when a counted account is %s",
+			async (status) => {
+				const h = harness({
+					accounts: [account("acct_1"), account("acct_2", { status })],
+				});
+
+				await h.service.run();
+
+				expect(h.anchors).toEqual([]);
+			},
+		);
+
+		it("skips the anchor when a counted account failed", async () => {
+			const h = harness({
+				accounts: [account("acct_1"), account("acct_2")],
+				listTransactions: async (accountId) => {
+					if (accountId === "acct_2") throw new Error("boom");
+					return [];
+				},
+			});
+
+			await expect(h.service.run()).rejects.toBeInstanceOf(CdrSyncError);
+
+			expect(h.anchors).toEqual([]);
+		});
+
+		// A loan's rows breaking the sign check daily must not hold the cash line for good.
+		it("writes the anchor when only a left-out account failed, then throws", async () => {
+			const h = harness({
+				accounts: [account("acct_1"), account("acct_loan", { type: "loan" })],
+				listTransactions: async (accountId) => {
+					if (accountId === "acct_loan") throw new Error("boom");
+					return [];
+				},
+			});
+
+			await expect(h.service.run()).rejects.toBeInstanceOf(CdrSyncError);
+
+			expect(h.anchors).toHaveLength(1);
+		});
+
+		it.each([
+			[
+				"a balance is not AUD",
+				{
+					balances: {
+						acct_1: balance("acct_1", {
+							current: { amount: 100, currency: "usd" },
+						}),
+					},
+				},
+			],
+			[
+				"saving the anchor throws",
+				{
+					recordSynced: async () => {
+						throw new Error("db down");
+					},
+				},
+			],
+		] satisfies [string, HarnessOptions][])(
+			"logs an error and resolves when %s",
+			async (_, opts) => {
+				const h = harness(opts);
+
+				await expect(h.service.run()).resolves.toBeUndefined();
+
+				expect(h.anchors).toEqual([]);
+				expect(
+					h.logs.some((l) => l.level === "error" && /anchor/.test(l.msg)),
+				).toBe(true);
+			},
+		);
+	});
+
+	describe("account balances", () => {
+		it("saves each account's bank name and masked number", async () => {
+			const h = harness();
+
+			await h.service.run();
+
+			expect(h.states.get("acct_1")).toMatchObject({
+				institutionName: "CommBank",
+				accountNumber: "xxxx8273",
+			});
+		});
+
+		it("reads every account on a live connection in one call, saving each readable balance", async () => {
+			const h = harness({
+				connections: [
+					connection("conn_1"),
+					connection("conn_2", CdrConnectionStatus.Revoked),
+				],
+				accounts: [
+					account("acct_tx"),
+					account("acct_loan", { type: "loan" }),
+					account("acct_gone"),
+					account("acct_old", { connection: "conn_2" }),
+				],
+				balances: {
+					acct_loan: balance("acct_loan", {
+						current: { amount: -8_394_25, currency: "aud" },
+						freshness: "stale",
+					}),
+					acct_gone: balance("acct_gone", {
+						current: null,
+						freshness: "unavailable",
+						observed_at: null,
+					}),
+				},
+			});
+
+			await h.service.run();
+
+			expect(h.balanceReads).toEqual([["acct_tx", "acct_loan", "acct_gone"]]);
+			expect(h.savedBalances).toEqual([
+				{
+					accountId: "acct_tx",
+					amount: 100,
+					asOf: new Date("2026-10-19T20:00:00Z"),
+				},
+				{
+					accountId: "acct_loan",
+					amount: -8394.25,
+					asOf: new Date("2026-10-19T20:00:00Z"),
+				},
+			]);
+		});
+
+		it("anchors from that same reply with no second read", async () => {
+			const h = harness();
+
+			await h.service.run();
+
+			expect(h.balanceReads).toHaveLength(1);
+			expect(h.anchors).toEqual([
+				{ amount: 100, asOf: new Date("2026-10-19T20:00:00Z") },
+			]);
+		});
+
+		it("skips the anchor when a counted account is missing from the reply", async () => {
+			const h = harness({ listBalances: async () => [] });
+
+			await expect(h.service.run()).resolves.toBeUndefined();
+
+			expect(h.anchors).toEqual([]);
+			expect(
+				h.logs.some((l) => l.level === "info" && /anchor/.test(l.msg)),
+			).toBe(true);
+		});
+
+		it("logs an error and still syncs when the read throws", async () => {
+			const h = harness({
+				listBalances: async () => {
+					throw new RedbarkRetryableError("429");
+				},
+			});
+
+			await expect(h.service.run()).resolves.toBeUndefined();
+
+			expect(h.advances).toHaveLength(1);
+			expect(h.savedBalances).toEqual([]);
+			expect(h.anchors).toEqual([]);
+			expect(
+				h.logs.some((l) => l.level === "error" && /balance/.test(l.msg)),
+			).toBe(true);
+		});
+
+		it("makes no call when no account is on a live connection", async () => {
+			const h = harness({
+				connections: [connection("conn_1", CdrConnectionStatus.Pending)],
+			});
+
+			await h.service.run();
+
+			expect(h.balanceReads).toEqual([]);
 		});
 	});
 

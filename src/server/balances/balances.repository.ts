@@ -1,12 +1,15 @@
 import { desc } from "drizzle-orm";
 import type { BalanceSetInput, BalanceSnapshot } from "~/domain/balances";
+import type { BalanceSource } from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
 import { balanceSnapshots } from "./balances.schema";
 
 export interface BalancesRepository {
 	/** `undefined` when there are no snapshots. */
 	findLatest(): Promise<BalanceSnapshot | undefined>;
-	insert(values: BalanceSetInput): Promise<BalanceSnapshot | undefined>;
+	insert(
+		values: BalanceSetInput & { source: BalanceSource },
+	): Promise<BalanceSnapshot | undefined>;
 }
 
 interface DrizzleBalancesRepositoryDeps {
@@ -30,7 +33,9 @@ export class DrizzleBalancesRepository implements BalancesRepository {
 		return row;
 	}
 
-	async insert(values: BalanceSetInput): Promise<BalanceSnapshot | undefined> {
+	async insert(
+		values: BalanceSetInput & { source: BalanceSource },
+	): Promise<BalanceSnapshot | undefined> {
 		const [row] = await this.db
 			.insert(balanceSnapshots)
 			.values(values)

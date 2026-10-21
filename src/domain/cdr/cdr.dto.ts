@@ -28,7 +28,13 @@ export const redbarkAccountDto = z.object({
 	id: z.string(),
 	connection: z.string(),
 	name: z.string(),
+	// Free text with no documented list (seen: transaction, loan, credit-card), so
+	// a new type can't fail discovery.
+	type: z.string(),
 	status: z.enum(["available", "syncing", "unavailable"]),
+	institution: z.object({ name: z.string() }),
+	/** Masked to the last four digits. */
+	account_number: z.string().nullable(),
 });
 
 export const redbarkConnectionDto = z.object({
@@ -50,7 +56,28 @@ export const redbarkPageDto = <T extends z.ZodType>(item: T) =>
 		next_page_url: z.url().nullable(),
 	});
 
+/** A member's choice on Settings → Bank accounts. */
+export const cdrSetInBalanceDto = z.object({
+	accountId: z.string().min(1),
+	inBalance: z.boolean(),
+});
+
+/** Room for "Joint offset"-style names; the bank's own can run past 40. */
+export const NICKNAME_MAX_LENGTH = 40;
+
+/** A member's rename on Settings → Bank accounts. Blank → null: back to the bank's name. */
+export const cdrSetNicknameDto = z.object({
+	accountId: z.string().min(1),
+	nickname: z
+		.string()
+		.trim()
+		.max(NICKNAME_MAX_LENGTH)
+		.transform((name) => name || null),
+});
+
 export type RedbarkTransaction = z.infer<typeof redbarkTransactionDto>;
 export type RedbarkAccount = z.infer<typeof redbarkAccountDto>;
 export type RedbarkConnection = z.infer<typeof redbarkConnectionDto>;
 export type RedbarkBalance = z.infer<typeof redbarkBalanceDto>;
+export type CdrSetInBalanceInput = z.infer<typeof cdrSetInBalanceDto>;
+export type CdrSetNicknameInput = z.infer<typeof cdrSetNicknameDto>;

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { Provenance } from "~/lib/constants";
-import { type RedbarkTransaction, redbarkTransactionDto } from "./cdr.dto";
-import { mapRedbarkTransaction } from "./map-redbark";
+import {
+	type RedbarkBalance,
+	type RedbarkTransaction,
+	redbarkTransactionDto,
+} from "./cdr.dto";
+import {
+	anchorFromBalances,
+	inBalanceByDefault,
+	latestBalance,
+	mapRedbarkTransaction,
+} from "./map-redbark";
 import { creditRow, debitRow } from "./redbark.fixtures";
 
 const row = (over: Partial<RedbarkTransaction> = {}): RedbarkTransaction => ({
@@ -102,5 +111,109 @@ describe("mapRedbarkTransaction", () => {
 			expect(mapped.amount).toBeLessThan(0);
 			expect(mapped.amount).toBe(-creditRow.amount.amount / 100);
 		});
+	});
+});
+
+describe("inBalanceByDefault", () => {
+	it.each(["transaction", "savings", "credit-card"])(
+		"counts a %s account",
+		(type) => {
+			expect(inBalanceByDefault(type)).toBe(true);
+		},
+	);
+
+	it("leaves a loan out", () => {
+		expect(inBalanceByDefault("loan")).toBe(false);
+	});
+
+	// An unknown type might be savings under another name, so a person decides.
+	it.each(["term-deposit", "Savings", ""])("leaves %j undecided", (type) => {
+		expect(inBalanceByDefault(type)).toBeNull();
+	});
+});
+
+describe("anchorFromBalances", () => {
+	const balance = (over: Partial<RedbarkBalance> = {}): RedbarkBalance => ({
+		account: "acct_1",
+		current: money(1_000_00),
+		freshness: "fresh",
+		observed_at: "2026-10-20T01:00:00Z",
+		...over,
+	});
+
+	it("sums every current balance in dollars, as of the oldest reading", () => {
+		expect(
+			anchorFromBalances([
+				balance({
+					current: money(1_000_10),
+					observed_at: "2026-10-20T03:00:00Z",
+				}),
+				balance({
+					current: money(250_20),
+					observed_at: "2026-10-20T01:00:00+00:00",
+				}),
+			]),
+		).toEqual({ amount: 1250.3, asOf: new Date("2026-10-20T01:00:00.000Z") });
+	});
+
+	// CDR signs a card balance negative when money is owed (confirmed live, adr017 facet 6).
+	it("lowers the sum by a credit card's negative balance", () => {
+		expect(
+			anchorFromBalances([
+				balance({ current: money(1_000_00) }),
+				balance({ current: money(-300_00) }),
+			])?.amount,
+		).toBe(700);
+	});
+
+	it("gives null when any balance is stale", () => {
+		expect(
+			anchorFromBalances([balance(), balance({ freshness: "stale" })]),
+		).toBeNull();
+	});
+
+	it.each([
+		["no freshness", { freshness: null }],
+		["freshness unavailable", { freshness: "unavailable" }],
+		["no current", { current: null }],
+		["no observed_at", { observed_at: null }],
+	] as const)("gives null when a balance has %s", (_, over) => {
+		expect(anchorFromBalances([balance(), balance(over)])).toBeNull();
+	});
+
+	it("gives null for no balances", () => {
+		expect(anchorFromBalances([])).toBeNull();
+	});
+
+	it("throws on a non-AUD balance", () => {
+		expect(() =>
+			anchorFromBalances([balance(), balance({ current: money(100, "usd") })]),
+		).toThrow(/currency/);
+	});
+});
+
+describe("latestBalance", () => {
+	const balance = (over: Partial<RedbarkBalance> = {}): RedbarkBalance => ({
+		account: "acct_1",
+		current: money(-8_394_25),
+		freshness: "stale",
+		observed_at: "2026-10-20T01:00:00Z",
+		...over,
+	});
+
+	// The list shows the last known balance, so a stale one is still worth keeping.
+	it("gives dollars and when the bank read them, fresh or not", () => {
+		expect(latestBalance(balance())).toEqual({
+			amount: -8394.25,
+			asOf: new Date("2026-10-20T01:00:00.000Z"),
+		});
+	});
+
+	it.each([
+		["no current", { current: null }],
+		["no observed_at", { observed_at: null }],
+		["a non-AUD currency", { current: money(100, "usd") }],
+	] as const)("gives null for %s", (_, over) => {
+		expect(latestBalance(balance(over))).toBeNull();
 	});
 });

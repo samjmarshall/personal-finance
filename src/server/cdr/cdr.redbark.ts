@@ -27,7 +27,8 @@ export interface RedbarkClient {
 		accountId: string;
 		from: Date;
 	}): Promise<RedbarkTransaction[]>;
-	getAccountBalance(accountId: string): Promise<RedbarkBalance>;
+	/** One call for up to 100 accounts. An account RedBark can't read comes back with a null `current`. */
+	listBalances(accountIds: string[]): Promise<RedbarkBalance[]>;
 }
 
 /** A 429, 5xx or network failure. `retryAfterMs` is null when RedBark gave no usable wait. */
@@ -92,11 +93,10 @@ export class HttpRedbarkClient implements RedbarkClient {
 		);
 	}
 
-	async getAccountBalance(accountId: string): Promise<RedbarkBalance> {
-		const { body } = await this.get(
-			`${this.apiRoot}/accounts/${encodeURIComponent(accountId)}/balance`,
-		);
-		return redbarkBalanceDto.parse(body);
+	async listBalances(accountIds: string[]): Promise<RedbarkBalance[]> {
+		const query = new URLSearchParams(accountIds.map((id) => ["account", id]));
+		const { body } = await this.get(`${this.apiRoot}/balances?${query}`);
+		return redbarkPageDto(redbarkBalanceDto).parse(body).data;
 	}
 
 	private async list<T extends z.ZodType>(

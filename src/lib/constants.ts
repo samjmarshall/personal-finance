@@ -56,6 +56,12 @@ export enum CdrConnectionStatus {
 	Revoked = "revoked",
 }
 
+// Who recorded a balance snapshot. A label only: the latest asOf wins either way.
+export enum BalanceSource {
+	Manual = "manual",
+	Cdr = "cdr",
+}
+
 // Stored frequency/priority are free-text; coerce a read value to the managed
 // vocab, falling back to the default when it is outside the current set (e.g.
 // legacy/imported data) so a form seed can never hold an unknown value.

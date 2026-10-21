@@ -1,5 +1,6 @@
 import { env } from "~/env";
 import { bedrock } from "~/server/aws/bedrock";
+import { balancesService } from "~/server/balances/balances.module";
 import { VercelBlobStore } from "~/server/blob-store/blob-store";
 import { categoriesService } from "~/server/categories/categories.module";
 import { CdrInngestController } from "~/server/cdr/cdr.inngest.controller";
@@ -20,8 +21,8 @@ import { inngest } from "./client";
 
 // Composition root: every tier built once with the real db + client. The route
 // handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
-// function's cron/event triggers from it. The outbox, categories and transactions
-// services are shared with other roots, so they come from their *.module.ts files
+// function's cron/event triggers from it. The outbox, categories, transactions and
+// balances services are shared with other roots, so they come from their *.module.ts files
 // rather than being built here.
 const outboxController = new OutboxInngestController({
 	inngest,
@@ -53,6 +54,7 @@ const cdrSyncService = new CdrSyncService({
 			})
 		: null,
 	transactions: transactionsService,
+	balances: balancesService,
 	logger: createRootLogger().with({ domain: "cdr", component: "sync" }),
 });
 const cdrController = new CdrInngestController({

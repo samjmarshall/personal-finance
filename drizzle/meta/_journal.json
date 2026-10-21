@@ -148,6 +148,20 @@
 			"when": 1792394162724,
 			"tag": "0020_wise_penance",
 			"breakpoints": true
+		},
+		{
+			"idx": 21,
+			"version": "7",
+			"when": 1792471721473,
+			"tag": "0021_condemned_ultimo",
+			"breakpoints": true
+		},
+		{
+			"idx": 22,
+			"version": "7",
+			"when": 1792546384861,
+			"tag": "0022_moaning_korath",
+			"breakpoints": true
 		}
 	]
 }

@@ -1,4 +1,5 @@
 import { asc, eq, sql } from "drizzle-orm";
+import type { BalanceSetInput } from "~/domain/balances";
 import type { CdrSyncState } from "~/domain/cdr";
 import type { CdrConnectionStatus } from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
@@ -6,17 +7,18 @@ import { cdrSyncState } from "./cdr.schema";
 
 export type DiscoveredAccount = Pick<
 	CdrSyncState,
-	"accountId" | "connectionStatus"
+	"accountId" | "accountNumber" | "connectionStatus" | "inBalance"
 > & {
 	connectionId: string;
 	accountName: string;
+	institutionName: string;
 };
 
 export interface CdrRepository {
 	listSyncState(): Promise<CdrSyncState[]>;
 	/** `undefined` when no row has the account id. */
 	findSyncState(accountId: string): Promise<CdrSyncState | undefined>;
-	/** Inserts or refreshes the account; never touches its highWaterMark. */
+	/** Inserts or refreshes the account; never touches its highWaterMark, a set inBalance or the nickname. */
 	upsertAccount(account: DiscoveredAccount): Promise<void>;
 	/** Never moves the mark back. Also stamps lastSyncedAt and clears lastError. */
 	advanceHighWaterMark(
@@ -30,6 +32,17 @@ export interface CdrRepository {
 		status: CdrConnectionStatus,
 	): Promise<void>;
 	recordError(accountId: string, message: string): Promise<void>;
+	/** `undefined` when no row has the account id. */
+	setInBalance(
+		accountId: string,
+		inBalance: boolean,
+	): Promise<CdrSyncState | undefined>;
+	recordBalance(accountId: string, balance: BalanceSetInput): Promise<void>;
+	/** Null clears it. `undefined` when no row has the account id. */
+	setNickname(
+		accountId: string,
+		nickname: string | null,
+	): Promise<CdrSyncState | undefined>;
 }
 
 interface DrizzleCdrRepositoryDeps {
@@ -59,14 +72,33 @@ export class DrizzleCdrRepository implements CdrRepository {
 		accountId,
 		connectionId,
 		accountName,
+		institutionName,
+		accountNumber,
 		connectionStatus,
+		inBalance,
 	}: DiscoveredAccount): Promise<void> {
 		await this.db
 			.insert(cdrSyncState)
-			.values({ accountId, connectionId, accountName, connectionStatus })
+			.values({
+				accountId,
+				connectionId,
+				accountName,
+				institutionName,
+				accountNumber,
+				connectionStatus,
+				inBalance,
+			})
 			.onConflictDoUpdate({
 				target: cdrSyncState.accountId,
-				set: { connectionId, accountName, connectionStatus },
+				set: {
+					connectionId,
+					accountName,
+					institutionName,
+					accountNumber,
+					connectionStatus,
+					// Discovery fills the flag once; a member's choice is never overwritten.
+					inBalance: sql`coalesce(${cdrSyncState.inBalance}, excluded."inBalance")`,
+				},
 			});
 	}
 
@@ -101,5 +133,39 @@ export class DrizzleCdrRepository implements CdrRepository {
 			.update(cdrSyncState)
 			.set({ lastError: message })
 			.where(eq(cdrSyncState.accountId, accountId));
+	}
+
+	async setInBalance(
+		accountId: string,
+		inBalance: boolean,
+	): Promise<CdrSyncState | undefined> {
+		const [row] = await this.db
+			.update(cdrSyncState)
+			.set({ inBalance })
+			.where(eq(cdrSyncState.accountId, accountId))
+			.returning();
+		return row;
+	}
+
+	async recordBalance(
+		accountId: string,
+		{ amount, asOf }: BalanceSetInput,
+	): Promise<void> {
+		await this.db
+			.update(cdrSyncState)
+			.set({ balance: amount, balanceAsOf: asOf })
+			.where(eq(cdrSyncState.accountId, accountId));
+	}
+
+	async setNickname(
+		accountId: string,
+		nickname: string | null,
+	): Promise<CdrSyncState | undefined> {
+		const [row] = await this.db
+			.update(cdrSyncState)
+			.set({ nickname })
+			.where(eq(cdrSyncState.accountId, accountId))
+			.returning();
+		return row;
 	}
 }

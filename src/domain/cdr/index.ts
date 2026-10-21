@@ -1,4 +1,9 @@
 import {
+	type CdrSetInBalanceInput,
+	type CdrSetNicknameInput,
+	cdrSetInBalanceDto,
+	cdrSetNicknameDto,
+	NICKNAME_MAX_LENGTH,
 	type RedbarkAccount,
 	type RedbarkBalance,
 	type RedbarkConnection,
@@ -10,9 +15,16 @@ import {
 	redbarkTransactionDto,
 } from "./cdr.dto";
 import type { CdrSyncState } from "./cdr.interface";
-import { mapRedbarkTransaction } from "./map-redbark";
+import {
+	anchorFromBalances,
+	inBalanceByDefault,
+	latestBalance,
+	mapRedbarkTransaction,
+} from "./map-redbark";
 
 export type {
+	CdrSetInBalanceInput,
+	CdrSetNicknameInput,
 	CdrSyncState,
 	RedbarkAccount,
 	RedbarkBalance,
@@ -20,7 +32,13 @@ export type {
 	RedbarkTransaction,
 };
 export {
+	anchorFromBalances,
+	cdrSetInBalanceDto,
+	cdrSetNicknameDto,
+	inBalanceByDefault,
+	latestBalance,
 	mapRedbarkTransaction,
+	NICKNAME_MAX_LENGTH,
 	redbarkAccountDto,
 	redbarkBalanceDto,
 	redbarkConnectionDto,

@@ -109,6 +109,12 @@ How a Receipt arrived — upload or email. A Receipt lives only here, so it has 
 not a Provenance.
 _Avoid_: source
 
+**Balance source**:
+Who recorded a balance snapshot — the member, or the bank sync. A label only: the newest
+as-of time wins either way. The one place "source" is the term; a snapshot is not a
+Transaction, so it has no Provenance.
+_Avoid_: provenance (for a balance)
+
 ## Relationships
 
 - A **Household** owns every **Expense**, **Income**, **Transaction**, **Category** and

@@ -72,7 +72,10 @@ describe("HttpRedbarkClient requests", () => {
 						id: "acct_1",
 						connection: "conn_1",
 						name: "Everyday",
+						type: "transaction",
 						status: "available",
+						institution: { id: "inst_fk_cba", name: "CommBank", logo: null },
+						account_number: "xxxx8273",
 					},
 				]),
 			);
@@ -86,25 +89,44 @@ describe("HttpRedbarkClient requests", () => {
 				id: "acct_1",
 				connection: "conn_1",
 				name: "Everyday",
+				type: "transaction",
 				status: "available",
+				institution: { name: "CommBank" },
+				account_number: "xxxx8273",
 			},
 		]);
 		expect(calledUrl(1).pathname).toBe("/v2/accounts");
 	});
 
-	it("reads one account's balance", async () => {
-		const balance = {
+	it("reads every account's balance in one call, in the order asked", async () => {
+		const fresh = {
 			account: "acct_1",
 			current: { amount: 123456, currency: "aud" },
 			freshness: "fresh",
 			observed_at: "2026-10-15T01:00:00Z",
 		};
-		fetchMock.mockResolvedValue(json(balance));
+		// One bank that can't answer comes back empty; it doesn't fail the call.
+		const unreachable = {
+			account: "acct_2",
+			current: null,
+			freshness: "unavailable",
+			observed_at: null,
+			retry_after_seconds: 900,
+		};
+		fetchMock.mockResolvedValue(page([fresh, unreachable]));
 
-		await expect(client().getAccountBalance("acct_1")).resolves.toEqual(
-			balance,
-		);
-		expect(calledUrl().pathname).toBe("/v2/accounts/acct_1/balance");
+		const { retry_after_seconds: _, ...unreachableParsed } = unreachable;
+
+		await expect(client().listBalances(["acct_1", "acct_2"])).resolves.toEqual([
+			fresh,
+			unreachableParsed,
+		]);
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(calledUrl().pathname).toBe("/v2/balances");
+		expect(calledUrl().searchParams.getAll("account")).toEqual([
+			"acct_1",
+			"acct_2",
+		]);
 	});
 });
 

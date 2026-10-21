@@ -28,6 +28,12 @@ describe("cdr_sync_state table shape (adr017 facet 5)", () => {
 		expect(cols.createdAt.notNull).toBe(true);
 	});
 
+	// Null means a person hasn't decided yet: a seeded row has no type until discovery.
+	it("leaves inBalance nullable with no default", () => {
+		expect(cols.inBalance.notNull).toBe(false);
+		expect(cols.inBalance.hasDefault).toBe(false);
+	});
+
 	it("leaves the sync fields nullable without a default", () => {
 		for (const col of [
 			cols.connectionId,
@@ -35,6 +41,20 @@ describe("cdr_sync_state table shape (adr017 facet 5)", () => {
 			cols.highWaterMark,
 			cols.lastSyncedAt,
 			cols.lastError,
+		]) {
+			expect(col.notNull).toBe(false);
+			expect(col.hasDefault).toBe(false);
+		}
+	});
+
+	// Prototype D's list: a row saved before these columns has none until its next sync.
+	it("leaves the list's account details nullable without a default", () => {
+		for (const col of [
+			cols.institutionName,
+			cols.accountNumber,
+			cols.balance,
+			cols.balanceAsOf,
+			cols.nickname,
 		]) {
 			expect(col.notNull).toBe(false);
 			expect(col.hasDefault).toBe(false);

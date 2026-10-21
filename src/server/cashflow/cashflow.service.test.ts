@@ -3,7 +3,7 @@ import type { BalanceSnapshot } from "~/domain/balances";
 import { type BuildCashflowInput, buildCashflow } from "~/domain/cashflow";
 import type { Expense } from "~/domain/expenses";
 import type { Income } from "~/domain/income";
-import { CommitmentKind } from "~/lib/constants";
+import { BalanceSource, CommitmentKind } from "~/lib/constants";
 import { recorder, throwing } from "~/test/fakes";
 import { CashflowService } from "./cashflow.service";
 
@@ -63,6 +63,7 @@ const SNAPSHOT: BalanceSnapshot = {
 	amount: 3000,
 	asOf: new Date("2026-10-05T00:00:00.000Z"),
 	createdAt: new Date("2026-10-05T01:00:00.000Z"),
+	source: BalanceSource.Cdr,
 };
 
 const TRANSACTIONS = [

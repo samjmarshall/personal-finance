@@ -27,14 +27,30 @@ const SYNC_STATE = {
 	id: 1,
 	accountId: "acc_1",
 	accountName: "Everyday",
+	accountNumber: "xxxx8273",
+	balance: 5489.69,
+	balanceAsOf: new Date("2026-10-18T18:00:00.000Z"),
 	connectionId: "conn_1",
 	connectionStatus: CdrConnectionStatus.Active,
 	createdAt: new Date("2026-10-01T00:00:00.000Z"),
 	highWaterMark: new Date("2026-10-15T00:00:00.000Z"),
+	inBalance: true,
+	institutionName: "CommBank",
 	lastError: null,
 	lastSyncedAt: new Date("2026-10-18T18:00:00.000Z"),
+	nickname: null,
 	updatedAt: null,
 } satisfies CdrSyncState;
+
+const DISCOVERED = {
+	accountId: "acc_1",
+	connectionId: "conn_1",
+	accountName: "Everyday",
+	institutionName: "CommBank",
+	accountNumber: "xxxx8273",
+	connectionStatus: CdrConnectionStatus.Active,
+	inBalance: true,
+};
 
 // Freeze Date only, so the auto update time stays stable.
 beforeEach(() => {
@@ -55,7 +71,7 @@ describe("listSyncState", () => {
 			  {
 			    "method": "all",
 			    "params": [],
-			    "sql": "select "id", "accountId", "connectionId", "accountName", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "createdAt", "updatedAt" from "cdr_sync_state" order by "cdr_sync_state"."id" asc",
+			    "sql": "select "id", "accountId", "connectionId", "accountName", "institutionName", "accountNumber", "balance", "balanceAsOf", "nickname", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "inBalance", "createdAt", "updatedAt" from "cdr_sync_state" order by "cdr_sync_state"."id" asc",
 			  },
 			]
 		`);
@@ -76,7 +92,7 @@ describe("findSyncState", () => {
 			    "params": [
 			      "acc_1",
 			    ],
-			    "sql": "select "id", "accountId", "connectionId", "accountName", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "createdAt", "updatedAt" from "cdr_sync_state" where "cdr_sync_state"."accountId" = $1",
+			    "sql": "select "id", "accountId", "connectionId", "accountName", "institutionName", "accountNumber", "balance", "balanceAsOf", "nickname", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "inBalance", "createdAt", "updatedAt" from "cdr_sync_state" where "cdr_sync_state"."accountId" = $1",
 			  },
 			]
 		`);
@@ -90,15 +106,11 @@ describe("findSyncState", () => {
 });
 
 describe("upsertAccount", () => {
-	it("inserts or refreshes the account on accountId, leaving highWaterMark alone", async () => {
+	// coalesce: discovery fills inBalance once, then a member's choice stays.
+	it("inserts or refreshes the account on accountId, leaving highWaterMark and a set inBalance alone", async () => {
 		const { repository, queries } = harness();
 
-		await repository.upsertAccount({
-			accountId: "acc_1",
-			connectionId: "conn_1",
-			accountName: "Everyday",
-			connectionStatus: CdrConnectionStatus.Active,
-		});
+		await repository.upsertAccount(DISCOVERED);
 
 		expect(queries).toMatchInlineSnapshot(`
 			[
@@ -108,29 +120,40 @@ describe("upsertAccount", () => {
 			      "acc_1",
 			      "conn_1",
 			      "Everyday",
+			      "CommBank",
+			      "xxxx8273",
 			      "active",
+			      true,
 			      "2026-10-19T00:00:00.000Z",
 			      "conn_1",
 			      "Everyday",
+			      "CommBank",
+			      "xxxx8273",
 			      "active",
 			      "2026-10-19T00:00:00.000Z",
 			    ],
-			    "sql": "insert into "cdr_sync_state" ("id", "accountId", "connectionId", "accountName", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "createdAt", "updatedAt") values (default, $1, $2, $3, default, $4, default, default, default, $5) on conflict ("accountId") do update set "connectionId" = $6, "accountName" = $7, "connectionStatus" = $8, "updatedAt" = $9",
+			    "sql": "insert into "cdr_sync_state" ("id", "accountId", "connectionId", "accountName", "institutionName", "accountNumber", "balance", "balanceAsOf", "nickname", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "inBalance", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5, default, default, default, default, $6, default, default, $7, default, $8) on conflict ("accountId") do update set "connectionId" = $9, "accountName" = $10, "institutionName" = $11, "accountNumber" = $12, "connectionStatus" = $13, "inBalance" = coalesce("cdr_sync_state"."inBalance", excluded."inBalance"), "updatedAt" = $14",
 			  },
 			]
 		`);
+	});
+
+	// The member owns the nickname; a sync renaming it back would undo their edit.
+	it("never writes the nickname", async () => {
+		const { repository, queries } = harness();
+
+		await repository.upsertAccount(DISCOVERED);
+
+		const [, update] = queries[0]?.sql.split(" do update set ") ?? [];
+		expect(update).toBeDefined();
+		expect(update).not.toContain('"nickname"');
 	});
 
 	it("lets a driver error bubble", async () => {
 		const { repository } = harness(() => pgError("23502"));
 
 		await expect(
-			repository.upsertAccount({
-				accountId: "acc_1",
-				connectionId: "conn_1",
-				accountName: "Everyday",
-				connectionStatus: CdrConnectionStatus.Active,
-			}),
+			repository.upsertAccount({ ...DISCOVERED, inBalance: null }),
 		).rejects.toMatchObject({ cause: { code: "23502" } });
 	});
 });
@@ -204,5 +227,109 @@ describe("recordError", () => {
 			  },
 			]
 		`);
+	});
+});
+
+describe("setInBalance", () => {
+	it("saves one account's choice and returns its row", async () => {
+		const { repository, queries } = harness(() => [
+			rowOf(COLUMNS, { ...SYNC_STATE, inBalance: false, updatedAt: NOW }),
+		]);
+
+		await expect(repository.setInBalance("acc_1", false)).resolves.toEqual({
+			...SYNC_STATE,
+			inBalance: false,
+			updatedAt: NOW,
+		});
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      false,
+			      "2026-10-19T00:00:00.000Z",
+			      "acc_1",
+			    ],
+			    "sql": "update "cdr_sync_state" set "inBalance" = $1, "updatedAt" = $2 where "cdr_sync_state"."accountId" = $3 returning "id", "accountId", "connectionId", "accountName", "institutionName", "accountNumber", "balance", "balanceAsOf", "nickname", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "inBalance", "createdAt", "updatedAt"",
+			  },
+			]
+		`);
+	});
+
+	it("gives undefined when no row has the account id", async () => {
+		const { repository } = harness();
+
+		await expect(
+			repository.setInBalance("acc_x", true),
+		).resolves.toBeUndefined();
+	});
+});
+
+describe("recordBalance", () => {
+	it("saves one account's latest balance and when the bank read it", async () => {
+		const { repository, queries } = harness();
+
+		await repository.recordBalance("acc_1", {
+			amount: -8394.25,
+			asOf: new Date("2026-10-18T18:00:00.000Z"),
+		});
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [
+			      -8394.25,
+			      "2026-10-18T18:00:00.000Z",
+			      "2026-10-19T00:00:00.000Z",
+			      "acc_1",
+			    ],
+			    "sql": "update "cdr_sync_state" set "balance" = $1, "balanceAsOf" = $2, "updatedAt" = $3 where "cdr_sync_state"."accountId" = $4",
+			  },
+			]
+		`);
+	});
+});
+
+describe("setNickname", () => {
+	it("saves one account's nickname and returns its row", async () => {
+		const { repository, queries } = harness(() => [
+			rowOf(COLUMNS, { ...SYNC_STATE, nickname: "Bills", updatedAt: NOW }),
+		]);
+
+		await expect(repository.setNickname("acc_1", "Bills")).resolves.toEqual({
+			...SYNC_STATE,
+			nickname: "Bills",
+			updatedAt: NOW,
+		});
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "Bills",
+			      "2026-10-19T00:00:00.000Z",
+			      "acc_1",
+			    ],
+			    "sql": "update "cdr_sync_state" set "nickname" = $1, "updatedAt" = $2 where "cdr_sync_state"."accountId" = $3 returning "id", "accountId", "connectionId", "accountName", "institutionName", "accountNumber", "balance", "balanceAsOf", "nickname", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "inBalance", "createdAt", "updatedAt"",
+			  },
+			]
+		`);
+	});
+
+	it("clears the nickname with null", async () => {
+		const { repository, queries } = harness();
+
+		await repository.setNickname("acc_1", null);
+
+		expect(queries[0]?.params[0]).toBeNull();
+	});
+
+	it("gives undefined when no row has the account id", async () => {
+		const { repository } = harness();
+
+		await expect(
+			repository.setNickname("acc_x", "Bills"),
+		).resolves.toBeUndefined();
 	});
 });
