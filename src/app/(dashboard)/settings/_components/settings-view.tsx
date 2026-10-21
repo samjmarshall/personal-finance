@@ -1,14 +1,22 @@
 "use client";
 
-import { AtSign, CalendarClock, type LucideIcon, Palette } from "lucide-react";
+import {
+	AtSign,
+	CalendarClock,
+	Landmark,
+	type LucideIcon,
+	Palette,
+} from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { AsyncBoundary } from "~/components/async-boundary";
 import { PageHeader } from "~/components/page-header";
 import { cn } from "~/lib/utils";
 import { AllowedSendersSection } from "./allowed-senders-section";
 import { AppearanceSection } from "./appearance-section";
+import { BankAccountsSection } from "./bank-accounts-section";
 import { PayCycleSection } from "./pay-cycle-section";
 import {
+	BankAccountsSkeleton,
 	ForwardingSkeleton,
 	PayCycleSkeleton,
 } from "./settings-panel-skeleton";
@@ -18,7 +26,7 @@ export type SettingsViewProps = {
 	inboundAddress?: string;
 };
 
-type SectionId = "appearance" | "pay-cycle" | "forwarding";
+type SectionId = "appearance" | "pay-cycle" | "forwarding" | "bank-accounts";
 
 // `render` rather than a bare component: this file is a client boundary, so a
 // server-only value like the inbound address can only arrive as a prop from the
@@ -61,6 +69,16 @@ const sections: Section[] = [
 			</AsyncBoundary>
 		),
 	},
+	{
+		id: "bank-accounts",
+		label: "Bank accounts",
+		icon: Landmark,
+		render: () => (
+			<AsyncBoundary label="bank accounts" skeleton={<BankAccountsSkeleton />}>
+				<BankAccountsSection />
+			</AsyncBoundary>
+		),
+	},
 ];
 
 export function SettingsView({ inboundAddress }: SettingsViewProps) {
@@ -68,7 +86,7 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 	const navRef = useRef<HTMLElement | null>(null);
 
 	// The rail is a horizontally scrolling strip on narrow screens, wide enough to
-	// overflow once there are three tabs, so the active tab can sit past the edge
+	// overflow once there are four tabs, so the active tab can sit past the edge
 	// and render half-clipped — which reads as broken.
 	//
 	// Explicit maths rather than scrollIntoView: `inline: "nearest"` leaves a tab
@@ -88,7 +106,7 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
 			<PageHeader
-				description="How Ledger looks, how your pay cycle is counted, and where receipts can arrive from."
+				description="How Ledger looks, how your pay cycle is counted, where receipts can arrive from, and which bank accounts count."
 				title="Settings"
 			/>
 

@@ -80,3 +80,38 @@ export function ForwardingSkeleton({
 		</SettingsPanelSkeleton>
 	);
 }
+
+export function BankAccountsSkeleton() {
+	return (
+		<SettingsPanelSkeleton
+			description="Your cash balance adds up every account switched on. Switched-off accounts still sync, they just aren't counted."
+			title="Cash balance"
+		>
+			{/* One bank group, then the Total, in BankAccountsSection's boxes. */}
+			<div className="flex items-baseline justify-between px-1 pb-2">
+				<Skeleton className="my-0.5 h-4 w-24" />
+				<Skeleton className="my-0.5 h-3 w-20" />
+			</div>
+			<div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
+				{["w-36", "w-44", "w-28"].map((width) => (
+					<div className="flex items-center gap-3 px-3 py-2.5" key={width}>
+						<div className="flex min-w-0 flex-1 flex-col">
+							<Skeleton className={`my-0.5 h-4 ${width} max-w-full`} />
+							<Skeleton className="my-0.5 h-3 w-16" />
+						</div>
+						<Skeleton className="h-4 w-20" />
+						<Skeleton className="h-[18.4px] w-8 rounded-full" />
+					</div>
+				))}
+			</div>
+			<div className="mt-4 flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
+				<div className="flex min-w-0 flex-1 flex-col">
+					<Skeleton className="my-0.5 h-4 w-10" />
+					<Skeleton className="my-0.5 h-3 w-36 max-w-full" />
+				</div>
+				<Skeleton className="h-4 w-20" />
+				<span aria-hidden="true" className="w-8 shrink-0" />
+			</div>
+		</SettingsPanelSkeleton>
+	);
+}

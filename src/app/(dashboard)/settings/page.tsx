@@ -25,6 +25,7 @@ async function SettingsData() {
 	if (!(await getSession())) redirect("/sign-in");
 	void api.setting.fortnightAnchor.prefetch();
 	void api.allowedSender.list.prefetch();
+	void api.cdr.syncState.prefetch();
 	return (
 		<HydrateClient>
 			{/* Read here, not in the view: the address is a server-only env value and

@@ -246,7 +246,7 @@ export function SettingsSkeleton() {
 	return (
 		<PageSkeleton
 			contentClassName="mt-8"
-			description="How Ledger looks, how your pay cycle is counted, and where receipts can arrive from."
+			description="How Ledger looks, how your pay cycle is counted, where receipts can arrive from, and which bank accounts count."
 			title="Settings"
 		>
 			<div className="grid gap-6 lg:grid-cols-[184px_1fr] lg:gap-10">
@@ -255,6 +255,7 @@ export function SettingsSkeleton() {
 						{ tab: "appearance", width: "w-24" },
 						{ tab: "pay-cycle", width: "w-20" },
 						{ tab: "forwarding", width: "w-24" },
+						{ tab: "bank-accounts", width: "w-28" },
 					].map(({ tab, width }) => (
 						<div
 							className="-mb-px border-transparent border-b-2 px-3 py-2 lg:mb-0 lg:-ml-px lg:border-b-0 lg:border-l-2 lg:py-1.5 lg:pl-4"
