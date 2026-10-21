@@ -60,8 +60,8 @@ importers:
         specifier: 2.11.0
         version: 2.11.0(@opentelemetry/api@1.9.1)
       '@posthog/ai':
-        specifier: 8.14.1
-        version: 8.14.1(@ai-sdk/provider@4.0.31)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(posthog-node@5.52.6(rxjs@7.8.2))
+        specifier: 8.14.3
+        version: 8.14.3(@ai-sdk/provider@4.0.31)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(posthog-node@5.52.6(rxjs@7.8.2))
       '@t3-oss/env-nextjs':
         specifier: 0.13.11
         version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
@@ -1875,8 +1875,8 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
-  '@posthog/ai@8.14.1':
-    resolution: {integrity: sha512-ZomvP3+PkO75xp4Zu+o5rVUSeP+xGmAtbOig6NMOmZqXKtzV/NTg4M7M042Kc0YoTcSIw3IWUVPUEY4JvXGcyA==}
+  '@posthog/ai@8.14.3':
+    resolution: {integrity: sha512-o/cVN1BXjf+VL1770AxlUw0+JxqcVhMDJXmsM5ugEpIfqua/Ylef6APMaS5+ON2lDnbiYwJ+1eN9Cg/fm1KomQ==}
     engines: {node: ^20.20.0 || >=22.22.0}
     peerDependencies:
       '@ai-sdk/provider': ^2.0.0 || ^3.0.0 || ^4.0.0
@@ -6723,7 +6723,7 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@posthog/ai@8.14.1(@ai-sdk/provider@4.0.31)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(posthog-node@5.52.6(rxjs@7.8.2))':
+  '@posthog/ai@8.14.3(@ai-sdk/provider@4.0.31)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.222.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))(posthog-node@5.52.6(rxjs@7.8.2))':
     dependencies:
       '@posthog/core': 1.59.1
       posthog-node: 5.52.6(rxjs@7.8.2)
