@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Validated - Phase 4 of 7
+status: Ready for Review - Phase 5 of 9
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -17,6 +17,13 @@ cash-flow projection keep working unchanged. Re-ingestion must be idempotent and
 clobber a member's edits. The architecture is settled in
 [adr017](../../docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md) (Status: In
 Progress) — this plan implements its seven facet decisions, one facet per phase.
+
+Revised 2026-10-20: no member-run scripts. A member sets each account's `inBalance` on
+`/settings` (Phase 5), not with `make cdr_in_balance`. History comes from an idempotent import on
+`/transactions/import` (Phases 7–8), not from `make cdr_seed` or a 90-day first-run backfill.
+Every bank row, whether it comes from the daily sync or an import, is checked against the
+household's own rows. An exact match is **adopted** (the household row takes the bank's id). A close match is held as a **possible
+duplicate** for a member to resolve. Anything else is added. This replaces facet 5's seeding.
 
 Revised 2026-10-09 after the tRPC 3-tier migration landed. Refs are refreshed, and the plan now
 follows [adr021](../../docs/adr/adr021-trpc-router-is-the-controller-tier.md) (controller file
@@ -103,25 +110,70 @@ left for Phase 2.
   `cdr-sync.service.ts`, `cdr.errors.ts` and `cdr.inngest.controller.ts` (wired in
   `functions.ts:45-60`); `TransactionsService.upsertSynced` (`transactions.service.ts:113-120`). Latest migration is
   `drizzle/0020_wise_penance.sql`.
-- **Scripts.** One TS script exists: `scripts/blob-prefix-delete.ts` (Node type stripping, run
-  by `make db_branch_delete`). It imports app code; Phase 5/6 scripts don't.
+- **Scripts.** `scripts/blob-prefix-delete.ts` (run by `make db_branch_delete`) is the only
+  committed TS script. Phase 5's uncommitted `scripts/cdr-in-balance.ts` and its Makefile
+  `cdr_in_balance` target are removed by the revised Phase 5. This plan adds no scripts.
+- **Bank-row write path today.** `mapRedbarkTransaction` (`src/domain/cdr/map-redbark.ts:11-42`)
+  drops `row.account` (`cdr.dto.ts:20`), so a `transaction` row stores the account's name, not its
+  id. `upsertSynced` (`transactions.service.ts:115-120` → `transactions.repository.ts:226-241`)
+  dedups on `(provenance, externalId)` only. A bank row is never compared with a member's own row
+  (`externalId` null). `CdrSyncService.syncAccount` (`cdr-sync.service.ts:248-275`) fetches from
+  `mark − 14d`, or `now − 90d` when the mark is null (`BACKFILL_DAYS` `:17`, `OVERLAP_DAYS` `:19`).
+  `listTransactions` (`cdr.redbark.ts:26-29`, `:74-93`) sends no `to`, and `list` throws on
+  `x-redbark-truncated` (`:113-115`). The edit guard treats any non-manual row as bank-owned
+  (`guardBankValues`, `transactions.service.ts:181-192`). Existing household rows are all
+  `provenance = manual`, `externalId` null. Nothing writes `Provenance.Import`.
+- **RedBark limits** (`https://api.redbark.com/v2/openapi.json`, read 2026-10-20). `GET
+  /transactions` takes `from` and `to` (bare `YYYY-MM-DD`, both inclusive). History reaches back
+  about 7 years. One window caps at 5,000 rows (`X-Redbark-Truncated`). `/transactions` is the
+  `heavy` tier: 30/min, 4 in flight, `Retry-After` on 429.
+- **UI precedents.**
+  - Settings: `settings/page.tsx:22-35` prefetches inside the boundary. `settings-view.tsx` has
+    `SectionId` at `:21`, the `sections` array at `:34-62` (data panels each in their own
+    `AsyncBoundary`), and the page description at `:91`. Panel shell: `settings-section.tsx`.
+    Panel skeletons: `settings-panel-skeleton.tsx`. List + mutation section:
+    `allowed-senders-section.tsx`.
+  - Sub-page shape: `expenses/unplanned/page.tsx:8-36` (`io()`, prefetch, `HydrateClient`).
+    Page skeletons live in `src/components/route-skeletons.tsx`.
+  - Page actions: `transactions-view.tsx:144-152` (`PageHeader` `actions`).
+  - Per-row resolve buttons with a per-row spinner: `MatchBanner`,
+    `receipts/_components/receipt-detail.tsx:178-205`.
+  - Polling while work is pending: `receipts-view.tsx:192-198` (`refetchInterval`).
+  - Date field: plain `<Input type="date">` (`pay-cycle-section.tsx:55-67`). There is no
+    date-range picker. Phase 5 adds the shadcn Switch (`src/components/ui/switch.tsx`).
+- **Inngest steps.** No function uses `step.run` or `onFailure` yet (`inngest` `4.22.0`). The
+  receipts worker parks on its final attempt instead (`receipts.inngest.controller.ts:46-49`).
 
 ## Desired End State
 
-A daily Inngest cron (`cdr-sync`, concurrency 1) calls an idempotent `CdrSyncService.run()`
-that, per linked account: pulls settled transactions from RedBark (`from = highWaterMark − 14d`,
-90-day backfill on first run), maps them into the app's Spend-positive glossary with a
-fail-loud sign check, upserts them through `TransactionsService.upsertSynced` keyed on
-`(provenance, externalId)` touching **bank-owned columns only**, and only then advances the
-account's cursor in `cdr_sync_state` (never backwards). When every account counted toward cash
-(`inBalance`: transaction, savings and credit-card accounts by default, never loans) is syncable
-and reports `fresh`, it anchors one household `balance_snapshot` row through
+A daily Inngest cron (`cdr-sync`, concurrency 1) calls an idempotent `CdrSyncService.run()`.
+Per linked account, it:
+1. Pulls settled transactions from RedBark: `from = highWaterMark − 14d`, or only the last 14
+   days on a first run.
+2. Maps them into the app's Spend-positive glossary with a fail-loud sign check.
+3. Reconciles them through `TransactionsService.reconcileSynced`. A known bank id refreshes
+   **bank-owned columns only**. A household row with no bank id and the same date and amount is
+   adopted. A close one (same direction, within 5% and 7 days) becomes a pending possible
+   duplicate. Anything else is added.
+4. Only then advances the account's cursor in `cdr_sync_state` (never backwards).
+
+History comes from `/transactions/import`. A member picks a date range, and an Inngest job
+(`cdr-import`) runs the same reconcile over that range in 90-day chunks. It never moves the
+cursor. Re-running a range adds nothing new and asks nothing twice. The same page lists each
+pending possible duplicate with three choices: **Keep mine**, which drops the bank row and is
+remembered; **Use bank's**, which moves the bank's values onto the member's row and keeps its
+links; and **Both are real**, which adds the bank row. Nothing is deleted without one of those
+choices.
+
+When every account counted toward cash (`inBalance`: transaction, savings and credit-card
+accounts by default, never loans; a member changes it on `/settings` → Bank accounts) is
+syncable and reports `fresh`, the sync anchors one household `balance_snapshot` row through
 `BalancesService.recordSynced`; that row replaces a typed balance until the member types a newer
-one. A dead
-consent (`revoked|expired|invalidated`) stops that connection and shows on the dashboard; it is
-not retried. An unset `REDBARK_API_KEY` makes the whole cron a no-op. A signed RedBark webhook
-can trigger the same idempotent `run()` early. Every member edit (description, category, group,
-expense link, notes) survives every re-sync.
+one. A dead consent (`revoked|expired|invalidated`) stops that connection and shows on the
+dashboard; it is not retried. An unset `REDBARK_API_KEY` makes the whole cron a no-op and fails
+an import. A signed RedBark webhook can trigger the same idempotent `run()` early. Every member
+edit (description, category, group, expense link, notes, receipt) survives every re-sync and
+every import.
 
 ## Out of Scope
 
@@ -129,10 +181,15 @@ expense link, notes) survives every re-sync.
   value is provisioned here but no PayPal code is written).
 - **Transfer-filtering** — internal transfers double-count as paired Spend + Inflow (adr017
   Negative Consequences); deferred to its own design.
-- **Cross-provenance consolidation** — the same purchase arriving as both `cdr` and `paypal`
-  (or overlapping a manual `import`) is not merged.
-- **Deleted synced rows** — a member-deleted `cdr` row comes back if it falls inside a later
-  run's 14-day overlap. No tombstones.
+- **`cdr` vs `paypal` consolidation.** The same purchase arriving from both is not merged
+  (PayPal isn't built). Bank rows vs the household's own rows are handled by Phases 7–8.
+- **Deleted synced rows.** A member-deleted bank row comes back when a later run's 14-day
+  overlap or an import covers its date. No tombstones. Only a **Keep mine** choice is
+  remembered.
+- **Tuning the match.** The window is fixed at 7 days and 5% of the member's amount.
+- **Bulk review or undo.** Each possible duplicate is resolved one at a time, and a choice
+  can't be undone in the UI.
+- **Choosing accounts per import.** An import covers every account the daily sync would sync.
 - **In-app per-user consent / redirect flow** — banks are linked manually in RedBark's
   dashboard (adr017 credential posture).
 - **Multi-currency** — non-AUD rows fail loud; single-currency asserted.
@@ -140,8 +197,11 @@ expense link, notes) survives every re-sync.
   denormalised on `cdr_sync_state`; promote later only if the app launches publicly.
 - **Adopting RedBark's hierarchical categories** — synced rows land uncategorised.
 - **Household scoping** — new tables follow the current unscoped pattern.
-- **A settings-page status surface** — the connection banner is dashboard-only.
-- **An in-app `inBalance` toggle** — a member changes it with `make cdr_in_balance` (Phase 5).
+- **A settings-page status surface** — connection health stays in the dashboard banner. The
+  Bank accounts section shows each account's name, bank, masked number, latest balance and
+  `inBalance` choice only.
+- **Nicknames beyond Settings** — a nickname renames the account on Settings → Bank accounts
+  only. A synced transaction keeps the bank's account name (`mapRedbarkTransaction`).
 - **Unlinked money in the balance line** — a synced anchor replaces a typed balance (adr017
   facet 6); no "unlinked funds" setting is added to the sum.
 
@@ -150,29 +210,37 @@ expense link, notes) survives every re-sync.
 Build the seven adr017 facets bottom-up so each phase ships alone and the risky,
 external-facing work is verified before anything depends on it: schema foundation → adapter +
 the sign-mapping sandbox spike (resolves adr017 Open Question #1) → sync state + the
-transactions upsert → cron service + controller → balance anchor → connection-status surfacing +
-seeding → webhook trigger.
+transactions upsert → cron service + controller → balance anchor + Bank accounts settings →
+connection banner → matching (reconcile + possible duplicates) → import job + page → webhook
+trigger. Nine phases. Matching (Phase 7) lands before the import (Phase 8) so history never
+arrives through the plain upsert.
 
 The new `cdr` domain is a class-based 3-tier (adr004) with adr021 file names
 (`cdr.inngest.controller.ts`, `cdr.trpc.controller.ts`, `cdr.http.controller.ts`). Under adr022,
-`cdr.repository.ts` touches only `cdr_sync_state`. The scoped upsert lives in the transactions
-domain (`TransactionsService.upsertSynced`), and the anchor insert lives in the balances domain
-(`BalancesService.recordSynced`). Each is reached through a `Pick` port.
+`cdr.repository.ts` touches only `cdr_sync_state` and `cdr_import`. Matching lives in the
+transactions domain (`TransactionsService.reconcileSynced`, which replaces `upsertSynced` as the
+sync's write in Phase 7) and owns the `possible_duplicate` table. The anchor insert lives in the
+balances domain (`BalancesService.recordSynced`). Each is reached through a `Pick` port.
 
 **No cross-domain `db.transaction()`.** Per account, the service upserts first and then advances
 the cursor. If the upsert throws, the cursor stays put. If the process dies between the two
 steps, the next run re-fetches the same window and the idempotent upsert absorbs it. adr017's
 "never advance the cursor past un-ingested rows" still holds, by ordering alone. The cursor is
-monotonic (`greatest`), so a short fetch never drags it back into the overlap or below a seeded
-floor. Sync writes take no outbox event (the cron is the trigger; receipt matching is read-time).
+monotonic (`greatest`), so a short fetch never drags it back into the overlap or below an earlier
+mark. Sync writes take no outbox event (the cron is the trigger; receipt matching is read-time).
+Starting an import does: the `cdr_import` row and its `cdr/import.requested` event commit
+together through `outbox.commit` in the cdr repository, like `receipts.repository.ts:88-98`.
 
 **Two cdr services** (split rule: disjoint deps):
-- `CdrSyncService` is the worker. It uses RedBark, transactions and balances.
-- `CdrService` serves the tRPC read and webhook intake. It uses the repository and outbox.
+- `CdrSyncService` is the worker. It uses RedBark, transactions and balances. It runs both the
+  daily sync and an import's chunks.
+- `CdrService` serves tRPC (account list, `inBalance`, import start and status) and webhook
+  intake. It uses the repository, plus the outbox for webhook events (Phase 9). An import's
+  event commits inside the repository instead, because it needs the new row's id.
 
 So `services.ts` never needs the optional key. Non-trivial pure logic is built test-first per
-the `tdd` skill: sign mapping, the scoped upsert, the freshness gate, the monotonic cursor and
-the banner copy.
+the `tdd` skill: sign mapping, the scoped upsert, the freshness gate, the monotonic cursor, the
+banner copy, the match pairing, and the import's date chunks.
 
 ---
 
@@ -309,13 +377,13 @@ Implements adr017 facets 2 (dedup upsert) and 5 (store-of-record via `cdr_sync_s
   | --- | --- |
   | `id` | identity PK |
   | `accountId` | text, not null, unique |
-  | `connectionId` | text, null (a seeded row has none until the first run) |
+  | `connectionId` | text, null (was for a seeded row; the seed is gone, so discovery always sets it) |
   | `accountName` | text, null |
   | `highWaterMark` | timestamptz, null |
   | `connectionStatus` | enum, not null, default `pending` |
   | `lastSyncedAt` | timestamptz, null |
   | `lastError` | text, null |
-  | `createdAt` | timestamptz, not null, **DB** default `.defaultNow()` (as `outbox.schema.ts:19`, not `$defaultFn`: the Phase 6 seed inserts with raw SQL) |
+  | `createdAt` | timestamptz, not null, **DB** default `.defaultNow()` (as `outbox.schema.ts:19`, not `$defaultFn`: a raw-SQL insert, like the since-removed seed, still gets it) |
   | `updatedAt` | timestamptz, null |
 - `src/server/db/index.ts` — add `cdrSchema` to the imports (`:5-14`) and the merged `schema`
   (`:17-28`).
@@ -412,11 +480,11 @@ pinned mapping.**
     on its `retryAfterMs` and makes it `retryable`. The controller reads only `CdrSyncError`, and
     a 429 is most likely on the run's first call.
   - **Saved account RedBark didn't return.** A `cdr_sync_state` row whose `accountId` is not in
-    the discovered list (a wrong seeded id, or a bank removed from RedBark) would stay `pending`
+    the discovered list (a bank removed from RedBark, or an old link's account) would stay `pending`
     and never sync, with nothing saying why. It counts as a failed account instead (see
     Failures): `recordError(accountId, "not in RedBark")` + `logger.error` naming the id. It is
-    not retryable, so the run fails loud. Fix: delete that row in the Neon SQL editor, then
-    re-seed with the right id. A row whose saved connection is listed but dead
+    not retryable, so the run fails loud. Fix: delete that row in the Neon SQL editor (see
+    the re-link runbook in Validate). A row whose saved connection is listed but dead
     (`revoked | expired | invalidated`) isn't this case: Consent skips it, and the banner asks
     for a reconnect (deleting it would lose its mark).
   - **Consent** (adr017 credential posture):
@@ -498,7 +566,8 @@ pinned mapping.**
   - `src/server/cdr/cdr-sync.service.test.ts` — fake `repository` / `redbark` / `transactions` as
     object literals recording calls, and a fake `logger` recording `{ level, msg, attrs }`
     (pattern `receipt-extraction.service.test.ts:115-190`). Assert:
-    - A null mark does the 90-day backfill; otherwise `from = hwm − 14d`.
+    - A null mark does the 90-day backfill (Phase 7 cuts it to 14 days); otherwise
+      `from = hwm − 14d`.
     - Every page is consumed and the mapping is applied.
     - `upsertSynced` is called **before** `advanceHighWaterMark`, and advance is skipped when
       the upsert throws.
@@ -554,7 +623,19 @@ pinned mapping.**
 
 ## Phase 5: Balance auto-anchor
 
-Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label).
+Implements adr017 facet 6. Touches the dashboard balance card (UI honesty label) and adds a
+Bank accounts section to `/settings`.
+
+**Reopened 2026-10-20.** The anchor is built and verified (notes below). The member-run
+`make cdr_in_balance` script it shipped with is replaced by the Bank accounts section, so a
+member sets `inBalance` in the app. `CdrService` and `cdrRouter` move here from Phase 6.
+
+**Reopened 2026-10-21 (prototype D).** The radio pair is replaced by prototype variant D
+(drafts A, B and D on local branch `prototype/settings-bank-accounts`; C was dropped). Three
+accounts named "Everyday Offset" couldn't be told apart, so each row now shows the bank,
+RedBark's masked account number and the latest balance, and a member can rename an account. A
+switch replaces **Counts** / **Left out**. Balance reads move to RedBark's bulk `GET /balances`:
+one call per run reads every account, saves each balance for the list, and feeds the anchor.
 
 **Which accounts count** (decided 2026-10-19). Each account has its own `inBalance` flag. Credit
 cards count: they are paid in full each month, so their negative balance shows money already
@@ -577,7 +658,7 @@ money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
   (`.notNull().default(BalanceSource.Manual)`) in `:6-14`. **Label only**: precedence stays pure
   latest-`asOf`, tiebreak `id desc` (`balances.repository.ts:24-31` unchanged; adr017 facet 6).
 - `src/server/cdr/cdr.schema.ts` — add `inBalance` (boolean, **null**) to `cdr_sync_state`.
-  Null means "not decided yet": a seeded row has no type until its first discovery.
+  Null means "not decided yet": a row saved before this column has no type until its next discovery fills it.
   `src/domain/cdr/cdr.interface.ts` gains `inBalance: boolean | null`.
 - `drizzle/0021_*.sql` (both changes) via `make db_generate` + `make db_migrate`.
 - `src/domain/cdr/cdr.dto.ts` — `redbarkAccountDto` gains `type: z.string()`. A string, not an
@@ -592,15 +673,122 @@ money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
   to `upsertAccount`. Each run, an account whose flag is still null logs `warn` with its type
   until the member sets it, so a savings account under an unexpected type name shows up (and
   the anchor waits for it).
-- `scripts/cdr-in-balance.ts` + `Makefile` `cdr_in_balance: install` → `node
-  scripts/cdr-in-balance.ts $(account) $(value)` (arg style of `db_custom`, `Makefile:62`).
-  Plain TS run by Node 24's type stripping, with the `postgres` driver,
-  `process.loadEnvFile()` and no app imports; Phase 6's seed script copies this style. Against
-  production, run it from `main` (whose `.env` is production). **A human runs it**: AGENTS.md
-  bars agent writes on `main`. A script, not a data migration
-  (`.claude/rules/database-migrations.md`): the account id and value aren't known when
-  migrations run. It updates one row's `inBalance` and exits non-zero when no row has that
-  `accountId` (run the sync or seed first).
+- **Remove the script.** Delete `scripts/cdr-in-balance.ts` and the `Makefile` `cdr_in_balance`
+  target (`Makefile:75-76`, and its `.PHONY` entry at `:5`). Reword the JSDoc at
+  `cdr-sync.service.ts:167` ("a member's `make cdr_in_balance` choice") to name Settings → Bank
+  accounts. adr017 facet 6's "(`make cdr_in_balance`)" becomes "(Settings → Bank accounts)".
+- `src/server/cdr/cdr.repository.ts` — `setInBalance(accountId, inBalance)` updates one row's
+  `inBalance` and `updatedAt` and returns the row, or `undefined` when no row has that id.
+- `src/domain/cdr/cdr.dto.ts` — `cdrSetInBalanceDto = z.object({ accountId: z.string().min(1),
+  inBalance: z.boolean() })`. Export it from `src/domain/cdr/index.ts`.
+- `src/server/cdr/cdr.service.ts` — `class CdrService` (deps `{ repository: CdrRepository }`).
+  It is separate from `CdrSyncService`, so the tRPC root never builds RedBark, transactions or
+  balances.
+  - `listSyncState()` delegates.
+  - `setInBalance({ accountId, inBalance })` → `NotFoundError` when the repository returns
+    `undefined` (`src/server/errors/domain-errors.ts`). Discovery's `coalesce` (above) keeps
+    the choice through every later sync.
+- `src/server/cdr/cdr.trpc.controller.ts` — `cdrRouter` (template
+  `balances.trpc.controller.ts:4-10`):
+  - `syncState: protectedProcedure.query(({ ctx }) => ctx.services.cdr.listSyncState())`
+  - `setInBalance: protectedProcedure.input(cdrSetInBalanceDto).mutation(...)`
+  - Mount it as `cdr` in `src/server/api/root.ts:13-23`. Build `cdr: new CdrService({
+    repository: new DrizzleCdrRepository({ db }) })` in `services.ts:24-40`.
+- **Account details for the list** (prototype D):
+  - `src/server/cdr/cdr.schema.ts` — five nullable columns on `cdr_sync_state`, no defaults:
+    - Bank-owned, refreshed by discovery: `institutionName` (RedBark `institution.name`) and
+      `accountNumber` (RedBark's masked `account_number`, last four digits, e.g. `xxxx8273`).
+    - Bank-owned, refreshed by the balance read: `balance` (double precision, dollars, like
+      `balance_snapshot.amount`) and `balanceAsOf` (timestamptz, RedBark `observed_at`).
+    - Member-owned: `nickname`. Discovery's `set` never names it, so a sync can't overwrite it.
+    - `src/domain/cdr/cdr.interface.ts` gains the five fields (forced by
+      `schema-interface-contract.test.ts`).
+  - `drizzle/0022_*.sql` via `make db_generate` + `make db_migrate`.
+  - `src/domain/cdr/cdr.dto.ts` — `redbarkAccountDto` gains `institution: z.object({ name:
+    z.string() })` and `account_number: z.string().nullable()` (both required in RedBark's
+    `AccountItem`).
+  - `src/domain/cdr/map-redbark.ts` — pure `latestBalance(balance): { amount, asOf } | null`:
+    dollars (`current.amount ÷ 100`) and `observed_at`. Null when either is null or the
+    currency isn't AUD, so an unreadable or foreign balance never overwrites the saved one.
+  - `src/server/cdr/cdr.redbark.ts` — `listBalances(accountIds)` replaces `getAccountBalance`:
+    one `GET /v2/balances?account=…&account=…` (RedBark's bulk read, mid tier, up to 100 ids,
+    answers in the order asked), parsed with `redbarkPageDto(redbarkBalanceDto)`. An account
+    RedBark can't reach comes back `freshness: unavailable` with a null `current`; it doesn't
+    fail the call.
+  - `src/server/cdr/cdr.repository.ts`:
+    - `DiscoveredAccount` and `upsertAccount` take `institutionName` and `accountNumber`; the
+      insert and the `set` both write them.
+    - `recordBalance(accountId, { amount, asOf })` sets `balance` and `balanceAsOf`.
+    - `setNickname(accountId, nickname)` sets one row's `nickname` and returns the row, or
+      `undefined` when no row has that id.
+  - `src/server/cdr/cdr-sync.service.ts`:
+    - Discovery passes `institution.name` and `account_number`.
+    - After the account loop, one `listBalances` call for every listed account on a live
+      (`active` / `expiring`) connection, none when there are none: a dead bank can't answer,
+      and a call where no bank answers fails. Each non-null `latestBalance` → `recordBalance`. A throw here logs `error` and never fails
+      the run; the anchor then has nothing to read and skips.
+    - The anchor reuses that reply for its counted accounts (step 1 below). A counted
+      account missing from it skips the anchor with `logger.info`.
+  - `src/domain/cdr/cdr.dto.ts` — `cdrSetNicknameDto = z.object({ accountId:
+    z.string().min(1), nickname: z.string().trim().max(40) })`, transformed so blank → null
+    (back to the bank's name). Export it from `index.ts`.
+  - `src/server/cdr/cdr.service.ts` — `setNickname({ accountId, nickname })` →
+    `NotFoundError` when the repository returns `undefined`.
+  - `src/server/cdr/cdr.trpc.controller.ts` — `setNickname:
+    protectedProcedure.input(cdrSetNicknameDto).mutation(...)`.
+  - adr017 — facet 5 names the five columns; the diagram's balance edge becomes the bulk
+    `GET /balances`.
+- **Settings → Bank accounts** (`src/app/(dashboard)/settings/_components/`), prototype D:
+  - `src/components/ui/switch.tsx` — the shadcn Switch (Base UI), added with
+    `pnpm dlx shadcn add switch`. The light off track is `bg-muted-foreground/80`, not
+    `bg-input`: shadcn's is ~1.35:1 on a card, under WCAG 1.4.11's 3:1 (design review).
+  - `bank-accounts.display.ts` — pure helpers:
+    - `accountLabel` — the nickname, else the bank's name, else the id.
+    - `groupByBank` — groups by `institutionName` (A–Z), each group's rows by balance high →
+      low (no balance last), with its counted count. By balance, not by switch, so a row
+      never moves mid-flip.
+    - `cashTotal` — Σ counted balances; null while any account is undecided.
+    - `formatBalance` — money with a real minus sign (`−$8,394.25`).
+    - `newAccountsNote` — "{n} new account(s) need(s) a choice. Find it/them marked New
+      below.", or null. Rows sort by balance, so a new one can sit below the fold.
+  - `bank-account-row.tsx` — props-driven `BankAccountRow({ account, onInBalanceChange,
+    onRename })`, one `<li>`:
+    - The label with a pencil button ("Rename {label} {number}"). The pencil opens an inline
+      form: input "New name for {label} {number}" (placeholder the bank's name, max 40),
+      **Save** / **Cancel**. Enter saves, Escape (anywhere in the form) cancels, and focus
+      returns to the pencil. Saving blank clears the nickname.
+    - Under it: the masked number (mono), the bank's account name when nicknamed, and for an
+      undecided account "New — switch on if it's cash, or leave it out", where "leave it out"
+      is a button that sets false and moves focus to the switch (the button goes with the
+      hint). An undecided row gets an amber left border.
+    - The balance (right, tabular, "—" before the first read): greyed when not counted,
+      struck through when left out. The name and number never grey: the account still syncs.
+    - A `Switch` at the far right, named "Count {label} {number} in cash balance", on only
+      when the flag is true, described by the New hint while undecided. No account type chip.
+  - `bank-accounts-section.tsx` — `useSuspenseQuery` on `api.cdr.syncState` inside
+    `SettingsSection` titled "Cash balance" (the tab stays "Bank accounts"): "Your cash balance
+    adds up every account switched on. Switched-off accounts still sync, they just aren't
+    counted."
+    - `newAccountsNote` in a warn box under the description, when any account is undecided.
+    - Per bank: a heading with "{n} of {m} counted" over a card list of rows.
+    - A Total row under the groups, lined up with the balances: `cashTotal` and "{n} of {m}
+      accounts counted"; "—" and "Waiting on {n} new account(s)" while any is undecided.
+    - Footer "Recounted at the next bank sync." Empty list → "No bank accounts yet. They show
+      here after the first bank sync."
+    - `setInBalance` and `setNickname` update the `cdr.syncState` cache at once (cancel the
+      in-flight read, patch the row, then mutate; `onSuccess` puts the saved row in, `onError`
+      invalidates), so the switch, the counts and the Total move with no wait. Two quick flips
+      don't flicker, as no refetch lands between them. A server error is the global
+      MutationCache's job.
+  - `settings-panel-skeleton.tsx` — `BankAccountsSkeleton` in the same shape: title "Cash
+    balance", one bank group of three rows (name, number, balance, switch), the Total row.
+  - `settings-view.tsx` — `SectionId` (`:21`) gains `"bank-accounts"`; add a `sections` entry
+    (`:34-63`) labelled "Bank accounts" with the `Landmark` icon, wrapped in `AsyncBoundary
+    label="bank accounts"`. Update the `PageHeader` description (`:91`) to mention bank
+    accounts.
+  - `settings/page.tsx:26-27` — add `void api.cdr.syncState.prefetch();`.
+  - **Remove the prototype**: `bank-accounts.prototype.tsx`, `src/components/prototype-switcher.tsx`
+    and the `?variant=` hook in `settings-view.tsx`.
 - `src/domain/balances/balance.interface.ts` — add `source: BalanceSource` (forced by
   `schema-interface-contract.test.ts:25`). `balance.dto.ts` is **unchanged**: `balanceSetDto`
   stays `{ amount, asOf }`, so a member can't post `source`.
@@ -623,7 +811,7 @@ money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
   only when no **counted** account failed, **no account's `inBalance` is still null, and every
   counted account (`inBalance` true) is syncable** (`active` / `expiring`, account `available`).
   Each flag is the saved one, read by `listSyncState()` after discovery, never
-  `inBalanceByDefault`: `coalesce` keeps a member's `cdr_in_balance` choice in the row, so a
+  `inBalanceByDefault`: `coalesce` keeps a member's Bank accounts choice in the row, so a
   card set to false stays out.
   A closed counted account holds the anchor until set to false. A failed loan doesn't
   block it: a loan's rows breaking the sign check every day would otherwise hold the cash line
@@ -633,11 +821,11 @@ money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
   every balance read still passes the freshness gate (a savings account under an odd type
   name). An account with `inBalance` false is ignored here, so a pending loan never blocks the
   cash line.
-  1. Read `getAccountBalance` for each counted account.
+  1. Take each counted account's balance from the run's one `listBalances` reply.
   2. Call `anchorFromBalances`.
   3. Non-null → `balances.recordSynced(...)`; null → `logger.info` and skip.
-  A throw anywhere in this step (a balance read, a non-AUD balance, `recordSynced`) skips the
-  anchor with `logger.error` and never fails the run.
+  A throw anywhere in this step (a non-AUD balance, `recordSynced`) skips the anchor with
+  `logger.error` and never fails the run.
   A retry would re-fetch every account's transactions, so a 429 here would only draw more 429s;
   the next daily run anchors.
   `functions.ts` passes `balancesService`.
@@ -674,66 +862,140 @@ money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
       `pending`, or listed `syncing` / `unavailable`, or when a counted account failed.
     - An `inBalance` false account that fails still gets the anchor written, then `run()`
       throws its `CdrSyncError`.
-    - A throwing balance read, a non-AUD balance, or a throwing `recordSynced` each log an
+    - A throwing `listBalances`, a non-AUD balance, or a throwing `recordSynced` each log an
       error, write no anchor, and `run()` resolves.
+    - Discovery passes each account's `institution.name` and `account_number`.
+    - One `listBalances` call per run, for every listed account on a live connection (none
+      when there are none). Each readable balance is
+      saved with `recordBalance`; an unavailable one (null `current`) is not. The anchor sums
+      from that same reply and makes no second read.
+    - A counted account missing from the reply skips the anchor with `logger.info`.
   - `balance-snapshot.display.test.ts` — the label for each source.
+  - `cdr.repository.test.ts` — inline snapshot of `setInBalance`: one `update` filtered on
+    `accountId`, `returning`.
+  - `cdr.dto.test.ts` — `cdrSetInBalanceDto` refuses an empty `accountId` and a non-boolean.
+  - `cdr.service.test.ts` — `listSyncState` delegates; `setInBalance` passes through and
+    throws `NotFoundError` for an unknown account.
+  - `cdr.trpc.controller.test.ts` — `createTestCaller` with `Partial<CdrService>` (pattern
+    `balances.trpc.controller.test.ts:9-58`). Both procedures call the service; a signed-out
+    call gets `UNAUTHORIZED`; an unknown account gets `NOT_FOUND`.
+  - `cdr.dto.test.ts` — an account parses with `institution.name` and a null
+    `account_number`; `cdrSetNicknameDto` trims, turns blank into null, and refuses 41
+    characters and an empty `accountId`.
+  - `cdr.schema.test.ts` — the five new columns are nullable with no default.
+  - `cdr.repository.test.ts` — the `upsertAccount` snapshot writes `institutionName` and
+    `accountNumber` in the insert and the `set`, and never names `nickname`; inline snapshots
+    of `recordBalance` and `setNickname`.
+  - `cdr.redbark.test.ts` — `listBalances` makes one GET with `account` repeated in the order
+    given and parses an unavailable item with a null `current`. The `getAccountBalance` tests
+    go with it.
+  - `map-redbark.test.ts` — `latestBalance`: dollars and `observed_at`; null for a null
+    `current`, a null `observed_at`, or a non-AUD currency.
+  - `cdr.service.test.ts` — `setNickname` passes through and throws `NotFoundError` for an
+    unknown account.
+  - `cdr.trpc.controller.test.ts` — `setNickname` calls the service with the trimmed input;
+    an unknown account gets `NOT_FOUND`.
+  - `bank-accounts.display.test.ts` — the label (nickname, then the bank's name, then the
+    id); banks A–Z with rows by balance high → low and no balance last, and each bank's
+    counted count; the total sums counted balances only and is null while any is undecided;
+    the minus sign.
+  - `bank-account-row.test.tsx` (jsdom), queried by role — the switch is on only for true;
+    flipping it calls `onInBalanceChange` with the new value; an undecided row shows the New
+    hint and "leave it out" calls `onInBalanceChange(false)`; pencil, type, Enter calls
+    `onRename` with the text; Escape cancels with no call; a nicknamed row shows the bank's
+    name under it.
 
 ### Success
-- [ ] `make check` passes (incl. `db:check` and the contract)
-- [ ] `make test` passes
-- [ ] `/design-review` (balance card gains the source label)
-- [ ] A live card balance with money owing reads negative; noted in adr017 facet 6
-- [ ] A sync writes exactly one `cdr` snapshot summing only `inBalance` accounts: a credit
+- [x] `make check` passes (incl. `db:check` and the contract)
+- [x] `make test` passes
+- [x] `/design-review` (balance card gains the source label)
+- [x] `/design-review` (Settings → Bank accounts, prototype D)
+- [x] A live card balance with money owing reads negative; noted in adr017 facet 6
+- [x] A sync writes exactly one `cdr` snapshot summing only `inBalance` accounts: a credit
       card's balance lowers it and a loan is left out. A stale counted account, one with a
       dead consent, or any account still undecided (null) leaves the balance line unchanged
-- [ ] `make cdr_in_balance account=… value=false` drops that account from the next anchor, a
-      later sync doesn't flip it back, and an unknown account id exits non-zero
-- [ ] A typed `balance.set` shows until the next sync writes a newer `cdr` row (source is a
+- [x] A sync makes one `GET /balances` call and no per-account balance reads
+- [x] After a sync, every account on `/settings` → Bank accounts shows under its bank with its
+      masked number and latest balance; the three "Everyday Offset" accounts differ by number
+- [x] Flipping a switch moves the bank's "n of m counted" and the Total at once, with no
+      reload; the flag is saved
+- [x] Switching a card off drops it from the next anchor, and a later sync doesn't flip it back
+- [x] Off greys and strikes through only the balance; the name and number keep full colour
+- [x] An undecided account shows the amber border and the New hint, and the Total shows "—";
+      "leave it out" saves it off and clears both
+- [x] A renamed account shows the new name with the bank's name under it, and a later sync
+      keeps it; saving blank goes back to the bank's name
+- [x] No prototype code left in the tree: `bank-accounts.prototype.tsx`,
+      `prototype-switcher.tsx` and the `?variant=` hook are gone
+- [x] `scripts/cdr-in-balance.ts` and the `cdr_in_balance` target are gone; nothing in `src/`,
+      `docs/` or the `Makefile` names them
+- [x] A typed `balance.set` shows until the next sync writes a newer `cdr` row (source is a
       label only)
+
+Verified 2026-10-20 on the branch DB:
+- Live sync: discovery set 8 `transaction` + 2 `credit-card` accounts true and the `loan` false.
+  The one `cdr` row equals Σ counted `current`, with `asOf` = the oldest counted `observed_at`.
+- A card set false stayed false through a re-sync, and the next anchor left it out (set with the
+  since-removed `make cdr_in_balance`; the Bank accounts check above repeats it in the UI).
+- A local RedBark proxy (one account bent per run) showed no new row and logged the skip reason
+  for: an unknown type (undecided), a `stale` balance, and a `revoked` connection.
+- A sync whose oldest bank read was older than a just-typed balance left "Entered by you" showing.
+  Once the typed row was older, the card read "Synced from bank".
+- Extra skip reason from the build: "no account counts" (every flag false), so it never logs "not fresh".
+
+Verified 2026-10-21 on the branch DB (Bank accounts, prototype D):
+- After a sync all 11 accounts show under CommBank, MyCard and Westpac with their masked number
+  and balance; the 3 "Everyday Offset" rows differ by number. Total $61,905.10 = the dashboard
+  anchor.
+- MyCard Premier switched off → an invoked `cdr-sync` kept it off and wrote a `cdr` row of
+  70,299.35 (its −8,394.25 left out). Switched back on and re-synced: 61,905.10.
+- Renamed "Smart Access" to "Bills"; an invoked sync kept it. Saving blank went back to
+  "Smart Access".
+- No account is undecided live, so null was faked in the client cache: amber edge, New hint, top
+  note and a "—" Total showed. "leave it out" saved false and moved focus to the switch.
+
+Design review 2026-10-21 (prototype D), fixed:
+- The light-mode off switch was ~1.35:1 on the card → track `bg-muted-foreground/80` (3.6:1).
+- A new account could sit below the fold → a warn note under the description
+  (`newAccountsNote`).
+- The switch read the same "off" for an undecided row → `aria-describedby` the New hint.
+- "leave it out" dropped focus to the page → focus moves to the row's switch.
+- Escape only worked in the rename input → handled on the form; the input is named per row
+  ("New name for {label} {number}").
+- The skeleton list lacked `overflow-hidden`.
+
+Rechecked live at 375 and 1440.
+
+### Follow-up (not built)
+Not needed for this phase's Success. Pick up when this page is next touched.
+- Strike-through on an off debt covers the "−", so −$8,394.25 reads like a positive amount.
+  Leave the sign unstruck (`bank-account-row.tsx`).
+- Tap targets under 44px at 375: switch 54×32, pencil 30×30, Save / Cancel 24px tall and ~7px
+  apart, "leave it out" 16px tall.
+- The switch focus ring (3px at 50% alpha) is faint around the off track
+  (`src/components/ui/switch.tsx`).
+- Nothing is read out on a rename save, on "leave it out", or when the Total changes (a polite
+  live region on the Total).
+- The empty state gives no next step: say where to connect a bank (RedBark's dashboard).
+- Rows jump when the rename form opens (+8px desktop, +20px at 375) and when the New hint goes
+  at 375 (+31px).
+- The Total's `w-8` spacer and the skeleton's switch pill copy the switch's size, so they drift
+  if it changes.
+- On a phone the "Bank accounts" tab starts off-screen in the settings tab rail; only a half-cut
+  tab hints that it scrolls (`settings-view.tsx`).
+- The global error toast shows raw error text (`src/trpc/query-client.ts`).
 
 ---
 
-## Phase 6: Connection-status surfacing + account seeding
+## Phase 6: Connection-status banner
 
-Completes adr017 facet 5's operational readiness and the consent-lifecycle surfacing. **Must run
-before the first live sync** (before `REDBARK_API_KEY` is set in production).
+Completes the consent-lifecycle surfacing (adr017 credential posture). Reads `api.cdr.syncState`
+from Phase 5.
+
+**Revised 2026-10-20.** The `make cdr_seed` script that lived here is gone. History now comes
+from the import (Phases 7–8), so nothing has to run before the key is set.
 
 ### Changes
-- `src/server/cdr/cdr.service.ts` — `class CdrService` (deps `{ repository: CdrRepository }`)
-  with `listSyncState()`. It is separate from `CdrSyncService`, so the tRPC root never builds
-  RedBark, transactions or balances.
-- `src/server/cdr/cdr.trpc.controller.ts` — `cdrRouter` with `syncState:
-  protectedProcedure.query(({ ctx }) => ctx.services.cdr.listSyncState())` (template
-  `balances.trpc.controller.ts:4-10`). Mount it as `cdr` in `src/server/api/root.ts:13-23`, and
-  build `cdr: new CdrService({ repository: new DrizzleCdrRepository({ db }) })` in
-  `services.ts:29-45`.
-- **Seed the pre-imported account** (adr017 facet 5) with `scripts/cdr-seed.ts`:
-  - Same style as Phase 5's `scripts/cdr-in-balance.ts`: plain TS run by Node 24's type
-    stripping (`package.json` is `"type": "module"`), the `postgres` driver,
-    `process.loadEnvFile()`, no app imports or `~/` aliases. Human-run only, like that one; a
-    migration can't call RedBark or know `from`.
-  - Args: `account` (the RedBark account id from its dashboard) and `from` (the first day CDR
-    owns — the day after the last manual row), read as UTC midnight like the mapper's row dates
-    (`src/domain/cdr/map-redbark.ts:38`). A `from` after today exits non-zero: the mark never
-    moves back, so a typo'd future day would skip every row until then with nothing said.
-  - It upserts that account's `cdr_sync_state` row with `highWaterMark = from + 14 days`, so the
-    first fetch (`hwm − 14d`) starts exactly at `from`. The monotonic cursor (Phase 3) keeps every
-    later fetch at or after it, so there is no cross-provenance duplicate period.
-  - It refuses to lower an existing mark.
-  - It leaves `inBalance` null; the first discovery fills it from the account's type.
-  - **It checks the id with RedBark before writing.** It pages `GET {REDBARK_API_URL}/v2/accounts`
-    with plain `fetch` and `REDBARK_API_KEY` from the environment. The URL defaults to
-    `https://api.redbark.com` (as `src/env.ts:118`). It sends `Redbark-Version` (RedBark wants it
-    on every request; copy `cdr.redbark.ts:15`, since the script imports no app code). Like the
-    client, it refuses a next page on another origin, because every request carries the key.
-    When the id isn't listed it exits non-zero and writes nothing; when it is, it prints the
-    account's name. Phase 4's
-    "not in RedBark" check comes too late: by then that same first run has found the real
-    account with no saved mark and backfilled 90 days over the manual rows. The key isn't a
-    Vercel secret yet at this step, so pass it inline: `REDBARK_API_KEY=… make cdr_seed …`.
-- `Makefile` — `cdr_seed: install` runs `node scripts/cdr-seed.ts $(account) $(from)` (arg style of
-  `db_custom`, `Makefile:62`). Production setup order: migrations → `make cdr_seed` against
-  production (`main` `.env`) → set the key.
 - `src/app/(dashboard)/_components/cdr-connection.display.ts` — pure
   `connectionNotice(states: CdrSyncState[])`:
   - Returns `null` when nothing needs attention: no accounts, or all `active` / `pending` with
@@ -748,7 +1010,8 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
     afresh. Reauthorizing "renews the existing connection in place: the connection keeps its id
     and its accounts" (`reauthorize_connection`, `https://api.redbark.com/v2/openapi.json`). So
     the next run sees it `active`, the banner clears, and each account resumes from its saved
-    mark. A fresh link makes new ids, which backfill 90 days (see the re-link runbook).
+    mark. A fresh link makes new ids, which start a new 14-day window; the gap comes back with
+    an import (see the re-link runbook).
   - When both kinds are present, alert wins.
 - `src/app/(dashboard)/_components/cdr-connection-notice.tsx` — props-driven
   `CdrConnectionNotice({ notice })`, no data calls. It shows a `role="status"` (warn) or
@@ -770,39 +1033,375 @@ before the first live sync** (before `REDBARK_API_KEY` is set in production).
   (`transactions.repository.ts:267-291`: `amount > 0 AND expenseId IS NULL`). Verify; no new
   surface (adr017 Positive Consequences).
 - Tests:
-  - `cdr.service.test.ts` — `listSyncState` delegates.
-  - `cdr.trpc.controller.test.ts` — `createTestCaller` with `Partial<CdrService>` (pattern
-    `balances.trpc.controller.test.ts:9-58`). The procedure calls the service; a signed-out call
-    gets `UNAUTHORIZED`.
   - `cdr-connection.display.test.ts` — each status → its notice; an `active` account with
     `lastError` → warn naming it and its last sync date, not the error text; mixed → alert wins;
     empty → null.
   - `cdr-connection-notice.test.tsx` (jsdom) — a warn notice renders `role="status"`, an alert
     notice renders `role="alert"` with the account names and the reauthorize copy (queried by role
     and text).
-  - `cdr-sync.service.test.ts` — a seeded mark makes the fetch start at the seeded `from`, not
-    the 90-day backfill.
 
 ### Success
 - [ ] `make check` passes
 - [ ] `make test` passes
 - [ ] `/design-review` (connection-status banner)
-- [ ] After `make cdr_seed` on the branch DB, the first run fetches from the seeded `from` (no
-      90-day backfill over already-imported rows)
-- [ ] On the first live run after seeding, rows dated `from` match the bank statement for that
-      day: none missing, none repeating a manual row. The client sends `from` as a bare date
-      (`cdr.redbark.ts:87`); a timestamp would be UTC midnight, 10–11 am in Sydney, and drop that
-      morning.
 - [ ] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
 - [ ] A failing `cdr.syncState` read hides the banner; the header and every other section
       still render
-- [ ] `make cdr_seed` with an account id RedBark doesn't list, or a `from` after today, exits
-      non-zero and leaves `cdr_sync_state` unchanged; a listed id prints the account's name
 
 ---
 
-## Phase 7: RedBark webhook trigger (final)
+## Phase 7: Bank-row matching (adopt + possible duplicates)
+
+Revises adr017 facets 2 and 5 (added 2026-10-20). Backend only; the review UI is Phase 8. Every
+bank row, from the daily sync or an import, goes through one reconcile step in the transactions
+domain. That makes a re-run of any window safe: it adds only rows that are missing, and it
+never deletes.
+
+**The rules** (agreed 2026-10-20):
+1. **Known bank id** (`provenance` + `externalId` already in `transaction`) → refresh its
+   bank-owned columns, as `upsertSynced` does today.
+2. **Pending review** for that bank id → refresh the review's bank values. Never a second
+   review, never a row. **Kept** review → skip; the member already said no.
+3. **Exact** → **adopt**. A household row (`externalId` null) on the same calendar day with the
+   same amount to the cent takes the bank's `provenance`, `externalId`, `externalAccountId`
+   and `accountName`. Its description, Expense link, Category, Group, notes and receipt stay,
+   and its id doesn't change. It is now non-`manual`, so the Phase 3 guard locks its date and
+   amount.
+4. **Close** → **possible duplicate**: same sign, amount within 5% of the household row's
+   amount, and no more than 7 calendar days apart. A `possible_duplicate` row holds the bank
+   row; nothing is written to `transaction`.
+5. Otherwise → **add** the bank row.
+
+Who can be a candidate:
+- A household row with no `externalId` that no pending review already holds.
+- A bank row from an account RedBark no longer lists (a re-link; see Validate), with
+  `externalAccountId` set and not in this run's `liveAccountIds`. **Review only**, never
+  adopted: one tap moves it to the new id ("Use bank's").
+- Never a bank row from a listed account, so two real same-amount coffees from one card never
+  match each other.
+
+Pairing is greedy and one-to-one: exact pairs first, then close pairs by (day gap, amount gap,
+candidate id). A bank row or candidate is used once; an unpaired bank row is added.
+
+Days compare as calendar days in `Australia/Sydney`. Bank rows are stored at UTC midnight, but
+a row typed in the form is stored at local midnight (`submitted-date.ts:3-7`), which is the day
+before in UTC. One household with AU banks (CDR, AUD-only), so one fixed zone; it becomes a
+setting with household scoping (Out of Scope).
+
+### Changes
+- `src/lib/constants.ts`:
+  - `export enum PossibleDuplicateStatus { Pending = "pending", Kept = "kept" }`
+  - `export const HOUSEHOLD_TIME_ZONE = "Australia/Sydney"`
+- `src/lib/utils.ts` — `dayKeyInZone(value: Date, timeZone: string): string` (`YYYY-MM-DD`),
+  built on `zonedDayFormatter` (`:88-104`), beside `startOfDayInZone` (`:106-118`).
+- `src/server/transactions/transactions.schema.ts`:
+  - `transaction` gains `externalAccountId` (text, null) after `externalId` (`:47`). RedBark's
+    account id, so a re-linked account's old rows can be told apart.
+  - pgEnum `possible_duplicate_status` from `PossibleDuplicateStatus`.
+  - Table `possible_duplicate` (this domain's; adr022):
+
+    | Column | Type |
+    | --- | --- |
+    | `id` | identity PK |
+    | `transactionId` | integer, not null, FK `transaction.id` **on delete cascade** (the member deleting their row drops the question; the bank row comes back on the next run or import that covers it) |
+    | `provenance` | `transaction_provenance`, not null |
+    | `externalId` | text, not null |
+    | `externalAccountId` | text, not null |
+    | `accountName` | text, not null |
+    | `amount` | double precision, not null |
+    | `date` | timestamptz, not null |
+    | `description` | text, not null |
+    | `status` | enum, not null, default `pending` |
+    | `createdAt` | timestamptz, not null, `$defaultFn` (as `transaction`) |
+    | `updatedAt` | timestamptz, null, `$onUpdate` |
+
+    `uniqueIndex("possible_duplicate_external_idx").on(provenance, externalId)`: one question
+    per bank row, ever. `index("possible_duplicate_transaction_idx").on(transactionId)`.
+- `src/domain/transactions/transaction.interface.ts`:
+  - `Transaction` gains `externalAccountId: string | null`; `SyncedTransaction` (`:24-32`)
+    gains `externalAccountId: string`.
+  - `PossibleDuplicate` (the row; add the pair to `schema-interface-contract.test.ts`
+    `Contracts`, `COVERED` and `aligned`).
+  - `PossibleDuplicateReview` (read model): `{ id, bank: { date, amount, description,
+    accountName }, mine: Pick<Transaction, "id" | "date" | "amount" | "description" |
+    "accountName" | "provenance"> }`.
+  - `ReconcileCounts { added, adopted, flagged, known }`. `known` counts refreshed rows and
+    skipped `kept` ones.
+- `src/domain/transactions/transaction.dto.ts` — `resolveDuplicateDto = z.object({ id:
+  z.number().int().positive(), choice: z.enum(["keep_mine", "use_bank", "both_real"]) })`.
+- `src/domain/cdr/map-redbark.ts:33-41` — set `externalAccountId: row.account`
+  (`cdr.dto.ts:18`).
+- `src/domain/transactions/reconcile-synced.ts` — pure `planReconcile({ incoming, knownIds,
+  reviews, candidates, liveAccountIds, timeZone })` → `{ refresh, add, adopt, flag, skipped }`,
+  with `MATCH_DAYS = 7` and `MATCH_SHARE = 0.05`. It applies the rules and pairing above. Amounts
+  compare as whole cents (`Math.round(amount * 100)`), because `amount` is a double. A
+  retired-account candidate can only be flagged. Export it from `src/domain/transactions/index.ts`.
+- `src/server/transactions/transactions.repository.ts` (interface `:61-86` + class):
+  - `upsertSynced` (`:226-241`) `set` gains `externalAccountId`, so a refresh fills it on rows
+    synced before this phase.
+  - `findKnownExternalIds(provenance, externalIds)` → `string[]`.
+  - `findReviews(provenance, externalIds)` → `{ id, externalId, status, transactionId }[]`.
+  - `findMatchCandidates({ from, to, liveAccountIds })` — `date` in `[from, to)`, and either
+    `externalId is null` or `externalAccountId` set and not in `liveAccountIds`, and no
+    `pending` review holds it (`not exists`).
+  - `applyReconcile({ upserts, adoptions, flags })` — one `db.transaction` (both tables are
+    this domain's):
+    - The `upsertSynced` statement for refreshes and adds.
+    - One `update` per adoption, guarded `where id = $id and "externalId" is null`, so a row
+      claimed since the read is left alone (that bank row then waits for the next run).
+    - `insert into possible_duplicate … on conflict (provenance, "externalId") do update set`
+      the bank values `where status = 'pending'`, so a `kept` review never reopens.
+  - `listPendingDuplicates()` (joined to the household row, newest bank date first) and
+    `countPendingDuplicates()`.
+  - `keepMine(id)`, `useBanks(id)`, `bothReal(id)` — each in a `db.transaction`, each acting
+    only on a `pending` review, each returning whether it found one:
+    - keep → `status = kept`.
+    - use bank's → set the household row's `date`, `amount`, `provenance`, `externalId`,
+      `externalAccountId`, `accountName` from the review, then delete the review.
+    - both → insert the bank row (`on conflict do nothing`), then delete the review.
+- `src/server/transactions/transactions.service.ts`:
+  - `reconcileSynced(rows, { liveAccountIds })` replaces `upsertSynced` (`:113-120`); its
+    same-id dedupe moves here. Reads known ids, reviews, and candidates over `[oldest − 8d,
+    newest + 9d)`: a day of slack each side, because a Sydney day starts the UTC day before (as
+    `MATCH_SCAN_DAYS`, `src/domain/receipts/match.ts:16`); the planner keeps the exact 7.
+    Calls `planReconcile` with `HOUSEHOLD_TIME_ZONE`, applies the plan, and returns
+    `ReconcileCounts`. Empty `rows` reads and writes nothing.
+  - `listPossibleDuplicates()`, `possibleDuplicateCount()`.
+  - `resolveDuplicate({ id, choice })` → `NotFoundError` when no pending review has that id.
+    A use-bank's unique violation (that bank id already sits on another row) →
+    `ConflictError` ("That bank row is already in your transactions").
+- `src/server/transactions/transactions.trpc.controller.ts` — `possibleDuplicates` and
+  `possibleDuplicateCount` queries, and a `resolveDuplicate` mutation (`resolveDuplicateDto`).
+- `src/server/cdr/cdr-sync.service.ts`:
+  - Dep `transactions: Pick<TransactionsService, "reconcileSynced">` (`:41`, `:53`).
+  - A null mark fetches `now − OVERLAP_DAYS` (14 days). Delete `BACKFILL_DAYS` (`:17`): older
+    history comes from the import.
+  - `syncAccount` (`:248-275`) calls `reconcileSynced(rows, { liveAccountIds })`, where
+    `liveAccountIds` is every account id RedBark listed this run.
+- `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md` — rewrite facet 2 (one
+  reconcile: refresh, adopt, possible duplicate, add) and facet 5 (14-day first run; history
+  from the member's import; drop the seed and the 90-day backfill). Keep Status `In Progress`.
+- `CONTEXT.md`:
+  - **Adopt**: the bank sync takes a household Transaction as its own when a bank row has the
+    same day and the same amount to the cent. The row keeps every Member edit; its date and
+    amount then come from the bank. _Avoid_: link (an Expense), match (a Receipt), merge.
+  - **Possible duplicate**: a bank row that looks like a household Transaction (same direction,
+    within 5% and 7 days) but isn't exact, held until a Member keeps theirs, uses the bank's, or
+    says both are real. _Avoid_: conflict, dupe.
+  - Relationships: a Transaction is adopted by at most one bank row; a possible duplicate
+    points at exactly one Transaction.
+- `drizzle/0023_*.sql` — `make db_generate` + `make db_migrate`.
+- Tests:
+  - `src/lib/utils.test.ts` — `dayKeyInZone`: UTC midnight and Sydney local midnight of the
+    same day give the same key, across a DST change.
+  - `reconcile-synced.test.ts`:
+    - A known id → refresh only, no candidate read needed.
+    - Exact day and cent → adopt; a local-midnight household row matches a UTC-midnight bank
+      row of the same day.
+    - 3 days and 4% off → flag; 8 days off → add; 6% off → add; opposite sign → add.
+    - Two bank rows and one candidate → one pairs, the other is added; an exact pair beats a
+      closer-in-days near pair.
+    - A pending review → refreshed flag, not re-matched; a kept review → skipped.
+    - A retired-account candidate with the exact day and amount → flag, never adopt; a
+      listed-account bank row is never a candidate.
+    - Same input twice gives the same plan.
+  - `transactions.repository.test.ts` — inline snapshots: the `upsertSynced` `set` with
+    `externalAccountId`; `findMatchCandidates` filters; the guarded adoption `update`; the
+    review upsert's `where status = 'pending'`; each resolve statement; the column-list
+    snapshots gain `externalAccountId`.
+  - `transactions.schema.test.ts` — `possible_duplicate` unique index, cascade FK, status
+    default.
+  - `transactions.service.test.ts` — `reconcileSynced` dedupes, calls `applyReconcile` with
+    the plan and returns its counts; empty input does nothing. `resolveDuplicate`: each choice
+    calls its repository method; not found → `NotFoundError`; a unique violation on use-bank's
+    → `ConflictError`. An adopted row (now `cdr`) refuses an amount edit.
+  - `transactions.trpc.controller.test.ts` — the three procedures call the service; a bad
+    `choice` is refused before the service; signed-out → `UNAUTHORIZED`.
+  - `map-redbark.test.ts` — `externalAccountId` comes from `row.account`.
+  - `cdr-sync.service.test.ts` — a null mark fetches 14 days; `reconcileSynced` gets every
+    listed account id; the "reconcile before advance" and "no advance on throw" cases move
+    from `upsertSynced`.
+  - Fixtures: add `externalAccountId` to the `Transaction` fixtures listed in Phase 1.
+
+### Success
+- [ ] `make check` passes (incl. `db:check` and the contract)
+- [ ] `make test` passes
+- [ ] On the branch DB, a manual row with the same day and amount as a bank row in the next
+      run's window is adopted: it keeps its description, Expense link, Category and notes,
+      shows the bank's account name, and refuses an amount edit. No second row appears
+- [ ] A manual row 3 days and 2% off a bank row gets one pending possible duplicate and no new
+      transaction; a second run adds no second review and no row
+- [ ] Through `transaction.resolveDuplicate`: keep mine stays kept through the next run; use
+      bank's gives the household row the bank's date and amount and keeps its links; both are
+      real adds the bank row once. No transaction is ever deleted
+- [ ] An account with no mark fetches only the last 14 days on its first run
+- [ ] A run with nothing new leaves the transaction count unchanged
+
+---
+
+## Phase 8: History import page + job
+
+Adds the member-run import (revised 2026-10-20) and the review screen. **Depends on Phase 7.**
+A member picks a date range on `/transactions/import`. A background job pulls it from RedBark
+in 90-day chunks and reconciles each one (Phase 7). The page shows progress and every pending
+possible duplicate. A request can't fetch 7 years inside a page load, and RedBark caps a
+window at 5,000 rows.
+
+### Changes
+- `src/lib/constants.ts` — `export enum CdrImportStatus { Queued = "queued", Running =
+  "running", Done = "done", Failed = "failed" }`.
+- `src/server/cdr/cdr.schema.ts` — pgEnum `cdr_import_status` and table `cdr_import` (cdr
+  domain; adr022):
+
+  | Column | Type |
+  | --- | --- |
+  | `id` | identity PK |
+  | `fromDate` | timestamptz, not null (UTC midnight of the first day) |
+  | `toDate` | timestamptz, not null (UTC midnight of the last day, inclusive) |
+  | `status` | enum, not null, default `queued` |
+  | `added`, `adopted`, `flagged`, `known` | integer, not null, default 0 |
+  | `error` | text, null |
+  | `createdAt` | timestamptz, not null, `.defaultNow()` |
+  | `finishedAt` | timestamptz, null |
+- `src/domain/cdr/cdr.interface.ts` — `CdrImport`; add the pair to
+  `schema-interface-contract.test.ts`.
+- `src/domain/cdr/cdr.dto.ts` — `cdrImportStartDto = z.object({ from: z.iso.date(), to:
+  z.iso.date() })` (bare days from `<Input type="date">`).
+- `src/domain/cdr/import-chunks.ts` — pure `importChunks(from, to, days = 90)` → inclusive
+  `{ from, to }` windows covering the range with no gap or overlap; `IMPORT_MAX_YEARS = 7`.
+- `src/server/cdr/cdr.redbark.ts` — `listTransactions` (`:26-29`, `:74-93`) takes an optional
+  `to`, sent as a bare date like `from` (RedBark's `to` is inclusive).
+- `src/server/cdr/cdr.repository.ts` — deps become `{ db, outbox: OutboxWriteDoor }` (as
+  `receipts.repository.ts:68-80`). Methods:
+  - `insertImport({ fromDate, toDate })` — `this.outbox.commit` inserts the row and
+    `buildOutboxEvent("cdr/import.requested", { importId })` together (as
+    `receipts.repository.ts:84-99`): the event needs the new id.
+  - `findActiveImport()` (queued or running), `latestImport()`.
+  - `markImportRunning(id)`, `addImportCounts(id, counts)` (adds to the columns),
+    `finishImport(id)`, `failImport(id, message)`.
+  - It now touches `cdr_sync_state` and `cdr_import` only.
+- `src/server/inngest/events.ts` — `EVENT_REGISTRY` (`:13-17`) gains `"cdr/import.requested":
+  z.object({ importId: z.number().int() })`.
+- `src/server/cdr/cdr.service.ts`:
+  - `startImport({ from, to })` → `InvalidInputError` when `from` is after `to`, `to` is after
+    today, or `from` is more than 7 years ago ("today" in `HOUSEHOLD_TIME_ZONE`).
+    `ConflictError("An import is already running")` when `findActiveImport()` finds one; two
+    racing starts would only queue two runs, which the shared concurrency key runs one after
+    the other. Then `insertImport`.
+  - `latestImport()`.
+- `src/server/cdr/cdr.trpc.controller.ts` — `startImport` mutation (`cdrImportStartDto`) and
+  `latestImport` query.
+- `src/server/cdr/cdr-sync.service.ts`:
+  - Move discovery out of `run()` into a private method that both `run()` and `planImport` use.
+  - `planImport(importId)` → `markImportRunning`. With no key, it calls `failImport(importId,
+    "Bank sync isn't set up")` and returns no chunks. Otherwise it discovers, then returns
+    `{ liveAccountIds, chunks }`: `importChunks` for each account the daily sync would sync
+    (same consent and account-status rules). Dates travel as `YYYY-MM-DD` strings, because a
+    step's result is JSON.
+  - `importChunk(importId, chunk, liveAccountIds)` → `listTransactions({ accountId, from, to })`
+    → map → `reconcileSynced` → `addImportCounts`. A retried chunk re-counts its rows as `known`,
+    so counts are a guide, not a ledger.
+  - `finishImport(importId)`, `failImport(importId, message)`.
+  - An import never calls `advanceHighWaterMark` or the anchor.
+- `src/server/cdr/cdr.inngest.controller.ts`:
+  - `cdr-sync`'s `concurrency` becomes `{ limit: 1, key: '"cdr-sync"', scope: "env" }`.
+  - Add `cdr-import` (`{ event: "cdr/import.requested" }`, `retries: RETRIES`, the same
+    concurrency). Handler: `step.run("plan")`, then one `step.run(\`chunk-${accountId}-${from}\`)`
+    per chunk, then `step.run("finish")`. Each step's error goes through the same mapping as
+    `cdr-sync` (move it into one private method). `onFailure` calls `failImport` with the
+    error message.
+  - Before coding, confirm with `web-lookup` for `inngest` 4.22: `step.run` retries per step;
+    `RetryAfterError` and `NonRetriableError` inside a step; the `onFailure` signature and how
+    it reads the original event; that a shared `concurrency.key` holds a slot only while a step
+    runs (so the cron can slip between import steps, but two reconciles never overlap); and
+    the steps-per-run cap. 7 years is about 29 chunks per account. `planImport` fails the run
+    with a clear message when the total would pass the cap.
+  - `get functions()` returns `[this.sync, this.import]`.
+- `src/server/inngest/functions.ts` and `src/server/api/services.ts` — build
+  `new DrizzleCdrRepository({ db, outbox: outboxService })` (`outbox.module.ts`).
+- `src/server/inngest/registry-golden.test.ts` — **deliberate** update: the
+  `cdr/import.requested` key, and `{ id: "cdr-import", triggers: [{ event:
+  "cdr/import.requested" }] }`.
+- `.claude/rules/server-architecture.md` — add `cdr-import` and `cdr/import.requested` to the
+  FROZEN list.
+- **`/transactions/import` page** (`src/app/(dashboard)/transactions/import/`):
+  - `page.tsx` — `AsyncBoundary` with `ImportSkeleton`, then an inner data component that
+    prefetches `api.cdr.latestImport` and `api.transaction.possibleDuplicates` inside
+    `HydrateClient` (as `expenses/unplanned/page.tsx:8-36`).
+  - `_components/import-view.tsx` — `PageHeader` "Import from bank", with a link back to
+    `/transactions`. Three parts:
+    - `import-form.tsx` — From and To `<Input type="date">` (as `pay-cycle-section.tsx:55-67`),
+      To defaulting to today, and an **Import** button. Disabled while a run is queued or
+      running. Client checks from ≤ to; the server checks the rest, and its errors go to the
+      global MutationCache. A line under it: "Safe to run again. It only adds what's missing,
+      and it never deletes."
+    - `import-status.tsx` — the latest run's status, range, counts ("Added 12 · Matched to
+      yours 30 · To review 3 · Already here 950") and a failed run's error. Polls
+      `api.cdr.latestImport` with `refetchInterval` while queued or running (as
+      `receipts-view.tsx:192-198`). When it finishes, invalidate `transaction.possibleDuplicates`,
+      `transaction.possibleDuplicateCount` and `transaction.list`.
+    - `possible-duplicate-list.tsx` + props-driven `possible-duplicate-card.tsx` — "In Ledger"
+      and "From the bank" side by side: date, description, amount, account. The day gap and
+      amount gap are called out. Three buttons: **Keep mine**, **Use bank's**, **Both are
+      real**, each calling `api.transaction.resolveDuplicate`. On success the card leaves and
+      a toast says what happened. Empty → "Nothing to review."
+  - `_components/import.display.ts` — pure status label, count line, and gap labels ("3 days
+    later", "$1.20 more").
+- `src/components/route-skeletons.tsx` — `ImportSkeleton` beside `TransactionsSkeleton`
+  (`:145`).
+- `src/app/(dashboard)/transactions/_components/transactions-view.tsx:144-152` — an "Import from
+  bank" link button beside "Add transaction", with a badge from
+  `api.transaction.possibleDuplicateCount` when it's above zero.
+- `src/components/app-nav.tsx:36` — check that `/transactions/import` keeps Transactions
+  active; prefix matching if not.
+- Tests:
+  - `import-chunks.test.ts` — one day; exactly 90 days → one chunk; 91 → two; 7 years → no gap
+    or overlap, last chunk ends on `to`.
+  - `cdr.dto.test.ts` — `cdrImportStartDto` refuses a non-date.
+  - `cdr.redbark.test.ts` — `to` is sent as a bare date; left out when absent.
+  - `cdr.repository.test.ts` — `insertImport` goes through `outbox.commit` with one
+    `cdr/import.requested` event carrying the new id (fake outbox as in
+    `receipts.repository.test.ts`); `addImportCounts` adds, not sets; `findActiveImport`
+    filters queued and running.
+  - `cdr.schema.test.ts` — `cdr_import` status default and count defaults.
+  - `cdr.service.test.ts` — `startImport` refuses each bad range and an active import; a good
+    one inserts.
+  - `cdr.trpc.controller.test.ts` — both procedures call the service; signed-out →
+    `UNAUTHORIZED`; an active import → `CONFLICT`.
+  - `cdr-sync.service.test.ts` — `planImport` with no key fails the run and returns no chunks;
+    it chunks only syncable accounts; `importChunk` passes `from`/`to`, reconciles with the
+    live ids and adds counts; an import never advances a mark or writes an anchor.
+  - `cdr.inngest.controller.test.ts` — `cdr-import`'s id, event trigger, retries and shared
+    concurrency key; `cdr-sync` now has the same key. With a fake `step`, the handler runs
+    plan, one step per chunk with a stable id, then finish; a step error maps like `cdr-sync`;
+    `onFailure` calls `failImport`.
+  - `import.display.test.ts` — each status label, the count line, gap labels for earlier,
+    later, more and less.
+  - `possible-duplicate-card.test.tsx` (jsdom) — both sides render; each button calls its
+    handler with its choice; queried by role and name.
+
+### Success
+- [ ] `make check` passes (incl. `db:check` and the contract)
+- [ ] `make test` passes
+- [ ] `registry-golden.test.ts` pins `cdr-import` and `cdr/import.requested` (deliberate update)
+- [ ] `/design-review` (`/transactions/import` and the header button)
+- [ ] On the branch DB, importing a 30-day range finishes with counts; importing it again adds
+      nothing and asks nothing new
+- [ ] Importing a range that covers older manual rows adopts the exact ones, lists the close
+      ones for review, and adds the rest; each review choice works from the page and the
+      header badge drops to match
+- [ ] Rows dated `from` match the bank statement for that day: none missing. The client sends
+      `from` and `to` as bare dates (`cdr.redbark.ts:87`); a timestamp would be UTC midnight,
+      10–11 am in Sydney, and drop that morning
+- [ ] Starting while one runs is refused with a message; a `to` after today, or a `from` over 7
+      years ago, is refused; with the key unset the run shows failed with a reason
+- [ ] No import deletes a transaction (count before ≤ count after)
+- [ ] A cron run that comes due during an import waits for the running step, then runs
+
+---
+
+## Phase 9: RedBark webhook trigger (final)
 
 Implements adr017 facet 7's additive webhook trigger. **Prerequisite (adr017 Open Question):
 confirm RedBark's `transactions.synced` / `connection.*` payload shapes, event-type names,
@@ -828,8 +1427,9 @@ unpublished today.
     webhook sources sign differently and may number deliveries differently, so a bare id from
     one could match the other's and drop a real event as "already queued".
 - `src/server/cdr/cdr.module.ts` — `CdrService` now has two consumers (the tRPC root and the
-  webhook routes), so export one `cdrService` (`{ repository, outbox: outboxService }`).
-  `services.ts` imports it. Add it to the module list in `.claude/rules/server-architecture.md`.
+  webhook routes), so export one `cdrService` (`{ repository: new DrizzleCdrRepository({ db,
+  outbox: outboxService }), outbox: outboxService }`). `services.ts` imports it. Add it to the
+  module list in `.claude/rules/server-architecture.md`.
 - `src/server/cdr/cdr.signature.ts` — `interface SignatureVerifier { verify(body, headers):
   boolean }` + two classes (`node:crypto` HMAC, `timingSafeEqual`, timestamp tolerance). They
   **must not be conflated** (adr017 facet 7):
@@ -855,10 +1455,10 @@ unpublished today.
     six full runs, past RedBark's 30/min transactions budget. Inngest documents `debounce` only
     for event triggers, so `cdr-sync` stays cron-only.
   - Add `cdr-sync-requested` (`{ event: "cdr/sync.requested" }`, `debounce: { period: "5m",
-    timeout: "30m" }`, `retries: RETRIES`). Its handler calls the same `run()` with the same
-    error mapping as `cdr-sync`; move that mapping into one private method both share.
-  - Both functions take `concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" }`, so a
-    webhook run never overlaps the cron run.
+    timeout: "30m" }`, `retries: RETRIES`). Its handler calls the same `run()` through the
+    shared error mapping (Phase 8).
+  - It takes the shared `concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" }` that
+    Phase 8 gave `cdr-sync` and `cdr-import`, so a webhook run never overlaps either.
   - Add `cdr-connection-changed` (`{ event: "cdr/connection.changed" }`). Its handler reads
     `event.data.connectionId` / `event.data.status` by name (never spreads `event.data`) and
     calls a new `CdrSyncService.applyConnectionStatus` → `repository.setConnectionStatus`.
@@ -888,8 +1488,8 @@ unpublished today.
     resolves; any other error rethrows.
   - `src/server/inngest/events.test.ts` — `buildOutboxEvent` honours a supplied `id`.
   - `cdr.inngest.controller.test.ts` — extend for the two new functions. `cdr-sync-requested`
-    has the debounce, and it shares the concurrency key with `cdr-sync`. Its handler calls
-    `run()` and maps a `CdrSyncError` like `cdr-sync` does.
+    has the debounce, and it shares the concurrency key with `cdr-sync` and `cdr-import`. Its
+    handler calls `run()` and maps a `CdrSyncError` like `cdr-sync` does.
   - `route.test.ts` in each route dir — mock the tier modules and assert only the root's job:
     the env gate per secret, built once, delegates (pattern
     `src/app/api/receipts/inbound/route.test.ts:40-113`).
@@ -914,22 +1514,23 @@ unpublished today.
 - Production enablement gate: do **not** set the production `REDBARK_API_KEY` until RedBark v2
   GA is confirmed (adr017 Open Question — beta `2026-10-01.wattle`). The optional key means the
   cron stays a safe no-op until then.
-- Production setup order:
-  1. Migrations `0019`–`0021` deploy.
-  2. `REDBARK_API_KEY=… make cdr_seed account=… from=…` against production. It refuses an id
-     RedBark doesn't list.
-  3. Set `REDBARK_API_KEY` (and the webhook secrets once Phase 7 ships) as Vercel dashboard
-     secrets.
-  4. After the first run, check the logs for an unknown-account-type `warn`. The anchor waits
-     until each is set. Set each one with
-     `make cdr_in_balance account=… value=true|false` from `main`.
+- Production setup order (no scripts):
+  1. Migrations `0019`–`0024` deploy.
+  2. Set `REDBARK_API_KEY` (and the webhook secrets once Phase 9 ships) as Vercel dashboard
+     secrets. The first run fetches 14 days; the household's own rows in that window are
+     adopted or flagged, never doubled.
+  3. On `/settings` → Bank accounts, switch on or leave out any account marked New. The
+     anchor waits until each is set.
+  4. On `/transactions/import`, import the history wanted (up to 7 years), then resolve each
+     possible duplicate.
 - Re-link runbook. Reauthorize first: it keeps every id, so nothing else is needed. Only when
   RedBark refuses it (it answers `404` once an expired consent's data is deleted) link the bank
-  afresh. Then, **before the next 18:00 UTC cron**:
-  1. `make cdr_seed account=<new id> from=<day after the old account's newest synced row>`
-     for each new account, so the first run doesn't backfill 90 days over rows already synced.
-  2. Delete the old account's `cdr_sync_state` row in the Neon SQL editor. RedBark no longer
+  afresh. Then:
+  1. Delete the old account's `cdr_sync_state` row in the Neon SQL editor. RedBark no longer
      lists it, so it would fail every run as "not in RedBark" (Phase 4).
+  2. On `/transactions/import`, import from the old account's newest synced day to today. The
+     old account's rows are review-only candidates, so nothing is doubled: pick **Use bank's**
+     to move each one to its new id.
 
 ## References
 
@@ -940,9 +1541,11 @@ unpublished today.
   all phases. Facet → phase map:
   - facet 1 (provenance model) → Phase 1
   - facets 3, 4 (settled-only, sign mapping) → Phase 2 (spike resolves Open Question #1)
-  - facets 2, 5 (dedup upsert, `cdr_sync_state`) → Phases 3, 4, 6
-  - facet 7 (poll-first / webhook-later) → Phases 4, 7
-  - facet 6 (balance auto-anchor, `inBalance` scope resolved 2026-10-19) → Phase 5
+  - facets 2, 5 (dedup upsert, `cdr_sync_state`; revised 2026-10-20 for adopt, possible
+    duplicates and the import) → Phases 3, 4, 7, 8
+  - facet 7 (poll-first / webhook-later) → Phases 4, 9
+  - facet 6 (balance auto-anchor, `inBalance` scope resolved 2026-10-19, set on `/settings`)
+    → Phase 5
   - credential & consent posture → Phases 2, 4, 6
 - Composed with (Accepted):
   - `adr002` — outbox + Inngest rails
@@ -952,7 +1555,8 @@ unpublished today.
   - `adr021` — `<domain>.<transport>.controller.ts`, tRPC router is the controller
   - `adr022` — cross-domain data through the owning service
   - `adr023` — `cdr/` is its own top-level domain
-  - `adr027` — `AsyncBoundary` is the only loading region (Phase 6 banner)
+  - `adr027` — `AsyncBoundary` is the only loading region (Phase 5 Bank accounts, Phase 6
+    banner, Phase 8 import page)
 - Contrasts: `adr006` / `adr007` (inbound session creds), `adr014` (Bedrock OIDC creds).
 - Rules: `.claude/rules/server-architecture.md` (tier map, construction, tests, FROZEN),
   `ui-components.md`, `unit-testing.md`.
