@@ -6,7 +6,18 @@ import {
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 
-/** Test wrapper: fake router so Next's error retry hits a spy, plus the app's query client. */
+// Set by the latest createAppRouter(); AppRouter lives at module level so React keeps one component.
+let current: { router: AppRouterInstance; queryClient: QueryClient };
+
+function AppRouter({ children }: { children: ReactNode }) {
+	return (
+		<QueryClientProvider client={current.queryClient}>
+			<AppRouterContext value={current.router}>{children}</AppRouterContext>
+		</QueryClientProvider>
+	);
+}
+
+/** Test wrapper: fake router so Next's error retry hits a spy, plus the app's query client. One per test. */
 export function createAppRouter() {
 	const router = {
 		back: vi.fn(),
@@ -17,15 +28,7 @@ export function createAppRouter() {
 		prefetch: vi.fn(),
 		bfcacheId: "test",
 	} satisfies AppRouterInstance;
-	const queryClient = new QueryClient();
-
-	function AppRouter({ children }: { children: ReactNode }) {
-		return (
-			<QueryClientProvider client={queryClient}>
-				<AppRouterContext value={router}>{children}</AppRouterContext>
-			</QueryClientProvider>
-		);
-	}
+	current = { router, queryClient: new QueryClient() };
 
 	return { router, AppRouter };
 }
