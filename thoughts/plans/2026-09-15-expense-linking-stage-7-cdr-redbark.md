@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Ready for Review - Phase 5 of 9
+status: In Progress - Phase 6 of 9
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -1041,11 +1041,14 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
     and text).
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
+- [x] `make check` passes
+- [x] `make test` passes
 - [ ] `/design-review` (connection-status banner)
 - [ ] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
+      — display + notice unit tests cover each status; browser shows no banner on the
+      current branch data. Not yet seen live: a revoked / expiring row (needs a DB flip on the
+      local branch).
 - [ ] A failing `cdr.syncState` read hides the banner; the header and every other section
       still render
 
