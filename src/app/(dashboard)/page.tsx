@@ -4,6 +4,7 @@ import {
 	CashFlowSection,
 	CashFlowSectionSkeleton,
 } from "./_components/cash-flow-section";
+import { CdrConnectionBanner } from "./_components/cdr-connection-banner";
 import { SpendCharts, SpendChartsSkeleton } from "./_components/spend-charts";
 import { StatCards, StatCardsSkeleton } from "./_components/stat-cards";
 
@@ -16,6 +17,12 @@ export default function DashboardPage() {
 				description="A snapshot of your household budget and spending."
 				title="Overview"
 			/>
+
+			{/* Invisible gate: nothing while loading, and a failed read hides the
+			    banner rather than putting an error card above the page. */}
+			<AsyncBoundary label="bank connections" skeleton={null}>
+				<CdrConnectionBanner />
+			</AsyncBoundary>
 
 			{/* Spacing sits outside each boundary, so the skeleton, content and
 			    error card all keep the same gap. */}
