@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: In Progress - Phase 6 of 9
+status: Validated - Phase 5 of 9
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -88,9 +88,9 @@ left for Phase 2.
   `schema-interface-contract.test.ts:25`. UI: `src/app/(dashboard)/_components/balance-snapshot-card.tsx`
   (`latest` `:14`, "As of" `:55-57`), mounted in `cash-flow-section.tsx:32`.
 - **Dashboard streams by section** ([adr027](../../docs/adr/adr027-async-boundary-for-loading-regions.md)).
-  `src/app/(dashboard)/page.tsx` is sync: `PageHeader` `:15-18`, then each section in its own
-  `AsyncBoundary` (summary `:22-26`, cash flow `:28-32`, spending `:34-38`; spacing sits on a
-  wrapper `div` outside each boundary). A section fetches
+  `src/app/(dashboard)/page.tsx` is sync: `PageHeader` `:16-19`, the Phase 6 banner gate
+  `:23-25`, then each section in its own `AsyncBoundary` (summary `:29-33`, cash flow `:35-39`,
+  spending `:41-45`; spacing sits on a wrapper `div` outside each boundary). A section fetches
   for itself: `StatCards` is an async server component reading `api.*` through
   `overview-data.ts` (`cache()`); `cash-flow-section.tsx:19-20` prefetches for client suspense
   children inside `HydrateClient`. `skeleton={null}` is an invisible gate: nothing while
@@ -1044,13 +1044,36 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
 - [x] `make check` passes
 - [x] `make test` passes
 - [ ] `/design-review` (connection-status banner)
-- [ ] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
+      — run 2026-10-22, no blockers, one High open: the banner streams in after the sections
+      and pushes the page down (CLS 0.123 at 375, 0.060 at 768, 0.037 at 1440; 0 with no
+      banner). Contrast passes both tones and themes. Fix, then re-run.
+- [x] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
-      — display + notice unit tests cover each status; browser shows no banner on the
-      current branch data. Not yet seen live: a revoked / expiring row (needs a DB flip on the
-      local branch).
-- [ ] A failing `cdr.syncState` read hides the banner; the header and every other section
+      — 2026-10-22, DB flips on the branch: `revoked` → `role="alert"` reauthorize banner
+      naming the account; `expiring` → `role="status"` "Bank connection expiring"; a
+      `lastError` → "Bank sync is behind … since 21 Oct 2026", no error text; revoked +
+      `lastError` → alert only. All healthy → no banner. Empty list and the sync skip rest on
+      unit tests (`connectionNotice([])`, Phase 4 consent tests, Phase 5 proxy check).
+- [x] A failing `cdr.syncState` read hides the banner; the header and every other section
       still render
+      — 2026-10-22, table renamed with a `revoked` row in it: no banner, header + summary +
+      cash flow + spending render, the failed query is logged.
+- [x] *Unplanned:* 296 synced Spend rows (30 days) have no `expenseId`; `findUnplanned` has no
+      provenance filter, so they land in the queue.
+
+Open from validation 2026-10-22 (see `/resolve-findings`):
+- **Wrong day.** The banner is a server component, so `formatDate(lastSyncedAt)` runs in the
+  server's zone (UTC on Vercel). The 18:00 UTC cron is the next morning in Sydney, so "since"
+  reads a day early.
+- **Layout shift** (design review High, above).
+- `role="alert"` re-announces a lasting state on every visit; use `status` for both tones.
+- Copy: no RedBark link; plural lists use "it"; same-named accounts can't be told apart;
+  an alert hides other banks' warn lines; expiring + stuck loses the expiry title.
+- Duplicates: `DEAD` copies `DEAD_CONSENT` (`cdr-sync.service.ts:23`); `accountLabel` copies
+  `settings/_components/bank-accounts.display.ts:12`.
+- A cold first dev load logs Next's "unstable `Date.now()` while prerendering" at
+  `page.tsx:24` (`flushAfterResponse` before `headers()`). Gone on reload; `make build` is
+  clean. Check whether `await io()` in the banner (as `cash-flow-section.tsx:16`) clears it.
 
 ---
 
