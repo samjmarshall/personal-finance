@@ -44,6 +44,29 @@ describe("connectionNotice", () => {
 		]);
 		expect(notice?.tone).toBe("warn");
 		expect(notice?.detail).toContain("Everyday");
+		expect(notice?.inRedBark).toBe(true);
+	});
+
+	it("joins several accounts with 'and' and reads right for more than one", () => {
+		const savings = { accountId: "acc_2", accountName: "Savings", id: 2 };
+		const expiring = CdrConnectionStatus.Expiring;
+		expect(
+			connectionNotice([
+				account({ connectionStatus: expiring }),
+				account({ ...savings, connectionStatus: expiring }),
+			])?.detail,
+		).toBe(
+			"Everyday and Savings will lose access soon. Reauthorize in RedBark's dashboard to keep syncing.",
+		);
+		const revoked = CdrConnectionStatus.Revoked;
+		expect(
+			connectionNotice([
+				account({ connectionStatus: revoked }),
+				account({ ...savings, connectionStatus: revoked }),
+			])?.detail,
+		).toBe(
+			"Syncing has stopped for Everyday and Savings. Reauthorize in RedBark's dashboard and it picks up where it left off.",
+		);
 	});
 
 	it.each([
@@ -56,6 +79,7 @@ describe("connectionNotice", () => {
 			account({ accountId: "acc_2", accountName: "Savings", id: 2 }),
 		]);
 		expect(notice?.tone).toBe("alert");
+		expect(notice?.inRedBark).toBe(true);
 		expect(notice?.title).toMatch(/reauthorize/i);
 		expect(notice?.detail).toContain("Everyday");
 		expect(notice?.detail).not.toContain("Savings");
@@ -78,6 +102,7 @@ describe("connectionNotice", () => {
 		expect(notice?.detail).toContain("Everyday");
 		expect(notice?.detail).toContain(formatDate("2026-10-18T03:00:00Z"));
 		expect(notice?.detail).not.toContain("secret detail");
+		expect(notice?.inRedBark).toBe(false);
 	});
 
 	it("says 'yet' when an erroring account has never synced", () => {

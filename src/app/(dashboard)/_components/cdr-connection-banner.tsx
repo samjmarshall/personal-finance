@@ -1,8 +1,11 @@
+import { io } from "next/cache";
+
 import { api } from "~/trpc/server";
-import { connectionNotice } from "./cdr-connection.display";
-import { CdrConnectionNotice } from "./cdr-connection-notice";
+import { ClientConnectionNotice } from "./cdr-connection-notice";
 
 export async function CdrConnectionBanner() {
-	const notice = connectionNotice(await api.cdr.syncState());
-	return notice ? <CdrConnectionNotice notice={notice} /> : null;
+	// The tRPC caller reads Date.now() before it reaches headers(), a sync-IO
+	// prerender error. io() ends the static shell here first.
+	await io();
+	return <ClientConnectionNotice states={await api.cdr.syncState()} />;
 }
