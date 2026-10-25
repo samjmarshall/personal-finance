@@ -5,9 +5,13 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
-import { type CdrSyncState, NICKNAME_MAX_LENGTH } from "~/domain/cdr";
+import {
+	accountLabel,
+	type CdrSyncState,
+	NICKNAME_MAX_LENGTH,
+} from "~/domain/cdr";
 import { cn } from "~/lib/utils";
-import { accountLabel, formatBalance } from "./bank-accounts.display";
+import { formatBalance } from "./bank-accounts.display";
 
 export type BankAccountRowProps = {
 	account: Pick<

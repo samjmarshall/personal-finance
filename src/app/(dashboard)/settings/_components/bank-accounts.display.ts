@@ -1,21 +1,11 @@
 import type { CdrSyncState } from "~/domain/cdr";
 import { formatCurrency } from "~/lib/utils";
 
-type Named = Pick<CdrSyncState, "accountId" | "accountName" | "nickname">;
 type Counted = Pick<CdrSyncState, "balance" | "inBalance">;
 type Grouped = Counted & Pick<CdrSyncState, "institutionName">;
 
 // A row saved before discovery stored the bank's name.
 const UNNAMED_BANK = "Other accounts";
-
-/** The member's nickname, else the bank's name, else the RedBark id. */
-export function accountLabel({
-	accountId,
-	accountName,
-	nickname,
-}: Named): string {
-	return nickname ?? accountName ?? accountId;
-}
 
 export interface BankGroup<T> {
 	bank: string;

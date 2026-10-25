@@ -2,6 +2,7 @@ import {
 	anchorFromBalances,
 	type CdrSyncState,
 	inBalanceByDefault,
+	isDeadConsent,
 	latestBalance,
 	mapRedbarkTransaction,
 	type RedbarkAccount,
@@ -19,12 +20,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const BACKFILL_DAYS = 90;
 // Fetch filters by txn date, but a card row can post 5+ days later (long weekend).
 const OVERLAP_DAYS = 14;
-
-const DEAD_CONSENT: CdrConnectionStatus[] = [
-	CdrConnectionStatus.Revoked,
-	CdrConnectionStatus.Expired,
-	CdrConnectionStatus.Invalidated,
-];
 
 const SYNCING_CONSENT: CdrConnectionStatus[] = [
 	CdrConnectionStatus.Active,
@@ -260,7 +255,7 @@ export class CdrSyncService {
 		account: RedbarkAccount | undefined,
 		consent: CdrConnectionStatus | undefined,
 	): Promise<void> {
-		if (consent && DEAD_CONSENT.includes(consent)) {
+		if (consent && isDeadConsent(consent)) {
 			this.logger.warn("cdr connection needs reauthorizing", {
 				accountId,
 				consent,

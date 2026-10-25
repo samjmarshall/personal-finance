@@ -1,3 +1,4 @@
+import { accountLabel } from "./account-label";
 import {
 	type CdrSetInBalanceInput,
 	type CdrSetNicknameInput,
@@ -15,6 +16,7 @@ import {
 	redbarkTransactionDto,
 } from "./cdr.dto";
 import type { CdrSyncState } from "./cdr.interface";
+import { isDeadConsent } from "./consent";
 import {
 	anchorFromBalances,
 	inBalanceByDefault,
@@ -32,10 +34,12 @@ export type {
 	RedbarkTransaction,
 };
 export {
+	accountLabel,
 	anchorFromBalances,
 	cdrSetInBalanceDto,
 	cdrSetNicknameDto,
 	inBalanceByDefault,
+	isDeadConsent,
 	latestBalance,
 	mapRedbarkTransaction,
 	NICKNAME_MAX_LENGTH,
