@@ -111,8 +111,8 @@ importers:
         specifier: 1.6.6
         version: 1.6.6
       inngest:
-        specifier: 4.22.0
-        version: 4.22.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3)
+        specifier: 4.26.0
+        version: 4.26.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3)
       lucide-react:
         specifier: 1.57.0
         version: 1.57.0(@types/react@19.3.0)(react@19.2.9)
@@ -3523,8 +3523,8 @@ packages:
     resolution: {integrity: sha512-NFzVcaGUkUjKdzrnOHl+sGRs51MfcWHFUADLV6KcmGa0IXwVumyL/82MAiGCBPrHQjFzlcdci97gQjdVerrItQ==}
     hasBin: true
 
-  inngest@4.22.0:
-    resolution: {integrity: sha512-lxjkD9mDAQct+At7+STbrJIIVQoEq12GyZPzsgZSwRQV3QKKtho7sGv/PgWZ+gSmfsyB9J3G4axLBrkNj0zHbw==}
+  inngest@4.26.0:
+    resolution: {integrity: sha512-7pIHJowArd8c98sJKwvgz/vCT+F37X57HwM968dobthUoRyCGuNmiY3qe1o5MDRlPw9R7Z3BCkOtSIVFlKqWVQ==}
     engines: {node: '>=20'}
     peerDependencies:
       '@sveltejs/kit': '>=1.27.3'
@@ -8137,7 +8137,7 @@ snapshots:
       - encoding
       - supports-color
 
-  inngest@4.22.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3):
+  inngest@4.26.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.2.9(react@19.2.9))(react@19.2.9))(react@19.2.9)(typescript@7.0.2)(zod@4.4.3):
     dependencies:
       '@bufbuild/protobuf': 2.16.0
       '@inngest/ai': 0.1.8
