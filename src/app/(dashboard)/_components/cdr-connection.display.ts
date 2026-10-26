@@ -1,9 +1,7 @@
-import {
-	accountLabel,
-	type CdrSyncState,
-	isDeadConsent,
-	isSyncingConsent,
-} from "~/domain/cdr";
+// Not the barrel: it carries the bank's zod schemas, and this runs in the browser.
+import { accountLabel } from "~/domain/cdr/account-label";
+import type { CdrSyncState } from "~/domain/cdr/cdr.interface";
+import { isDeadConsent, isSyncingConsent } from "~/domain/cdr/consent";
 import { CdrConnectionStatus } from "~/lib/constants";
 import { formatDate } from "~/lib/utils";
 
@@ -47,26 +45,24 @@ const behindLine = (a: CdrSyncState, label: Label) =>
 // The cron runs daily, so two days allows one missed run before warning.
 const STALLED_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
 
-// A run that fails before the account loop (dead key, discovery error, cron
-// stopped) records no lastError, so the only sign is that no live account moved.
-function stalledLine(states: CdrSyncState[], now: Date): string | null {
+// A run that dies before any account (dead key, discovery error, cron off) saves
+// no error, so the only sign is that no live account moved.
+function stalledLine(states: CdrSyncState[]): string | null {
 	const live = states.filter((s) => isSyncingConsent(s.connectionStatus));
 	if (live.length === 0) return null;
 	const newest = Math.max(
 		...live.map((s) => (s.lastSyncedAt ?? s.createdAt).getTime()),
 	);
-	if (now.getTime() - newest <= STALLED_AFTER_MS) return null;
+	if (Date.now() - newest <= STALLED_AFTER_MS) return null;
 	return live.some((s) => s.lastSyncedAt)
 		? `No bank account has synced since ${formatDate(new Date(newest))}.`
 		: "No bank account has synced yet.";
 }
 
-// Never shows the error text: logs hold the cause, banner only says which account is behind.
-// Alert wins the tone and title so a dead consent is never buried under a softer
-// notice, but other banks' warnings still show under it.
+// Never shows error text; logs hold the cause. A dead consent sets tone and title
+// so softer notices can't bury it; other banks' warnings still show.
 export function connectionNotice(
 	states: CdrSyncState[],
-	now = new Date(),
 ): ConnectionNotice | null {
 	const dead = states.filter((s) => isDeadConsent(s.connectionStatus));
 	const expiring = states.filter(
@@ -76,7 +72,7 @@ export function connectionNotice(
 	const stuck = states.filter(
 		(s) => s.lastError !== null && !isDeadConsent(s.connectionStatus),
 	);
-	const stalled = stalledLine(states, now);
+	const stalled = stalledLine(states);
 	const label = labeller(states);
 
 	const reauthorizeLines = [
@@ -97,13 +93,13 @@ export function connectionNotice(
 	];
 	if (reauthorizeLines.length === 0 && behindLines.length === 0) return null;
 
-	// The title names the most urgent thing the member can fix. Banks linked in
-	// one sitting can expire together, so it counts connections, not accounts.
+	// Title leads with the most urgent issue. Plural counts banks, not accounts:
+	// one bank's accounts share one connection.
 	const s = (accounts: CdrSyncState[]) =>
 		new Set(accounts.map((a) => a.connectionId)).size > 1 ? "s" : "";
 	const title =
 		dead.length > 0
-			? `Reauthorize your bank connection${s(dead)}`
+			? `Reauthorize your bank connection${s([...dead, ...expiring])}`
 			: expiring.length > 0
 				? `Bank connection${s(expiring)} expiring`
 				: "Bank sync is behind";

@@ -38,9 +38,8 @@ export default function DashboardPage() {
 				</AsyncBoundary>
 			</div>
 
-			{/* Invisible gate: nothing while loading, and a failed read hides the
-			    banner rather than putting an error card on the page. Last, so the
-			    banner floats over the page instead of pushing it down. */}
+			{/* Invisible gate: a failed read hides the banner, no error card. Last,
+			    so arriving late moves nothing above it. */}
 			<AsyncBoundary label="bank connections" skeleton={null}>
 				<CdrConnectionBanner />
 			</AsyncBoundary>

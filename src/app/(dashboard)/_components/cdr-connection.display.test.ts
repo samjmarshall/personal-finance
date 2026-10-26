@@ -114,6 +114,17 @@ describe("connectionNotice", () => {
 				}),
 			])?.title,
 		).toBe("Reauthorize your bank connections");
+		// An expiring bank needs a reauthorize too, so it counts.
+		expect(
+			connectionNotice([
+				account({ connectionStatus: revoked }),
+				account({
+					...savings,
+					connectionId: "con_2",
+					connectionStatus: expiring,
+				}),
+			])?.title,
+		).toBe("Reauthorize your bank connections");
 		expect(
 			connectionNotice([
 				account({ connectionStatus: expiring }),
