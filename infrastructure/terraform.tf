@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "6.69.0"
+      version = "6.70.0"
     }
     vercel = {
       source  = "vercel/vercel"
@@ -10,7 +10,7 @@ terraform {
     }
     posthog = {
       source  = "PostHog/posthog"
-      version = "1.0.24"
+      version = "1.0.26"
     }
   }
 

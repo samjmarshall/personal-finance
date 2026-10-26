@@ -4,6 +4,9 @@ import "~/env";
 const config: NextConfig = {
 	cacheComponents: true,
 	partialPrefetching: true,
+	experimental: {
+		agentUpgrade: "security",
+	},
 	// Portless serves the dev app from https://personal-finance.localhost (and
 	// <branch>.personal-finance.localhost per worktree) — a different origin than the
 	// localhost:PORT the dev server binds, so Next must trust it.

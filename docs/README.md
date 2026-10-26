@@ -80,3 +80,9 @@ Terraform in `infrastructure/` owns infrastructure only: the Vercel project, the
 ## Dependency updates (Renovate + Claude)
 
 Renovate (`.github/renovate.json`) auto-merges patches; minor and major PRs wait for a human. `.github/workflows/claude-renovate.yml` runs Claude on them: when a minor/major PR opens it reads the release notes and comments on breaking changes, deprecations, bug fixes and features worth adopting (no edits); when Quality Control or Deployment fails on a `renovate/*` push it fixes the cause, runs the checks and pushes to the PR branch, or comments why not. One fix attempt per Renovate push — if Claude's commit fails CI, a human takes over. Claude never starts, re-runs or waits on CI; its push does that. Both jobs log Claude's full output (`show_full_output`) for troubleshooting. Re-run either by hand with `workflow_dispatch` (`pr`, `mode`). Needs the `CLAUDE_CODE_OAUTH_TOKEN` secret (`claude setup-token`) and the Claude GitHub App on the repo; like any `workflow_run` / `workflow_dispatch` workflow it only runs from `main`.
+
+## License
+
+MIT, see [LICENSE](../LICENSE). Self-host it, learn from it, contribute to it.
+
+Open core, like PostHog: if paid hosted plans arrive, paid-only code will live in an `ee/` directory under its own commercial license. Everything outside `ee/` stays MIT.
