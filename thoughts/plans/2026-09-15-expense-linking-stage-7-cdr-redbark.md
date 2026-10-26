@@ -88,9 +88,9 @@ left for Phase 2.
   `schema-interface-contract.test.ts:25`. UI: `src/app/(dashboard)/_components/balance-snapshot-card.tsx`
   (`latest` `:14`, "As of" `:55-57`), mounted in `cash-flow-section.tsx:32`.
 - **Dashboard streams by section** ([adr027](../../docs/adr/adr027-async-boundary-for-loading-regions.md)).
-  `src/app/(dashboard)/page.tsx` is sync: `PageHeader` `:16-19`, the Phase 6 banner gate
-  `:23-25`, then each section in its own `AsyncBoundary` (summary `:29-33`, cash flow `:35-39`,
-  spending `:41-45`; spacing sits on a wrapper `div` outside each boundary). A section fetches
+  `src/app/(dashboard)/page.tsx` is sync: `PageHeader` `:16-19`, then each section in its own
+  `AsyncBoundary` (summary `:23-27`, cash flow `:29-33`, spending `:35-39`; spacing sits on a
+  wrapper `div` outside each boundary), then the Phase 6 banner gate last (`:44-46`). A section fetches
   for itself: `StatCards` is an async server component reading `api.*` through
   `overview-data.ts` (`cache()`); `cash-flow-section.tsx:19-20` prefetches for client suspense
   children inside `HydrateClient`. `skeleton={null}` is an invisible gate: nothing while
@@ -1064,6 +1064,12 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
       stuck titles "Bank sync is behind", losing the expiry. (3) "Open RedBark" sits after the
       stuck lines, so it reads as their fix. Date fix, `role="status"`, contrast and no
       `Date.now()` prerender error all check out.
+      — re-run 2026-10-26 after 869954f: all 3 Highs fixed (CLS 0 at 375 / 768 / 1440 in
+      every state; expiring + stuck titles "Bank connection expiring"; the link follows the
+      reauthorize line). No blockers, **1 High open**: at 375 the sticky banner (142–302 px)
+      covers a focused control (the "Update balance" input fully, "Chart period" half;
+      WCAG 2.4.11). Second reviewer's High (call it Medium): with dead + expiring banks the
+      title only counts the dead one.
 - [x] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
       — 2026-10-22, DB flips on the branch: `revoked` → `role="alert"` reauthorize banner
@@ -1079,6 +1085,9 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
       — 2026-10-22, table renamed with a `revoked` row in it: no banner, header + summary +
       cash flow + spending render, the failed query is logged. Rechecked 2026-10-25 after
       4348e3e: same result, `TRPCError: Failed query` logged from `<CdrConnectionBanner>`.
+      Rechecked 2026-10-26 with the boundary at the page's end: a `revoked` row shows the
+      banner; with the table renamed, no banner and no error card, all six section headings
+      render, the failed query is logged. Healthy rows → no banner.
 - [x] *Unplanned:* 296 synced Spend rows (30 days) have no `expenseId`; `findUnplanned` has no
       provenance filter, so they land in the queue.
 
@@ -1087,34 +1096,36 @@ no RedBark link, "it" in plural lists, the `DEAD` / `accountLabel` copies (now
 `src/domain/cdr/consent.ts`, `account-label.ts`), and the dev `Date.now()` prerender error
 (`await io()` in the banner).
 
-Open from validation 2026-10-25 (see `/resolve-findings`):
-- **Layout shift** (design review High 1). The likely fix: await `syncState` in the page (a
-  failed read → null), render the box on the server, and build only the date on the client.
-- **Expiring + stuck** (High 2, 3): the title loses the expiry, and "Open RedBark" trails the
-  stuck lines.
-- **No banner when the whole run fails.** Only a per-account `lastError` counts as stuck. A dead
-  key, a discovery throw, or a stopped cron leaves no `lastError`, so numbers go stale with
-  nothing on screen. Consider a stale `lastSyncedAt` check.
-- **An alert hides other banks' lines** (`cdr-connection.display.ts:29` returns early).
-- **No way to clear a banner** for a bank closed on purpose: rows are never deleted, so a
-  revoked or "not in RedBark" account nags forever.
-- **Full rows reach the client**: `lastError` text, account numbers and balances sit in the
-  RSC payload, though the banner never shows them. Pass only the fields it needs.
-- **Barrel import**: `cdr-connection.display.ts:1` imports `~/domain/cdr`, which pulls zod and
-  the RedBark DTOs into the home page's client bundle. Import `consent` / `account-label`
+Fixed from validation 2026-10-25 (3196ae7, 869954f; checked 2026-10-26): layout shift, the
+expiring + stuck title, the link's place, a whole-run stall (no live account synced in 2
+days), an alert hiding other banks' lines, same-named accounts, plural titles, "opens in new
+tab", long-name overflow, both test gaps, `SYNCING_CONSENT` (now `isSyncingConsent`). Five
+comments tightened in validation (page, banner, display).
+
+Open from validation 2026-10-26 (see `/resolve-findings`):
+- **Banner covers focused controls at 375** (design review High, WCAG 2.4.11). Reserve its
+  height with `scroll-padding-bottom`, or drop sticky on small screens.
+- **Dead + expiring title** counts only the dead bank (singular with two to fix).
+- **Full rows reach the client** (`cdr-connection-banner.tsx:10`): `lastError` text, account
+  numbers and balances sit in the RSC payload. Pass only the fields it needs.
+- **Barrel import**: `cdr-connection.display.ts:1-6` imports `~/domain/cdr`, which may pull zod
+  and the RedBark DTOs into the home page's client bundle. Import `consent` / `account-label`
   directly.
-- Copy: same-named accounts can't be told apart; the alert title is singular for many banks;
-  "picks up where it left off" for several accounts; the error-only banner has no next step;
-  nothing says what RedBark is.
-- A11y: "Open RedBark" doesn't say it opens a new tab; hover drops the underline; the link is
-  20 px tall; a long unbroken name overflows at 375 (`break-words`).
-- Test gap: the local-day test uses `render()`, not hydration, so it passes without the
-  gate; "renders nothing when healthy" passes `[]`, not healthy rows.
-- Smells (judgement): `SYNCING_CONSENT` (`cdr-sync.service.ts:24-27`) and the inline Expiring
-  checks still sit outside `consent.ts`; the test fixture is copied across two files;
-  `inRedBark` reads like a place (`linksToRedBark`).
-- Out of scope, seen in review: the Balance card's "As of" line shows a stray ","
-  ("As of 21 Oct 2026 · , Synced from bank") and renders `formatDate` on the server in UTC.
+- **No lasting clear** for a bank closed on purpose: the X only lasts until reload, and rows
+  are never deleted (code review ties this to a gone-from-RedBark account failing every run).
+- A11y: dismiss drops focus to `<body>`; the status mounts with its text inside, so it may
+  not be announced; the X's focus halo is ~2:1 in light; hover drops the link's underline;
+  a long name breaks mid-word.
+- Copy: behind / stalled lines give no next step; nothing says what RedBark is; "lose access
+  soon" has no timeframe; "Reauthorize in RedBark's dashboard" repeats in one paragraph; the
+  paragraph gap (`space-y-1`) is too tight; "Reauthorize" is US spelling.
+- Smells (judgement): Expiring still checked inline in two files; `dead.length > 0` checked
+  three times in `connectionNotice`; the `CdrSyncState` test builder is copied three times;
+  two "name + masked number" formats; `"alert" | "warn"` typed twice; the `s` plural helper
+  shadows `s`; `now` param unused outside tests (which fake the clock).
+- Out of scope, seen in review: the Balance card's "As of" line shows a stray "," and renders
+  `formatDate` on the server in UTC; at 375 the cash-flow chart scrolls the page sideways and
+  the nav icon overlaps the wordmark.
 
 ---
 
