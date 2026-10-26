@@ -1,5 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CdrSyncState } from "~/domain/cdr";
 import { CdrConnectionStatus } from "~/lib/constants";
 import { formatDate } from "~/lib/utils";
 import {
@@ -7,40 +9,60 @@ import {
 	ClientConnectionNotice,
 } from "./cdr-connection-notice";
 
+function account(overrides: Partial<CdrSyncState> = {}): CdrSyncState {
+	return {
+		accountId: "acc_1",
+		accountName: "Everyday",
+		accountNumber: null,
+		balance: null,
+		balanceAsOf: null,
+		connectionId: "con_1",
+		connectionStatus: CdrConnectionStatus.Active,
+		createdAt: new Date("2026-10-01T00:00:00Z"),
+		highWaterMark: null,
+		id: 1,
+		inBalance: true,
+		institutionName: null,
+		lastError: null,
+		lastSyncedAt: new Date(),
+		nickname: null,
+		updatedAt: null,
+		...overrides,
+	};
+}
+
 describe("ClientConnectionNotice", () => {
-	it("builds the notice in the browser, with the last sync in local time", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("leaves the server HTML empty and builds the notice once hydrated", async () => {
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 		const lastSyncedAt = new Date("2026-10-21T18:00:00Z");
-		render(
+		const ui = (
 			<ClientConnectionNotice
-				states={[
-					{
-						accountId: "acc_1",
-						accountName: "Everyday",
-						accountNumber: null,
-						balance: null,
-						balanceAsOf: null,
-						connectionId: "con_1",
-						connectionStatus: CdrConnectionStatus.Active,
-						createdAt: new Date("2026-10-01T00:00:00Z"),
-						highWaterMark: null,
-						id: 1,
-						inBalance: true,
-						institutionName: null,
-						lastError: "boom",
-						lastSyncedAt,
-						nickname: null,
-						updatedAt: null,
-					},
-				]}
-			/>,
+				states={[account({ lastError: "boom", lastSyncedAt })]}
+			/>
 		);
+		const container = document.createElement("div");
+		container.innerHTML = renderToString(ui);
+		expect(container).toBeEmptyDOMElement();
+		document.body.appendChild(container);
+
+		await act(async () => render(ui, { container, hydrate: true }));
+
 		expect(screen.getByRole("status")).toHaveTextContent(
 			`Everyday hasn't synced since ${formatDate(lastSyncedAt)}.`,
 		);
+		expect(errors).not.toHaveBeenCalled();
 	});
 
 	it("renders nothing when every account is healthy", () => {
-		const { container } = render(<ClientConnectionNotice states={[]} />);
+		const { container } = render(
+			<ClientConnectionNotice
+				states={[account(), account({ accountId: "acc_2", id: 2 })]}
+			/>,
+		);
 		expect(container).toBeEmptyDOMElement();
 	});
 });
@@ -50,8 +72,8 @@ describe("CdrConnectionNotice", () => {
 		render(
 			<CdrConnectionNotice
 				notice={{
-					detail: "Everyday hasn't synced yet.",
-					inRedBark: false,
+					behind: "Everyday hasn't synced yet.",
+					reauthorize: null,
 					title: "Bank sync is behind",
 					tone: "warn",
 				}}
@@ -68,9 +90,9 @@ describe("CdrConnectionNotice", () => {
 		render(
 			<CdrConnectionNotice
 				notice={{
-					detail:
+					behind: null,
+					reauthorize:
 						"Syncing has stopped for Everyday and Savings. Reauthorize in RedBark's dashboard and it picks up where it left off.",
-					inRedBark: true,
 					title: "Reauthorize your bank connection",
 					tone: "alert",
 				}}
@@ -80,9 +102,27 @@ describe("CdrConnectionNotice", () => {
 		expect(status).toHaveTextContent("Reauthorize your bank connection");
 		expect(status).toHaveTextContent("Everyday and Savings");
 		expect(screen.queryByRole("alert")).toBeNull();
-		expect(screen.getByRole("link", { name: "Open RedBark" })).toHaveAttribute(
-			"href",
-			"https://app.redbark.com",
+		expect(
+			screen.getByRole("link", { name: "Open RedBark (opens in new tab)" }),
+		).toHaveAttribute("href", "https://app.redbark.com");
+	});
+
+	it("puts the link with the reauthorize line and the behind lines after it", () => {
+		render(
+			<CdrConnectionNotice
+				notice={{
+					behind: "Savings hasn't synced yet.",
+					reauthorize: "Everyday will lose access soon.",
+					title: "Bank connection expiring",
+					tone: "warn",
+				}}
+			/>,
 		);
+		const link = screen.getByRole("link", { name: /^Open RedBark/ });
+		expect(link.closest("p")).toHaveTextContent(
+			"Everyday will lose access soon.",
+		);
+		expect(link.closest("p")).not.toHaveTextContent("Savings");
+		expect(screen.getByText("Savings hasn't synced yet.")).toBeInTheDocument();
 	});
 });

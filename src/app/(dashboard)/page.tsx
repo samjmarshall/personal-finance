@@ -18,12 +18,6 @@ export default function DashboardPage() {
 				title="Overview"
 			/>
 
-			{/* Invisible gate: nothing while loading, and a failed read hides the
-			    banner rather than putting an error card above the page. */}
-			<AsyncBoundary label="bank connections" skeleton={null}>
-				<CdrConnectionBanner />
-			</AsyncBoundary>
-
 			{/* Spacing sits outside each boundary, so the skeleton, content and
 			    error card all keep the same gap. */}
 			<div className="mt-6">
@@ -43,6 +37,13 @@ export default function DashboardPage() {
 					<SpendCharts />
 				</AsyncBoundary>
 			</div>
+
+			{/* Invisible gate: nothing while loading, and a failed read hides the
+			    banner rather than putting an error card on the page. Last, so the
+			    banner floats over the page instead of pushing it down. */}
+			<AsyncBoundary label="bank connections" skeleton={null}>
+				<CdrConnectionBanner />
+			</AsyncBoundary>
 		</div>
 	);
 }

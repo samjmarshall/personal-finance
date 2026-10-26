@@ -1014,8 +1014,9 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
     an import (see the re-link runbook).
   - When both kinds are present, alert wins.
 - `src/app/(dashboard)/_components/cdr-connection-notice.tsx` — props-driven
-  `CdrConnectionNotice({ notice })`, no data calls. It shows a `role="status"` (warn) or
-  `role="alert"` (alert) banner:
+  `CdrConnectionNotice({ notice })`, no data calls. It shows a `role="status"` banner for both
+  tones (*changed in validation 2026-10-25:* `role="alert"` re-announced a lasting state on
+  every visit):
   - Tokens: `--badge-warn-*` / `--badge-spend-*` (`src/styles/globals.css:78-90`).
   - Shape: like `MatchBanner` (`src/app/(dashboard)/receipts/_components/receipt-detail.tsx:89-213`).
 - `src/app/(dashboard)/_components/cdr-connection-banner.tsx` — async **server** component
@@ -1023,12 +1024,21 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
   `HydrateClient`). It awaits `api.cdr.syncState()` (`~/trpc/server`), runs
   `connectionNotice`, and renders nothing for `null`, else `CdrConnectionNotice`. The banner
   carries its own top margin, since it usually renders nothing.
+  *Changed in validation 2026-10-25 (4348e3e):* it passes the rows to a client
+  `ClientConnectionNotice`, which runs `connectionNotice` after mount so "since" is the
+  member's local day, not the server's UTC day.
 - `src/app/(dashboard)/page.tsx` — mount
   `<AsyncBoundary label="bank connections" skeleton={null}><CdrConnectionBanner /></AsyncBoundary>`
-  between `PageHeader` (`:15-18`) and the summary section (`:22-26`). The invisible gate
+  between `PageHeader` (`:16-19`) and the summary section (`:29-33`). The invisible gate
   (adr027) shows nothing while loading, and a failed read hides the banner (still logged)
   instead of putting an error card above the page. Dashboard only: `(dashboard)/_components/`
   is the home page's folder (`.claude/rules/ui-components.md`).
+  *Changed in resolve-findings 2026-10-26 (CLS High):* the boundary moved to the end of the
+  page, and the notice renders in a new generic `AttentionBanner`
+  (`(dashboard)/_components/attention-banner.tsx`). It's `sticky bottom-4`, so it floats at the
+  screen's bottom, takes its own space at the page's end, and moves nothing above it. An "X"
+  dismisses it in client state only, so it comes back on reload. The banner moves to
+  `src/components/` when a second page uses it.
 - **Unplanned:** synced Spend with no `expenseId` already lands in the queue
   (`transactions.repository.ts:267-291`: `amount > 0 AND expenseId IS NULL`). Verify; no new
   surface (adr017 Positive Consequences).
@@ -1036,9 +1046,9 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
   - `cdr-connection.display.test.ts` — each status → its notice; an `active` account with
     `lastError` → warn naming it and its last sync date, not the error text; mixed → alert wins;
     empty → null.
-  - `cdr-connection-notice.test.tsx` (jsdom) — a warn notice renders `role="status"`, an alert
-    notice renders `role="alert"` with the account names and the reauthorize copy (queried by role
-    and text).
+  - `cdr-connection-notice.test.tsx` (jsdom) — both tones render `role="status"`; an alert
+    notice carries the account names, the reauthorize copy and the "Open RedBark" link
+    (queried by role and text).
 
 ### Success
 - [x] `make check` passes
@@ -1047,6 +1057,13 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
       — run 2026-10-22, no blockers, one High open: the banner streams in after the sections
       and pushes the page down (CLS 0.123 at 375, 0.060 at 768, 0.037 at 1440; 0 with no
       banner). Contrast passes both tones and themes. Fix, then re-run.
+      — re-run 2026-10-25 after 4348e3e: still no blockers, **3 Highs open**. (1) CLS is
+      unchanged (0.123 / 0.060 / 0.037 revoked; 0.140 at 375 expiring + error). The
+      hydration gate isn't the cause (hydration ~150 ms, data ~236 ms): the `skeleton={null}`
+      boundary holds no space, so the banner always lands after first paint. (2) Expiring +
+      stuck titles "Bank sync is behind", losing the expiry. (3) "Open RedBark" sits after the
+      stuck lines, so it reads as their fix. Date fix, `role="status"`, contrast and no
+      `Date.now()` prerender error all check out.
 - [x] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
       — 2026-10-22, DB flips on the branch: `revoked` → `role="alert"` reauthorize banner
@@ -1054,26 +1071,50 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
       `lastError` → "Bank sync is behind … since 21 Oct 2026", no error text; revoked +
       `lastError` → alert only. All healthy → no banner. Empty list and the sync skip rest on
       unit tests (`connectionNotice([])`, Phase 4 consent tests, Phase 5 proxy check).
+      — rechecked 2026-10-25 after 4348e3e: the same flips show both tones as
+      `role="status"`, "Open RedBark" on revoked / expiring, and "since" shows the Sydney
+      day, not the UTC one.
 - [x] A failing `cdr.syncState` read hides the banner; the header and every other section
       still render
       — 2026-10-22, table renamed with a `revoked` row in it: no banner, header + summary +
-      cash flow + spending render, the failed query is logged.
+      cash flow + spending render, the failed query is logged. Rechecked 2026-10-25 after
+      4348e3e: same result, `TRPCError: Failed query` logged from `<CdrConnectionBanner>`.
 - [x] *Unplanned:* 296 synced Spend rows (30 days) have no `expenseId`; `findUnplanned` has no
       provenance filter, so they land in the queue.
 
-Open from validation 2026-10-22 (see `/resolve-findings`):
-- **Wrong day.** The banner is a server component, so `formatDate(lastSyncedAt)` runs in the
-  server's zone (UTC on Vercel). The 18:00 UTC cron is the next morning in Sydney, so "since"
-  reads a day early.
-- **Layout shift** (design review High, above).
-- `role="alert"` re-announces a lasting state on every visit; use `status` for both tones.
-- Copy: no RedBark link; plural lists use "it"; same-named accounts can't be told apart;
-  an alert hides other banks' warn lines; expiring + stuck loses the expiry title.
-- Duplicates: `DEAD` copies `DEAD_CONSENT` (`cdr-sync.service.ts:23`); `accountLabel` copies
-  `settings/_components/bank-accounts.display.ts:12`.
-- A cold first dev load logs Next's "unstable `Date.now()` while prerendering" at
-  `page.tsx:24` (`flushAfterResponse` before `headers()`). Gone on reload; `make build` is
-  clean. Check whether `await io()` in the banner (as `cash-flow-section.tsx:16`) clears it.
+Fixed from validation 2026-10-22 (1630bdc, 4348e3e): the wrong "since" day, `role="alert"`,
+no RedBark link, "it" in plural lists, the `DEAD` / `accountLabel` copies (now
+`src/domain/cdr/consent.ts`, `account-label.ts`), and the dev `Date.now()` prerender error
+(`await io()` in the banner).
+
+Open from validation 2026-10-25 (see `/resolve-findings`):
+- **Layout shift** (design review High 1). The likely fix: await `syncState` in the page (a
+  failed read → null), render the box on the server, and build only the date on the client.
+- **Expiring + stuck** (High 2, 3): the title loses the expiry, and "Open RedBark" trails the
+  stuck lines.
+- **No banner when the whole run fails.** Only a per-account `lastError` counts as stuck. A dead
+  key, a discovery throw, or a stopped cron leaves no `lastError`, so numbers go stale with
+  nothing on screen. Consider a stale `lastSyncedAt` check.
+- **An alert hides other banks' lines** (`cdr-connection.display.ts:29` returns early).
+- **No way to clear a banner** for a bank closed on purpose: rows are never deleted, so a
+  revoked or "not in RedBark" account nags forever.
+- **Full rows reach the client**: `lastError` text, account numbers and balances sit in the
+  RSC payload, though the banner never shows them. Pass only the fields it needs.
+- **Barrel import**: `cdr-connection.display.ts:1` imports `~/domain/cdr`, which pulls zod and
+  the RedBark DTOs into the home page's client bundle. Import `consent` / `account-label`
+  directly.
+- Copy: same-named accounts can't be told apart; the alert title is singular for many banks;
+  "picks up where it left off" for several accounts; the error-only banner has no next step;
+  nothing says what RedBark is.
+- A11y: "Open RedBark" doesn't say it opens a new tab; hover drops the underline; the link is
+  20 px tall; a long unbroken name overflows at 375 (`break-words`).
+- Test gap: the local-day test uses `render()`, not hydration, so it passes without the
+  gate; "renders nothing when healthy" passes `[]`, not healthy rows.
+- Smells (judgement): `SYNCING_CONSENT` (`cdr-sync.service.ts:24-27`) and the inline Expiring
+  checks still sit outside `consent.ts`; the test fixture is copied across two files;
+  `inRedBark` reads like a place (`linksToRedBark`).
+- Out of scope, seen in review: the Balance card's "As of" line shows a stray ","
+  ("As of 21 Oct 2026 · , Synced from bank") and renders `formatDate` on the server in UTC.
 
 ---
 
