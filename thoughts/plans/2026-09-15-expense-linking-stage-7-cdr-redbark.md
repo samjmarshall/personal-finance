@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Validated - Phase 5 of 9
+status: Validated - Phase 6 of 9
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -1053,7 +1053,7 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
 ### Success
 - [x] `make check` passes
 - [x] `make test` passes
-- [ ] `/design-review` (connection-status banner)
+- [x] `/design-review` (connection-status banner)
       — run 2026-10-22, no blockers, one High open: the banner streams in after the sections
       and pushes the page down (CLS 0.123 at 375, 0.060 at 768, 0.037 at 1440; 0 with no
       banner). Contrast passes both tones and themes. Fix, then re-run.
@@ -1070,6 +1070,11 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
       covers a focused control (the "Update balance" input fully, "Chart period" half;
       WCAG 2.4.11). Second reviewer's High (call it Medium): with dead + expiring banks the
       title only counts the dead one.
+      — re-run 2026-10-26 after ac44037: **no blockers, no Highs.** On a Tab sweep (both ways)
+      at 375 / 768 / 1440, every focused control stays at least 8 px clear of the banner.
+      Scroll padding = banner height + 24 px, it follows a resize, and dismiss clears it.
+      CLS is 0 in every state. Dead + expiring gives "Reauthorize your bank connections".
+      Contrast passes. The Mediums are listed under Open below.
 - [x] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
       — 2026-10-22, DB flips on the branch: `revoked` → `role="alert"` reauthorize banner
@@ -1102,30 +1107,55 @@ days), an alert hiding other banks' lines, same-named accounts, plural titles, "
 tab", long-name overflow, both test gaps, `SYNCING_CONSENT` (now `isSyncingConsent`). Five
 comments tightened in validation (page, banner, display).
 
-Open from validation 2026-10-26 (see `/resolve-findings`):
-- **Banner covers focused controls at 375** (design review High, WCAG 2.4.11). Reserve its
-  height with `scroll-padding-bottom`, or drop sticky on small screens.
-- **Dead + expiring title** counts only the dead bank (singular with two to fix).
+Fixed from validation 2026-10-26 (ac44037; re-validated 2026-10-26): the banner covering
+focused controls (`scroll-padding-bottom` set from the banner's height), the dead + expiring
+title, the barrel import (−21.6 KB gz on home), the unused `now` param. One comment
+tightened in validation (`attention-banner.tsx:52`).
+
+Open from re-validation 2026-10-26 (see `/resolve-findings`). None blocks the phase:
+- **Same account said twice** (`cdr-connection.display.ts:90-93`). When every live account is
+  stuck, the stalled line and each behind line both show: "No bank account has synced since
+  21 Oct. Everyday hasn't synced since 21 Oct."
+- **Wrong "since" day in the stalled line** (`cdr-connection.display.ts:53-59`). A live account
+  that never synced counts its `createdAt` as a sync, so the line can name a day nothing
+  synced (A synced 10 Oct, B added 15 Oct → "since 15 Oct").
+- **Dismiss lasts until the dashboard remounts, not until reload** (`attention-banner.tsx:15`
+  doc, and this plan's "comes back on reload"). Leaving the page and coming back brings it
+  back. A notice that gets worse while the banner stays mounted stays hidden.
+- **Global scroll padding** (`attention-banner.tsx:57-68`). It writes `<html>`'s
+  `scrollPaddingBottom` and resets it to `""`, not to the old value. A second banner
+  would overwrite it. Matters once the banner moves to `src/components/`.
+- **Sidebar jump at 1440** (design review Medium). Tabbing to "Sign out" in the sticky
+  sidebar scrolls the page 469 px, because the padding covers a part of the screen the
+  banner never reaches. The next Tab jumps back.
+- **Tall on small phones** (design review Medium). The alert takes 302 px (53%) at 320×568,
+  mostly because "Reauthorize in RedBark's dashboard" repeats.
+- **`ROOM_ABOVE_PX = 24` copies `bottom-4`** by hand. A larger root font or a new offset
+  lets them drift apart.
+- **Plural counts a null `connectionId` as one bank** (`cdr-connection.display.ts:98`).
+  Unlikely: discovery always sets it.
 - **Full rows reach the client** (`cdr-connection-banner.tsx:10`): `lastError` text, account
   numbers and balances sit in the RSC payload. Pass only the fields it needs.
-- **Barrel import**: `cdr-connection.display.ts:1-6` imports `~/domain/cdr`, which may pull zod
-  and the RedBark DTOs into the home page's client bundle. Import `consent` / `account-label`
-  directly.
-- **No lasting clear** for a bank closed on purpose: the X only lasts until reload, and rows
-  are never deleted (code review ties this to a gone-from-RedBark account failing every run).
-- A11y: dismiss drops focus to `<body>`; the status mounts with its text inside, so it may
-  not be announced; the X's focus halo is ~2:1 in light; hover drops the link's underline;
-  a long name breaks mid-word.
-- Copy: behind / stalled lines give no next step; nothing says what RedBark is; "lose access
-  soon" has no timeframe; "Reauthorize in RedBark's dashboard" repeats in one paragraph; the
-  paragraph gap (`space-y-1`) is too tight; "Reauthorize" is US spelling.
-- Smells (judgement): Expiring still checked inline in two files; `dead.length > 0` checked
-  three times in `connectionNotice`; the `CdrSyncState` test builder is copied three times;
-  two "name + masked number" formats; `"alert" | "warn"` typed twice; the `s` plural helper
-  shadows `s`; `now` param unused outside tests (which fake the clock).
-- Out of scope, seen in review: the Balance card's "As of" line shows a stray "," and renders
-  `formatDate` on the server in UTC; at 375 the cash-flow chart scrolls the page sideways and
-  the nav icon overlaps the wordmark.
+- **No lasting clear** for a bank closed on purpose. Rows are never deleted, and code review
+  ties this to a gone-from-RedBark account failing every run.
+- A11y: dismiss drops focus to `<body>`. The status mounts with its text inside, so it may
+  not be announced. The X's focus halo is ~2:1 in light and its tap area is 28×28 on
+  mobile. Hover drops the link's underline. A long name breaks mid-word. The link's green
+  focus ring clashes on red.
+- Copy: behind / stalled lines give no next step. Nothing says what RedBark is. "Lose access
+  soon" has no timeframe. "Reauthorize in RedBark's dashboard" repeats in one paragraph. The
+  paragraph gap (`space-y-1`) is too tight. "Reauthorize" is US spelling. The title doesn't
+  stand out at 375. A same-day failure reads "hasn't synced since" today.
+- Smells (judgement): Expiring is still checked inline in two files. `dead.length > 0` is
+  checked three times in `connectionNotice`. The `CdrSyncState` test builder is copied three
+  times. There are two "name + masked number" formats. `"alert" | "warn"` is typed twice. The
+  `s` plural helper shadows `s`, and `lead` is vague. `(accounts, label)` travel together.
+  The pre-joined `reauthorize` / `behind` strings make the component re-check both.
+  `AttentionBanner` mixes tone, dismiss and the scroll-padding side effect.
+- Out of scope, seen in review: the Balance card's "As of" line renders `formatDate` on the
+  server in UTC (its stray "," wasn't seen on 2026-10-26). At 375 the cash-flow chart scrolls
+  the page sideways and the nav icon overlaps the wordmark. At 375 / 768 the sticky top
+  header can cover a control focused by Shift+Tab (no `scroll-padding-top`).
 
 ---
 
