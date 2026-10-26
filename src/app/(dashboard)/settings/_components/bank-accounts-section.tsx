@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import type { CdrSyncState } from "~/domain/cdr";
 import { api } from "~/trpc/react";
 import { BankAccountRow } from "./bank-account-row";
@@ -12,9 +13,12 @@ import {
 } from "./bank-accounts.display";
 import { SettingsSection } from "./settings-section";
 
+const SAVE_QUEUE = "bank-account-settings";
+
 export function BankAccountsSection() {
 	const [accounts] = api.cdr.syncState.useSuspenseQuery();
 	const utils = api.useUtils();
+	const queryClient = useQueryClient();
 
 	const putRow = (accountId: string, change: Partial<CdrSyncState>) =>
 		utils.cdr.syncState.setData(undefined, (rows) =>
@@ -22,10 +26,16 @@ export function BankAccountsSection() {
 				row.accountId === accountId ? { ...row, ...change } : row,
 			),
 		);
-	// The saved row replaces the guess. On error the refetch undoes it, and the
-	// global MutationCache shows the toast (src/trpc/query-client.ts).
+	// One queue keeps saves in click order; only the last puts its row in, or an
+	// old value flashes. On error a refetch undoes the guess (toast: src/trpc/query-client.ts).
 	const settle = {
-		onSuccess: (row: CdrSyncState) => putRow(row.accountId, row),
+		scope: { id: SAVE_QUEUE },
+		onSuccess: (row: CdrSyncState) => {
+			const queued = queryClient.isMutating({
+				predicate: (m) => m.options.scope?.id === SAVE_QUEUE,
+			});
+			if (queued === 1) putRow(row.accountId, row);
+		},
 		onError: () => utils.cdr.syncState.invalidate(),
 	};
 	const setInBalance = api.cdr.setInBalance.useMutation(settle);

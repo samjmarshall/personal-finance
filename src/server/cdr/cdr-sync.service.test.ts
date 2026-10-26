@@ -99,6 +99,7 @@ interface HarnessOptions {
 	saved?: CdrSyncState[];
 	rows?: Record<string, RedbarkTransaction[]>;
 	listConnections?: () => Promise<RedbarkConnection[]>;
+	listSyncState?: () => Promise<CdrSyncState[]>;
 	listTransactions?: (accountId: string) => Promise<RedbarkTransaction[]>;
 	upsertSynced?: (rows: SyncedTransaction[]) => Promise<void>;
 	recordError?: (accountId: string) => Promise<void>;
@@ -126,7 +127,7 @@ function harness(opts: HarnessOptions = {}) {
 	const logs: LogEntry[] = [];
 
 	const repository: CdrRepository = {
-		listSyncState: async () => [...states.values()],
+		listSyncState: opts.listSyncState ?? (async () => [...states.values()]),
 		findSyncState: async (accountId) => states.get(accountId),
 		upsertAccount: async (a) => {
 			calls.push(`upsertAccount ${a.accountId}`);
@@ -408,6 +409,21 @@ describe("CdrSyncService.run", () => {
 				cause,
 			});
 		});
+	});
+
+	it("fails a sync state read without a retry, and fetches nothing", async () => {
+		const cause = new Error("connection terminated");
+		const h = harness({
+			listSyncState: async () => {
+				throw cause;
+			},
+		});
+
+		const error = await caught(h.service.run());
+
+		expect(error).toBeInstanceOf(CdrSyncError);
+		expect(error).toMatchObject({ retryable: false, cause });
+		expect(h.fetches).toEqual([]);
 	});
 
 	describe("consent", () => {

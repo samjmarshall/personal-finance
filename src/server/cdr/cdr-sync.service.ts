@@ -77,7 +77,12 @@ export class CdrSyncService {
 					"",
 			);
 
-		const states = await this.repository.listSyncState();
+		// A DB blip moved no cursor, so the next daily run is the retry.
+		const states = await this.repository
+			.listSyncState()
+			.catch((cause: unknown) => {
+				throw syncError("cdr sync state read failed", [cause]);
+			});
 		const failures: AccountFailure[] = [];
 		for (const saved of states) {
 			const account = accountsById.get(saved.accountId);
