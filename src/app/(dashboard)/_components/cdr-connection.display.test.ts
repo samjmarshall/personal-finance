@@ -65,7 +65,7 @@ describe("connectionNotice", () => {
 				account({ ...savings, connectionStatus: expiring }),
 			])?.reauthorize,
 		).toBe(
-			"Everyday and Savings will lose access soon. Reauthorize in RedBark's dashboard to keep syncing.",
+			"Everyday and Savings will lose access soon. Reauthorise in RedBark's dashboard to keep syncing.",
 		);
 		const revoked = CdrConnectionStatus.Revoked;
 		expect(
@@ -74,7 +74,7 @@ describe("connectionNotice", () => {
 				account({ ...savings, connectionStatus: revoked }),
 			])?.reauthorize,
 		).toBe(
-			"Syncing has stopped for Everyday and Savings. Reauthorize in RedBark's dashboard and it picks up where it left off.",
+			"Syncing has stopped for Everyday and Savings. Reauthorise in RedBark's dashboard and it picks up where it left off.",
 		);
 	});
 
@@ -88,7 +88,7 @@ describe("connectionNotice", () => {
 			account({ accountId: "acc_2", accountName: "Savings", id: 2 }),
 		]);
 		expect(notice?.tone).toBe("alert");
-		expect(notice?.title).toMatch(/reauthorize/i);
+		expect(notice?.title).toMatch(/reauthorise/i);
 		expect(notice?.reauthorize).toContain("Everyday");
 		expect(notice?.reauthorize).not.toContain("Savings");
 		expect(notice?.behind).toBeNull();
@@ -103,7 +103,7 @@ describe("connectionNotice", () => {
 				account({ connectionStatus: revoked }),
 				account({ ...savings, connectionStatus: revoked }),
 			])?.title,
-		).toBe("Reauthorize your bank connection");
+		).toBe("Reauthorise your bank connection");
 		expect(
 			connectionNotice([
 				account({ connectionStatus: revoked }),
@@ -113,7 +113,7 @@ describe("connectionNotice", () => {
 					connectionStatus: revoked,
 				}),
 			])?.title,
-		).toBe("Reauthorize your bank connections");
+		).toBe("Reauthorise your bank connections");
 		// An expiring bank needs a reauthorize too, so it counts.
 		expect(
 			connectionNotice([
@@ -124,7 +124,7 @@ describe("connectionNotice", () => {
 					connectionStatus: expiring,
 				}),
 			])?.title,
-		).toBe("Reauthorize your bank connections");
+		).toBe("Reauthorise your bank connections");
 		expect(
 			connectionNotice([
 				account({ connectionStatus: expiring }),
@@ -204,6 +204,24 @@ describe("connectionNotice", () => {
 		);
 	});
 
+	it("doesn't name a live stuck account again when the whole sync has stalled", () => {
+		vi.setSystemTime(new Date("2026-10-21T00:00:00Z"));
+		expect(
+			connectionNotice([
+				account({ lastError: "boom" }),
+				account({
+					accountId: "acc_2",
+					accountName: "Savings",
+					connectionStatus: CdrConnectionStatus.Pending,
+					id: 2,
+					lastError: "not in RedBark",
+				}),
+			])?.behind,
+		).toBe(
+			`No bank account has synced since ${formatDate("2026-10-18T03:00:00Z")}. Savings hasn't synced since ${formatDate("2026-10-18T03:00:00Z")}.`,
+		);
+	});
+
 	it("is null when the newest sync is exactly two days old", () => {
 		vi.setSystemTime(new Date("2026-10-20T03:00:00Z"));
 		expect(connectionNotice([account()])).toBeNull();
@@ -213,6 +231,24 @@ describe("connectionNotice", () => {
 		vi.setSystemTime(new Date("2026-10-04T00:00:00Z"));
 		expect(connectionNotice([account({ lastSyncedAt: null })])?.behind).toBe(
 			"No bank account has synced yet.",
+		);
+	});
+
+	it("dates a stall from the last real sync, not a newer never-synced account", () => {
+		vi.setSystemTime(new Date("2026-10-20T00:00:00Z"));
+		expect(
+			connectionNotice([
+				account({ lastSyncedAt: new Date("2026-10-10T03:00:00Z") }),
+				account({
+					accountId: "acc_2",
+					accountName: "Savings",
+					createdAt: new Date("2026-10-15T03:00:00Z"),
+					id: 2,
+					lastSyncedAt: null,
+				}),
+			])?.behind,
+		).toBe(
+			`No bank account has synced since ${formatDate("2026-10-10T03:00:00Z")}.`,
 		);
 	});
 
@@ -242,9 +278,10 @@ describe("connectionNotice", () => {
 			}),
 		]);
 		expect(notice?.tone).toBe("alert");
-		expect(notice?.title).toBe("Reauthorize your bank connection");
-		expect(notice?.reauthorize).toContain("Syncing has stopped for Savings.");
-		expect(notice?.reauthorize).toContain("Everyday will lose access soon.");
+		expect(notice?.title).toBe("Reauthorise your bank connection");
+		expect(notice?.reauthorize).toBe(
+			"Syncing has stopped for Savings. Everyday will lose access soon. Reauthorise them in RedBark's dashboard.",
+		);
 		expect(notice?.behind).toContain("Bills hasn't synced since");
 	});
 
@@ -261,7 +298,7 @@ describe("connectionNotice", () => {
 		expect(notice?.tone).toBe("warn");
 		expect(notice?.title).toBe("Bank connection expiring");
 		expect(notice?.reauthorize).toBe(
-			"Everyday will lose access soon. Reauthorize in RedBark's dashboard to keep syncing.",
+			"Everyday will lose access soon. Reauthorise in RedBark's dashboard to keep syncing.",
 		);
 		expect(notice?.behind).toBe(
 			`Savings hasn't synced since ${formatDate("2026-10-18T03:00:00Z")}.`,

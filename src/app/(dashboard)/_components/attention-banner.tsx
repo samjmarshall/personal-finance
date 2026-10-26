@@ -12,7 +12,7 @@ const TONES = {
 	warn: "border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] text-[var(--badge-warn-fg)]",
 } as const;
 
-/** Floats at the bottom of the screen; render it last on the page. Dismissed until the page reloads. */
+/** Floats at the bottom of the screen; render it last on the page. Dismissed until the page mounts again (a reload, or coming back to it). */
 export function AttentionBanner({
 	children,
 	tone,
@@ -37,8 +37,12 @@ export function AttentionBanner({
 			<Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
 			<div className="wrap-anywhere min-w-0 flex-1">{children}</div>
 			<Button
-				className="-my-1 hover:bg-current/10 hover:text-current dark:hover:bg-current/10"
-				onClick={() => setDismissed(true)}
+				className="-my-1 hover:bg-current/10 hover:text-current focus-visible:border-current focus-visible:ring-current/50 dark:hover:bg-current/10"
+				onClick={(e) => {
+					if (document.activeElement === e.currentTarget)
+						focusBefore(e.currentTarget);
+					setDismissed(true);
+				}}
 				size="icon-sm"
 				variant="ghost"
 			>
@@ -49,7 +53,23 @@ export function AttentionBanner({
 	);
 }
 
-// The bottom-4 offset plus a little air above the banner.
+const TABBABLE =
+	'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// The X removes itself, which drops focus to the page top and loses a screen
+// reader's place. The banner is last, so hand focus to the control before it.
+function focusBefore(dismiss: HTMLElement) {
+	const banner = dismiss.closest("[role=status]");
+	if (!banner) return;
+	const before = [...document.querySelectorAll<HTMLElement>(TABBABLE)].filter(
+		(el) =>
+			el.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING &&
+			el.checkVisibility?.() !== false,
+	);
+	before.at(-1)?.focus();
+}
+
+// 16px float gap below the banner, plus 8px of air above it.
 const ROOM_ABOVE_PX = 24;
 
 // A field focused by Tab would scroll in under the banner (WCAG 2.4.11); padding the

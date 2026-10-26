@@ -54,8 +54,10 @@ function stalledLine(states: CdrSyncState[]): string | null {
 		...live.map((s) => (s.lastSyncedAt ?? s.createdAt).getTime()),
 	);
 	if (Date.now() - newest <= STALLED_AFTER_MS) return null;
-	return live.some((s) => s.lastSyncedAt)
-		? `No bank account has synced since ${formatDate(new Date(newest))}.`
+	// The day shown is a real sync; a newer find date only delays the warning.
+	const synced = live.flatMap((s) => s.lastSyncedAt ?? []);
+	return synced.length > 0
+		? `No bank account has synced since ${formatDate(new Date(Math.max(...synced.map((d) => d.getTime()))))}.`
 		: "No bank account has synced yet.";
 }
 
@@ -75,33 +77,43 @@ export function connectionNotice(
 	const stalled = stalledLine(states);
 	const label = labeller(states);
 
+	// Each problem once, then one fix, so a phone banner doesn't say it twice.
 	const reauthorizeLines = [
 		...(dead.length > 0
-			? [
-					`Syncing has stopped for ${names(dead, label)}. Reauthorize in RedBark's dashboard and it picks up where it left off.`,
-				]
+			? [`Syncing has stopped for ${names(dead, label)}.`]
 			: []),
 		...(expiring.length > 0
-			? [
-					`${names(expiring, label)} will lose access soon. Reauthorize in RedBark's dashboard to keep syncing.`,
-				]
+			? [`${names(expiring, label)} will lose access soon.`]
 			: []),
 	];
-	const behindLines = [
-		...(stalled ? [stalled] : []),
-		...stuck.map((a) => behindLine(a, label)),
-	];
+	if (reauthorizeLines.length > 0)
+		reauthorizeLines.push(
+			dead.length === 0
+				? "Reauthorise in RedBark's dashboard to keep syncing."
+				: expiring.length === 0
+					? "Reauthorise in RedBark's dashboard and it picks up where it left off."
+					: "Reauthorise them in RedBark's dashboard.",
+		);
+	// A stalled run already covers every live account; don't name them again.
+	const behindLines = stalled
+		? [
+				stalled,
+				...stuck
+					.filter((a) => !isSyncingConsent(a.connectionStatus))
+					.map((a) => behindLine(a, label)),
+			]
+		: stuck.map((a) => behindLine(a, label));
 	if (reauthorizeLines.length === 0 && behindLines.length === 0) return null;
 
 	// Title leads with the most urgent issue. Plural counts banks, not accounts:
 	// one bank's accounts share one connection.
-	const s = (accounts: CdrSyncState[]) =>
+	const plural = (accounts: CdrSyncState[]) =>
 		new Set(accounts.map((a) => a.connectionId)).size > 1 ? "s" : "";
 	const title =
 		dead.length > 0
-			? `Reauthorize your bank connection${s([...dead, ...expiring])}`
+			? `Reauthorise your bank connection${plural([...dead, ...expiring])}`
 			: expiring.length > 0
-				? `Bank connection${s(expiring)} expiring`
+				? `Bank connection${plural(expiring)} expiring`
 				: "Bank sync is behind";
 	return {
 		behind: behindLines.length > 0 ? behindLines.join(" ") : null,

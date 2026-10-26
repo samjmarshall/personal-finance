@@ -22,17 +22,17 @@ export function ClientConnectionNotice({ states }: { states: CdrSyncState[] }) {
 export function CdrConnectionNotice({ notice }: { notice: ConnectionNotice }) {
 	// The link follows the lines it fixes; behind lines get their own paragraph
 	// so it never reads as their fix.
-	const lead = notice.reauthorize ?? notice.behind;
+	const firstLine = notice.reauthorize ?? notice.behind;
 	return (
 		<AttentionBanner tone={notice.tone}>
 			<div className="space-y-1">
 				<p>
-					<span className="font-medium">{notice.title}.</span> {lead}
+					<span className="font-medium">{notice.title}.</span> {firstLine}
 					{notice.reauthorize && (
 						<>
 							{" "}
 							<a
-								className="inline-flex items-center gap-1 rounded font-medium underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-ring"
+								className="inline-flex items-center gap-1 rounded font-medium underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-current"
 								href={REDBARK_DASHBOARD}
 								rel="noreferrer"
 								target="_blank"

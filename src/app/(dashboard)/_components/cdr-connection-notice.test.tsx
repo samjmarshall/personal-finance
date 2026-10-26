@@ -34,10 +34,13 @@ function account(overrides: Partial<CdrSyncState> = {}): CdrSyncState {
 describe("ClientConnectionNotice", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
+		vi.useRealTimers();
 	});
 
 	it("leaves the server HTML empty and builds the notice once hydrated", async () => {
 		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-10-22T03:00:00Z"));
 		const lastSyncedAt = new Date("2026-10-21T18:00:00Z");
 		const ui = (
 			<ClientConnectionNotice
@@ -92,14 +95,14 @@ describe("CdrConnectionNotice", () => {
 				notice={{
 					behind: null,
 					reauthorize:
-						"Syncing has stopped for Everyday and Savings. Reauthorize in RedBark's dashboard and it picks up where it left off.",
-					title: "Reauthorize your bank connection",
+						"Syncing has stopped for Everyday and Savings. Reauthorise in RedBark's dashboard and it picks up where it left off.",
+					title: "Reauthorise your bank connection",
 					tone: "alert",
 				}}
 			/>,
 		);
 		const status = screen.getByRole("status");
-		expect(status).toHaveTextContent("Reauthorize your bank connection");
+		expect(status).toHaveTextContent("Reauthorise your bank connection");
 		expect(status).toHaveTextContent("Everyday and Savings");
 		expect(screen.queryByRole("alert")).toBeNull();
 		expect(

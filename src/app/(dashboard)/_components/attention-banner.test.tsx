@@ -22,6 +22,26 @@ describe("AttentionBanner", () => {
 		expect(screen.queryByRole("status")).toBeNull();
 	});
 
+	it("hands focus to the control before it when dismissed from the keyboard", async () => {
+		const user = userEvent.setup();
+		render(
+			<>
+				<button type="button">Chart period</button>
+				<AttentionBanner tone="alert">
+					Syncing has stopped. <a href="https://example.com">Open RedBark</a>
+				</AttentionBanner>
+			</>,
+		);
+		await user.tab();
+		await user.tab();
+		await user.tab();
+		expect(screen.getByRole("button", { name: "Dismiss" })).toHaveFocus();
+
+		await user.keyboard("{Enter}");
+		expect(screen.queryByRole("status")).toBeNull();
+		expect(screen.getByRole("button", { name: "Chart period" })).toHaveFocus();
+	});
+
 	it("keeps focused fields clear of it, until dismissed", async () => {
 		vi.stubGlobal(
 			"ResizeObserver",
