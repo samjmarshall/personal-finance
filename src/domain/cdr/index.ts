@@ -16,7 +16,7 @@ import {
 	redbarkTransactionDto,
 } from "./cdr.dto";
 import type { CdrSyncState } from "./cdr.interface";
-import { isDeadConsent } from "./consent";
+import { isDeadConsent, isSyncingConsent } from "./consent";
 import {
 	anchorFromBalances,
 	inBalanceByDefault,
@@ -40,6 +40,7 @@ export {
 	cdrSetNicknameDto,
 	inBalanceByDefault,
 	isDeadConsent,
+	isSyncingConsent,
 	latestBalance,
 	mapRedbarkTransaction,
 	NICKNAME_MAX_LENGTH,

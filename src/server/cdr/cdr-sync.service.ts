@@ -3,6 +3,7 @@ import {
 	type CdrSyncState,
 	inBalanceByDefault,
 	isDeadConsent,
+	isSyncingConsent,
 	latestBalance,
 	mapRedbarkTransaction,
 	type RedbarkAccount,
@@ -20,11 +21,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const BACKFILL_DAYS = 90;
 // Fetch filters by txn date, but a card row can post 5+ days later (long weekend).
 const OVERLAP_DAYS = 14;
-
-const SYNCING_CONSENT: CdrConnectionStatus[] = [
-	CdrConnectionStatus.Active,
-	CdrConnectionStatus.Expiring,
-];
 
 interface AccountFailure {
 	accountId: string;
@@ -114,7 +110,7 @@ export class CdrSyncService {
 			accounts
 				.filter((a) => {
 					const consent = statuses.get(a.connection);
-					return consent !== undefined && SYNCING_CONSENT.includes(consent);
+					return consent !== undefined && isSyncingConsent(consent);
 				})
 				.map((a) => a.id),
 		);
@@ -127,7 +123,7 @@ export class CdrSyncService {
 				!failed.has(saved.accountId) &&
 				account?.status === "available" &&
 				consent !== undefined &&
-				SYNCING_CONSENT.includes(consent)
+				isSyncingConsent(consent)
 			);
 		});
 		if (blocker) this.logger.info(`cdr balance anchor skipped: ${blocker}`);
