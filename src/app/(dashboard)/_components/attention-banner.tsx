@@ -12,7 +12,7 @@ const TONES = {
 	warn: "border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] text-[var(--badge-warn-fg)]",
 } as const;
 
-/** Floats at the bottom of the screen; render it last on the page. Dismissed until the page mounts again (a reload, or coming back to it). */
+/** Sticks to the screen's bottom edge; render it last on the page. Dismissal lasts until the page remounts. */
 export function AttentionBanner({
 	children,
 	tone,
@@ -39,8 +39,9 @@ export function AttentionBanner({
 			<Button
 				className="-my-1 hover:bg-current/10 hover:text-current focus-visible:border-current focus-visible:ring-current/50 dark:hover:bg-current/10"
 				onClick={(e) => {
-					if (document.activeElement === e.currentTarget)
-						focusBefore(e.currentTarget);
+					// Keyboard only: Chrome focuses a clicked button too, and moving
+					// focus up the page would scroll a mouse user away.
+					if (e.detail === 0) focusBefore(e.currentTarget);
 					setDismissed(true);
 				}}
 				size="icon-sm"
@@ -53,18 +54,25 @@ export function AttentionBanner({
 	);
 }
 
-const TABBABLE =
-	'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
+
+// Base UI keeps a disabled button at tabindex 0 and its form inputs hidden at -1,
+// so the selector alone lets in controls that refuse focus.
+const isTabbable = (el: HTMLElement) =>
+	el.tabIndex >= 0 &&
+	!el.matches(":disabled") &&
+	!el.closest("[aria-hidden=true], [inert]") &&
+	el.checkVisibility?.() !== false;
 
 // The X removes itself, which drops focus to the page top and loses a screen
 // reader's place. The banner is last, so hand focus to the control before it.
 function focusBefore(dismiss: HTMLElement) {
 	const banner = dismiss.closest("[role=status]");
 	if (!banner) return;
-	const before = [...document.querySelectorAll<HTMLElement>(TABBABLE)].filter(
+	const before = [...document.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
 		(el) =>
 			el.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING &&
-			el.checkVisibility?.() !== false,
+			isTabbable(el),
 	);
 	before.at(-1)?.focus();
 }

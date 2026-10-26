@@ -11,12 +11,12 @@ const SYNCING: ReadonlySet<CdrConnectionStatus> = new Set([
 	CdrConnectionStatus.Expiring,
 ]);
 
-/** Consent is gone: the sync skips the account and the banner says syncing has stopped. */
+/** Consent is gone; the sync skips these accounts. */
 export function isDeadConsent(status: CdrConnectionStatus): boolean {
 	return DEAD.has(status);
 }
 
-/** The sync pulls this account, so the banner's stall check watches it. */
+/** Consent still works; the sync pulls these accounts. */
 export function isSyncingConsent(status: CdrConnectionStatus): boolean {
 	return SYNCING.has(status);
 }

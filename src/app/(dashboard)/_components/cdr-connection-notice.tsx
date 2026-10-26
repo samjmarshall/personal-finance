@@ -27,7 +27,7 @@ export function CdrConnectionNotice({ notice }: { notice: ConnectionNotice }) {
 		<AttentionBanner tone={notice.tone}>
 			<div className="space-y-1">
 				<p>
-					<span className="font-medium">{notice.title}.</span> {firstLine}
+					<span className="font-semibold">{notice.title}.</span> {firstLine}
 					{notice.reauthorize && (
 						<>
 							{" "}

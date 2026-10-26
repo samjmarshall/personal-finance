@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Button } from "~/components/ui/button";
 import { AttentionBanner } from "./attention-banner";
 
 describe("AttentionBanner", () => {
@@ -40,6 +41,36 @@ describe("AttentionBanner", () => {
 		await user.keyboard("{Enter}");
 		expect(screen.queryByRole("status")).toBeNull();
 		expect(screen.getByRole("button", { name: "Chart period" })).toHaveFocus();
+	});
+
+	it("skips a disabled button and a hidden input when handing focus back", async () => {
+		const user = userEvent.setup();
+		render(
+			<>
+				<button type="button">Chart period</button>
+				<Button disabled>Save</Button>
+				<input aria-hidden readOnly tabIndex={-1} />
+				<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>
+			</>,
+		);
+		screen.getByRole("button", { name: "Dismiss" }).focus();
+
+		await user.keyboard("{Enter}");
+		expect(screen.getByRole("button", { name: "Chart period" })).toHaveFocus();
+	});
+
+	it("leaves focus alone when dismissed by mouse", async () => {
+		const user = userEvent.setup();
+		render(
+			<>
+				<button type="button">Chart period</button>
+				<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>
+			</>,
+		);
+		await user.click(screen.getByRole("button", { name: "Dismiss" }));
+		expect(
+			screen.getByRole("button", { name: "Chart period" }),
+		).not.toHaveFocus();
 	});
 
 	it("keeps focused fields clear of it, until dismissed", async () => {

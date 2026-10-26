@@ -54,7 +54,7 @@ function stalledLine(states: CdrSyncState[]): string | null {
 		...live.map((s) => (s.lastSyncedAt ?? s.createdAt).getTime()),
 	);
 	if (Date.now() - newest <= STALLED_AFTER_MS) return null;
-	// The day shown is a real sync; a newer find date only delays the warning.
+	// Show only a real sync's day. A just-found account only delays the warning.
 	const synced = live.flatMap((s) => s.lastSyncedAt ?? []);
 	return synced.length > 0
 		? `No bank account has synced since ${formatDate(new Date(Math.max(...synced.map((d) => d.getTime()))))}.`
