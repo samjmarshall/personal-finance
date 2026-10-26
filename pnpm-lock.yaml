@@ -209,7 +209,7 @@ importers:
         version: 30.1.3(@noble/hashes@2.4.0)
       portless:
         specifier: ^0.15.7
-        version: 0.15.8
+        version: 0.15.12
       postcss:
         specifier: ^8.5.29
         version: 8.5.31
@@ -4205,8 +4205,8 @@ packages:
     resolution: {integrity: sha512-nDywThFk1i4BQK4twPQ6TA4RT8bDY96yeuCVBWL3ePARCiEKDRSrNGbFIgUJpLp+XeIR65v8ra7WuJOFUBtkMA==}
     engines: {node: '>=8'}
 
-  portless@0.15.8:
-    resolution: {integrity: sha512-kzGoG4xLsEytczl7O/COZaBwSAOKsWsZDxHv7/iFHKIC0X71OonpgbsQw58CGO29RklIHIx6yLM31TJMnTtPEw==}
+  portless@0.15.12:
+    resolution: {integrity: sha512-Lbz85zLboOMkvq2unXYfJ/YMpsvFZYQgrwGEbinZErp045y9fLm4obm7E77V2BI2Om0Mh6tX/2w2ftFqRs5kfQ==}
     engines: {node: '>=24'}
     os: [darwin, linux, win32]
     hasBin: true
@@ -8673,7 +8673,7 @@ snapshots:
     dependencies:
       find-up: 3.0.0
 
-  portless@0.15.8: {}
+  portless@0.15.12: {}
 
   postal-mime@2.7.5: {}
 
