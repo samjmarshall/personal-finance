@@ -14,7 +14,7 @@ export const cdrConnectionStatus = pgEnum(
 export const cdrSyncState = pgTable("cdr_sync_state", (d) => ({
 	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
 	accountId: d.text().notNull().unique(),
-	// Discovery always sets it. Nullable from when a seed script made rows without one.
+	// Discovery always sets it. Nullable is a leftover from a since-removed seed step.
 	connectionId: d.text(),
 	accountName: d.text(),
 	institutionName: d.text(),

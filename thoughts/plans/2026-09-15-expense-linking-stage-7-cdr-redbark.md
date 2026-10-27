@@ -48,7 +48,7 @@ left for Phase 2.
   `Transaction` (`src/domain/transactions/transaction.interface.ts:3-20`) is pinned to the table
   by `src/server/db/schema-interface-contract.test.ts:28` — a new column without an interface
   field fails `make check`. Shared instance: `transactions.module.ts`. Upsert precedents (`onConflictDoUpdate`):
-  `src/server/settings/settings.repository.ts:41`, `cdr.repository.ts:91`.
+  `src/server/settings/settings.repository.ts:41`, `cdr.repository.ts:81`.
 - **adr022 owns cross-domain data.** A repository touches only its own domain's tables; other
   domains' reads *and* writes go through the owning service as a narrow `Pick` port.
   `src/server/architecture.test.ts` enforces it (TODO list empty, shrink-only): a
@@ -117,7 +117,7 @@ left for Phase 2.
   drops `row.account` (`cdr.dto.ts:20`), so a `transaction` row stores the account's name, not its
   id. `upsertSynced` (`transactions.service.ts:115-120` → `transactions.repository.ts:226-241`)
   dedups on `(provenance, externalId)` only. A bank row is never compared with a member's own row
-  (`externalId` null). `CdrSyncService.syncAccount` (`cdr-sync.service.ts:285-312`) fetches from
+  (`externalId` null). `CdrSyncService.syncAccount` (`cdr-sync.service.ts:290-317`) fetches from
   `mark − 14d`, or `now − 90d` when the mark is null (`BACKFILL_DAYS` `:21`, `OVERLAP_DAYS` `:23`).
   `listTransactions` (`cdr.redbark.ts:26-29`, `:74-93`) sends no `to`, and `list` throws on
   `x-redbark-truncated` (`:113-115`). The edit guard treats any non-manual row as bank-owned
@@ -747,7 +747,7 @@ money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
       low (no balance last), with its counted count. By balance, not by switch, so a row
       never moves mid-flip.
     - `cashTotal` — Σ counted balances; null while any account is undecided.
-    - `formatBalance` — money with a real minus sign (`−$8,394.25`).
+    - `formatBalance` — money with a minus sign (`-$8,394.25`).
     - `newAccountsNote` — "{n} new account(s) need(s) a choice. Find it/them marked New
       below.", or null. Rows sort by balance, so a new one can sit below the fold.
   - `bank-account-row.tsx` — props-driven `BankAccountRow({ account, onInBalanceChange,
@@ -1083,6 +1083,12 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
       `<body>`, the disabled Save or a hidden input. A real mouse click on X keeps focus
       and scrollY. Title is 600 weight. CLS 0 at 320 / 375 / 768 / 1440; focused controls
       ≥ 8 px clear; contrast 6.47–8.18:1. The Mediums are listed under Open below.
+      — re-run 2026-10-27 after 43ee893 / dbc7d8b: **no blockers, no Highs.** Held Enter on
+      X: 0 Save clicks with Save on; focus lands on the input with Save off; the guard goes
+      on keyup. Held Space dismisses once. A mouse click keeps scrollY. CLS ≈ 0; scroll
+      padding 142 / 82 px; focused controls ≥ 9 px clear. Failed queued save checked live
+      (800 ms delay, 2nd save aborted; A off, B off, A on): saves ran 1 → 2 → 3, A stayed on,
+      one `cdr.syncState` refetch after save 3, B back to on.
 - [x] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
       — 2026-10-22, DB flips on the branch: `revoked` → `role="alert"` reauthorize banner
@@ -1136,20 +1142,23 @@ Phases 7–9 plan text (a613c23): no-key import over `failed`, raw chunk errors,
 row, Phase 8's migration, query invalidation. Two comments tightened in validation
 (`attention-banner.tsx:59`, `cdr.service.ts:28`).
 
-Open from re-validation 2026-10-27 after bc311a2 (see `/resolve-findings`). None blocks the phase:
-- **Holding Enter on X can submit the balance** (design review Medium,
-  `attention-banner.tsx:41-46`). Enter clicks X on keydown and focus moves to an enabled
-  Save; key-repeat then clicks Save (2 extra clicks seen, blocked by a page guard). Ignore
-  `e.repeat` on the handed-off control, or hand off on keyup. Space is safe.
-- **A failed save flashes the wrong value on a queued row** (design review Medium,
-  `bank-accounts-section.tsx:31-39`). A off, B off, A on, B fails: `onError` refetches while
-  A's "on" waits, so A shows off for ~920 ms. End state is right. Invalidate only when the
-  queue is empty, as `onSuccess` does.
+Fixed from re-validation 2026-10-27 (43ee893, dbc7d8b, 60aac2b; checked 2026-10-27): held
+Enter on X clicking the handed-off control, a failed save flashing a queued row, unused
+`findSyncState`, the unnamed "last save" check (now `isLastSave`). Three comments tightened
+in validation (`attention-banner.tsx:59`, `bank-accounts-section.tsx:35`, `cdr.schema.ts:17`).
+
+Fixed by `/resolve-findings` 2026-10-27: a save during a refetch now redoes it once the
+saves finish (`refetchWhenDrained`, was `failed`); every signed amount uses the ASCII "-";
+the click handler calls the held-Enter guard itself, so `focusBefore` only moves focus.
+
+Open from re-validation 2026-10-27 after 43ee893 (see `/resolve-findings`). None blocks the phase:
+- **Space dismiss leaves the Enter guard on** (`attention-banner.tsx:83-96`). It comes off
+  only on an Enter keyup, so the next held Enter anywhere loses its repeats once.
 - **Touch dismiss untested.** A tap may report `e.detail === 1`, so it skips the handoff
   and drops focus to `<body>` (TalkBack / VoiceOver).
 - **Keyboard dismiss scrolls far** (375: ~700–800 px; 1440: ~540 px): `focus()` scrolls the
   handed-off control into view. Keyboard only; product call.
-- **Global scroll padding** (`attention-banner.tsx:85-95`). It writes `<html>`'s
+- **Global scroll padding** (`attention-banner.tsx:103-114`). It writes `<html>`'s
   `scrollPaddingBottom` and resets it to `""`, not to the old value. A second banner
   would overwrite it. Matters once the banner moves to `src/components/`.
 - **Sidebar jump at 1440** (design review Medium). Tabbing to "Sign out" in the sticky
@@ -1178,11 +1187,13 @@ Open from re-validation 2026-10-27 after bc311a2 (see `/resolve-findings`). None
 - Copy: behind / stalled lines give no next step. Nothing says what RedBark is. "Lose access
   soon" has no timeframe. The paragraph gap (`space-y-1`) is too tight. A same-day failure
   reads "hasn't synced since" today. A pending stuck account can repeat the stall's date.
-- Smells (judgement): new in bc311a2 / 0fe95d9: `queued === 1` means "this is the last
-  save" (`isLastSave`?), and `m.options.scope?.id` reaches into TanStack internals
-  (`bank-accounts-section.tsx:34-37`); `e.detail === 0` is an unnamed "by keyboard";
-  `isTabbable` adds Base UI quirks to `AttentionBanner`, a fourth reason for it to change;
-  the `listSyncState` `.catch` wraps like `discover`'s try/catch in another style. Still
+- Smells (judgement): new in 43ee893 / dbc7d8b / 4f36fef: `AttentionBanner` now has five
+  reasons to change (layout, focus handoff, Base UI quirks, held Enter, scroll padding);
+  move the focus helpers out, like `src/hooks/use-restore-focus.ts`. Two signed-money formatters (`money.tsx:24`, `bank-accounts.display.ts:74`).
+  `connectionId` nullable with no current need. From bc311a2 / 0fe95d9:
+  `m.options.scope?.id` reaches into TanStack internals (`bank-accounts-section.tsx:31-34`);
+  `e.detail === 0` is an unnamed "by keyboard"; the `listSyncState` `.catch` wraps like
+  `discover`'s try/catch in another style. Still
   open: the dead / expiring / both cascade runs three times (fix line, title, tone); consent
   read five ways in `connectionNotice`; `stalledLine` finds the newest date twice;
   `STALLED_AFTER_MS` and `DAY_MS` (`cdr-sync.service.ts:20`) beside three `MS_PER_DAY`s;
@@ -1192,8 +1203,8 @@ Open from re-validation 2026-10-27 after bc311a2 (see `/resolve-findings`). None
   builder copied three times; two "name + masked number" formats; `"alert" | "warn"` typed
   twice; `(accounts, label)` travel together; the pre-joined strings.
 - Smells (judgement), other phases: `save(); x.mutate(...)` twice and `nickname.trim() ||
-  null` repeating the DTO rule (`bank-accounts-section.tsx:82-97`); the null-balance "—" +
-  sr-only markup twice (`bank-accounts-section.tsx:112-119`, `bank-account-row.tsx:164-171`);
+  null` repeating the DTO rule (`bank-accounts-section.tsx:92-107`); the null-balance "—" +
+  sr-only markup twice (`bank-accounts-section.tsx:122-127`, `bank-account-row.tsx:164-171`);
   the AUD check and `/ 100` three times each in `map-redbark.ts`; `inBalance: boolean | null`
   checked `=== null` in five places; "bank owns amount + date" spread over the repository,
   service, form and interface; `guardBankValues` throws and returns "is synced";
@@ -1203,8 +1214,7 @@ Open from re-validation 2026-10-27 after bc311a2 (see `/resolve-findings`). None
   scrolls the page sideways and the nav icon overlaps the wordmark. At 375 / 768 the sticky
   top header can cover a control focused by Shift+Tab (no `scroll-padding-top`). Settings
   switch is 32×18 px (under 24 px, WCAG 2.5.8) and its error toast says "Failed to fetch".
-  Uncommitted `src/components/money.tsx` swaps the "−" minus sign for a hyphen;
-  `formatBalance` still uses "−", so one screen shows two signs.
+  Dev-only Next `instant` validation errors in the console on `/` and `/settings`.
 - Found by code review, other phases:
   - Phase 2: one unknown account `status` (`cdr.dto.ts:34`) fails discovery, so no account
     syncs until a code change. `X-Redbark-Truncated` throws a plain, non-retryable `Error`
@@ -1226,6 +1236,10 @@ Open from re-validation 2026-10-27 after bc311a2 (see `/resolve-findings`). None
     row typed after its bank row is never matched; no `externalAccountId` backfill; no
     import throttle against RedBark's 30/min; outbox prune lets an 8-day webhook replay
     through.
+  - Phases 7–9 plan text (2026-10-27 code review): the rest was fixed in the plan text by
+    `/resolve-findings`. Left by choice: NZ (east of Sydney) dates land a day early, so exact
+    becomes a review (a safe fallback; one zone by design). Each webhook route 500s when the
+    other route's secret is unset (loud, and the runbook sets both together).
 ---
 
 ## Phase 7: Bank-row matching (adopt + possible duplicates)
@@ -1251,15 +1265,21 @@ never deletes.
 5. Otherwise → **add** the bank row.
 
 Who can be a candidate:
-- A household row with no `externalId` that no pending review already holds.
+- A household row with no `externalId` that no review holds. A `kept` one counts: "Keep mine"
+  said the row is that bank row, so a later bank row mustn't adopt it.
+- A household row a `pending` review holds, for an **exact** pair only. Adopting it adds the
+  review's bank row and drops the review: the row is now the exact one, so the close one is
+  another purchase. Without this, an exact twin from a later run or chunk is added silently.
 - A bank row from an account RedBark no longer lists (a re-link; see Validate), with
   `externalAccountId` set and not in this run's `liveAccountIds`. **Review only**, never
   adopted: one tap moves it to the new id ("Use bank's").
 - Never a bank row from a listed account, so two real same-amount coffees from one card never
   match each other.
 
-Pairing is greedy and one-to-one: exact pairs first, then close pairs by (day gap, amount gap,
-candidate id). A bank row or candidate is used once; an unpaired bank row is added.
+Pairing is greedy and one-to-one: exact pairs first, by (bank `externalId`, candidate id), then
+close pairs by (day gap, amount gap, bank `externalId`, candidate id). A bank row or candidate
+is used once; an unpaired bank row is added. No order is left to the DB read, so a retry gives
+the same plan: two typed $5 coffees and one bank $5 always adopt the older row.
 
 Days compare as calendar days in `Australia/Sydney`. Bank rows are stored at UTC midnight, but
 a row typed in the form is stored at local midnight (`submitted-date.ts:3-7`), which is the day
@@ -1281,7 +1301,7 @@ setting with household scoping (Out of Scope).
     | Column | Type |
     | --- | --- |
     | `id` | identity PK |
-    | `transactionId` | integer, not null, FK `transaction.id` **on delete cascade** (the member deleting their row drops the question; the bank row comes back on the next run or import that covers it) |
+    | `transactionId` | integer, not null, FK `transaction.id` **on delete cascade** (a backstop: `delete` adds the bank rows first, see below) |
     | `provenance` | `transaction_provenance`, not null |
     | `externalId` | text, not null |
     | `externalAccountId` | text, not null |
@@ -1321,14 +1341,23 @@ setting with household scoping (Out of Scope).
   - `findReviews(provenance, externalIds)` → `{ id, externalId, status, transactionId }[]`.
   - `findMatchCandidates({ from, to, liveAccountIds })` — `date` in `[from, to)`, and either
     `externalId is null` or `externalAccountId` set and not in `liveAccountIds`, and no
-    `pending` review holds it (`not exists`).
-  - `applyReconcile({ upserts, adoptions, flags })` — one `db.transaction` (both tables are
+    `kept` review holds it (`not exists`). A household row a `pending` review holds comes back
+    with that review's id as `heldBy`.
+  - `applyReconcile({ upserts, adoptions, flags })` (a refreshed flag carries its review
+    `id`) — one `db.transaction` (both tables are
     this domain's):
     - The `upsertSynced` statement for refreshes and adds.
     - One `update` per adoption, guarded `where id = $id and "externalId" is null`, so a row
-      claimed since the read is left alone (that bank row then waits for the next run).
-    - `insert into possible_duplicate … on conflict (provenance, "externalId") do update set`
-      the bank values `where status = 'pending'`, so a `kept` review never reopens.
+      claimed or deleted since the read is left alone. One that updates 0 rows adds its bank
+      row instead (counted as `added`): an import never fetches that date again.
+    - An adoption of a `heldBy` row that updated 1 row then deletes that review `where status
+      = 'pending' returning` its bank values and adds them as a row (counted as `added`).
+    - New flags: `insert into possible_duplicate … on conflict (provenance, "externalId") do
+      nothing`.
+    - Refreshes: `update possible_duplicate set` the bank values `where id = $id and status =
+      'pending'`. Not an upsert: a review the member resolved since the read would come back
+      as a ghost card for a bank row already in the ledger. 0 rows updated → skip; a `kept`
+      review never reopens.
   - `listPendingDuplicates()` (joined to the household row, newest bank date first) and
     `countPendingDuplicates()`.
   - `keepMine(id)`, `useBanks(id)`, `bothReal(id)` — each in a `db.transaction`, each acting
@@ -1337,6 +1366,9 @@ setting with household scoping (Out of Scope).
     - use bank's → set the household row's `date`, `amount`, `provenance`, `externalId`,
       `externalAccountId`, `accountName` from the review, then delete the review.
     - both → insert the bank row (`on conflict do nothing`), then delete the review.
+  - `delete(id)` (`:340-342`) becomes a `db.transaction`: insert each review's bank row on
+    that row, `pending` or `kept` (`on conflict do nothing`), then delete it. A review is the
+    only copy of its bank row, and a date past the 14-day overlap is never fetched again.
 - `src/server/transactions/transactions.service.ts`:
   - `reconcileSynced(rows, { liveAccountIds })` replaces `upsertSynced` (`:115-120`); its
     same-id dedupe moves here. Reads known ids, reviews, and candidates over `[oldest − 8d,
@@ -1351,10 +1383,10 @@ setting with household scoping (Out of Scope).
 - `src/server/transactions/transactions.trpc.controller.ts` — `possibleDuplicates` and
   `possibleDuplicateCount` queries, and a `resolveDuplicate` mutation (`resolveDuplicateDto`).
 - `src/server/cdr/cdr-sync.service.ts`:
-  - Dep `transactions: Pick<TransactionsService, "reconcileSynced">` (`:41`, `:53`).
+  - Dep `transactions: Pick<TransactionsService, "reconcileSynced">` (`:34`, `:46`).
   - A null mark fetches `now − OVERLAP_DAYS` (14 days). Delete `BACKFILL_DAYS` (`:21`): older
     history comes from the import.
-  - `syncAccount` (`:285-312`) calls `reconcileSynced(rows, { liveAccountIds })`, where
+  - `syncAccount` (`:290-317`) calls `reconcileSynced(rows, { liveAccountIds })`, where
     `liveAccountIds` is every account id RedBark listed this run.
 - `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md` — rewrite facet 2 (one
   reconcile: refresh, adopt, possible duplicate, add) and facet 5 (14-day first run; history
@@ -1380,13 +1412,18 @@ setting with household scoping (Out of Scope).
     - Two bank rows and one candidate → one pairs, the other is added; an exact pair beats a
       closer-in-days near pair.
     - A pending review → refreshed flag, not re-matched; a kept review → skipped.
+    - A row a pending review holds: an exact bank row adopts it and releases the review; a
+      close one doesn't pair with it (added).
     - A retired-account candidate with the exact day and amount → flag, never adopt; a
       listed-account bank row is never a candidate.
-    - Same input twice gives the same plan.
+    - Same input twice gives the same plan, and so does the same input shuffled; two exact
+      candidates → the lower id is adopted.
   - `transactions.repository.test.ts` — inline snapshots: the `upsertSynced` `set` with
-    `externalAccountId`; `findMatchCandidates` filters; the guarded adoption `update`; the
-    review upsert's `where status = 'pending'`; each resolve statement; the column-list
-    snapshots gain `externalAccountId`.
+    `externalAccountId`; `findMatchCandidates` filters; the guarded adoption `update`, and the
+    bank row added when it updates nothing; a held row's review released into a row; the
+    new-flag `do nothing`; the refresh's `where id = $id and status = 'pending'`; each resolve
+    statement; `delete` adding the held bank rows; the column-list snapshots gain
+    `externalAccountId`.
   - `transactions.schema.test.ts` — `possible_duplicate` unique index, cascade FK, status
     default.
   - `transactions.service.test.ts` — `reconcileSynced` dedupes, calls `applyReconcile` with
@@ -1442,7 +1479,7 @@ window at 5,000 rows.
   | `createdAt` | timestamptz, not null, `.defaultNow()` |
   | `finishedAt` | timestamptz, null |
 - `src/domain/cdr/cdr.interface.ts` — `CdrImport`; add the pair to
-  `schema-interface-contract.test.ts`.
+  `schema-interface-contract.test.ts`. `LatestImport = CdrImport & { active: boolean }`.
 - `src/domain/cdr/cdr.dto.ts` — `cdrImportStartDto = z.object({ from: z.iso.date(), to:
   z.iso.date() })` (bare days from `<Input type="date">`).
 - `src/domain/cdr/import-chunks.ts` — pure `importChunks(from, to, days = 90)` → inclusive
@@ -1454,7 +1491,7 @@ window at 5,000 rows.
   - `insertImport({ fromDate, toDate })` — `this.outbox.commit` inserts the row and
     `buildOutboxEvent("cdr/import.requested", { importId })` together (as
     `receipts.repository.ts:84-99`): the event needs the new id.
-  - `findActiveImport()` (queued or running, created in the last 24 hours), `latestImport()`.
+  - `findActiveImport(since)` (queued or running, created after `since`), `latestImport()`.
     A run that dies without its `onFailure` landing (cancelled in Inngest, or `failImport`
     hit a DB blip) stays `running`; without the cut-off it would refuse every later import.
     A real run past a day lets a new one start. The two interleave step by step on the shared
@@ -1462,26 +1499,35 @@ window at 5,000 rows.
   - `markImportRunning(id)`, `addImportCounts(id, counts)` (adds to the columns),
     `finishImport(id)`, `failImport(id, message)`. `finishImport` moves only a `running` row,
     so the `finish` step can't turn a run `planImport` already failed back into `done`.
+    `markImportRunning` moves only a `queued` row and returns whether it did: the outbox
+    re-sends past Inngest's 24 h dedup (`outbox.service.ts:84-85`), and a second delivery
+    mustn't restart a finished import or add its counts again.
   - It now touches `cdr_sync_state` and `cdr_import` only.
 - `src/server/inngest/events.ts` — `EVENT_REGISTRY` (`:13-17`) gains `"cdr/import.requested":
   z.object({ importId: z.number().int() })`.
 - `src/server/cdr/cdr.service.ts`:
   - `startImport({ from, to })` → `InvalidInputError` when `from` is after `to`, `to` is after
     today, or `from` is more than 7 years ago ("today" in `HOUSEHOLD_TIME_ZONE`).
-    `ConflictError("An import is already running")` when `findActiveImport()` finds one; two
-    racing starts would run two imports, interleaved step by step as above. Then `insertImport`.
-  - `latestImport()`.
+    `ConflictError("An import is already running")` when `findActiveImport(since)` finds
+    one; two racing starts would run two imports, interleaved step by step as above. Then
+    `insertImport`.
+  - `latestImport()` → the newest row with `active`: queued or running and newer than
+    `IMPORT_ACTIVE_HOURS` (24). `startImport` passes the same cut-off to `findActiveImport`, so
+    the page never locks on a run the server has given up on.
 - `src/server/cdr/cdr.trpc.controller.ts` — `startImport` mutation (`cdrImportStartDto`) and
   `latestImport` query.
 - `src/server/cdr/cdr-sync.service.ts`:
   - Move discovery out of `run()` into a private method that both `run()` and `planImport` use.
-  - `planImport(importId)` → `markImportRunning`. With no key, it calls `failImport(importId,
-    "Bank sync isn't set up")` and returns no chunks. Otherwise it discovers, then returns
+  - `planImport(importId)` → `markImportRunning`. When that moves nothing (a repeat delivery)
+    it returns `null` and touches nothing else; the handler then stops, with no chunks and no
+    `finish`. With no key, it calls `failImport(importId, "Bank sync isn't set up")` and
+    returns no chunks. Otherwise it discovers, then returns
     `{ liveAccountIds, chunks }`: `importChunks` for each account the daily sync would sync
-    (same consent and account-status rules). Dates travel as `YYYY-MM-DD` strings, because a
-    step's result is JSON.
+    (same consent and account-status rules). Each chunk is `{ accountId, accountName, from, to
+    }`, with RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:302`).
+    Dates travel as `YYYY-MM-DD` strings, because a step's result is JSON.
   - `importChunk(importId, chunk, liveAccountIds)` → `listTransactions({ accountId, from, to })`
-    → map → `reconcileSynced` → `addImportCounts`. A retried chunk re-counts its rows as `known`,
+    → map with `chunk.accountName` → `reconcileSynced` → `addImportCounts`. A retried chunk re-counts its rows as `known`,
     so counts are a guide, not a ledger. Any error leaves as `syncError("cdr import chunk
     failed", [cause])`, as discovery does: the shared mapping only reads a `CdrSyncError`, so a
     raw 429 would lose its wait and a 4xx or mapping throw would be retried.
@@ -1519,15 +1565,16 @@ window at 5,000 rows.
   - `_components/import-view.tsx` — `PageHeader` "Import from bank", with a link back to
     `/transactions`. Three parts:
     - `import-form.tsx` — From and To `<Input type="date">` (as `pay-cycle-section.tsx:55-67`),
-      To defaulting to today, and an **Import** button. Disabled while a run is queued or
-      running. Client checks from ≤ to; the server checks the rest, and its errors go to the
+      To defaulting to today, and an **Import** button. Disabled while the latest run is
+      `active`. Client checks from ≤ to; the server checks the rest, and its errors go to the
       global MutationCache. On success, invalidate `cdr.latestImport`: the status only polls
-      while queued or running, so without it the page keeps showing the last finished run. A
+      while `active`, so without it the page keeps showing the last finished run. A
       line under it: "Safe to run again. It only adds what's missing, and it never deletes."
     - `import-status.tsx` — the latest run's status, range, counts ("Added 12 · Matched to
       yours 30 · To review 3 · Already here 950") and a failed run's error. Polls
-      `api.cdr.latestImport` with `refetchInterval` while queued or running (as
-      `receipts-view.tsx:192-198`). When it finishes, invalidate `transaction.possibleDuplicates`,
+      `api.cdr.latestImport` with `refetchInterval` while `active` (as
+      `receipts-view.tsx:192-198`). A queued or running row that isn't `active` reads "Didn't
+      finish", and the form is open. When it finishes, invalidate `transaction.possibleDuplicates`,
       `transaction.possibleDuplicateCount` and `transaction.list`.
     - `possible-duplicate-list.tsx` + props-driven `possible-duplicate-card.tsx` — "In Ledger"
       and "From the bank" side by side: date, description, amount, account. The day gap and
@@ -1536,8 +1583,8 @@ window at 5,000 rows.
       `transaction.possibleDuplicates`, `transaction.possibleDuplicateCount` (the header badge)
       and `transaction.list`, so the card leaves; a toast says what happened. Empty →
       "Nothing to review."
-  - `_components/import.display.ts` — pure status label, count line, and gap labels ("3 days
-    later", "$1.20 more").
+  - `_components/import.display.ts` — pure status label (incl. "Didn't finish"), count line,
+    and gap labels ("3 days later", "$1.20 more").
 - `src/components/route-skeletons.tsx` — `ImportSkeleton` beside `TransactionsSkeleton`
   (`:145`).
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx:144-152` — an "Import from
@@ -1555,22 +1602,27 @@ window at 5,000 rows.
   - `cdr.repository.test.ts` — `insertImport` goes through `outbox.commit` with one
     `cdr/import.requested` event carrying the new id (fake outbox as in
     `receipts.repository.test.ts`); `addImportCounts` adds, not sets; `findActiveImport`
-    filters queued and running from the last 24 hours; `finishImport` updates only a
-    `running` row.
+    filters queued and running created after `since`; `finishImport` updates only a
+    `running` row; `markImportRunning` only a `queued` one.
   - `cdr.schema.test.ts` — `cdr_import` status default and count defaults.
   - `cdr.service.test.ts` — `startImport` refuses each bad range and an active import; a good
-    one inserts.
+    one inserts. `latestImport` is `active` for a running row just under 24 hours old, and
+    not just over; `startImport` passes `findActiveImport` the same cut-off.
   - `cdr.trpc.controller.test.ts` — both procedures call the service; signed-out →
     `UNAUTHORIZED`; an active import → `CONFLICT`.
   - `cdr-sync.service.test.ts` — `planImport` with no key fails the run and returns no chunks;
-    it chunks only syncable accounts; `importChunk` passes `from`/`to`, reconciles with the
+    on a row past `queued` it returns `null` and never discovers or fails the run;
+    it chunks only syncable accounts, each chunk carrying the account's name; `importChunk`
+    passes `from`/`to`, maps rows with the chunk's name, reconciles with the
     live ids and adds counts; a 429 in a chunk throws a retryable `CdrSyncError` with its wait,
     a mapping throw a non-retryable one; an import never advances a mark or writes an anchor.
   - `cdr.inngest.controller.test.ts` — `cdr-import`'s id, event trigger, retries and shared
     concurrency key; `cdr-sync` now has the same key. With a fake `step`, the handler runs
-    plan, one step per chunk with a stable id, then finish; a step error maps like `cdr-sync`;
+    plan, one step per chunk with a stable id, then finish; a `null` plan runs no chunk and no
+    finish; a step error maps like `cdr-sync`;
     `onFailure` calls `failImport`.
-  - `import.display.test.ts` — each status label, the count line, gap labels for earlier,
+  - `import.display.test.ts` — each status label (a running row not `active` → "Didn't
+    finish"), the count line, gap labels for earlier,
     later, more and less.
   - `possible-duplicate-card.test.tsx` (jsdom) — both sides render; each button calls its
     handler with its choice; queried by role and name.
@@ -1605,13 +1657,13 @@ unpublished today.
 
 ### Changes
 - `src/server/inngest/events.ts`:
-  - Add `cdr/sync.requested` (`z.object({})`) and `cdr/connection.changed` (`{ connectionId,
-    status: z.enum(CdrConnectionStatus) }`) to `EVENT_REGISTRY` (`:13-17`). New keys only, no
-    renames.
+  - Add `cdr/sync.requested` (`z.object({})`) and `cdr/connection.changed` (`{ connectionId
+    }`, for logs) to `EVENT_REGISTRY` (`:13-17`). New keys only, no renames. No status: the
+    handler re-reads it from RedBark, so a late or replayed event can't write an old one.
   - `buildOutboxEvent` (`:31-43`) takes an optional `{ id }` so a caller can supply a
     deterministic idempotency key. The default stays `crypto.randomUUID()`.
 - `src/server/cdr/cdr.service.ts` — add dep `outbox: OutboxWriteDoor`, plus
-  `requestSync(deliveryId)` and `connectionChanged(deliveryId, connectionId, status)`:
+  `requestSync(deliveryId)` and `connectionChanged(deliveryId, connectionId)`:
   - Both publish through `outbox.publish(buildOutboxEvent(name, …, { id: uuidFromDelivery(name,
     deliveryId) }))`. Never a bare `inngest.send`.
   - The outbox row's `uuid` PK (`outbox.schema.ts:12`) is the dedup store. A replayed delivery
@@ -1654,9 +1706,13 @@ unpublished today.
     shared error mapping (Phase 8).
   - It takes the shared `concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" }` that
     Phase 8 gave `cdr-sync` and `cdr-import`, so a webhook run never overlaps either.
-  - Add `cdr-connection-changed` (`{ event: "cdr/connection.changed" }`). Its handler reads
-    `event.data.connectionId` / `event.data.status` by name (never spreads `event.data`) and
-    calls a new `CdrSyncService.applyConnectionStatus` → `repository.setConnectionStatus`.
+  - Add `cdr-connection-changed` (`{ event: "cdr/connection.changed" }`, the same shared
+    concurrency). The event is a nudge, not data: its handler calls
+    `CdrSyncService.refreshConnections()`, Phase 8's shared discovery made public, which sets
+    every connection's status from RedBark's current list (`setConnectionStatus`). RedBark
+    sends "expired" then "active" on a reauth; writing the event's own status would let a
+    late or retried "expired" win, and race the daily discovery. It reads
+    `event.data.connectionId` by name for its log (never spreads `event.data`).
 - `src/app/api/cdr/webhook/route.ts` + `src/app/api/cdr/events/route.ts` — each is its own
   composition root (per `src/app/api/receipts/inbound/route.ts:25-58`):
   - Read `REDBARK_WEBHOOK_SECRET` and `REDBARK_EVENT_SECRET`. When either is unset, return 500
@@ -1686,6 +1742,8 @@ unpublished today.
   - `cdr.inngest.controller.test.ts` — extend for the two new functions. `cdr-sync-requested`
     has the debounce, and it shares the concurrency key with `cdr-sync` and `cdr-import`. Its
     handler calls `run()` and maps a `CdrSyncError` like `cdr-sync` does.
+    `cdr-connection-changed` shares the key too, and its handler calls `refreshConnections()`
+    with no status from the event.
   - `route.test.ts` in each route dir — mock the tier modules and assert only the root's job:
     the env gate per secret, built once, delegates (pattern
     `src/app/api/receipts/inbound/route.test.ts:40-113`).
