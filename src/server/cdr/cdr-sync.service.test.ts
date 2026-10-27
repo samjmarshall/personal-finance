@@ -101,7 +101,7 @@ interface HarnessOptions {
 	listConnections?: () => Promise<RedbarkConnection[]>;
 	listSyncState?: () => Promise<CdrSyncState[]>;
 	listTransactions?: (accountId: string) => Promise<RedbarkTransaction[]>;
-	upsertSynced?: (rows: SyncedTransaction[]) => Promise<void>;
+	reconcileSynced?: (rows: SyncedTransaction[]) => Promise<void>;
 	recordError?: (accountId: string) => Promise<void>;
 	balances?: Record<string, RedbarkBalance>;
 	listBalances?: (accountIds: string[]) => Promise<RedbarkBalance[]>;
@@ -116,7 +116,10 @@ function harness(opts: HarnessOptions = {}) {
 		(opts.saved ?? []).map((s) => [s.accountId, s]),
 	);
 	const fetches: { accountId: string; from: Date }[] = [];
-	const upserts: SyncedTransaction[][] = [];
+	const reconciles: {
+		rows: SyncedTransaction[];
+		liveAccountIds: string[];
+	}[] = [];
 	const advances: { accountId: string; mark: Date; syncedAt: Date }[] = [];
 	const errors: { accountId: string; message: string }[] = [];
 	const statusSets: { connectionId: string; status: CdrConnectionStatus }[] =
@@ -183,10 +186,14 @@ function harness(opts: HarnessOptions = {}) {
 		},
 	};
 	const transactions = {
-		upsertSynced: async (rows: SyncedTransaction[]) => {
-			calls.push("upsertSynced");
-			upserts.push(rows);
-			await opts.upsertSynced?.(rows);
+		reconcileSynced: async (
+			rows: SyncedTransaction[],
+			{ liveAccountIds }: { liveAccountIds: string[] },
+		) => {
+			calls.push("reconcileSynced");
+			reconciles.push({ rows, liveAccountIds });
+			await opts.reconcileSynced?.(rows);
+			return { added: rows.length, adopted: 0, flagged: 0, known: 0 };
 		},
 	};
 	const balances = {
@@ -216,7 +223,7 @@ function harness(opts: HarnessOptions = {}) {
 		calls,
 		states,
 		fetches,
-		upserts,
+		reconciles,
 		advances,
 		errors,
 		statusSets,
@@ -244,13 +251,13 @@ afterEach(() => vi.useRealTimers());
 
 describe("CdrSyncService.run", () => {
 	describe("window", () => {
-		it("backfills 90 days when the account has no mark", async () => {
+		it("fetches only the last 14 days when the account has no mark", async () => {
 			const h = harness();
 
 			await h.service.run();
 
 			expect(h.fetches).toEqual([
-				{ accountId: "acct_1", from: daysBefore(NOW, 90) },
+				{ accountId: "acct_1", from: daysBefore(NOW, 14) },
 			]);
 		});
 
@@ -267,7 +274,7 @@ describe("CdrSyncService.run", () => {
 	});
 
 	describe("ingest", () => {
-		it("maps every fetched row and upserts them", async () => {
+		it("maps every fetched row and reconciles them", async () => {
 			const h = harness({
 				rows: {
 					acct_1: [
@@ -279,11 +286,12 @@ describe("CdrSyncService.run", () => {
 
 			await h.service.run();
 
-			expect(h.upserts).toEqual([
+			expect(h.reconciles.map(({ rows }) => rows)).toEqual([
 				[
 					{
 						provenance: Provenance.Cdr,
 						externalId: "t1",
+						externalAccountId: "acct_1",
 						accountName: "Name acct_1",
 						amount: 42.5,
 						date: new Date("2026-10-01T00:00:00.000Z"),
@@ -292,6 +300,7 @@ describe("CdrSyncService.run", () => {
 					{
 						provenance: Provenance.Cdr,
 						externalId: "t2",
+						externalAccountId: "acct_1",
 						accountName: "Name acct_1",
 						amount: -2500,
 						date: new Date("2026-10-02T00:00:00.000Z"),
@@ -301,14 +310,27 @@ describe("CdrSyncService.run", () => {
 			]);
 		});
 
-		it("upserts before it advances the mark, to the newest row's date", async () => {
+		// A bank row from an account RedBark still lists is never a match candidate.
+		it("tells the reconcile every account RedBark listed, synced or not", async () => {
+			const h = harness({
+				accounts: [account("acct_1"), account("acct_2", { status: "syncing" })],
+			});
+
+			await h.service.run();
+
+			expect(h.reconciles.map(({ liveAccountIds }) => liveAccountIds)).toEqual([
+				["acct_1", "acct_2"],
+			]);
+		});
+
+		it("reconciles before it advances the mark, to the newest row's date", async () => {
 			const h = harness({
 				rows: { acct_1: [row("t1", "2026-10-01"), row("t2", "2026-10-05")] },
 			});
 
 			await h.service.run();
 
-			expect(h.calls.indexOf("upsertSynced")).toBeLessThan(
+			expect(h.calls.indexOf("reconcileSynced")).toBeLessThan(
 				h.calls.indexOf("advance acct_1"),
 			);
 			expect(h.advances).toEqual([
@@ -320,10 +342,10 @@ describe("CdrSyncService.run", () => {
 			]);
 		});
 
-		it("leaves the mark alone when the upsert throws", async () => {
+		it("leaves the mark alone when the reconcile throws", async () => {
 			const h = harness({
 				rows: { acct_1: [row("t1", "2026-10-01")] },
-				upsertSynced: async () => {
+				reconcileSynced: async () => {
 					throw new Error("db down");
 				},
 			});
@@ -357,7 +379,7 @@ describe("CdrSyncService.run", () => {
 
 			await h.service.run();
 
-			expect(h.advances[0]?.mark).toEqual(daysBefore(NOW, 90));
+			expect(h.advances[0]?.mark).toEqual(daysBefore(NOW, 14));
 		});
 	});
 

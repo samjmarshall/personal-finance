@@ -18,8 +18,8 @@ import { type RedbarkClient, RedbarkRetryableError } from "./cdr.redbark";
 import type { CdrRepository } from "./cdr.repository";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const BACKFILL_DAYS = 90;
 // Fetch filters by txn date, but a card row can post 5+ days later (long weekend).
+// A first run fetches only this much too: older history comes from the import.
 const OVERLAP_DAYS = 14;
 
 interface AccountFailure {
@@ -31,7 +31,7 @@ interface CdrSyncServiceDeps {
 	repository: CdrRepository;
 	/** Null when `REDBARK_API_KEY` is unset. */
 	redbark: RedbarkClient | null;
-	transactions: Pick<TransactionsService, "upsertSynced">;
+	transactions: Pick<TransactionsService, "reconcileSynced">;
 	balances: Pick<BalancesService, "recordSynced">;
 	logger: Logger;
 }
@@ -43,7 +43,7 @@ interface CdrSyncServiceDeps {
 export class CdrSyncService {
 	private readonly repository: CdrRepository;
 	private readonly redbark: RedbarkClient | null;
-	private readonly transactions: Pick<TransactionsService, "upsertSynced">;
+	private readonly transactions: Pick<TransactionsService, "reconcileSynced">;
 	private readonly balances: Pick<BalancesService, "recordSynced">;
 	private readonly logger: Logger;
 
@@ -70,6 +70,7 @@ export class CdrSyncService {
 
 		const { statuses, accounts } = await this.discover(this.redbark);
 		const accountsById = new Map(accounts.map((a) => [a.id, a]));
+		const liveAccountIds = [...accountsById.keys()];
 		const consentOf = (saved: CdrSyncState) =>
 			statuses.get(
 				accountsById.get(saved.accountId)?.connection ??
@@ -88,7 +89,9 @@ export class CdrSyncService {
 			const account = accountsById.get(saved.accountId);
 			const consent = consentOf(saved);
 			try {
-				await this.syncIfReady(this.redbark, saved, account, consent);
+				await this.syncIfReady(this.redbark, saved, account, consent, {
+					liveAccountIds,
+				});
 			} catch (error) {
 				failures.push({ accountId: saved.accountId, error });
 				this.logger.error("cdr account sync failed", {
@@ -255,6 +258,7 @@ export class CdrSyncService {
 		{ accountId, highWaterMark }: CdrSyncState,
 		account: RedbarkAccount | undefined,
 		consent: CdrConnectionStatus | undefined,
+		listed: { liveAccountIds: string[] },
 	): Promise<void> {
 		if (consent && isDeadConsent(consent)) {
 			this.logger.warn("cdr connection needs reauthorizing", {
@@ -284,23 +288,22 @@ export class CdrSyncService {
 			return;
 		}
 
-		await this.syncAccount(redbark, account, highWaterMark);
+		await this.syncAccount(redbark, account, highWaterMark, listed);
 	}
 
 	private async syncAccount(
 		redbark: RedbarkClient,
 		account: RedbarkAccount,
 		mark: Date | null,
+		listed: { liveAccountIds: string[] },
 	): Promise<void> {
 		const now = new Date();
-		const from = mark
-			? new Date(mark.getTime() - OVERLAP_DAYS * DAY_MS)
-			: new Date(now.getTime() - BACKFILL_DAYS * DAY_MS);
+		const from = new Date((mark ?? now).getTime() - OVERLAP_DAYS * DAY_MS);
 
 		const rows = (
 			await redbark.listTransactions({ accountId: account.id, from })
 		).map((row) => mapRedbarkTransaction(row, account.name));
-		await this.transactions.upsertSynced(rows);
+		await this.transactions.reconcileSynced(rows, listed);
 
 		// The mark is monotonic, so one bad future date would stall the account for good.
 		const newest = rows.reduce<Date | null>(
