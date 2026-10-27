@@ -4,6 +4,9 @@
 	"schedule": ["* 9-16 * * 1-5"],
 	"timezone": "Australia/Sydney",
 	"prConcurrentLimit": 10,
+	"prBodyNotes": [
+		"- [ ] <!-- claude-review -->Run Claude release notes review (works on patch PRs and red CI)\n- [ ] <!-- claude-implement -->Let Claude implement the review's suggestions and push them to this branch"
+	],
 	"packageRules": [
 		{
 			"description": [
