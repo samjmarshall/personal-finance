@@ -39,7 +39,7 @@ export function parseFromAddress(from: string): string {
 	const [only] = addresses;
 	return addresses.size === 1 &&
 		only &&
-		allowedSenderCreateDto.shape.email.safeParse(only).success
+		allowedSenderCreateDto.shape.email.validate(only)
 		? only
 		: "";
 }

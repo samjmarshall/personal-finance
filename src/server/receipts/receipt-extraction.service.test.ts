@@ -342,6 +342,29 @@ describe("ReceiptExtractionService.process", () => {
 		expect(h.calls.saveExtraction[0]?.values.receiptDate).toBeNull();
 	});
 
+	it("nulls a non-ISO currency instead of failing the whole extraction", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => ({ ...extraction, currency: "A$" }),
+		});
+
+		await h.service.process(1);
+
+		expect(h.calls.saveExtraction).toHaveLength(1);
+		expect(h.calls.saveExtraction[0]?.values.currency).toBeNull();
+	});
+
+	it("upper-cases and trims a currency code before checking it", async () => {
+		const h = harness({
+			receipt: baseReceipt(),
+			extract: async () => ({ ...extraction, currency: " aud " }),
+		});
+
+		await h.service.process(1);
+
+		expect(h.calls.saveExtraction[0]?.values.currency).toBe("AUD");
+	});
+
 	it("marks a re-upload duplicate without spending on the AI call", async () => {
 		const h = harness({ receipt: baseReceipt(), dup: { id: 42 } });
 
