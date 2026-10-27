@@ -21,7 +21,7 @@ export function Money({
 }) {
 	const v = value ?? 0;
 	const display = formatCurrency(Math.abs(v));
-	const prefix = signed ? (v < 0 ? "+" : v > 0 ? "−" : "") : "";
+	const prefix = signed ? (v < 0 ? "+" : v > 0 ? "-" : "") : "";
 
 	const toneClass =
 		tone === "income"
