@@ -41,7 +41,10 @@ export function AttentionBanner({
 				onClick={(e) => {
 					// Keyboard only: Chrome focuses a clicked button too, and moving
 					// focus up the page would scroll a mouse user away.
-					if (e.detail === 0) focusBefore(e.currentTarget);
+					if (e.detail === 0) {
+						focusBefore(e.currentTarget);
+						swallowHeldEnter();
+					}
 					setDismissed(true);
 				}}
 				size="icon-sm"
@@ -56,8 +59,8 @@ export function AttentionBanner({
 
 const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
 
-// Base UI leaves a disabled button tabbable by attribute and hides form inputs
-// at -1, so matching tag names alone lets in controls that refuse focus.
+// Base UI keeps a disabled button in the tab order and leaves hidden inputs in the
+// page, so the selector alone lets in controls that can't take focus.
 const isTabbable = (el: HTMLElement) =>
 	el.tabIndex >= 0 &&
 	!el.matches(":disabled") &&
@@ -75,7 +78,6 @@ function focusBefore(dismiss: HTMLElement) {
 			isTabbable(el),
 	);
 	before.at(-1)?.focus();
-	swallowHeldEnter();
 }
 
 // Enter clicks on press and repeats while held, so a held Enter would click
