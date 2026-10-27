@@ -115,7 +115,8 @@
 			"protobufjs"
 		],
 		"overrides": {
-			"@esbuild-kit/core-utils>esbuild": "0.28.2"
+			"@esbuild-kit/core-utils>esbuild": "0.28.2",
+			"@vercel/cli-config>zod": "4.6.7"
 		}
 	}
 }
