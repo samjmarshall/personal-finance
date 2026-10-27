@@ -19,6 +19,70 @@ function Suspends({ promise }: { promise: Promise<string> }) {
 	return <p>{use(promise)}</p>;
 }
 
+function Throws({ error }: { error: Error }): never {
+	throw error;
+}
+
+function AlwaysFails(): never {
+	throw new Error("offline");
+}
+
+function Redirects(): never {
+	redirect("/sign-in");
+}
+
+// Throws while fails() is true, so a later Try again can recover.
+function Flaky({
+	fails,
+	children,
+}: {
+	fails: () => boolean;
+	children: React.ReactNode;
+}) {
+	if (fails()) throw new Error("offline");
+	return children;
+}
+
+function Query({ queryFn }: { queryFn: () => Promise<string> }) {
+	const { data } = useSuspenseQuery({ queryKey: ["chart"], queryFn });
+	return <p>{data}</p>;
+}
+
+function Rows({ filter }: { filter: string }) {
+	if (filter === "broken") throw new Error("offline");
+	return <p>Rows for {filter}</p>;
+}
+
+function QueryRows({
+	filter,
+	fetchBroken,
+}: {
+	filter: string;
+	fetchBroken: () => Promise<string>;
+}) {
+	const { data } = useSuspenseQuery({
+		queryKey: ["rows", filter],
+		queryFn: filter === "broken" ? fetchBroken : async () => filter,
+	});
+	return <p>Rows for {data}</p>;
+}
+
+// A real refresh suspends the page above, so the card stays up until the server answers.
+function Page({
+	promise,
+	exposeRefresh,
+	children,
+}: {
+	promise: Promise<string>;
+	exposeRefresh: (start: () => void) => void;
+	children: React.ReactNode;
+}) {
+	const [refreshing, setRefreshing] = useState(false);
+	exposeRefresh(() => setRefreshing(true));
+	if (refreshing) use(promise);
+	return children;
+}
+
 // React 19 only retries a suspended render whose act() was awaited.
 async function renderBoundary(children: React.ReactNode) {
 	const { router, AppRouter } = createAppRouter();
@@ -140,10 +204,6 @@ describe("AsyncBoundary", () => {
 		const silenceErrors = () =>
 			vi.spyOn(console, "error").mockImplementation(() => {});
 
-		function Throws({ error }: { error: Error }): never {
-			throw error;
-		}
-
 		it("shows a Couldn't load card and logs the error", async () => {
 			const errors = silenceErrors();
 			const error = new Error("boom");
@@ -161,10 +221,6 @@ describe("AsyncBoundary", () => {
 			const user = userEvent.setup();
 			const { AppRouter } = createAppRouter();
 			let fail = true;
-			function Flaky() {
-				if (fail) throw new Error("offline");
-				return <p>Pay received</p>;
-			}
 			await act(async () =>
 				render(
 					<AsyncBoundary
@@ -175,7 +231,9 @@ describe("AsyncBoundary", () => {
 							</article>
 						}
 					>
-						<Flaky />
+						<Flaky fails={() => fail}>
+							<p>Pay received</p>
+						</Flaky>
 					</AsyncBoundary>,
 					{ wrapper: AppRouter },
 				),
@@ -237,13 +295,9 @@ describe("AsyncBoundary", () => {
 				.fn<() => Promise<string>>()
 				.mockRejectedValueOnce(new Error("offline"))
 				.mockResolvedValue("Chart");
-			function Query() {
-				const { data } = useSuspenseQuery({ queryKey: ["chart"], queryFn });
-				return <p>{data}</p>;
-			}
 			const { router } = await renderBoundary(
 				<QueryClientProvider client={queryClient}>
-					<Query />
+					<Query queryFn={queryFn} />
 				</QueryClientProvider>,
 			);
 			expect(await screen.findByRole("alert")).toBeInTheDocument();
@@ -257,10 +311,6 @@ describe("AsyncBoundary", () => {
 
 		it("a new resetKey clears the card without refreshing the router", async () => {
 			silenceErrors();
-			function Rows({ filter }: { filter: string }) {
-				if (filter === "broken") throw new Error("offline");
-				return <p>Rows for {filter}</p>;
-			}
 			const ui = (filter: string) => (
 				<AsyncBoundary
 					label="transactions"
@@ -293,13 +343,6 @@ describe("AsyncBoundary", () => {
 				.fn<() => Promise<string>>()
 				.mockRejectedValueOnce(new Error("offline"))
 				.mockResolvedValue("broken");
-			function Rows({ filter }: { filter: string }) {
-				const { data } = useSuspenseQuery({
-					queryKey: ["rows", filter],
-					queryFn: filter === "broken" ? fetchBroken : async () => filter,
-				});
-				return <p>Rows for {data}</p>;
-			}
 			const ui = (filter: string) => (
 				<QueryClientProvider client={queryClient}>
 					<AsyncBoundary
@@ -307,7 +350,7 @@ describe("AsyncBoundary", () => {
 						resetKey={filter}
 						skeleton={<p>Skeleton</p>}
 					>
-						<Rows filter={filter} />
+						<QueryRows fetchBroken={fetchBroken} filter={filter} />
 					</AsyncBoundary>
 				</QueryClientProvider>
 			);
@@ -329,11 +372,11 @@ describe("AsyncBoundary", () => {
 			silenceErrors();
 			const user = userEvent.setup();
 			let fail = true;
-			function Flaky() {
-				if (fail) throw new Error("offline");
-				return <p>Chart</p>;
-			}
-			await renderBoundary(<Flaky />);
+			await renderBoundary(
+				<Flaky fails={() => fail}>
+					<p>Chart</p>
+				</Flaky>,
+			);
 			fail = false;
 
 			await user.click(screen.getByRole("button", { name: "Try again" }));
@@ -350,16 +393,14 @@ describe("AsyncBoundary", () => {
 			const { AppRouter } = createAppRouter();
 			const { promise, resolve } = deferred<string>();
 			let fail = true;
-			function Flaky() {
-				if (fail) throw new Error("offline");
-				return <Suspends promise={promise} />;
-			}
 			await act(async () =>
 				render(
 					<>
 						<input aria-label="Note" />
 						<AsyncBoundary label="cash flow" skeleton={<p>Skeleton</p>}>
-							<Flaky />
+							<Flaky fails={() => fail}>
+								<Suspends promise={promise} />
+							</Flaky>
 						</AsyncBoundary>
 					</>,
 					{ wrapper: AppRouter },
@@ -381,9 +422,6 @@ describe("AsyncBoundary", () => {
 		it("a failed Try again moves focus to the new Try again", async () => {
 			silenceErrors();
 			const user = userEvent.setup();
-			function AlwaysFails(): never {
-				throw new Error("offline");
-			}
 			await renderBoundary(<AlwaysFails />);
 
 			await user.click(screen.getByRole("button", { name: "Try again" }));
@@ -398,25 +436,21 @@ describe("AsyncBoundary", () => {
 			const user = userEvent.setup();
 			const { router, AppRouter } = createAppRouter();
 			const { promise, resolve } = deferred<string>();
-			// A real refresh suspends the page above, so the card stays up until the server answers.
 			let startRefresh = () => {};
-			function Page({ children }: { children: React.ReactNode }) {
-				const [refreshing, setRefreshing] = useState(false);
-				startRefresh = () => setRefreshing(true);
-				if (refreshing) use(promise);
-				return children;
-			}
 			router.refresh.mockImplementation(() => startRefresh());
 			let fail = true;
-			function Flaky() {
-				if (fail) throw new Error("offline");
-				return <p>Chart</p>;
-			}
 			await act(async () =>
 				render(
-					<Page>
+					<Page
+						exposeRefresh={(start) => {
+							startRefresh = start;
+						}}
+						promise={promise}
+					>
 						<AsyncBoundary label="cash flow" skeleton={<p>Skeleton</p>}>
-							<Flaky />
+							<Flaky fails={() => fail}>
+								<p>Chart</p>
+							</Flaky>
 						</AsyncBoundary>
 					</Page>,
 					{ wrapper: AppRouter },
@@ -438,9 +472,6 @@ describe("AsyncBoundary", () => {
 
 		it("lets redirect() through to the boundary above", async () => {
 			silenceErrors();
-			function Redirects(): never {
-				redirect("/sign-in");
-			}
 			const { AppRouter } = createAppRouter();
 			await act(async () =>
 				render(
