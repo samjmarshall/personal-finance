@@ -31,6 +31,7 @@ const TRANSACTION: Transaction = {
 	notes: null,
 	provenance: Provenance.Manual,
 	externalId: null,
+	externalAccountId: null,
 	accountName: null,
 	createdAt: new Date("2026-09-01T01:00:00.000Z"),
 	updatedAt: null,
@@ -132,6 +133,53 @@ describe("transaction router", () => {
 			callerWith({ delete: method }).transaction.delete({ id: 1 }),
 		).resolves.toEqual({ success: true });
 		expect(calls).toEqual([[1]]);
+	});
+
+	it("possibleDuplicates and possibleDuplicateCount read the pending reviews", async () => {
+		const list = recorder([]);
+		const count = recorder(2);
+		const caller = callerWith({
+			listPossibleDuplicates: list.method,
+			possibleDuplicateCount: count.method,
+		});
+
+		await expect(caller.transaction.possibleDuplicates()).resolves.toEqual([]);
+		await expect(caller.transaction.possibleDuplicateCount()).resolves.toBe(2);
+		expect([list.calls, count.calls]).toEqual([[[]], [[]]]);
+	});
+
+	it("resolveDuplicate hands the service the id and choice", async () => {
+		const { method, calls } = recorder(undefined);
+
+		await callerWith({ resolveDuplicate: method }).transaction.resolveDuplicate(
+			{ id: 4, choice: "use_bank" },
+		);
+
+		expect(calls).toEqual([[{ id: 4, choice: "use_bank" }]]);
+	});
+
+	it("resolveDuplicate refuses an unknown choice before reaching the service", async () => {
+		const { method, calls } = recorder(undefined);
+
+		await expect(
+			callerWith({ resolveDuplicate: method }).transaction.resolveDuplicate({
+				id: 4,
+				choice: "merge" as never,
+			}),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		expect(calls).toEqual([]);
+	});
+
+	it("rejects a signed-out resolveDuplicate before reaching the service", async () => {
+		const { method, calls } = recorder(undefined);
+
+		await expect(
+			callerWith(
+				{ resolveDuplicate: method },
+				null,
+			).transaction.resolveDuplicate({ id: 4, choice: "keep_mine" }),
+		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+		expect(calls).toEqual([]);
 	});
 
 	it("surfaces a NotFoundError as NOT_FOUND", async () => {

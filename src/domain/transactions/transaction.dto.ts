@@ -76,3 +76,10 @@ export const linkExpenseDto = z.object({
 });
 
 export type LinkExpenseInput = z.infer<typeof linkExpenseDto>;
+
+export const resolveDuplicateDto = z.object({
+	id: z.number().int().positive(),
+	choice: z.enum(["keep_mine", "use_bank", "both_real"]),
+});
+
+export type ResolveDuplicateInput = z.infer<typeof resolveDuplicateDto>;

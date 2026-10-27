@@ -6,7 +6,12 @@ import {
 	pgTable,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { Frequency, Priority, Provenance } from "~/lib/constants";
+import {
+	Frequency,
+	PossibleDuplicateStatus,
+	Priority,
+	Provenance,
+} from "~/lib/constants";
 import { categories } from "~/server/categories/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 
@@ -45,6 +50,7 @@ export const transactions = pgTable(
 		provenance: transactionProvenance().notNull().default(Provenance.Manual),
 		// The provider's own id; null on a manual row.
 		externalId: d.text(),
+		externalAccountId: d.text(),
 		accountName: d.text(),
 		createdAt: d
 			.timestamp({ withTimezone: true })
@@ -67,5 +73,51 @@ export const transactions = pgTable(
 			"transaction_expense_or_category_check",
 			sql`${t.expenseId} IS NULL OR ${t.categoryId} IS NULL`,
 		),
+	],
+);
+
+export const possibleDuplicateStatus = pgEnum(
+	"possible_duplicate_status",
+	Object.values(PossibleDuplicateStatus) as [
+		PossibleDuplicateStatus,
+		...PossibleDuplicateStatus[],
+	],
+);
+
+// A bank row that looks like a household row but isn't exact, held until a
+// member answers. Nothing reaches `transaction` until then.
+export const possibleDuplicates = pgTable(
+	"possible_duplicate",
+	(d) => ({
+		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		// A backstop only: deleting the row first adds its held bank rows.
+		transactionId: d
+			.integer()
+			.notNull()
+			.references(() => transactions.id, { onDelete: "cascade" }),
+		provenance: transactionProvenance()
+			.$type<Exclude<Provenance, Provenance.Manual>>()
+			.notNull(),
+		externalId: d.text().notNull(),
+		externalAccountId: d.text().notNull(),
+		accountName: d.text().notNull(),
+		amount: d.doublePrecision().notNull(),
+		date: d.timestamp({ withTimezone: true }).notNull(),
+		description: d.text().notNull(),
+		status: possibleDuplicateStatus()
+			.notNull()
+			.default(PossibleDuplicateStatus.Pending),
+		createdAt: d
+			.timestamp({ withTimezone: true })
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+	}),
+	(t) => [
+		uniqueIndex("possible_duplicate_external_idx").on(
+			t.provenance,
+			t.externalId,
+		),
+		index("possible_duplicate_transaction_idx").on(t.transactionId),
 	],
 );

@@ -1,4 +1,9 @@
-import type { Frequency, Priority, Provenance } from "~/lib/constants";
+import type {
+	Frequency,
+	PossibleDuplicateStatus,
+	Priority,
+	Provenance,
+} from "~/lib/constants";
 
 export interface Transaction {
 	id: number;
@@ -9,6 +14,7 @@ export interface Transaction {
 	date: Date;
 	description: string;
 	expenseId: number | null;
+	externalAccountId: string | null;
 	externalId: string | null;
 	frequency: Frequency;
 	group: string;
@@ -25,10 +31,51 @@ export interface SyncedTransaction {
 	// Never manual: the edit guard trusts a manual row to be member-owned.
 	provenance: Exclude<Provenance, Provenance.Manual>;
 	externalId: string;
+	// The bank's account id, so a re-linked account's old rows can be told apart.
+	externalAccountId: string;
 	accountName: string;
 	amount: number;
 	date: Date;
 	description: string;
+}
+
+// A bank row held back because it looks like a household row but isn't exact.
+// The only copy of that bank row until a member answers.
+export interface PossibleDuplicate {
+	id: number;
+	accountName: string;
+	amount: number;
+	createdAt: Date;
+	date: Date;
+	description: string;
+	externalAccountId: string;
+	externalId: string;
+	provenance: SyncedTransaction["provenance"];
+	status: PossibleDuplicateStatus;
+	transactionId: number;
+	updatedAt: Date | null;
+}
+
+// One pending question: the bank's row beside the member's.
+export interface PossibleDuplicateReview {
+	id: number;
+	bank: Pick<
+		PossibleDuplicate,
+		"date" | "amount" | "description" | "accountName"
+	>;
+	mine: Pick<
+		Transaction,
+		"id" | "date" | "amount" | "description" | "accountName" | "provenance"
+	>;
+}
+
+// What one reconcile did. `known` counts refreshed rows and reviews, and bank
+// rows a member already kept theirs over.
+export interface ReconcileCounts {
+	added: number;
+	adopted: number;
+	flagged: number;
+	known: number;
 }
 
 // One Expense's Consumed: linked Spend net of refunds

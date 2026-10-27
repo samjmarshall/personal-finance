@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
 	linkExpenseDto,
+	resolveDuplicateDto,
 	transactionCreateDto,
 	transactionListQueryDto,
 	transactionUpdateDto,
@@ -32,6 +33,20 @@ export const transactionRouter = createTRPCRouter({
 	linkExpense: protectedProcedure
 		.input(linkExpenseDto)
 		.mutation(({ ctx, input }) => ctx.services.transactions.linkExpense(input)),
+
+	possibleDuplicates: protectedProcedure.query(({ ctx }) =>
+		ctx.services.transactions.listPossibleDuplicates(),
+	),
+
+	possibleDuplicateCount: protectedProcedure.query(({ ctx }) =>
+		ctx.services.transactions.possibleDuplicateCount(),
+	),
+
+	resolveDuplicate: protectedProcedure
+		.input(resolveDuplicateDto)
+		.mutation(({ ctx, input }) =>
+			ctx.services.transactions.resolveDuplicate(input),
+		),
 
 	delete: protectedProcedure
 		.input(z.object({ id: z.number() }))

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type {
 	ExpenseConsumption,
+	PossibleDuplicateReview,
+	ReconcileCounts,
+	ReconcilePlan,
 	SyncedTransaction,
 	Transaction,
 	TransactionSummary,
@@ -37,7 +40,15 @@ function serviceWith(
 		list: unstaged,
 		summary: unstaged,
 		insert: unstaged,
-		upsertSynced: unstaged,
+		findKnownExternalIds: unstaged,
+		findReviews: unstaged,
+		findMatchCandidates: unstaged,
+		applyReconcile: unstaged,
+		listPendingDuplicates: unstaged,
+		countPendingDuplicates: unstaged,
+		keepMine: unstaged,
+		useBanks: unstaged,
+		bothReal: unstaged,
 		findSyncedValues: unstaged,
 		update: unstaged,
 		findUnplanned: unstaged,
@@ -72,6 +83,7 @@ const TRANSACTION: Transaction = {
 	notes: null,
 	provenance: Provenance.Manual,
 	externalId: null,
+	externalAccountId: null,
 	accountName: null,
 	createdAt: new Date("2026-09-01T01:00:00.000Z"),
 	updatedAt: null,
@@ -178,43 +190,221 @@ describe("create", () => {
 	});
 });
 
-describe("upsertSynced", () => {
+describe("reconcileSynced", () => {
 	const SYNCED: SyncedTransaction = {
 		provenance: Provenance.Cdr,
 		externalId: "txn_1",
+		externalAccountId: "acct_1",
 		accountName: "Everyday",
 		date: new Date("2026-10-15T00:00:00.000Z"),
 		description: "WOOLWORTHS",
 		amount: 42.5,
 	};
+	const COUNTS: ReconcileCounts = {
+		added: 1,
+		adopted: 0,
+		flagged: 0,
+		known: 0,
+	};
+	const LIVE = { liveAccountIds: ["acct_1"] };
 
-	it("hands the rows to the repository", async () => {
-		const upserted: unknown[] = [];
+	function reconciling(staged: Partial<TransactionsRepository> = {}) {
+		const reads: unknown[][] = [];
+		const plans: ReconcilePlan[] = [];
 		const service = serviceWith({
-			upsertSynced: async (rows) => {
-				upserted.push(rows);
+			findKnownExternalIds: async (...args) => {
+				reads.push(["known", ...args]);
+				return [];
 			},
+			findReviews: async (...args) => {
+				reads.push(["reviews", ...args]);
+				return [];
+			},
+			findMatchCandidates: async (...args) => {
+				reads.push(["candidates", ...args]);
+				return [];
+			},
+			applyReconcile: async (plan) => {
+				plans.push(plan);
+				return COUNTS;
+			},
+			...staged,
 		});
-		const other = { ...SYNCED, externalId: "txn_2" };
+		return { service, reads, plans };
+	}
 
-		await service.upsertSynced([SYNCED, other]);
+	it("reads and writes nothing for no rows", async () => {
+		const { service, reads, plans } = reconciling();
 
-		expect(upserted).toEqual([[SYNCED, other]]);
+		await expect(service.reconcileSynced([], LIVE)).resolves.toEqual({
+			added: 0,
+			adopted: 0,
+			flagged: 0,
+			known: 0,
+		});
+		expect(reads).toEqual([]);
+		expect(plans).toEqual([]);
+	});
+
+	// A Sydney day starts the UTC day before, so each side gets a day of slack.
+	it("reads ids, reviews and candidates over the rows' dates plus 8 and 9 days", async () => {
+		const { service, reads } = reconciling();
+		const older = {
+			...SYNCED,
+			externalId: "txn_0",
+			date: new Date("2026-10-10T00:00:00.000Z"),
+		};
+
+		await service.reconcileSynced([SYNCED, older], LIVE);
+
+		expect(reads).toEqual([
+			["known", Provenance.Cdr, ["txn_1", "txn_0"]],
+			["reviews", Provenance.Cdr, ["txn_1", "txn_0"]],
+			[
+				"candidates",
+				{
+					from: new Date("2026-10-02T00:00:00.000Z"),
+					to: new Date("2026-10-24T00:00:00.000Z"),
+					liveAccountIds: ["acct_1"],
+				},
+			],
+		]);
+	});
+
+	it("adopts a household row on the same Sydney day and cent", async () => {
+		const { service, plans } = reconciling({
+			findMatchCandidates: async () => [
+				{
+					id: 1,
+					date: new Date("2026-10-14T13:00:00.000Z"),
+					amount: 42.5,
+					externalId: null,
+					externalAccountId: null,
+					heldBy: null,
+				},
+			],
+		});
+
+		await expect(service.reconcileSynced([SYNCED], LIVE)).resolves.toEqual(
+			COUNTS,
+		);
+		expect(plans).toEqual([
+			{
+				refresh: [],
+				add: [],
+				adopt: [{ transactionId: 1, row: SYNCED, heldBy: null }],
+				flag: [],
+				skipped: [],
+			},
+		]);
 	});
 
 	// Postgres refuses one upsert that hits the same row twice (SQLSTATE 21000).
 	it("keeps only the later of two rows with the same externalId", async () => {
-		const upserted: unknown[] = [];
-		const service = serviceWith({
-			upsertSynced: async (rows) => {
-				upserted.push(rows);
-			},
-		});
+		const { service, plans } = reconciling();
 		const later = { ...SYNCED, amount: 50 };
 
-		await service.upsertSynced([SYNCED, later]);
+		await service.reconcileSynced([SYNCED, later], LIVE);
 
-		expect(upserted).toEqual([[later]]);
+		expect(plans.map((plan) => plan.add)).toEqual([[later]]);
+	});
+
+	it("plans each provenance on its own and sums the counts", async () => {
+		const { service, reads, plans } = reconciling();
+		const paypal: SyncedTransaction = {
+			...SYNCED,
+			provenance: Provenance.Paypal,
+		};
+
+		await expect(
+			service.reconcileSynced([SYNCED, paypal], LIVE),
+		).resolves.toEqual({ added: 2, adopted: 0, flagged: 0, known: 0 });
+		expect(reads.filter(([kind]) => kind === "known")).toEqual([
+			["known", Provenance.Cdr, ["txn_1"]],
+			["known", Provenance.Paypal, ["txn_1"]],
+		]);
+		expect(plans.map((plan) => plan.add)).toEqual([[SYNCED], [paypal]]);
+	});
+});
+
+describe("possible duplicates", () => {
+	const REVIEW: PossibleDuplicateReview = {
+		id: 4,
+		bank: {
+			date: new Date("2026-10-15T00:00:00.000Z"),
+			amount: 41,
+			description: "WOOLIES",
+			accountName: "Everyday",
+		},
+		mine: {
+			id: 1,
+			date: new Date("2026-10-14T13:00:00.000Z"),
+			amount: 42.5,
+			description: "Groceries",
+			accountName: null,
+			provenance: Provenance.Manual,
+		},
+	};
+
+	it("lists and counts the pending reviews", async () => {
+		const service = serviceWith({
+			listPendingDuplicates: async () => [REVIEW],
+			countPendingDuplicates: async () => 1,
+		});
+
+		await expect(service.listPossibleDuplicates()).resolves.toEqual([REVIEW]);
+		await expect(service.possibleDuplicateCount()).resolves.toBe(1);
+	});
+
+	it.each([
+		["keep_mine", "keepMine"],
+		["use_bank", "useBanks"],
+		["both_real", "bothReal"],
+	] as const)("%s resolves through %s", async (choice, method) => {
+		const calls: number[] = [];
+		const service = serviceWith({
+			[method]: async (id: number) => {
+				calls.push(id);
+				return true;
+			},
+		});
+
+		await service.resolveDuplicate({ id: 4, choice });
+
+		expect(calls).toEqual([4]);
+	});
+
+	it("404s a review that is gone or already answered", async () => {
+		const service = serviceWith({ keepMine: async () => false });
+
+		const thrown = await service
+			.resolveDuplicate({ id: 4, choice: "keep_mine" })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Possible duplicate not found." });
+	});
+
+	it("conflicts when the bank row already sits on another row", async () => {
+		const service = serviceWith({ useBanks: throwing(failedQuery("23505")) });
+
+		const thrown = await service
+			.resolveDuplicate({ id: 4, choice: "use_bank" })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(ConflictError);
+		expect(thrown).toMatchObject({
+			message: "That bank row is already in your transactions.",
+		});
+	});
+
+	it("lets any other driver error bubble", async () => {
+		const error = failedQuery("57014");
+		const service = serviceWith({ bothReal: throwing(error) });
+
+		await expect(
+			service.resolveDuplicate({ id: 4, choice: "both_real" }),
+		).rejects.toBe(error);
 	});
 });
 

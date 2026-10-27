@@ -83,7 +83,7 @@ export function fromDateInput(value: string): Date | null {
 
 // Intl rejects an unknown IANA zone by throwing, and a zone string can arrive from a
 // client — fall back to the runtime's own zone so a bad value degrades rather than 500s.
-// Cached because startOfDayInZone runs per row over a scan window.
+// Cached because the zoned-day helpers run per row over a scan window.
 const zonedDayFormatters = new Map<string, Intl.DateTimeFormat>();
 function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 	const cached = zonedDayFormatters.get(timeZone);
@@ -112,6 +112,12 @@ export function startOfDayInZone(value: Date, timeZone: string): Date {
 	const part = (type: Intl.DateTimeFormatPartTypes) =>
 		Number(parts.find((p) => p.type === type)?.value);
 	return new Date(part("year"), part("month") - 1, part("day"));
+}
+
+// `YYYY-MM-DD` of the calendar day `value` lands on in `timeZone` (IANA), so two
+// instants from either side of UTC midnight compare as one day.
+export function dayKeyInZone(value: Date, timeZone: string): string {
+	return zonedDayFormatter(timeZone).format(value);
 }
 
 // Compare by local calendar day, not instant: a one-time due today is upcoming,

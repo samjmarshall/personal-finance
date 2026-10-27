@@ -31,6 +31,7 @@ describe("mapRedbarkTransaction", () => {
 		expect(mapRedbarkTransaction(row(), "Everyday")).toEqual({
 			provenance: Provenance.Cdr,
 			externalId: "txn_1",
+			externalAccountId: "acct_1",
 			accountName: "Everyday",
 			amount: 42.5,
 			date: new Date("2026-10-01T00:00:00.000Z"),

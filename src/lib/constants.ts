@@ -56,6 +56,17 @@ export enum CdrConnectionStatus {
 	Revoked = "revoked",
 }
 
+// A bank row held for a member's answer. A kept one stays as the record of "Keep
+// mine", so the bank row is never asked about or added again.
+export enum PossibleDuplicateStatus {
+	Pending = "pending",
+	Kept = "kept",
+}
+
+// One household with AU banks only (CDR is AUD-only), so one fixed zone decides
+// which calendar day a row falls on. Becomes a setting with household scoping.
+export const HOUSEHOLD_TIME_ZONE = "Australia/Sydney";
+
 // Who recorded a balance snapshot. A label only: the latest asOf wins either way.
 export enum BalanceSource {
 	Manual = "manual",

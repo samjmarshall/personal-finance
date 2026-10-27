@@ -1,6 +1,18 @@
 import {
+	type Adoption,
+	type Flag,
+	MATCH_DAYS,
+	type MatchCandidate,
+	planReconcile,
+	type ReconcileInput,
+	type ReconcilePlan,
+	type ReconcileReview,
+} from "./reconcile-synced";
+import {
 	type LinkExpenseInput,
 	linkExpenseDto,
+	type ResolveDuplicateInput,
+	resolveDuplicateDto,
 	type TransactionCreateInput,
 	type TransactionListQuery,
 	type TransactionUpdateInput,
@@ -13,6 +25,9 @@ import {
 } from "./transaction.dto";
 import type {
 	ExpenseConsumption,
+	PossibleDuplicate,
+	PossibleDuplicateReview,
+	ReconcileCounts,
 	SyncedTransaction,
 	Transaction,
 	TransactionListItem,
@@ -21,8 +36,18 @@ import type {
 } from "./transaction.interface";
 
 export type {
+	Adoption,
 	ExpenseConsumption,
+	Flag,
 	LinkExpenseInput,
+	MatchCandidate,
+	PossibleDuplicate,
+	PossibleDuplicateReview,
+	ReconcileCounts,
+	ReconcileInput,
+	ReconcilePlan,
+	ReconcileReview,
+	ResolveDuplicateInput,
 	SyncedTransaction,
 	Transaction,
 	TransactionCreateInput,
@@ -36,6 +61,9 @@ export type {
 };
 export {
 	linkExpenseDto,
+	MATCH_DAYS,
+	planReconcile,
+	resolveDuplicateDto,
 	transactionCreateDto,
 	transactionListQueryDto,
 	transactionUpdateDto,

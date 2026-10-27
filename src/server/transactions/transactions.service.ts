@@ -1,16 +1,21 @@
-import type {
-	ExpenseConsumption,
-	LinkExpenseInput,
-	SyncedTransaction,
-	Transaction,
-	TransactionCreateInput,
-	TransactionListQuery,
-	TransactionListResult,
-	TransactionSummary,
-	TransactionUpdateInput,
-	UnplannedWindow,
+import {
+	type ExpenseConsumption,
+	type LinkExpenseInput,
+	MATCH_DAYS,
+	type PossibleDuplicateReview,
+	planReconcile,
+	type ReconcileCounts,
+	type ResolveDuplicateInput,
+	type SyncedTransaction,
+	type Transaction,
+	type TransactionCreateInput,
+	type TransactionListQuery,
+	type TransactionListResult,
+	type TransactionSummary,
+	type TransactionUpdateInput,
+	type UnplannedWindow,
 } from "~/domain/transactions";
-import { Provenance } from "~/lib/constants";
+import { HOUSEHOLD_TIME_ZONE, Provenance } from "~/lib/constants";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { assertRow } from "~/server/errors/assert-row";
 import {
@@ -40,6 +45,28 @@ const LINKED_CATEGORY_MESSAGE =
 const NOT_FOUND_MESSAGE = "Transaction not found.";
 // Each re-sync rewrites a synced row's amount and date, so an edit would vanish.
 const BANK_OWNED_MESSAGE = "Amount and date come from the bank.";
+const DUPLICATE_NOT_FOUND_MESSAGE = "Possible duplicate not found.";
+// Use bank's moves the bank id onto the household row; another row may hold it.
+const BANK_ROW_TAKEN_MESSAGE = "That bank row is already in your transactions.";
+
+const MS_PER_DAY = 86_400_000;
+// A Sydney day starts the UTC day before, so the scan takes a day of slack each
+// side; the planner keeps the exact window.
+const SCAN_BEFORE_DAYS = MATCH_DAYS + 1;
+const SCAN_AFTER_DAYS = MATCH_DAYS + 2;
+
+const NO_COUNTS: ReconcileCounts = {
+	added: 0,
+	adopted: 0,
+	flagged: 0,
+	known: 0,
+};
+const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
+	added: a.added + b.added,
+	adopted: a.adopted + b.adopted,
+	flagged: a.flagged + b.flagged,
+	known: a.known + b.known,
+});
 
 const rethrowWriteConflict = (error: unknown, fkMessage: string): never => {
 	if (isPgViolation(error, PgViolation.CheckViolation)) {
@@ -112,11 +139,52 @@ export class TransactionsService {
 
 	// A page that shifts mid-fetch can repeat a row, and Postgres refuses one
 	// upsert that hits the same row twice (SQLSTATE 21000). The later copy wins.
-	upsertSynced(rows: SyncedTransaction[]): Promise<void> {
-		const unique = new Map(
-			rows.map((row) => [`${row.provenance}:${row.externalId}`, row]),
-		);
-		return this.repository.upsertSynced([...unique.values()]);
+	// A bank id is unique only within its provenance, so each is planned alone.
+	async reconcileSynced(
+		rows: SyncedTransaction[],
+		{ liveAccountIds }: { liveAccountIds: string[] },
+	): Promise<ReconcileCounts> {
+		const byProvenance = new Map<
+			SyncedTransaction["provenance"],
+			Map<string, SyncedTransaction>
+		>();
+		for (const row of rows) {
+			const group = byProvenance.get(row.provenance) ?? new Map();
+			byProvenance.set(row.provenance, group.set(row.externalId, row));
+		}
+		let counts = NO_COUNTS;
+		for (const [provenance, group] of byProvenance) {
+			const result = await this.reconcileGroup(
+				provenance,
+				[...group.values()],
+				liveAccountIds,
+			);
+			counts = sumCounts(counts, result);
+		}
+		return counts;
+	}
+
+	listPossibleDuplicates(): Promise<PossibleDuplicateReview[]> {
+		return this.repository.listPendingDuplicates();
+	}
+
+	possibleDuplicateCount(): Promise<number> {
+		return this.repository.countPendingDuplicates();
+	}
+
+	async resolveDuplicate({ id, choice }: ResolveDuplicateInput): Promise<void> {
+		const resolve = {
+			keep_mine: () => this.repository.keepMine(id),
+			use_bank: () => this.repository.useBanks(id),
+			both_real: () => this.repository.bothReal(id),
+		}[choice];
+		const found = await resolve().catch((error: unknown) => {
+			if (isPgViolation(error, PgViolation.UniqueViolation)) {
+				throw new ConflictError(BANK_ROW_TAKEN_MESSAGE, { cause: error });
+			}
+			throw error;
+		});
+		if (!found) throw new NotFoundError(DUPLICATE_NOT_FOUND_MESSAGE);
 	}
 
 	// A missing id 404s at the first read; a row deleted between that read and
@@ -175,6 +243,35 @@ export class TransactionsService {
 
 	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]> {
 		return this.repository.datedAmounts();
+	}
+
+	/** `incoming`: all of `provenance`, unique by bank id, not empty. */
+	private async reconcileGroup(
+		provenance: SyncedTransaction["provenance"],
+		incoming: SyncedTransaction[],
+		liveAccountIds: string[],
+	): Promise<ReconcileCounts> {
+		const ids = incoming.map((row) => row.externalId);
+		const times = incoming.map((row) => row.date.getTime());
+		const [knownIds, reviews, candidates] = await Promise.all([
+			this.repository.findKnownExternalIds(provenance, ids),
+			this.repository.findReviews(provenance, ids),
+			this.repository.findMatchCandidates({
+				from: new Date(Math.min(...times) - SCAN_BEFORE_DAYS * MS_PER_DAY),
+				to: new Date(Math.max(...times) + SCAN_AFTER_DAYS * MS_PER_DAY),
+				liveAccountIds,
+			}),
+		]);
+		return this.repository.applyReconcile(
+			planReconcile({
+				incoming,
+				knownIds,
+				reviews,
+				candidates,
+				liveAccountIds,
+				timeZone: HOUSEHOLD_TIME_ZONE,
+			}),
+		);
 	}
 
 	/** 404s a missing row; refuses a changed amount or date on a synced row. True when synced. */

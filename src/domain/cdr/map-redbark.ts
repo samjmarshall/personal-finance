@@ -33,6 +33,7 @@ export function mapRedbarkTransaction(
 	return {
 		provenance: Provenance.Cdr,
 		externalId: row.id,
+		externalAccountId: row.account,
 		accountName,
 		amount,
 		// Bank date has no time or zone. UTC midnight shows the same day in Australia.

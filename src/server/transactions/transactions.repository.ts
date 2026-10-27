@@ -11,14 +11,21 @@ import {
 	isNull,
 	lt,
 	lte,
+	notExists,
+	notInArray,
 	or,
 	type SQL,
 	sql,
 } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
+import { alias, type PgColumn } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type {
 	ExpenseConsumption,
+	MatchCandidate,
+	PossibleDuplicateReview,
+	ReconcileCounts,
+	ReconcilePlan,
+	ReconcileReview,
 	SyncedTransaction,
 	Transaction,
 	TransactionCreateInput,
@@ -28,8 +35,9 @@ import type {
 	transactionSortBy,
 	UnplannedWindow,
 } from "~/domain/transactions";
+import { PossibleDuplicateStatus } from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
-import { transactions } from "./transactions.schema";
+import { possibleDuplicates, transactions } from "./transactions.schema";
 
 export type TransactionLink = Pick<Transaction, "expenseId" | "categoryId">;
 /** A row's bank-owned values, plus provenance to tell if it is synced. */
@@ -52,6 +60,11 @@ export type DatedTransaction = Pick<
 	"id" | "description" | "amount" | "date"
 >;
 
+type SyncedProvenance = SyncedTransaction["provenance"];
+type Executor =
+	| typeof realDb
+	| Parameters<Parameters<typeof realDb.transaction>[0]>[0];
+
 // One page of rows; total counts every match, not just this page
 export interface TransactionPage {
 	items: Transaction[];
@@ -62,8 +75,35 @@ export interface TransactionsRepository {
 	list(query: TransactionListQuery): Promise<TransactionPage>;
 	summary(): Promise<TransactionSummary>;
 	insert(values: TransactionCreateInput): Promise<Transaction | undefined>;
-	/** Insert, or on a repeat bank id refresh only amount, date and account name. */
-	upsertSynced(rows: SyncedTransaction[]): Promise<void>;
+	/** Bank ids among `externalIds` already in `transaction`. */
+	findKnownExternalIds(
+		provenance: SyncedProvenance,
+		externalIds: string[],
+	): Promise<string[]>;
+	/** Every review of these bank ids, any status. */
+	findReviews(
+		provenance: SyncedProvenance,
+		externalIds: string[],
+	): Promise<ReconcileReview[]>;
+	/**
+	 * Rows dated in `[from, to)` a bank row may pair with: household rows, and bank
+	 * rows of accounts not in `liveAccountIds`. None a kept review holds.
+	 */
+	findMatchCandidates(
+		window: DateWindow & { liveAccountIds: string[] },
+	): Promise<MatchCandidate[]>;
+	/**
+	 * One transaction. A refresh or add touches only bank-owned columns. An
+	 * adoption whose row was claimed or deleted since the read adds its bank row.
+	 */
+	applyReconcile(plan: ReconcilePlan): Promise<ReconcileCounts>;
+	/** Newest bank date first. */
+	listPendingDuplicates(): Promise<PossibleDuplicateReview[]>;
+	countPendingDuplicates(): Promise<number>;
+	/** Each resolve acts only on a pending review; false when there is none. */
+	keepMine(id: number): Promise<boolean>;
+	useBanks(id: number): Promise<boolean>;
+	bothReal(id: number): Promise<boolean>;
 	/** `undefined` when no row has the id. */
 	findSyncedValues(id: number): Promise<SyncedValues | undefined>;
 	/** `undefined` when no row has the id. */
@@ -79,6 +119,7 @@ export interface TransactionsRepository {
 	findLink(id: number): Promise<TransactionLink | undefined>;
 	/** `undefined` when no row has the id. */
 	setLink(id: number, link: TransactionLink): Promise<Transaction | undefined>;
+	/** Adds every bank row a review holds on it first: the review is its only copy. */
 	delete(id: number): Promise<void>;
 	consumedByExpense(): Promise<ExpenseConsumption[]>;
 	/** Every Transaction's date and amount: the cash flow actuals. */
@@ -88,6 +129,22 @@ export interface TransactionsRepository {
 // The value the conflicting INSERT row tried to write.
 const excluded = (column: PgColumn) =>
 	sql`excluded.${sql.identifier(column.name)}`;
+
+// The bank's half of a review, shaped as the row it would become.
+const reviewBankRow = {
+	provenance: possibleDuplicates.provenance,
+	externalId: possibleDuplicates.externalId,
+	externalAccountId: possibleDuplicates.externalAccountId,
+	accountName: possibleDuplicates.accountName,
+	amount: possibleDuplicates.amount,
+	date: possibleDuplicates.date,
+	description: possibleDuplicates.description,
+};
+
+const isPending = eq(
+	possibleDuplicates.status,
+	PossibleDuplicateStatus.Pending,
+);
 
 // Spend is a positive amount; a refund (negative) counts as 0 toward it.
 const spendAmount = sql`case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end`;
@@ -221,11 +278,236 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		return row;
 	}
 
-	// A re-sync refreshes only amount, date and account name. The description and
-	// member edits (Expense link, Category, Group, notes) stay put.
-	async upsertSynced(rows: SyncedTransaction[]): Promise<void> {
+	async findKnownExternalIds(
+		provenance: SyncedProvenance,
+		externalIds: string[],
+	): Promise<string[]> {
+		if (!externalIds.length) return [];
+		const rows = await this.db
+			.select({ externalId: transactions.externalId })
+			.from(transactions)
+			.where(
+				and(
+					eq(transactions.provenance, provenance),
+					inArray(transactions.externalId, externalIds),
+				),
+			);
+		// The `in` filter drops null ids, but the column type stays nullable.
+		return rows.map((r) => r.externalId as string);
+	}
+
+	async findReviews(
+		provenance: SyncedProvenance,
+		externalIds: string[],
+	): Promise<ReconcileReview[]> {
+		if (!externalIds.length) return [];
+		return this.db
+			.select({
+				id: possibleDuplicates.id,
+				externalId: possibleDuplicates.externalId,
+				status: possibleDuplicates.status,
+				transactionId: possibleDuplicates.transactionId,
+			})
+			.from(possibleDuplicates)
+			.where(
+				and(
+					eq(possibleDuplicates.provenance, provenance),
+					inArray(possibleDuplicates.externalId, externalIds),
+				),
+			);
+	}
+
+	findMatchCandidates({
+		from,
+		to,
+		liveAccountIds,
+	}: DateWindow & { liveAccountIds: string[] }): Promise<MatchCandidate[]> {
+		const kept = alias(possibleDuplicates, "kept");
+		return this.db
+			.select({
+				id: transactions.id,
+				date: transactions.date,
+				amount: transactions.amount,
+				externalId: transactions.externalId,
+				externalAccountId: transactions.externalAccountId,
+				heldBy: possibleDuplicates.id,
+			})
+			.from(transactions)
+			.leftJoin(
+				possibleDuplicates,
+				and(eq(possibleDuplicates.transactionId, transactions.id), isPending),
+			)
+			.where(
+				and(
+					gte(transactions.date, from),
+					lt(transactions.date, to),
+					or(
+						isNull(transactions.externalId),
+						and(
+							isNotNull(transactions.externalAccountId),
+							notInArray(transactions.externalAccountId, liveAccountIds),
+						),
+					),
+					notExists(
+						this.db
+							.select({ id: kept.id })
+							.from(kept)
+							.where(
+								and(
+									eq(kept.transactionId, transactions.id),
+									eq(kept.status, PossibleDuplicateStatus.Kept),
+								),
+							),
+					),
+				),
+			);
+	}
+
+	applyReconcile(plan: ReconcilePlan): Promise<ReconcileCounts> {
+		return this.db.transaction(async (tx) => {
+			const extra: SyncedTransaction[] = [];
+			let adopted = 0;
+			for (const { transactionId, row, heldBy } of plan.adopt) {
+				if (!(await this.adopt(tx, transactionId, row))) {
+					extra.push(row);
+					continue;
+				}
+				adopted++;
+				if (heldBy === null) continue;
+				// The household row is now the exact bank row, so the close one the
+				// review held is another purchase.
+				const released = await tx
+					.delete(possibleDuplicates)
+					.where(and(eq(possibleDuplicates.id, heldBy), isPending))
+					.returning(reviewBankRow);
+				extra.push(...released);
+			}
+
+			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...extra]);
+
+			const fresh = plan.flag.filter((f) => f.reviewId === null);
+			const flagged = fresh.length
+				? await tx
+						.insert(possibleDuplicates)
+						.values(
+							fresh.map(({ transactionId, row }) => ({
+								transactionId,
+								...row,
+							})),
+						)
+						.onConflictDoNothing({
+							target: [
+								possibleDuplicates.provenance,
+								possibleDuplicates.externalId,
+							],
+						})
+						.returning({ id: possibleDuplicates.id })
+				: [];
+
+			for (const { reviewId, row } of plan.flag) {
+				if (reviewId === null) continue;
+				// Not an upsert: a review resolved since the read must not come back.
+				await tx
+					.update(possibleDuplicates)
+					.set({
+						externalAccountId: row.externalAccountId,
+						accountName: row.accountName,
+						amount: row.amount,
+						date: row.date,
+						description: row.description,
+					})
+					.where(and(eq(possibleDuplicates.id, reviewId), isPending));
+			}
+
+			return {
+				added: plan.add.length + extra.length,
+				adopted,
+				flagged: flagged.length,
+				known:
+					plan.refresh.length +
+					plan.skipped.length +
+					plan.flag.length -
+					flagged.length,
+			};
+		});
+	}
+
+	listPendingDuplicates(): Promise<PossibleDuplicateReview[]> {
+		return this.db
+			.select({
+				id: possibleDuplicates.id,
+				bank: {
+					date: possibleDuplicates.date,
+					amount: possibleDuplicates.amount,
+					description: possibleDuplicates.description,
+					accountName: possibleDuplicates.accountName,
+				},
+				mine: {
+					id: transactions.id,
+					date: transactions.date,
+					amount: transactions.amount,
+					description: transactions.description,
+					accountName: transactions.accountName,
+					provenance: transactions.provenance,
+				},
+			})
+			.from(possibleDuplicates)
+			.innerJoin(
+				transactions,
+				eq(transactions.id, possibleDuplicates.transactionId),
+			)
+			.where(isPending)
+			.orderBy(desc(possibleDuplicates.date), desc(possibleDuplicates.id));
+	}
+
+	async countPendingDuplicates(): Promise<number> {
+		const [row] = await this.db
+			.select({ count: sql<number>`cast(count(*) as int)` })
+			.from(possibleDuplicates)
+			.where(isPending);
+		return row?.count ?? 0;
+	}
+
+	async keepMine(id: number): Promise<boolean> {
+		const kept = await this.db
+			.update(possibleDuplicates)
+			.set({ status: PossibleDuplicateStatus.Kept })
+			.where(and(eq(possibleDuplicates.id, id), isPending))
+			.returning({ id: possibleDuplicates.id });
+		return kept.length > 0;
+	}
+
+	useBanks(id: number): Promise<boolean> {
+		return this.db.transaction(async (tx) => {
+			const [review] = await this.takeReview(tx, id);
+			if (!review) return false;
+			const { transactionId, description: _, ...bank } = review;
+			await tx
+				.update(transactions)
+				.set(bank)
+				.where(eq(transactions.id, transactionId));
+			return true;
+		});
+	}
+
+	bothReal(id: number): Promise<boolean> {
+		return this.db.transaction(async (tx) => {
+			const [review] = await this.takeReview(tx, id);
+			if (!review) return false;
+			const { transactionId: _, ...bank } = review;
+			await tx.insert(transactions).values(bank).onConflictDoNothing();
+			return true;
+		});
+	}
+
+	// A re-sync refreshes only the bank-owned columns. The description and member
+	// edits (Expense link, Category, Group, notes) stay put.
+	private async upsertSynced(
+		db: Executor,
+		rows: SyncedTransaction[],
+	): Promise<void> {
 		if (!rows.length) return;
-		await this.db
+		await db
 			.insert(transactions)
 			.values(rows)
 			.onConflictDoUpdate({
@@ -235,8 +517,34 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				set: {
 					amount: excluded(transactions.amount),
 					date: excluded(transactions.date),
+					externalAccountId: excluded(transactions.externalAccountId),
 					accountName: excluded(transactions.accountName),
 				},
+			});
+	}
+
+	// Guarded on a still-empty bank id, so a row claimed or deleted since the read
+	// is left alone. Takes the bank's values; the member's edits stay.
+	private async adopt(
+		tx: Executor,
+		id: number,
+		{ description: _, ...bank }: SyncedTransaction,
+	): Promise<boolean> {
+		const adopted = await tx
+			.update(transactions)
+			.set(bank)
+			.where(and(eq(transactions.id, id), isNull(transactions.externalId)))
+			.returning({ id: transactions.id });
+		return adopted.length > 0;
+	}
+
+	private takeReview(tx: Executor, id: number) {
+		return tx
+			.delete(possibleDuplicates)
+			.where(and(eq(possibleDuplicates.id, id), isPending))
+			.returning({
+				...reviewBankRow,
+				transactionId: possibleDuplicates.transactionId,
 			});
 	}
 
@@ -337,8 +645,17 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		return row;
 	}
 
-	async delete(id: number): Promise<void> {
-		await this.db.delete(transactions).where(eq(transactions.id, id));
+	delete(id: number): Promise<void> {
+		return this.db.transaction(async (tx) => {
+			const held = await tx
+				.select(reviewBankRow)
+				.from(possibleDuplicates)
+				.where(eq(possibleDuplicates.transactionId, id));
+			// A date past the sync's overlap is never fetched again.
+			if (held.length)
+				await tx.insert(transactions).values(held).onConflictDoNothing();
+			await tx.delete(transactions).where(eq(transactions.id, id));
+		});
 	}
 
 	// Lifetime Consumed per Expense, for the Planned page. The sum nets refunds
