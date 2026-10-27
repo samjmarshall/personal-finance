@@ -56,8 +56,8 @@ export function AttentionBanner({
 
 const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
 
-// Base UI keeps a disabled button at tabindex 0 and its form inputs hidden at -1,
-// so the selector alone lets in controls that refuse focus.
+// Base UI leaves a disabled button tabbable by attribute and hides form inputs
+// at -1, so matching tag names alone lets in controls that refuse focus.
 const isTabbable = (el: HTMLElement) =>
 	el.tabIndex >= 0 &&
 	!el.matches(":disabled") &&
@@ -75,6 +75,24 @@ function focusBefore(dismiss: HTMLElement) {
 			isTabbable(el),
 	);
 	before.at(-1)?.focus();
+	swallowHeldEnter();
+}
+
+// Enter clicks on press and repeats while held, so a held Enter would click
+// the control that just got focus. Drop repeats until the key comes up.
+function swallowHeldEnter() {
+	const block = (e: KeyboardEvent) => {
+		if (e.key !== "Enter" || !e.repeat) return;
+		e.preventDefault();
+		e.stopPropagation();
+	};
+	const release = (e: KeyboardEvent) => {
+		if (e.key !== "Enter") return;
+		window.removeEventListener("keydown", block, true);
+		window.removeEventListener("keyup", release, true);
+	};
+	window.addEventListener("keydown", block, true);
+	window.addEventListener("keyup", release, true);
 }
 
 // 16px float gap below the banner, plus 8px of air above it.

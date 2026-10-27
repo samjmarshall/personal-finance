@@ -59,6 +59,27 @@ describe("AttentionBanner", () => {
 		expect(screen.getByRole("button", { name: "Chart period" })).toHaveFocus();
 	});
 
+	it("doesn't let a held Enter click the control it hands focus to", async () => {
+		const user = userEvent.setup();
+		const save = vi.fn();
+		render(
+			<>
+				<button onClick={save} type="button">
+					Save
+				</button>
+				<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>
+			</>,
+		);
+		screen.getByRole("button", { name: "Dismiss" }).focus();
+
+		await user.keyboard("{Enter>3/}");
+		expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();
+		expect(save).not.toHaveBeenCalled();
+
+		await user.keyboard("{Enter}");
+		expect(save).toHaveBeenCalledOnce();
+	});
+
 	it("leaves focus alone when dismissed by mouse", async () => {
 		const user = userEvent.setup();
 		render(
