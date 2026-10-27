@@ -4,7 +4,6 @@ import {
 	BaggageKey,
 	readBaggage,
 } from "~/server/observability/tracing/baggage";
-import { currentSpanContext } from "~/server/observability/tracing/current-trace-id";
 
 // undefined = not yet built; null = no key, a permanent no-op for this process.
 let client: PostHog | null | undefined;
@@ -20,7 +19,7 @@ function getClient(): PostHog | null {
 /**
  * Sends an exception to PostHog Error Tracking. No-op without POSTHOG_KEY.
  * distinctId is the Member from baggage, or "server" for a request with no
- * Member on context; correlates to the trace via $trace_id/$span_id.
+ * Member on context. posthog-node adds $trace_id/$span_id from the active span.
  */
 export function captureException(
 	error: unknown,
@@ -31,14 +30,10 @@ export function captureException(
 
 	try {
 		const distinctId = readBaggage()[BaggageKey.MemberId] ?? "server";
-		const spanCtx = currentSpanContext();
 
 		posthog.captureException(error, distinctId, {
 			// Same value spans carry, so one production filter works for alerts on both.
 			"deployment.environment.name": process.env.VERCEL_ENV,
-			...(spanCtx
-				? { $trace_id: spanCtx.traceId, $span_id: spanCtx.spanId }
-				: {}),
 			...props,
 		});
 	} catch (captureError) {
