@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { useRef } from "react";
 import type { CdrSyncState } from "~/domain/cdr";
 import { api } from "~/trpc/react";
@@ -27,24 +28,24 @@ export function BankAccountsSection() {
 				row.accountId === accountId ? { ...row, ...change } : row,
 			),
 		);
-	const failed = useRef(false);
+	const refetchWhenDrained = useRef(false);
 	const isLastSave = () =>
 		queryClient.isMutating({
 			predicate: (m) => m.options.scope?.id === SAVE_QUEUE,
 		}) === 1;
-	// One queue keeps saves in click order. Only the last writes the cache, or a queued
-	// guess flashes back; a failure refetches then (toast: src/trpc/query-client.ts).
+	// Saves run one at a time, in click order. Only the last updates the screen, or a queued
+	// change flashes back; any failure refetches once the queue empties (toast: src/trpc/query-client.ts).
 	const settle = {
 		scope: { id: SAVE_QUEUE },
 		onSuccess: (row: CdrSyncState) => {
 			if (isLastSave()) putRow(row.accountId, row);
 		},
 		onError: () => {
-			failed.current = true;
+			refetchWhenDrained.current = true;
 		},
 		onSettled: () => {
-			if (!failed.current || !isLastSave()) return;
-			failed.current = false;
+			if (!refetchWhenDrained.current || !isLastSave()) return;
+			refetchWhenDrained.current = false;
 			return utils.cdr.syncState.invalidate();
 		},
 	};
@@ -53,7 +54,10 @@ export function BankAccountsSection() {
 
 	// Shown at once, so the switch, the counts and the Total move with no wait.
 	async function save(accountId: string, change: Partial<CdrSyncState>) {
-		// Stop a refetch already on its way, or it lands the old row on top.
+		// Stop a refetch already on its way, or it lands the old row on top. Redo it once
+		// the saves finish, or a row a failed save left wrong stays wrong.
+		if (queryClient.isFetching({ queryKey: getQueryKey(api.cdr.syncState) }))
+			refetchWhenDrained.current = true;
 		await utils.cdr.syncState.cancel();
 		putRow(accountId, change);
 	}
