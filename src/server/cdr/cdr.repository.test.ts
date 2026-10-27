@@ -78,33 +78,6 @@ describe("listSyncState", () => {
 	});
 });
 
-describe("findSyncState", () => {
-	it("reads one account's row by its RedBark id", async () => {
-		const { repository, queries } = harness(() => [rowOf(COLUMNS, SYNC_STATE)]);
-
-		await expect(repository.findSyncState("acc_1")).resolves.toEqual(
-			SYNC_STATE,
-		);
-		expect(queries).toMatchInlineSnapshot(`
-			[
-			  {
-			    "method": "all",
-			    "params": [
-			      "acc_1",
-			    ],
-			    "sql": "select "id", "accountId", "connectionId", "accountName", "institutionName", "accountNumber", "balance", "balanceAsOf", "nickname", "highWaterMark", "connectionStatus", "lastSyncedAt", "lastError", "inBalance", "createdAt", "updatedAt" from "cdr_sync_state" where "cdr_sync_state"."accountId" = $1",
-			  },
-			]
-		`);
-	});
-
-	it("gives undefined when no row has the account id", async () => {
-		const { repository } = harness();
-
-		await expect(repository.findSyncState("acc_x")).resolves.toBeUndefined();
-	});
-});
-
 describe("upsertAccount", () => {
 	// coalesce: discovery fills inBalance once, then a member's choice stays.
 	it("inserts or refreshes the account on accountId, leaving highWaterMark and a set inBalance alone", async () => {

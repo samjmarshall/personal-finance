@@ -128,7 +128,6 @@ function harness(opts: HarnessOptions = {}) {
 
 	const repository: CdrRepository = {
 		listSyncState: opts.listSyncState ?? (async () => [...states.values()]),
-		findSyncState: async (accountId) => states.get(accountId),
 		upsertAccount: async (a) => {
 			calls.push(`upsertAccount ${a.accountId}`);
 			const prev = states.get(a.accountId) ?? savedState(a.accountId);

@@ -9,7 +9,6 @@ import { CdrService } from "./cdr.service";
 function serviceWith(staged: Partial<CdrRepository>) {
 	const repository: CdrRepository = {
 		listSyncState: unstaged,
-		findSyncState: unstaged,
 		upsertAccount: unstaged,
 		advanceHighWaterMark: unstaged,
 		setConnectionStatus: unstaged,

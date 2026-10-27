@@ -14,7 +14,7 @@ export const cdrConnectionStatus = pgEnum(
 export const cdrSyncState = pgTable("cdr_sync_state", (d) => ({
 	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
 	accountId: d.text().notNull().unique(),
-	// Null on a seeded row until the first run finds its connection.
+	// Discovery always sets it. Nullable from when a seed script made rows without one.
 	connectionId: d.text(),
 	accountName: d.text(),
 	institutionName: d.text(),
@@ -31,10 +31,10 @@ export const cdrSyncState = pgTable("cdr_sync_state", (d) => ({
 		.default(CdrConnectionStatus.Pending),
 	lastSyncedAt: d.timestamp({ withTimezone: true }),
 	lastError: d.text(),
-	// Counts toward the balance anchor. Null until decided: a seeded row has no
-	// type before its first discovery.
+	// Counts toward the balance anchor. Null until decided: an unknown account type
+	// gets no default.
 	inBalance: d.boolean(),
-	// A DB default, not a JS one: the seed script inserts with raw SQL.
+	// A DB default, not a JS one, so a hand-written SQL insert still gets it.
 	createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
 	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
 }));

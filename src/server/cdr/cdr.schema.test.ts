@@ -21,14 +21,14 @@ describe("cdr_sync_state table shape (adr017 facet 5)", () => {
 		expect(cols.connectionStatus.notNull).toBe(true);
 	});
 
-	// The seed script inserts with raw SQL, so this needs a DB default, not a JS one.
+	// A hand-written SQL insert skips JS defaults, so this needs a DB one.
 	it("stamps createdAt in the database", () => {
 		expect(cols.createdAt.hasDefault).toBe(true);
 		expect(cols.createdAt.defaultFn).toBeUndefined();
 		expect(cols.createdAt.notNull).toBe(true);
 	});
 
-	// Null means a person hasn't decided yet: a seeded row has no type until discovery.
+	// Null means a person hasn't decided yet: an unknown account type gets no default.
 	it("leaves inBalance nullable with no default", () => {
 		expect(cols.inBalance.notNull).toBe(false);
 		expect(cols.inBalance.hasDefault).toBe(false);

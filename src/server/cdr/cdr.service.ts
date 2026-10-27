@@ -25,7 +25,7 @@ export class CdrService {
 		return this.repository.listSyncState();
 	}
 
-	/** Discovery's `coalesce` keeps this choice through every later sync. */
+	/** The sync never overwrites this choice once set. */
 	async setInBalance({
 		accountId,
 		inBalance,

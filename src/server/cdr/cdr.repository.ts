@@ -16,8 +16,6 @@ export type DiscoveredAccount = Pick<
 
 export interface CdrRepository {
 	listSyncState(): Promise<CdrSyncState[]>;
-	/** `undefined` when no row has the account id. */
-	findSyncState(accountId: string): Promise<CdrSyncState | undefined>;
 	/** Inserts or refreshes the account; never touches its highWaterMark, a set inBalance or the nickname. */
 	upsertAccount(account: DiscoveredAccount): Promise<void>;
 	/** Never moves the mark back. Also stamps lastSyncedAt and clears lastError. */
@@ -58,14 +56,6 @@ export class DrizzleCdrRepository implements CdrRepository {
 
 	async listSyncState(): Promise<CdrSyncState[]> {
 		return this.db.select().from(cdrSyncState).orderBy(asc(cdrSyncState.id));
-	}
-
-	async findSyncState(accountId: string): Promise<CdrSyncState | undefined> {
-		const [row] = await this.db
-			.select()
-			.from(cdrSyncState)
-			.where(eq(cdrSyncState.accountId, accountId));
-		return row;
 	}
 
 	async upsertAccount({
