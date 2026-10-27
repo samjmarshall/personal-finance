@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Validated - Phase 6 of 9
+status: Ready for Review - Phase 7 of 9
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -1439,18 +1439,18 @@ setting with household scoping (Out of Scope).
   - Fixtures: add `externalAccountId` to the `Transaction` fixtures listed in Phase 1.
 
 ### Success
-- [ ] `make check` passes (incl. `db:check` and the contract)
-- [ ] `make test` passes
-- [ ] On the branch DB, a manual row with the same day and amount as a bank row in the next
+- [x] `make check` passes (incl. `db:check` and the contract)
+- [x] `make test` passes
+- [x] On the branch DB, a manual row with the same day and amount as a bank row in the next
       run's window is adopted: it keeps its description, Expense link, Category and notes,
       shows the bank's account name, and refuses an amount edit. No second row appears
-- [ ] A manual row 3 days and 2% off a bank row gets one pending possible duplicate and no new
+- [x] A manual row 3 days and 2% off a bank row gets one pending possible duplicate and no new
       transaction; a second run adds no second review and no row
-- [ ] Through `transaction.resolveDuplicate`: keep mine stays kept through the next run; use
+- [x] Through `transaction.resolveDuplicate`: keep mine stays kept through the next run; use
       bank's gives the household row the bank's date and amount and keeps its links; both are
       real adds the bank row once. No transaction is ever deleted
-- [ ] An account with no mark fetches only the last 14 days on its first run
-- [ ] A run with nothing new leaves the transaction count unchanged
+- [x] An account with no mark fetches only the last 14 days on its first run
+- [x] A run with nothing new leaves the transaction count unchanged
 
 ---
 
