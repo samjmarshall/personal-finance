@@ -40,7 +40,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("ResendInboundMailbox.getBody", () => {
-	it("returns the html and text bodies", async () => {
+	it("returns the html and text bodies, under a timeout", async () => {
 		const h = harness();
 		h.get.mockResolvedValue({
 			data: { html: "<p>x</p>", text: "x", subject: "ignored" },
@@ -51,7 +51,9 @@ describe("ResendInboundMailbox.getBody", () => {
 			html: "<p>x</p>",
 			text: "x",
 		});
-		expect(h.get).toHaveBeenCalledWith("email-1");
+		expect(h.get).toHaveBeenCalledWith("email-1", undefined, {
+			signal: expect.any(AbortSignal),
+		});
 	});
 
 	it("throws with Resend's message when the read fails", async () => {
@@ -65,13 +67,16 @@ describe("ResendInboundMailbox.getBody", () => {
 });
 
 describe("ResendInboundMailbox.listAttachments", () => {
-	it("lists by email id and unwraps the page", async () => {
+	it("lists by email id under a timeout and unwraps the page", async () => {
 		const h = harness();
 		const items = [{ id: "a1", download_url: "https://dl.test/a1" }];
 		h.list.mockResolvedValue({ data: { data: items }, error: null });
 
 		await expect(h.mailbox.listAttachments("email-1")).resolves.toEqual(items);
-		expect(h.list).toHaveBeenCalledWith({ emailId: "email-1" });
+		expect(h.list).toHaveBeenCalledWith(
+			{ emailId: "email-1" },
+			{ signal: expect.any(AbortSignal) },
+		);
 	});
 
 	it("throws with Resend's message when the list fails", async () => {

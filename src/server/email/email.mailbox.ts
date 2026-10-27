@@ -30,6 +30,8 @@ export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // Ten attachments each allowed to hang would eat the route's whole 60s budget, so
 // one download gets a fraction of it.
 const DOWNLOAD_TIMEOUT_MS = 10_000;
+// The Resend API reads get the same cap, so a slow API can't eat the budget either.
+const RESEND_READ_TIMEOUT_MS = 10_000;
 
 interface ResendInboundMailboxDeps {
 	resend: Pick<Resend, "emails">;
@@ -43,7 +45,11 @@ export class ResendInboundMailbox implements InboundMailbox {
 	}
 
 	async getBody(emailId: string): Promise<EmailBody> {
-		const { data, error } = await this.resend.emails.receiving.get(emailId);
+		const { data, error } = await this.resend.emails.receiving.get(
+			emailId,
+			undefined,
+			{ signal: AbortSignal.timeout(RESEND_READ_TIMEOUT_MS) },
+		);
 		if (error) throw new Error(`resend get email failed: ${error.message}`);
 		return { html: data.html, text: data.text };
 	}
@@ -51,6 +57,7 @@ export class ResendInboundMailbox implements InboundMailbox {
 	async listAttachments(emailId: string): Promise<AttachmentDownload[]> {
 		const { data, error } = await this.resend.emails.receiving.attachments.list(
 			{ emailId },
+			{ signal: AbortSignal.timeout(RESEND_READ_TIMEOUT_MS) },
 		);
 		if (error)
 			throw new Error(`resend list attachments failed: ${error.message}`);
