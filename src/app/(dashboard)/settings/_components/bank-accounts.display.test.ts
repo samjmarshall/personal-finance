@@ -116,8 +116,8 @@ describe("newAccountsNote", () => {
 });
 
 describe("formatBalance", () => {
-	it("uses a real minus sign for money owed", () => {
-		expect(formatBalance(-8394.25)).toBe("−$8,394.25");
+	it("prefixes a minus for money owed", () => {
+		expect(formatBalance(-8394.25)).toBe("-$8,394.25");
 	});
 
 	it("shows a positive balance plainly", () => {

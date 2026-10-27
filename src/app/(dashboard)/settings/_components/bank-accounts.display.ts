@@ -69,7 +69,6 @@ export function newAccountsNote(accounts: Counted[]): string | null {
 		: `${undecided} new accounts need a choice. Find them marked New below.`;
 }
 
-/** A real minus sign (U+2212), not a hyphen, for money owed. */
 export function formatBalance(amount: number): string {
-	return `${amount < 0 ? "−" : ""}${formatCurrency(Math.abs(amount))}`;
+	return `${amount < 0 ? "-" : ""}${formatCurrency(Math.abs(amount))}`;
 }

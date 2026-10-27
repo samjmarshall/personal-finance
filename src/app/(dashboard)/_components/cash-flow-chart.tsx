@@ -307,7 +307,7 @@ function CashFlowTooltip({
 							<div className="flex justify-between gap-4" key={it.key}>
 								<span className="text-muted-foreground">{it.label}</span>
 								{/* item.amount is signed: + Spend, − Inflow. Show the direction
-								    as a sign too, not color alone — spend "−", inflow "+"
+								    as a sign too, not color alone — spend "-", inflow "+"
 								    (WCAG 1.4.1: color isn't the only cue). */}
 								<span
 									className={cn(
@@ -315,7 +315,7 @@ function CashFlowTooltip({
 										it.amount >= 0 ? "text-spend" : "text-positive",
 									)}
 								>
-									{it.amount >= 0 ? "−" : "+"}
+									{it.amount >= 0 ? "-" : "+"}
 									{formatCurrency(Math.abs(it.amount))}
 								</span>
 							</div>

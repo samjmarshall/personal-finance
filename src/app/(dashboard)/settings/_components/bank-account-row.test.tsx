@@ -59,12 +59,12 @@ describe("BankAccountRow", () => {
 		expect(onInBalanceChange).toHaveBeenCalledWith(to);
 	});
 
-	it("shows the name, masked number and balance with a real minus sign", () => {
+	it("shows the name, masked number and signed balance", () => {
 		renderRow();
 
 		expect(screen.getByText("Everyday Offset")).toBeInTheDocument();
 		expect(screen.getByText("xxxx8273")).toBeInTheDocument();
-		expect(screen.getByText("−$8,394.25")).toBeInTheDocument();
+		expect(screen.getByText("-$8,394.25")).toBeInTheDocument();
 	});
 
 	it("says there is no balance yet before the first read", () => {
