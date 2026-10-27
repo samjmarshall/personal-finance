@@ -4,7 +4,7 @@
 	"private": true,
 	"license": "MIT",
 	"type": "module",
-	"packageManager": "pnpm@10.18.3",
+	"packageManager": "pnpm@10.34.9",
 	"engines": {
 		"node": "24.x"
 	},
@@ -109,11 +109,11 @@
 		"initVersion": "7.40.0"
 	},
 	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild",
-			"inngest-cli",
-			"protobufjs"
-		],
+		"allowBuilds": {
+			"esbuild": true,
+			"inngest-cli": true,
+			"protobufjs": true
+		},
 		"overrides": {
 			"@vercel/cli-config>zod": "4.6.7"
 		}
