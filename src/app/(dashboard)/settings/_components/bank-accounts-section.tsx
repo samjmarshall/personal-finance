@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import type { CdrSyncState } from "~/domain/cdr";
 import { api } from "~/trpc/react";
 import { BankAccountRow } from "./bank-account-row";
@@ -26,17 +27,26 @@ export function BankAccountsSection() {
 				row.accountId === accountId ? { ...row, ...change } : row,
 			),
 		);
-	// One queue keeps saves in click order; only the last puts its row in, or an
-	// old value flashes. On error a refetch undoes the guess (toast: src/trpc/query-client.ts).
+	const failed = useRef(false);
+	const isLastSave = () =>
+		queryClient.isMutating({
+			predicate: (m) => m.options.scope?.id === SAVE_QUEUE,
+		}) === 1;
+	// One queue keeps saves in click order. Only the last writes the cache, or a queued
+	// guess flashes back; a failure refetches then (toast: src/trpc/query-client.ts).
 	const settle = {
 		scope: { id: SAVE_QUEUE },
 		onSuccess: (row: CdrSyncState) => {
-			const queued = queryClient.isMutating({
-				predicate: (m) => m.options.scope?.id === SAVE_QUEUE,
-			});
-			if (queued === 1) putRow(row.accountId, row);
+			if (isLastSave()) putRow(row.accountId, row);
 		},
-		onError: () => utils.cdr.syncState.invalidate(),
+		onError: () => {
+			failed.current = true;
+		},
+		onSettled: () => {
+			if (!failed.current || !isLastSave()) return;
+			failed.current = false;
+			return utils.cdr.syncState.invalidate();
+		},
 	};
 	const setInBalance = api.cdr.setInBalance.useMutation(settle);
 	const setNickname = api.cdr.setNickname.useMutation(settle);
