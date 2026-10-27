@@ -9,6 +9,7 @@ import {
 	NoObjectGeneratedError,
 	type TextPart,
 } from "ai";
+import { z } from "zod";
 
 import {
 	type ExtractionCategory,
@@ -52,6 +53,11 @@ enum ReceiptOutcome {
 // when the receipt has none); anything else would fail the `date` column insert and
 // roll back the whole extraction, so an off-format date is dropped rather than fatal.
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Checked after the call, not in the model schema: a bad code there would fail the
+// whole extraction. The model can return "aud" or "A$", so case is fixed first and
+// anything still not ISO 4217 is dropped.
+const CURRENCY_CODE = z.currencyCode();
 
 // Bedrock Converse caps a message at 3.75 MB per image and 4.5 MB per document (AWS
 // `Message` API reference), while uploads and inbound attachments accept 10 MB. Read
@@ -413,6 +419,7 @@ export class ReceiptExtractionService {
 					? i.categoryId
 					: null,
 		}));
+		const currency = extracted.currency.trim().toUpperCase();
 
 		await this.repository.saveExtraction(
 			receiptId,
@@ -422,7 +429,7 @@ export class ReceiptExtractionService {
 					? extracted.receiptDate
 					: null,
 				total: extracted.total,
-				currency: extracted.currency,
+				currency: CURRENCY_CODE.validate(currency) ? currency : null,
 				rawJson: extracted,
 			},
 			items,
