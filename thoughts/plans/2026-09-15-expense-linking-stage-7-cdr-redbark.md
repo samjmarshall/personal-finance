@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Validated - Phase 5 of 9
+status: Validated - Phase 6 of 9
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -394,7 +394,6 @@ Implements adr017 facets 2 (dedup upsert) and 5 (store-of-record via `cdr_sync_s
   (deps `{ db }`). It touches **only** `cdr_sync_state`: Drizzle only, throws, no logging.
   Methods:
   - `listSyncState()`
-  - `findSyncState(accountId)`
   - `upsertAccount({ accountId, connectionId, accountName, connectionStatus })` —
     `ON CONFLICT (accountId)`; never touches `highWaterMark`.
   - `advanceHighWaterMark(accountId, mark, syncedAt)` — **monotonic**:
@@ -1053,7 +1052,7 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
 ### Success
 - [x] `make check` passes
 - [x] `make test` passes
-- [ ] `/design-review` (connection-status banner)
+- [x] `/design-review` (connection-status banner)
       — run 2026-10-22, no blockers, one High open: the banner streams in after the sections
       and pushes the page down (CLS 0.123 at 375, 0.060 at 768, 0.037 at 1440; 0 with no
       banner). Contrast passes both tones and themes. Fix, then re-run.
@@ -1079,6 +1078,11 @@ from the import (Phases 7–8), so nothing has to run before the key is set.
       dismiss focus handoff (see Open). The rest of 2875003 checks out: no account named
       twice, the stall dated from a real sync, "Reauthorise" in every state, one fix line
       (alert 242 px at 320×568, was 302), focus rings 4.42:1+ on both tones. CLS 0.
+      — re-run 2026-10-27 after bc311a2: **no blockers, no Highs.** Keyboard dismiss
+      (Enter / Space, 375 / 1440, Save on / off) lands on the last real control, never
+      `<body>`, the disabled Save or a hidden input. A real mouse click on X keeps focus
+      and scrollY. Title is 600 weight. CLS 0 at 320 / 375 / 768 / 1440; focused controls
+      ≥ 8 px clear; contrast 6.47–8.18:1. The Mediums are listed under Open below.
 - [x] A `revoked` connection shows the reauthorize banner and its accounts stop syncing; an
       `expiring` one shows a soft warning; no banner shows with no linked accounts
       — 2026-10-22, DB flips on the branch: `revoked` → `role="alert"` reauthorize banner
@@ -1123,28 +1127,39 @@ focus ring on red, the `s` / `lead` names. The dismiss doc now says "until the p
 Three comments tightened in validation (`attention-banner.tsx:15`, `cdr-connection.display.ts:57`,
 `consent.ts:14`, `:19`).
 
-Open from re-validation 2026-10-26 after 2875003 (see `/resolve-findings`):
-- **Keyboard dismiss still drops focus to `<body>`** (design review High,
-  `attention-banner.tsx:56-70`). The last match before the banner is the balance form's
-  disabled **Save**. base-ui gives it `tabindex="0"`, so the `[tabindex]` clause matches it,
-  and `.focus()` on a disabled button does nothing. base-ui's hidden input
-  (`tabindex=-1`, `aria-hidden`) also matches `input:not([disabled])`. Skip `:disabled`,
-  `tabIndex < 0`, `[aria-hidden=true]` and `[inert]`. Test with a disabled base-ui `Button`.
-- **A mouse click on X moves focus and scrolls the page** (design review High,
-  `attention-banner.tsx:41-45`). Chromium focuses a button on mousedown, so the
-  `activeElement` check is true for a click too. With Save enabled the page jumps (375:
-  scrollY 2174 → 1143; 1440: 597 → 47). Hand off focus on keyboard use only (`e.detail === 0`
-  or `:focus-visible`).
-- **Global scroll padding** (`attention-banner.tsx:77-88`). It writes `<html>`'s
+Fixed from re-validation 2026-10-26 (bc311a2, 0fe95d9; checked 2026-10-27): keyboard dismiss
+dropping focus to `<body>` (skips disabled, `tabIndex < 0`, `aria-hidden`, `inert`), a mouse
+click on X moving focus and scrolling (keyboard only, `e.detail === 0`), the title not
+standing out at 375 (semibold), Phase 4's unwrapped `listSyncState()` (now non-retryable),
+Phase 5's out-of-order switch saves (one mutation `scope`; only the last save writes its row).
+Phases 7–9 plan text (a613c23): no-key import over `failed`, raw chunk errors, a stuck import
+row, Phase 8's migration, query invalidation. Two comments tightened in validation
+(`attention-banner.tsx:59`, `cdr.service.ts:28`).
+
+Open from re-validation 2026-10-27 after bc311a2 (see `/resolve-findings`). None blocks the phase:
+- **Holding Enter on X can submit the balance** (design review Medium,
+  `attention-banner.tsx:41-46`). Enter clicks X on keydown and focus moves to an enabled
+  Save; key-repeat then clicks Save (2 extra clicks seen, blocked by a page guard). Ignore
+  `e.repeat` on the handed-off control, or hand off on keyup. Space is safe.
+- **A failed save flashes the wrong value on a queued row** (design review Medium,
+  `bank-accounts-section.tsx:31-39`). A off, B off, A on, B fails: `onError` refetches while
+  A's "on" waits, so A shows off for ~920 ms. End state is right. Invalidate only when the
+  queue is empty, as `onSuccess` does.
+- **Touch dismiss untested.** A tap may report `e.detail === 1`, so it skips the handoff
+  and drops focus to `<body>` (TalkBack / VoiceOver).
+- **Keyboard dismiss scrolls far** (375: ~700–800 px; 1440: ~540 px): `focus()` scrolls the
+  handed-off control into view. Keyboard only; product call.
+- **Global scroll padding** (`attention-banner.tsx:85-95`). It writes `<html>`'s
   `scrollPaddingBottom` and resets it to `""`, not to the old value. A second banner
   would overwrite it. Matters once the banner moves to `src/components/`.
 - **Sidebar jump at 1440** (design review Medium). Tabbing to "Sign out" in the sticky
   sidebar scrolls the page 469 px, because the padding covers a part of the screen the
   banner never reaches. The next Tab jumps back.
-- **Tall on small phones** (design review Medium). The alert takes 242 px (43%) at 320×568.
-- **Expiring + stalled title hides the stall** (design review Medium). "Bank connection
-  expiring" leads; "nothing synced for 7 days" sits in paragraph 2. Fine if expiring stays
-  the fix to lead with.
+- **Tall on small phones** (design review Medium). At 320×568 the alert takes 178 px (31%),
+  the warn 182 px (32%, 8 lines). Dismissible.
+- **Expiring + stalled / behind title hides the other problem** (design review Medium).
+  "Bank connection expiring" leads; a different account's "hasn't synced since" or the
+  stall line reads as part of it, with no next step.
 - **A stalled line drops an older behind date.** A live stuck account that last synced before
   the stall date loses its own line, so the banner gives the newer day.
 - **`ROOM_ABOVE_PX = 24` copies `bottom-4`** by hand. A larger root font or a new offset
@@ -1152,46 +1167,65 @@ Open from re-validation 2026-10-26 after 2875003 (see `/resolve-findings`):
 - **Plural counts a null `connectionId` as one bank** (`cdr-connection.display.ts:111`).
   Unlikely: discovery always sets it.
 - **Full rows reach the client** (`cdr-connection-banner.tsx:10`): `lastError` text, account
-  numbers and balances sit in the RSC payload. Pass only the fields it needs.
+  numbers and balances sit in the RSC payload. Pass only the fields it needs. (Security
+  review: not a vuln, the same rows reach the same session through `cdr.syncState`.)
 - **No lasting clear** for a bank closed on purpose. Rows are never deleted, and code review
   ties this to a gone-from-RedBark account failing every run.
 - A11y: the status mounts with its text inside, so it may not be announced. The X's halo is
   ~2.3:1 in light (its 1 px border passes) and its tap area is 28×28 on mobile. Hover drops
-  the link's underline. The link's focus outline touches the "." before it.
+  the link's underline. The link's focus outline touches the "." before it. With 8 px
+  clearance at 375 a 2–3 px focus ring leaves ~5 px showing.
 - Copy: behind / stalled lines give no next step. Nothing says what RedBark is. "Lose access
-  soon" has no timeframe. The paragraph gap (`space-y-1`) is too tight. The title doesn't
-  stand out at 375. A same-day failure reads "hasn't synced since" today. A pending stuck
-  account can repeat the stall's date.
-- Smells (judgement): the dead / expiring / both cascade now runs three times (fix line,
-  title, tone): one severity value could drive all three. Consent is read five ways in
-  `connectionNotice`, and "not dead, not syncing" means Pending without saying so.
-  `stalledLine` finds the newest date twice. `STALLED_AFTER_MS` spells out a day; the repo
-  has `MS_PER_DAY`. `stuck` / `stalled` / `behind` are near-twins; `plural` returns a
-  suffix; `Label` is a function. `focusBefore` finds the banner by its role text, not the
-  ref. `ClientConnectionNotice` vs `CdrConnectionNotice` differ only by prefix. Still open
-  from before: Expiring checked inline in two files, the `CdrSyncState` test builder copied
-  three times, two "name + masked number" formats, `"alert" | "warn"` typed twice,
-  `(accounts, label)` travel together, the pre-joined strings, and `AttentionBanner` mixing
-  tone, dismiss, scroll padding and now focus.
+  soon" has no timeframe. The paragraph gap (`space-y-1`) is too tight. A same-day failure
+  reads "hasn't synced since" today. A pending stuck account can repeat the stall's date.
+- Smells (judgement): new in bc311a2 / 0fe95d9: `queued === 1` means "this is the last
+  save" (`isLastSave`?), and `m.options.scope?.id` reaches into TanStack internals
+  (`bank-accounts-section.tsx:34-37`); `e.detail === 0` is an unnamed "by keyboard";
+  `isTabbable` adds Base UI quirks to `AttentionBanner`, a fourth reason for it to change;
+  the `listSyncState` `.catch` wraps like `discover`'s try/catch in another style. Still
+  open: the dead / expiring / both cascade runs three times (fix line, title, tone); consent
+  read five ways in `connectionNotice`; `stalledLine` finds the newest date twice;
+  `STALLED_AFTER_MS` and `DAY_MS` (`cdr-sync.service.ts:20`) beside three `MS_PER_DAY`s;
+  `stuck` / `stalled` / `behind` near-twins; `plural` returns a suffix; `Label` is a
+  function; `focusBefore` finds the banner by role, not the ref; `ClientConnectionNotice` vs
+  `CdrConnectionNotice`; Expiring checked inline in two files; the `CdrSyncState` test
+  builder copied three times; two "name + masked number" formats; `"alert" | "warn"` typed
+  twice; `(accounts, label)` travel together; the pre-joined strings.
+- Smells (judgement), other phases: `save(); x.mutate(...)` twice and `nickname.trim() ||
+  null` repeating the DTO rule (`bank-accounts-section.tsx:82-97`); the null-balance "—" +
+  sr-only markup twice (`bank-accounts-section.tsx:112-119`, `bank-account-row.tsx:164-171`);
+  the AUD check and `/ 100` three times each in `map-redbark.ts`; `inBalance: boolean | null`
+  checked `=== null` in five places; "bank owns amount + date" spread over the repository,
+  service, form and interface; `guardBankValues` throws and returns "is synced";
+  `HarnessOptions` feeds a port two ways.
 - Out of scope, seen in review: the Balance card's "As of" line renders `formatDate` on the
-  server in UTC. At 375 the cash-flow chart scrolls the page sideways and the nav icon
-  overlaps the wordmark. At 375 / 768 the sticky top header can cover a control focused by
-  Shift+Tab (no `scroll-padding-top`). Uncommitted `src/components/money.tsx` swaps the "−"
-  minus sign for a hyphen.
+  server in UTC, with a stray "," before "Synced from bank". At 375 the cash-flow chart
+  scrolls the page sideways and the nav icon overlaps the wordmark. At 375 / 768 the sticky
+  top header can cover a control focused by Shift+Tab (no `scroll-padding-top`). Settings
+  switch is 32×18 px (under 24 px, WCAG 2.5.8) and its error toast says "Failed to fetch".
+  Uncommitted `src/components/money.tsx` swaps the "−" minus sign for a hyphen;
+  `formatBalance` still uses "−", so one screen shows two signs.
 - Found by code review, other phases:
-  - Phase 4: `listSyncState()` (`cdr-sync.service.ts:79`) isn't wrapped like `discover()`,
-    so a DB blip there gets Inngest's default retries, against "a driver error isn't
-    retried".
-  - Phase 5: `bank-accounts-section.tsx:28` writes each server reply over the row, and the
-    mutations can finish out of order. A quick off → on flip can land the old value.
-  - Phases 7–9 plan text: no-key import finishes `done` over `failed`; one bad chunk fails
-    the whole import; import chunks throw raw errors the controller doesn't map; exact adopt
-    can merge two real same-day, same-amount rows; `liveAccountIds` counts dead
-    connections' accounts; a row typed after its bank row is never matched; a stuck
-    import row blocks every later import; no `externalAccountId` backfill; Phase 8 names no
-    migration; `startImport` / `resolveDuplicate` don't invalidate their queries; no import
-    throttle against RedBark's 30/min; outbox prune lets an 8-day webhook replay through.
-
+  - Phase 2: one unknown account `status` (`cdr.dto.ts:34`) fails discovery, so no account
+    syncs until a code change. `X-Redbark-Truncated` throws a plain, non-retryable `Error`
+    (`cdr.redbark.ts:115`) and the next run asks for the same window, so the account never
+    syncs. `Retry-After: 0` gives a 0 ms wait (`cdr.redbark.ts:170`), so all retries hit a
+    rate-limited API at once. `listBalances` sends every id in one GET (`:97`), with no
+    split at RedBark's 100-id limit.
+  - Phase 3: `guardBankValues` (`transactions.service.ts:187`) refuses a notes edit when a
+    sync changed the row's amount or date while the form was open.
+  - Phase 4: a quiet account's mark stays put (`cdr-sync.service.ts:314`, `mark ?? from`),
+    so its window grows each day until it truncates. An account RedBark no longer lists
+    keeps `active` and fails every run (`:266`), blocking the anchor if counted. One failed
+    `recordBalance` drops every balance that run (`:213`). Each retry re-runs every account
+    (`cdr.inngest.controller.ts:43`, no steps).
+  - Phase 5: the anchor's `asOf` is the oldest balance read, but synced rows sit at UTC
+    midnight, so a same-day row posted after the read is in neither (`cdr-sync.service.ts:228`).
+  - Phases 7–9 plan text: one bad chunk fails the whole import; exact adopt can merge two
+    real same-day, same-amount rows; `liveAccountIds` counts dead connections' accounts; a
+    row typed after its bank row is never matched; no `externalAccountId` backfill; no
+    import throttle against RedBark's 30/min; outbox prune lets an 8-day webhook replay
+    through.
 ---
 
 ## Phase 7: Bank-row matching (adopt + possible duplicates)
@@ -1423,7 +1457,8 @@ window at 5,000 rows.
   - `findActiveImport()` (queued or running, created in the last 24 hours), `latestImport()`.
     A run that dies without its `onFailure` landing (cancelled in Inngest, or `failImport`
     hit a DB blip) stays `running`; without the cut-off it would refuse every later import.
-    A real run past a day only queues behind the next one on the shared concurrency key.
+    A real run past a day lets a new one start. The two interleave step by step on the shared
+    concurrency key, which is safe: no two reconciles overlap, and each adds only missing rows.
   - `markImportRunning(id)`, `addImportCounts(id, counts)` (adds to the columns),
     `finishImport(id)`, `failImport(id, message)`. `finishImport` moves only a `running` row,
     so the `finish` step can't turn a run `planImport` already failed back into `done`.
@@ -1434,8 +1469,7 @@ window at 5,000 rows.
   - `startImport({ from, to })` → `InvalidInputError` when `from` is after `to`, `to` is after
     today, or `from` is more than 7 years ago ("today" in `HOUSEHOLD_TIME_ZONE`).
     `ConflictError("An import is already running")` when `findActiveImport()` finds one; two
-    racing starts would only queue two runs, which the shared concurrency key runs one after
-    the other. Then `insertImport`.
+    racing starts would run two imports, interleaved step by step as above. Then `insertImport`.
   - `latestImport()`.
 - `src/server/cdr/cdr.trpc.controller.ts` — `startImport` mutation (`cdrImportStartDto`) and
   `latestImport` query.
@@ -1471,9 +1505,13 @@ window at 5,000 rows.
   `new DrizzleCdrRepository({ db, outbox: outboxService })` (`outbox.module.ts`).
 - `src/server/inngest/registry-golden.test.ts` — **deliberate** update: the
   `cdr/import.requested` key, and `{ id: "cdr-import", triggers: [{ event:
-  "cdr/import.requested" }] }`.
-- `.claude/rules/server-architecture.md` — add `cdr-import` and `cdr/import.requested` to the
-  FROZEN list.
+  "cdr/import.requested" }] }`. The spy also records each function's `concurrency`, so the
+  golden pins the shared `"cdr-sync"` key (and the existing `event.data.receiptId`).
+- `.claude/rules/server-architecture.md` — add `cdr-import`, `cdr/import.requested` and the
+  `"cdr-sync"` concurrency key to the FROZEN list.
+- `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md` — facet 7: `cdr-sync` and
+  `cdr-import` share the frozen concurrency key `"cdr-sync"`, so two reconciles never overlap
+  (the FROZEN rule's ADR note).
 - **`/transactions/import` page** (`src/app/(dashboard)/transactions/import/`):
   - `page.tsx` — `AsyncBoundary` with `ImportSkeleton`, then an inner data component that
     prefetches `api.cdr.latestImport` and `api.transaction.possibleDuplicates` inside
@@ -1540,7 +1578,8 @@ window at 5,000 rows.
 ### Success
 - [ ] `make check` passes (incl. `db:check` and the contract)
 - [ ] `make test` passes
-- [ ] `registry-golden.test.ts` pins `cdr-import` and `cdr/import.requested` (deliberate update)
+- [ ] `registry-golden.test.ts` pins `cdr-import`, `cdr/import.requested` and the shared
+      `"cdr-sync"` concurrency key (deliberate update)
 - [ ] `/design-review` (`/transactions/import` and the header button)
 - [ ] On the branch DB, importing a 30-day range finishes with counts; importing it again adds
       nothing and asks nothing new
@@ -1628,7 +1667,8 @@ unpublished today.
   server-only and optional.
 - `src/server/inngest/registry-golden.test.ts` — **deliberate** golden update:
   - Add the two keys to the keys assertion (`:11-19`).
-  - Append `cdr-sync-requested` and `cdr-connection-changed`.
+  - Append `cdr-sync-requested` (with the shared `"cdr-sync"` concurrency key) and
+    `cdr-connection-changed`.
 - `.claude/rules/server-architecture.md` — add `cdr-sync-requested` and `cdr-connection-changed`
   to the FROZEN list.
 - Tests:
