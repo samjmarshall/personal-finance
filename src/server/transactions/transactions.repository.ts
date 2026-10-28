@@ -367,6 +367,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		return this.db.transaction(async (tx) => {
 			const extra: SyncedTransaction[] = [];
 			let adopted = 0;
+			let released = 0;
 			for (const { transactionId, row, heldBy } of plan.adopt) {
 				if (!(await this.adopt(tx, transactionId, row))) {
 					extra.push(row);
@@ -376,8 +377,9 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				if (heldBy === null) continue;
 				// The household row is now the exact bank row, so the close one the
 				// review held is another purchase.
-				const released = await this.takeReview(tx, heldBy);
-				extra.push(...released.map(({ transactionId: _, ...bank }) => bank));
+				const taken = await this.takeReview(tx, heldBy);
+				released += taken.length;
+				extra.push(...taken.map(({ transactionId: _, ...bank }) => bank));
 			}
 
 			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...extra]);
@@ -419,7 +421,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			return {
 				added: plan.add.length + extra.length,
 				adopted,
-				flagged: flagged.length,
+				flagged: flagged.length - released,
 				known:
 					plan.refresh.length +
 					plan.skipped.length +

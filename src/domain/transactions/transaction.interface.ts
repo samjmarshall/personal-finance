@@ -70,7 +70,9 @@ export interface PossibleDuplicateReview {
 }
 
 // What one reconcile did. `known` counts refreshed rows and reviews, and bank
-// rows a member already kept theirs over.
+// rows a member already kept theirs over. `flagged` is the change in pending
+// reviews: an adoption can release one into a row (then counted as added), so
+// a multi-chunk import nets out reviews an earlier chunk made, and can go below 0.
 export interface ReconcileCounts {
 	added: number;
 	adopted: number;

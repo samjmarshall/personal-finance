@@ -707,7 +707,8 @@ describe("applyReconcile", () => {
 			adopt: [{ transactionId: 1, row: SYNCED, heldBy: 9 }],
 		});
 
-		expect(counts).toEqual({ added: 1, adopted: 1, flagged: 0, known: 0 });
+		// The released review leaves the pending ones: its bank row is added now.
+		expect(counts).toEqual({ added: 1, adopted: 1, flagged: -1, known: 0 });
 		expect(queries.slice(2)).toMatchInlineSnapshot(`
 			[
 			  {
