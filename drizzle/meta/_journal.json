@@ -169,6 +169,13 @@
 			"when": 1793108568157,
 			"tag": "0023_wise_zarda",
 			"breakpoints": true
+		},
+		{
+			"idx": 24,
+			"version": "7",
+			"when": 1793164959780,
+			"tag": "0024_reflective_ares",
+			"breakpoints": true
 		}
 	]
 }

@@ -12,6 +12,7 @@ import { EVENT_REGISTRY } from "./events";
 describe("event registry golden", () => {
 	it("pins the frozen event names", () => {
 		expect(Object.keys(EVENT_REGISTRY).sort()).toEqual([
+			"cdr/import.requested",
 			"receipt/email.received",
 			"receipt/retry",
 			"receipt/uploaded",
@@ -19,18 +20,20 @@ describe("event registry golden", () => {
 	});
 });
 
-// Function ids + triggers are also frozen: Inngest keys scheduled runs by id (a rename
-// silently drops the old schedule) and event triggers are the same wire strings as the
-// registry above. Drive the controllers with a spy client to read what they declare
+// Function ids, triggers and concurrency keys are also frozen: Inngest keys scheduled
+// runs by id (a rename silently drops the old schedule), event triggers are the same
+// wire strings as the registry above, and a renamed key splits a shared slot.
+// `cdr-import`'s onFailure registers as `cdr-import-failure`, derived from its id. Drive the controllers with a spy client to read what they declare
 // — avoids importing the real db/client (env-free, like the block above).
 describe("worker golden", () => {
-	it("pins the frozen function ids + triggers", () => {
-		const declared: { id: string; triggers: unknown[] }[] = [];
+	it("pins the frozen function ids, triggers and concurrency keys", () => {
+		type Opts = { id: string; triggers: unknown[]; concurrency?: unknown };
+		const declared: Opts[] = [];
 		const spy = {
 			send: async () => {},
-			createFunction: (opts: { id: string; triggers: unknown[] }) => {
-				declared.push({ id: opts.id, triggers: opts.triggers });
-				return { id: () => opts.id };
+			createFunction: ({ id, triggers, concurrency }: Opts) => {
+				declared.push({ id, triggers, concurrency });
+				return { id: () => id };
 			},
 			// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
 		} as any;
@@ -44,13 +47,23 @@ describe("worker golden", () => {
 			{ id: "outbox-prune", triggers: [{ cron: "0 3 * * *" }] },
 			{
 				id: "process-receipt",
+				concurrency: { key: "event.data.receiptId", limit: 1 },
 				triggers: [
 					{ event: "receipt/uploaded" },
 					{ event: "receipt/retry" },
 					{ event: "receipt/email.received" },
 				],
 			},
-			{ id: "cdr-sync", triggers: [{ cron: "0 18 * * *" }] },
+			{
+				id: "cdr-sync",
+				concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" },
+				triggers: [{ cron: "0 18 * * *" }],
+			},
+			{
+				id: "cdr-import",
+				concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" },
+				triggers: [{ event: "cdr/import.requested" }],
+			},
 		]);
 	});
 });

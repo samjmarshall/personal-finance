@@ -2,7 +2,7 @@
 date: 2026-09-15
 design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 adrs: [adr002, adr004, adr005, adr013, adr017, adr021, adr022, adr023]
-status: Validated - Phase 7 of 9
+status: Ready for Review - Phase 8 of 9
 ---
 # Expense Linking Stage 7 — CDR Bank Sync (RedBark) Implementation Plan
 
@@ -1628,23 +1628,23 @@ window at 5,000 rows.
     handler with its choice; queried by role and name.
 
 ### Success
-- [ ] `make check` passes (incl. `db:check` and the contract)
-- [ ] `make test` passes
-- [ ] `registry-golden.test.ts` pins `cdr-import`, `cdr/import.requested` and the shared
+- [x] `make check` passes (incl. `db:check` and the contract)
+- [x] `make test` passes
+- [x] `registry-golden.test.ts` pins `cdr-import`, `cdr/import.requested` and the shared
       `"cdr-sync"` concurrency key (deliberate update)
-- [ ] `/design-review` (`/transactions/import` and the header button)
-- [ ] On the branch DB, importing a 30-day range finishes with counts; importing it again adds
+- [x] `/design-review` (`/transactions/import` and the header button)
+- [x] On the branch DB, importing a 30-day range finishes with counts; importing it again adds
       nothing and asks nothing new
-- [ ] Importing a range that covers older manual rows adopts the exact ones, lists the close
+- [x] Importing a range that covers older manual rows adopts the exact ones, lists the close
       ones for review, and adds the rest; each review choice works from the page and the
       header badge drops to match
-- [ ] Rows dated `from` match the bank statement for that day: none missing. The client sends
+- [x] Rows dated `from` match the bank statement for that day: none missing. The client sends
       `from` and `to` as bare dates (`cdr.redbark.ts:88`); a timestamp would be UTC midnight,
       10–11 am in Sydney, and drop that morning
-- [ ] Starting while one runs is refused with a message; a `to` after today, or a `from` over 7
+- [x] Starting while one runs is refused with a message; a `to` after today, or a `from` over 7
       years ago, is refused; with the key unset the run shows failed with a reason
-- [ ] No import deletes a transaction (count before ≤ count after)
-- [ ] A cron run that comes due during an import waits for the running step, then runs
+- [x] No import deletes a transaction (count before ≤ count after)
+- [x] A cron run that comes due during an import waits for the running step, then runs
 
 ---
 

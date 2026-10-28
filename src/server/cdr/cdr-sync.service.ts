@@ -1,6 +1,8 @@
 import {
 	anchorFromBalances,
 	type CdrSyncState,
+	type ImportWindow,
+	importChunks,
 	inBalanceByDefault,
 	isDeadConsent,
 	isSyncingConsent,
@@ -9,6 +11,7 @@ import {
 	type RedbarkAccount,
 	type RedbarkBalance,
 } from "~/domain/cdr";
+import type { ReconcileCounts } from "~/domain/transactions";
 import { CdrConnectionStatus } from "~/lib/constants";
 import type { BalancesService } from "~/server/balances/balances.service";
 import type { Logger } from "~/server/observability/logging/logger";
@@ -21,6 +24,20 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Fetch filters by txn date, but a card row can post 5+ days later (long weekend).
 // A first run fetches only this much too: older history comes from the import.
 const OVERLAP_DAYS = 14;
+// Inngest caps a run at 1,000 steps; the import also spends one on plan and one on finish.
+const MAX_IMPORT_CHUNKS = 998;
+
+/** One account's slice of an import; dates are inclusive `YYYY-MM-DD`. */
+export interface ImportChunk extends ImportWindow {
+	accountId: string;
+	accountName: string;
+}
+
+export interface ImportPlan {
+	/** Every account RedBark lists, so a chunk's reconcile can tell a closed account from a live one. */
+	liveAccountIds: string[];
+	chunks: ImportChunk[];
+}
 
 interface AccountFailure {
 	accountId: string;
@@ -127,12 +144,7 @@ export class CdrSyncService {
 		const blocker = this.anchorBlocker(states, accountsById, (saved) => {
 			const account = accountsById.get(saved.accountId);
 			const consent = consentOf(saved);
-			return (
-				!failed.has(saved.accountId) &&
-				account?.status === "available" &&
-				consent !== undefined &&
-				isSyncingConsent(consent)
-			);
+			return !failed.has(saved.accountId) && isSyncable(account, consent);
 		});
 		if (blocker) this.logger.info(`cdr balance anchor skipped: ${blocker}`);
 		else await this.anchorBalance(states, balances);
@@ -142,6 +154,81 @@ export class CdrSyncService {
 				`cdr sync failed for ${failures.map((f) => f.accountId).join(", ")}`,
 				failures.map((f) => f.error),
 			);
+	}
+
+	/**
+	 * Claims a queued import and splits it into chunks. Null when the import is
+	 * past queued (a repeat delivery), so the caller runs nothing.
+	 */
+	async planImport(importId: number): Promise<ImportPlan | null> {
+		const row = await this.repository.markImportRunning(importId);
+		if (!row) {
+			this.logger.info("cdr import already claimed", { importId });
+			return null;
+		}
+		if (!this.redbark) {
+			await this.repository.failImport(importId, "Bank sync isn't set up");
+			return { liveAccountIds: [], chunks: [] };
+		}
+
+		const { statuses, accounts } = await this.discover(this.redbark);
+		const windows = importChunks(bareDay(row.fromDate), bareDay(row.toDate));
+		const chunks: ImportChunk[] = [];
+		for (const account of accounts) {
+			if (!isSyncable(account, statuses.get(account.connection))) {
+				this.logger.info("cdr import skipped an account", {
+					importId,
+					accountId: account.id,
+				});
+				continue;
+			}
+			for (const window of windows)
+				chunks.push({
+					accountId: account.id,
+					accountName: account.name,
+					...window,
+				});
+		}
+		if (chunks.length > MAX_IMPORT_CHUNKS)
+			throw new CdrSyncError(
+				"This import is too big for one run. Try a shorter range.",
+				{ retryable: false },
+			);
+		return { liveAccountIds: accounts.map((a) => a.id), chunks };
+	}
+
+	/** Fetches and reconciles one chunk. Never moves a mark or writes an anchor. */
+	async importChunk(
+		importId: number,
+		{ accountId, accountName, from, to }: ImportChunk,
+		liveAccountIds: string[],
+	): Promise<ReconcileCounts> {
+		if (!this.redbark)
+			throw new CdrSyncError("Bank sync isn't set up", { retryable: false });
+		try {
+			const rows = (
+				await this.redbark.listTransactions({
+					accountId,
+					from: utcMidnight(from),
+					to: utcMidnight(to),
+				})
+			).map((row) => mapRedbarkTransaction(row, accountName));
+			const counts = await this.transactions.reconcileSynced(rows, {
+				liveAccountIds,
+			});
+			await this.repository.addImportCounts(importId, counts);
+			return counts;
+		} catch (cause) {
+			throw syncError("cdr import chunk failed", [cause]);
+		}
+	}
+
+	finishImport(importId: number): Promise<void> {
+		return this.repository.finishImport(importId);
+	}
+
+	failImport(importId: number, message: string): Promise<void> {
+		return this.repository.failImport(importId, message);
 	}
 
 	private async discover(redbark: RedbarkClient): Promise<{
@@ -319,6 +406,21 @@ export class CdrSyncService {
 		);
 	}
 }
+
+/** What the daily sync would fetch today: listed, available, on a syncing consent. */
+function isSyncable(
+	account: RedbarkAccount | undefined,
+	consent: CdrConnectionStatus | undefined,
+): boolean {
+	return (
+		account?.status === "available" &&
+		consent !== undefined &&
+		isSyncingConsent(consent)
+	);
+}
+
+const bareDay = (value: Date) => value.toISOString().slice(0, 10);
+const utcMidnight = (day: string) => new Date(`${day}T00:00:00.000Z`);
 
 // A mapping throw or a 4xx fails the same way every attempt; only a
 // transient error is worth a retry.

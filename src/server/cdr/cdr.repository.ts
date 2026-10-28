@@ -1,9 +1,14 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { BalanceSetInput } from "~/domain/balances";
-import type { CdrSyncState } from "~/domain/cdr";
-import type { CdrConnectionStatus } from "~/lib/constants";
+import type { CdrImport, CdrSyncState } from "~/domain/cdr";
+import type { ReconcileCounts } from "~/domain/transactions";
+import { type CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
-import { cdrSyncState } from "./cdr.schema";
+import { buildOutboxEvent } from "~/server/inngest/events";
+import type { OutboxWriteDoor } from "~/server/outbox/outbox.service";
+import { cdrImport, cdrSyncState } from "./cdr.schema";
+
+const UNFINISHED = [CdrImportStatus.Queued, CdrImportStatus.Running];
 
 export type DiscoveredAccount = Pick<
 	CdrSyncState,
@@ -41,17 +46,35 @@ export interface CdrRepository {
 		accountId: string,
 		nickname: string | null,
 	): Promise<CdrSyncState | undefined>;
+	/** Commits the row with its `cdr/import.requested` event. */
+	insertImport(
+		range: Pick<CdrImport, "fromDate" | "toDate">,
+	): Promise<CdrImport>;
+	/** A queued or running import created after `since`. */
+	findActiveImport(since: Date): Promise<CdrImport | undefined>;
+	latestImport(): Promise<CdrImport | undefined>;
+	/** Moves only a queued import and returns it; `undefined` when it was already past queued. */
+	markImportRunning(id: number): Promise<CdrImport | undefined>;
+	/** Adds to the saved counts. */
+	addImportCounts(id: number, counts: ReconcileCounts): Promise<void>;
+	/** Moves only a running import to done. */
+	finishImport(id: number): Promise<void>;
+	/** Fails only a queued or running import. */
+	failImport(id: number, message: string): Promise<void>;
 }
 
 interface DrizzleCdrRepositoryDeps {
 	db: typeof realDb;
+	outbox: OutboxWriteDoor;
 }
 
 export class DrizzleCdrRepository implements CdrRepository {
 	private readonly db: typeof realDb;
+	private readonly outbox: OutboxWriteDoor;
 
-	constructor({ db }: DrizzleCdrRepositoryDeps) {
+	constructor({ db, outbox }: DrizzleCdrRepositoryDeps) {
 		this.db = db;
+		this.outbox = outbox;
 	}
 
 	async listSyncState(): Promise<CdrSyncState[]> {
@@ -157,5 +180,94 @@ export class DrizzleCdrRepository implements CdrRepository {
 			.where(eq(cdrSyncState.accountId, accountId))
 			.returning();
 		return row;
+	}
+
+	// The event carries the row id, known only after the insert, so row and event
+	// commit together.
+	async insertImport({
+		fromDate,
+		toDate,
+	}: Pick<CdrImport, "fromDate" | "toDate">): Promise<CdrImport> {
+		const [row] = await this.outbox.commit(
+			(tx) => tx.insert(cdrImport).values({ fromDate, toDate }).returning(),
+			(inserted) =>
+				inserted.map((row) =>
+					buildOutboxEvent("cdr/import.requested", { importId: row.id }),
+				),
+		);
+		if (!row) throw new Error("insertImport: no row returned");
+		return row;
+	}
+
+	async findActiveImport(since: Date): Promise<CdrImport | undefined> {
+		const [row] = await this.db
+			.select()
+			.from(cdrImport)
+			.where(
+				and(
+					inArray(cdrImport.status, UNFINISHED),
+					gt(cdrImport.createdAt, since),
+				),
+			)
+			.limit(1);
+		return row;
+	}
+
+	async latestImport(): Promise<CdrImport | undefined> {
+		const [row] = await this.db
+			.select()
+			.from(cdrImport)
+			.orderBy(desc(cdrImport.id))
+			.limit(1);
+		return row;
+	}
+
+	async markImportRunning(id: number): Promise<CdrImport | undefined> {
+		const [row] = await this.db
+			.update(cdrImport)
+			.set({ status: CdrImportStatus.Running })
+			.where(
+				and(eq(cdrImport.id, id), eq(cdrImport.status, CdrImportStatus.Queued)),
+			)
+			.returning();
+		return row;
+	}
+
+	async addImportCounts(
+		id: number,
+		{ added, adopted, flagged, known }: ReconcileCounts,
+	): Promise<void> {
+		await this.db
+			.update(cdrImport)
+			.set({
+				added: sql`${cdrImport.added} + ${added}`,
+				adopted: sql`${cdrImport.adopted} + ${adopted}`,
+				flagged: sql`${cdrImport.flagged} + ${flagged}`,
+				known: sql`${cdrImport.known} + ${known}`,
+			})
+			.where(eq(cdrImport.id, id));
+	}
+
+	async finishImport(id: number): Promise<void> {
+		await this.db
+			.update(cdrImport)
+			.set({ status: CdrImportStatus.Done, finishedAt: new Date() })
+			.where(
+				and(
+					eq(cdrImport.id, id),
+					eq(cdrImport.status, CdrImportStatus.Running),
+				),
+			);
+	}
+
+	async failImport(id: number, message: string): Promise<void> {
+		await this.db
+			.update(cdrImport)
+			.set({
+				status: CdrImportStatus.Failed,
+				error: message,
+				finishedAt: new Date(),
+			})
+			.where(and(eq(cdrImport.id, id), inArray(cdrImport.status, UNFINISHED)));
 	}
 }

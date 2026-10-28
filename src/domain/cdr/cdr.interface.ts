@@ -1,4 +1,4 @@
-import type { CdrConnectionStatus } from "~/lib/constants";
+import type { CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
 
 export interface CdrSyncState {
 	id: number;
@@ -18,3 +18,20 @@ export interface CdrSyncState {
 	nickname: string | null;
 	updatedAt: Date | null;
 }
+
+export interface CdrImport {
+	id: number;
+	added: number;
+	adopted: number;
+	createdAt: Date;
+	error: string | null;
+	finishedAt: Date | null;
+	flagged: number;
+	fromDate: Date;
+	known: number;
+	status: CdrImportStatus;
+	toDate: Date;
+}
+
+// `active`: queued or running and young enough that its job may still report.
+export type LatestImport = CdrImport & { active: boolean };

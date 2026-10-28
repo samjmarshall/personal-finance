@@ -1,5 +1,5 @@
 import { pgEnum, pgTable } from "drizzle-orm/pg-core";
-import { CdrConnectionStatus } from "~/lib/constants";
+import { CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
 
 export const cdrConnectionStatus = pgEnum(
 	"cdr_connection_status",
@@ -37,4 +37,26 @@ export const cdrSyncState = pgTable("cdr_sync_state", (d) => ({
 	// A DB default, not a JS one, so a hand-written SQL insert still gets it.
 	createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
 	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+}));
+
+export const cdrImportStatus = pgEnum(
+	"cdr_import_status",
+	Object.values(CdrImportStatus) as [CdrImportStatus, ...CdrImportStatus[]],
+);
+
+// One member-run history import. Counts are a guide, not a ledger: a retried
+// chunk counts its rows again as known.
+export const cdrImport = pgTable("cdr_import", (d) => ({
+	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+	// UTC midnight of the first and last day, both inclusive.
+	fromDate: d.timestamp({ withTimezone: true }).notNull(),
+	toDate: d.timestamp({ withTimezone: true }).notNull(),
+	status: cdrImportStatus().notNull().default(CdrImportStatus.Queued),
+	added: d.integer().notNull().default(0),
+	adopted: d.integer().notNull().default(0),
+	flagged: d.integer().notNull().default(0),
+	known: d.integer().notNull().default(0),
+	error: d.text(),
+	createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+	finishedAt: d.timestamp({ withTimezone: true }),
 }));

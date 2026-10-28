@@ -75,9 +75,16 @@ export const cdrSetNicknameDto = z.object({
 		.transform((name) => name || null),
 });
 
+/** Bare days from `<Input type="date">`; the service checks the range. */
+export const cdrImportStartDto = z.object({
+	from: z.iso.date(),
+	to: z.iso.date(),
+});
+
 export type RedbarkTransaction = z.infer<typeof redbarkTransactionDto>;
 export type RedbarkAccount = z.infer<typeof redbarkAccountDto>;
 export type RedbarkConnection = z.infer<typeof redbarkConnectionDto>;
 export type RedbarkBalance = z.infer<typeof redbarkBalanceDto>;
 export type CdrSetInBalanceInput = z.infer<typeof cdrSetInBalanceDto>;
 export type CdrSetNicknameInput = z.infer<typeof cdrSetNicknameDto>;
+export type CdrImportStartInput = z.infer<typeof cdrImportStartDto>;

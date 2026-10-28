@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BalanceSetInput } from "~/domain/balances";
 import type {
+	CdrImport,
 	CdrSyncState,
 	RedbarkAccount,
 	RedbarkBalance,
@@ -11,6 +12,7 @@ import type { SyncedTransaction } from "~/domain/transactions";
 import {
 	BalanceSource,
 	CdrConnectionStatus,
+	CdrImportStatus,
 	Provenance,
 } from "~/lib/constants";
 import type {
@@ -107,7 +109,24 @@ interface HarnessOptions {
 	listBalances?: (accountIds: string[]) => Promise<RedbarkBalance[]>;
 	recordSynced?: (input: BalanceSetInput) => Promise<void>;
 	redbark?: null;
+	/** What markImportRunning returns; `undefined` when the import is past queued. */
+	runningImport?: CdrImport | undefined;
 }
+
+const importRow = (over: Partial<CdrImport> = {}): CdrImport => ({
+	id: 7,
+	fromDate: new Date("2026-01-01T00:00:00.000Z"),
+	toDate: new Date("2026-04-01T00:00:00.000Z"),
+	status: CdrImportStatus.Running,
+	added: 0,
+	adopted: 0,
+	flagged: 0,
+	known: 0,
+	error: null,
+	createdAt: NOW,
+	finishedAt: null,
+	...over,
+});
 
 // Records call order across ports so a test can assert what ran before what.
 function harness(opts: HarnessOptions = {}) {
@@ -115,7 +134,7 @@ function harness(opts: HarnessOptions = {}) {
 	const states = new Map<string, CdrSyncState>(
 		(opts.saved ?? []).map((s) => [s.accountId, s]),
 	);
-	const fetches: { accountId: string; from: Date }[] = [];
+	const fetches: { accountId: string; from: Date; to?: Date }[] = [];
 	const reconciles: {
 		rows: SyncedTransaction[];
 		liveAccountIds: string[];
@@ -128,6 +147,9 @@ function harness(opts: HarnessOptions = {}) {
 	const savedBalances: ({ accountId: string } & BalanceSetInput)[] = [];
 	const anchors: BalanceSetInput[] = [];
 	const logs: LogEntry[] = [];
+	const importCounts: { id: number; counts: unknown }[] = [];
+	const importEnds: { id: number; failed?: string }[] = [];
+	const discoveries = { count: 0 };
 
 	const repository: CdrRepository = {
 		listSyncState: opts.listSyncState ?? (async () => [...states.values()]),
@@ -164,15 +186,38 @@ function harness(opts: HarnessOptions = {}) {
 		// A member's choices; the sync never writes them.
 		setInBalance: unstaged,
 		setNickname: unstaged,
+		// The page starts and reads imports; the worker only moves them.
+		insertImport: unstaged,
+		findActiveImport: unstaged,
+		latestImport: unstaged,
+		markImportRunning: async (id) => {
+			calls.push(`markImportRunning ${id}`);
+			return "runningImport" in opts ? opts.runningImport : importRow({ id });
+		},
+		addImportCounts: async (id, counts) => {
+			calls.push(`addImportCounts ${id}`);
+			importCounts.push({ id, counts });
+		},
+		finishImport: async (id) => {
+			calls.push(`finishImport ${id}`);
+			importEnds.push({ id });
+		},
+		failImport: async (id, message) => {
+			calls.push(`failImport ${id}`);
+			importEnds.push({ id, failed: message });
+		},
 	};
 	const redbark: RedbarkClient = {
-		listConnections:
-			opts.listConnections ??
-			(async () => opts.connections ?? [connection("conn_1")]),
+		listConnections: async () => {
+			discoveries.count++;
+			return opts.listConnections
+				? opts.listConnections()
+				: (opts.connections ?? [connection("conn_1")]);
+		},
 		listAccounts: async () => opts.accounts ?? [account("acct_1")],
-		listTransactions: async ({ accountId, from }) => {
+		listTransactions: async ({ accountId, from, to }) => {
 			calls.push(`fetch ${accountId}`);
-			fetches.push({ accountId, from });
+			fetches.push({ accountId, from, to });
 			return opts.listTransactions
 				? opts.listTransactions(accountId)
 				: (opts.rows?.[accountId] ?? []);
@@ -231,6 +276,9 @@ function harness(opts: HarnessOptions = {}) {
 		savedBalances,
 		anchors,
 		logs,
+		importCounts,
+		importEnds,
+		discoveries,
 	};
 }
 
@@ -998,5 +1046,193 @@ describe("CdrSyncService.run", () => {
 			expect(h.calls).toEqual([]);
 			expect(h.logs.map((l) => l.level)).toEqual(["info"]);
 		});
+	});
+});
+
+describe("CdrSyncService.planImport", () => {
+	it("fails the import with a reason and plans nothing when the key is unset", async () => {
+		const h = harness({ redbark: null });
+
+		await expect(h.service.planImport(7)).resolves.toEqual({
+			liveAccountIds: [],
+			chunks: [],
+		});
+		expect(h.importEnds).toEqual([{ id: 7, failed: "Bank sync isn't set up" }]);
+	});
+
+	// The outbox can deliver the event twice; the second must not redo the import.
+	it("returns null and touches nothing else when the import is past queued", async () => {
+		const h = harness({ runningImport: undefined });
+
+		await expect(h.service.planImport(7)).resolves.toBeNull();
+		expect(h.discoveries.count).toBe(0);
+		expect(h.calls).toEqual(["markImportRunning 7"]);
+	});
+
+	it("chunks only accounts the daily sync would sync, each with its name", async () => {
+		const h = harness({
+			connections: [
+				connection("conn_1"),
+				connection("conn_2", CdrConnectionStatus.Revoked),
+				connection("conn_3", CdrConnectionStatus.Pending),
+			],
+			accounts: [
+				account("acct_1"),
+				account("acct_2", { status: "syncing" }),
+				account("acct_3", { connection: "conn_2" }),
+				account("acct_4", { status: "unavailable" }),
+				account("acct_5", { connection: "conn_3" }),
+				account("acct_6", { connection: "conn_unlisted" }),
+			],
+		});
+
+		const plan = await h.service.planImport(7);
+
+		expect(plan?.liveAccountIds).toEqual([
+			"acct_1",
+			"acct_2",
+			"acct_3",
+			"acct_4",
+			"acct_5",
+			"acct_6",
+		]);
+		expect(plan?.chunks).toEqual([
+			{
+				accountId: "acct_1",
+				accountName: "Name acct_1",
+				from: "2026-01-01",
+				to: "2026-03-31",
+			},
+			{
+				accountId: "acct_1",
+				accountName: "Name acct_1",
+				from: "2026-04-01",
+				to: "2026-04-01",
+			},
+		]);
+		expect(h.calls).toContain("upsertAccount acct_1");
+	});
+
+	it("wraps a discovery failure like the daily sync", async () => {
+		const h = harness({
+			listConnections: async () => {
+				throw new RedbarkRetryableError("429", { retryAfterMs: 30_000 });
+			},
+		});
+
+		const error = await caught(h.service.planImport(7));
+
+		expect(error).toBeInstanceOf(CdrSyncError);
+		expect(error).toMatchObject({ retryable: true, retryAfterMs: 30_000 });
+	});
+
+	// Inngest caps a run at 1,000 steps.
+	it("fails without a retry when the chunks would pass the step cap", async () => {
+		const h = harness({
+			accounts: Array.from({ length: 35 }, (_, i) => account(`acct_${i}`)),
+			runningImport: importRow({
+				fromDate: new Date("2019-10-20T00:00:00.000Z"),
+				toDate: new Date("2026-10-20T00:00:00.000Z"),
+			}),
+		});
+
+		const error = await caught(h.service.planImport(7));
+
+		expect(error).toBeInstanceOf(CdrSyncError);
+		expect(error).toMatchObject({
+			retryable: false,
+			message: expect.stringMatching(/shorter range/),
+		});
+	});
+});
+
+describe("CdrSyncService.importChunk", () => {
+	const chunk = {
+		accountId: "acct_1",
+		accountName: "Everyday Offset",
+		from: "2026-01-01",
+		to: "2026-03-31",
+	};
+
+	it("fetches the window, maps with the chunk's name, reconciles with the live ids and adds the counts", async () => {
+		const h = harness({
+			rows: { acct_1: [row("t1", "2026-02-01"), row("t2", "2026-03-01")] },
+		});
+
+		await expect(
+			h.service.importChunk(7, chunk, ["acct_1", "acct_9"]),
+		).resolves.toEqual({ added: 2, adopted: 0, flagged: 0, known: 0 });
+
+		expect(h.fetches).toEqual([
+			{
+				accountId: "acct_1",
+				from: new Date("2026-01-01T00:00:00.000Z"),
+				to: new Date("2026-03-31T00:00:00.000Z"),
+			},
+		]);
+		expect(h.reconciles).toHaveLength(1);
+		expect(h.reconciles[0]?.liveAccountIds).toEqual(["acct_1", "acct_9"]);
+		expect(h.reconciles[0]?.rows.map((r) => r.accountName)).toEqual([
+			"Everyday Offset",
+			"Everyday Offset",
+		]);
+		expect(h.importCounts).toEqual([
+			{ id: 7, counts: { added: 2, adopted: 0, flagged: 0, known: 0 } },
+		]);
+	});
+
+	it("throws a retryable CdrSyncError with RedBark's wait on a 429", async () => {
+		const h = harness({
+			listTransactions: async () => {
+				throw new RedbarkRetryableError("429", { retryAfterMs: 30_000 });
+			},
+		});
+
+		const error = await caught(h.service.importChunk(7, chunk, ["acct_1"]));
+
+		expect(error).toBeInstanceOf(CdrSyncError);
+		expect(error).toMatchObject({ retryable: true, retryAfterMs: 30_000 });
+		expect(h.importCounts).toEqual([]);
+	});
+
+	it("throws a non-retryable CdrSyncError on a mapping throw", async () => {
+		const foreign = {
+			...row("t1", "2026-02-01"),
+			amount: { amount: -100, currency: "usd" },
+		};
+		const h = harness({ rows: { acct_1: [foreign] } });
+
+		const error = await caught(h.service.importChunk(7, chunk, ["acct_1"]));
+
+		expect(error).toBeInstanceOf(CdrSyncError);
+		expect(error).toMatchObject({ retryable: false });
+		expect(h.reconciles).toEqual([]);
+	});
+
+	it("never advances a mark, reads balances or writes an anchor", async () => {
+		const h = harness({
+			saved: [savedState("acct_1", { inBalance: true })],
+			rows: { acct_1: [row("t1", "2026-02-01")] },
+		});
+
+		const plan = await h.service.planImport(7);
+		for (const c of plan?.chunks ?? [])
+			await h.service.importChunk(7, c, plan?.liveAccountIds ?? []);
+
+		expect(h.reconciles.length).toBeGreaterThan(0);
+		expect(h.advances).toEqual([]);
+		expect(h.balanceReads).toEqual([]);
+		expect(h.anchors).toEqual([]);
+	});
+});
+
+describe("CdrSyncService.finishImport and failImport", () => {
+	it("hands each to the repository", async () => {
+		const h = harness();
+
+		await h.service.finishImport(7);
+		await h.service.failImport(8, "boom");
+
+		expect(h.importEnds).toEqual([{ id: 7 }, { id: 8, failed: "boom" }]);
 	});
 });

@@ -46,7 +46,7 @@ const receiptsController = new ReceiptsInngestController({
 
 // An unset key builds no client, so the daily run is a logged no-op.
 const cdrSyncService = new CdrSyncService({
-	repository: new DrizzleCdrRepository({ db }),
+	repository: new DrizzleCdrRepository({ db, outbox: outboxService }),
 	redbark: env.REDBARK_API_KEY
 		? new HttpRedbarkClient({
 				apiKey: env.REDBARK_API_KEY,

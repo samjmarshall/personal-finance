@@ -1,7 +1,9 @@
 import { accountLabel } from "./account-label";
 import {
+	type CdrImportStartInput,
 	type CdrSetInBalanceInput,
 	type CdrSetNicknameInput,
+	cdrImportStartDto,
 	cdrSetInBalanceDto,
 	cdrSetNicknameDto,
 	NICKNAME_MAX_LENGTH,
@@ -15,8 +17,14 @@ import {
 	redbarkPageDto,
 	redbarkTransactionDto,
 } from "./cdr.dto";
-import type { CdrSyncState } from "./cdr.interface";
+import type { CdrImport, CdrSyncState, LatestImport } from "./cdr.interface";
 import { isDeadConsent, isSyncingConsent } from "./consent";
+import {
+	IMPORT_MAX_YEARS,
+	type ImportWindow,
+	importChunks,
+	importEarliestDay,
+} from "./import-chunks";
 import {
 	anchorFromBalances,
 	inBalanceByDefault,
@@ -25,9 +33,13 @@ import {
 } from "./map-redbark";
 
 export type {
+	CdrImport,
+	CdrImportStartInput,
 	CdrSetInBalanceInput,
 	CdrSetNicknameInput,
 	CdrSyncState,
+	ImportWindow,
+	LatestImport,
 	RedbarkAccount,
 	RedbarkBalance,
 	RedbarkConnection,
@@ -36,8 +48,12 @@ export type {
 export {
 	accountLabel,
 	anchorFromBalances,
+	cdrImportStartDto,
 	cdrSetInBalanceDto,
 	cdrSetNicknameDto,
+	IMPORT_MAX_YEARS,
+	importChunks,
+	importEarliestDay,
 	inBalanceByDefault,
 	isDeadConsent,
 	isSyncingConsent,

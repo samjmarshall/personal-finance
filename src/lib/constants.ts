@@ -56,6 +56,15 @@ export enum CdrConnectionStatus {
 	Revoked = "revoked",
 }
 
+// A member-run history import. A queued or running row past a day old is
+// treated as dead (see IMPORT_ACTIVE_HOURS), since its job may never report.
+export enum CdrImportStatus {
+	Queued = "queued",
+	Running = "running",
+	Done = "done",
+	Failed = "failed",
+}
+
 // A bank row held for a member's answer. A kept one stays as the record of "Keep
 // mine", so the bank row is never asked about or added again.
 export enum PossibleDuplicateStatus {

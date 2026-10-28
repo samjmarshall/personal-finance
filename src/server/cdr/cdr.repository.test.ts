@@ -1,22 +1,38 @@
 import { getTableColumns } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CdrSyncState } from "~/domain/cdr";
-import { CdrConnectionStatus } from "~/lib/constants";
+import type { CdrImport, CdrSyncState } from "~/domain/cdr";
+import { CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
 import {
 	pgError,
 	type Respond,
 	recordingDb,
 	rowOf,
 } from "~/server/db/recording-db.fake";
+import type { OutboxEventDescriptor } from "~/server/inngest/events";
+import type { OutboxWriteDoor } from "~/server/outbox/outbox.service";
+import { unstaged } from "~/test/fakes";
 import { DrizzleCdrRepository } from "./cdr.repository";
-import { cdrSyncState } from "./cdr.schema";
+import { cdrImport, cdrSyncState } from "./cdr.schema";
 
+// Stand-in write door: runs the writes in the test db's transaction and keeps the
+// events, so the SQL lands in the snapshot. outbox.service.test.ts covers the real one.
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+	const events: OutboxEventDescriptor[] = [];
+	const outbox: OutboxWriteDoor = {
+		commit: (writes, toEvents) =>
+			db.transaction(async (tx) => {
+				const result = await writes(tx as never);
+				events.push(...toEvents(result));
+				return result;
+			}),
+		publish: unstaged,
+	};
 	return {
-		repository: new DrizzleCdrRepository({ db: db as never }),
+		repository: new DrizzleCdrRepository({ db: db as never, outbox }),
 		queries,
+		events,
 	};
 }
 
@@ -304,5 +320,229 @@ describe("setNickname", () => {
 		await expect(
 			repository.setNickname("acc_x", "Bills"),
 		).resolves.toBeUndefined();
+	});
+});
+
+const IMPORT_COLUMNS = Object.keys(getTableColumns(cdrImport));
+
+const IMPORT = {
+	id: 7,
+	fromDate: new Date("2026-01-01T00:00:00.000Z"),
+	toDate: new Date("2026-03-31T00:00:00.000Z"),
+	status: CdrImportStatus.Queued,
+	added: 0,
+	adopted: 0,
+	flagged: 0,
+	known: 0,
+	error: null,
+	createdAt: NOW,
+	finishedAt: null,
+} satisfies CdrImport;
+
+describe("insertImport", () => {
+	it("inserts the row in a transaction and returns it", async () => {
+		const { repository, queries } = harness(() => [
+			rowOf(IMPORT_COLUMNS, IMPORT),
+		]);
+
+		await expect(
+			repository.insertImport({
+				fromDate: IMPORT.fromDate,
+				toDate: IMPORT.toDate,
+			}),
+		).resolves.toEqual(IMPORT);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "begin",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      "2026-01-01T00:00:00.000Z",
+			      "2026-03-31T00:00:00.000Z",
+			    ],
+			    "sql": "insert into "cdr_import" ("id", "fromDate", "toDate", "status", "added", "adopted", "flagged", "known", "error", "createdAt", "finishedAt") values (default, $1, $2, default, default, default, default, default, default, default, default) returning "id", "fromDate", "toDate", "status", "added", "adopted", "flagged", "known", "error", "createdAt", "finishedAt"",
+			  },
+			  {
+			    "method": "execute",
+			    "params": [],
+			    "sql": "commit",
+			  },
+			]
+		`);
+	});
+
+	// The event needs the new id, so the row and its event commit together.
+	it("commits one cdr/import.requested event carrying the new id", async () => {
+		const { repository, events } = harness(() => [
+			rowOf(IMPORT_COLUMNS, IMPORT),
+		]);
+
+		await repository.insertImport({
+			fromDate: IMPORT.fromDate,
+			toDate: IMPORT.toDate,
+		});
+
+		expect(events.map(({ name, data }) => [name, data])).toEqual([
+			["cdr/import.requested", { importId: 7, _trace: expect.any(Object) }],
+		]);
+	});
+});
+
+describe("findActiveImport", () => {
+	it("finds a queued or running import created after the cut-off", async () => {
+		const { repository, queries } = harness(() => []);
+
+		await expect(
+			repository.findActiveImport(new Date("2026-10-18T00:00:00.000Z")),
+		).resolves.toBeUndefined();
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "queued",
+			      "running",
+			      "2026-10-18T00:00:00.000Z",
+			      1,
+			    ],
+			    "sql": "select "id", "fromDate", "toDate", "status", "added", "adopted", "flagged", "known", "error", "createdAt", "finishedAt" from "cdr_import" where ("cdr_import"."status" in ($1, $2) and "cdr_import"."createdAt" > $3) limit $4",
+			  },
+			]
+		`);
+	});
+});
+
+describe("latestImport", () => {
+	it("reads the newest import", async () => {
+		const { repository, queries } = harness(() => [
+			rowOf(IMPORT_COLUMNS, IMPORT),
+		]);
+
+		await expect(repository.latestImport()).resolves.toEqual(IMPORT);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      1,
+			    ],
+			    "sql": "select "id", "fromDate", "toDate", "status", "added", "adopted", "flagged", "known", "error", "createdAt", "finishedAt" from "cdr_import" order by "cdr_import"."id" desc limit $1",
+			  },
+			]
+		`);
+	});
+});
+
+describe("markImportRunning", () => {
+	// The outbox can deliver the event again past Inngest's dedup window.
+	it("moves only a queued import and returns it", async () => {
+		const running = { ...IMPORT, status: CdrImportStatus.Running };
+		const { repository, queries } = harness(() => [
+			rowOf(IMPORT_COLUMNS, running),
+		]);
+
+		await expect(repository.markImportRunning(7)).resolves.toEqual(running);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "running",
+			      7,
+			      "queued",
+			    ],
+			    "sql": "update "cdr_import" set "status" = $1 where ("cdr_import"."id" = $2 and "cdr_import"."status" = $3) returning "id", "fromDate", "toDate", "status", "added", "adopted", "flagged", "known", "error", "createdAt", "finishedAt"",
+			  },
+			]
+		`);
+	});
+
+	it("returns undefined when the import is past queued", async () => {
+		const { repository } = harness(() => []);
+
+		await expect(repository.markImportRunning(7)).resolves.toBeUndefined();
+	});
+});
+
+describe("addImportCounts", () => {
+	it("adds each count to the saved total", async () => {
+		const { repository, queries } = harness();
+
+		await repository.addImportCounts(7, {
+			added: 2,
+			adopted: 3,
+			flagged: 1,
+			known: 40,
+		});
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [
+			      2,
+			      3,
+			      1,
+			      40,
+			      7,
+			    ],
+			    "sql": "update "cdr_import" set "added" = "cdr_import"."added" + $1, "adopted" = "cdr_import"."adopted" + $2, "flagged" = "cdr_import"."flagged" + $3, "known" = "cdr_import"."known" + $4 where "cdr_import"."id" = $5",
+			  },
+			]
+		`);
+	});
+});
+
+describe("finishImport", () => {
+	// A run planImport already failed must not turn back into done.
+	it("moves only a running import to done", async () => {
+		const { repository, queries } = harness();
+
+		await repository.finishImport(7);
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [
+			      "done",
+			      "2026-10-19T00:00:00.000Z",
+			      7,
+			      "running",
+			    ],
+			    "sql": "update "cdr_import" set "status" = $1, "finishedAt" = $2 where ("cdr_import"."id" = $3 and "cdr_import"."status" = $4)",
+			  },
+			]
+		`);
+	});
+});
+
+describe("failImport", () => {
+	// A done import stays done; a failed one keeps its first reason.
+	it("fails only a queued or running import, with the reason", async () => {
+		const { repository, queries } = harness();
+
+		await repository.failImport(7, "Bank sync isn't set up");
+
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [
+			      "failed",
+			      "Bank sync isn't set up",
+			      "2026-10-19T00:00:00.000Z",
+			      7,
+			      "queued",
+			      "running",
+			    ],
+			    "sql": "update "cdr_import" set "status" = $1, "error" = $2, "finishedAt" = $3 where ("cdr_import"."id" = $4 and "cdr_import"."status" in ($5, $6))",
+			  },
+			]
+		`);
 	});
 });

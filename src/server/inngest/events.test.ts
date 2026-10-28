@@ -95,7 +95,10 @@ describe("buildOutboxEvent (active trace)", () => {
 type _NameIsRegistryKeys = Expect<
 	Equal<
 		EventName,
-		"receipt/uploaded" | "receipt/email.received" | "receipt/retry"
+		| "receipt/uploaded"
+		| "receipt/email.received"
+		| "receipt/retry"
+		| "cdr/import.requested"
 	>
 >;
 type _PayloadShape = Expect<

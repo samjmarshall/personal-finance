@@ -8,6 +8,7 @@ import { db } from "~/server/db";
 import { expensesService } from "~/server/expenses/expenses.module";
 import { DrizzleIncomeRepository } from "~/server/income/income.repository";
 import { IncomeService } from "~/server/income/income.service";
+import { outboxService } from "~/server/outbox/outbox.module";
 import { receiptsService } from "~/server/receipts/receipts.module";
 import { DrizzleSettingsRepository } from "~/server/settings/settings.repository";
 import { SettingsService } from "~/server/settings/settings.service";
@@ -34,7 +35,9 @@ export const services = {
 		balances: balancesService,
 	}),
 	categories: categoriesService,
-	cdr: new CdrService({ repository: new DrizzleCdrRepository({ db }) }),
+	cdr: new CdrService({
+		repository: new DrizzleCdrRepository({ db, outbox: outboxService }),
+	}),
 	expenses: expensesService,
 	income,
 	receipts: receiptsService,

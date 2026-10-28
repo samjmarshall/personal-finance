@@ -1,0 +1,124 @@
+import { type ReactNode, useId } from "react";
+import { Money } from "~/components/money";
+import { Button } from "~/components/ui/button";
+import type {
+	PossibleDuplicateReview,
+	ResolveDuplicateInput,
+} from "~/domain/transactions";
+import { formatDate } from "~/lib/utils";
+import { amountGapLabel, dayGapLabel } from "./import.display";
+
+export type DuplicateChoice = ResolveDuplicateInput["choice"];
+
+const CHOICES: { choice: DuplicateChoice; label: string }[] = [
+	{ choice: "keep_mine", label: "Keep mine" },
+	{ choice: "use_bank", label: "Use bank's" },
+	{ choice: "both_real", label: "Both are real" },
+];
+
+export function PossibleDuplicateCard({
+	review: { bank, mine },
+	pending,
+	onResolve,
+}: {
+	review: PossibleDuplicateReview;
+	/** The answer being saved; every button waits for it. */
+	pending: DuplicateChoice | null;
+	onResolve: (choice: DuplicateChoice) => void;
+}) {
+	const titleId = useId();
+	const gaps = [
+		dayGapLabel(bank.date, mine.date),
+		amountGapLabel(bank.amount, mine.amount),
+	].filter((gap) => gap !== null);
+
+	return (
+		<article
+			aria-labelledby={titleId}
+			className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10"
+		>
+			<h3 className="sr-only" id={titleId}>
+				Possible duplicate of {mine.description}
+			</h3>
+			<div className="grid divide-border max-sm:divide-y sm:grid-cols-2 sm:divide-x">
+				<Side label="In Ledger" row={mine} />
+				<Side label="From the bank" row={bank}>
+					{gaps.length > 0 && (
+						<ul
+							aria-label="Differences"
+							className="mt-2 flex flex-wrap gap-1.5"
+						>
+							{gaps.map((gap) => (
+								<li
+									className="rounded-full border border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] px-2 py-0.5 text-xs font-medium text-[var(--badge-warn-fg)]"
+									key={gap}
+								>
+									{gap}
+								</li>
+							))}
+						</ul>
+					)}
+				</Side>
+			</div>
+			<div className="flex flex-wrap gap-2 border-t border-border bg-muted/30 px-4 py-3">
+				{CHOICES.map(({ choice, label }) => (
+					<Button
+						// Every card has the same three names; this says which row.
+						aria-describedby={titleId}
+						disabled={pending !== null && pending !== choice}
+						key={choice}
+						loading={pending === choice}
+						onClick={() => onResolve(choice)}
+						size="sm"
+						variant="outline"
+					>
+						{label}
+					</Button>
+				))}
+			</div>
+		</article>
+	);
+}
+
+function Side({
+	label,
+	row,
+	children,
+}: {
+	label: string;
+	row: Pick<
+		PossibleDuplicateReview["mine"],
+		"date" | "amount" | "description"
+	> & { accountName: string | null };
+	children?: ReactNode;
+}) {
+	const labelId = useId();
+	return (
+		<section aria-labelledby={labelId} className="min-w-0 px-4 py-3.5">
+			<h4
+				className="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+				id={labelId}
+			>
+				{label}
+			</h4>
+			<div className="mt-1.5 flex items-baseline justify-between gap-3">
+				{/* Wraps, never cut: the tail is often what tells two rows apart. */}
+				<p className="min-w-0 font-medium wrap-anywhere text-foreground">
+					{row.description}
+				</p>
+				<Money
+					className="shrink-0 font-medium"
+					signed
+					tone="ledger"
+					value={row.amount}
+				/>
+			</div>
+			<p className="mt-0.5 text-xs text-muted-foreground">
+				<span className="tabular">{formatDate(row.date)}</span>
+				<span aria-hidden="true"> · </span>
+				<span>{row.accountName ?? "No account"}</span>
+			</p>
+			{children}
+		</section>
+	);
+}

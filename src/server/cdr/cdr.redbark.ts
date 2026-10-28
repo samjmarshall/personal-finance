@@ -22,10 +22,11 @@ const REQUEST_TIMEOUT_MS = 15_000;
 export interface RedbarkClient {
 	listConnections(): Promise<RedbarkConnection[]>;
 	listAccounts(): Promise<RedbarkAccount[]>;
-	/** Settled rows only, every page. Throws if RedBark truncates the window. */
+	/** Settled rows only, every page. `to` is inclusive; none means up to today. Throws if RedBark truncates the window. */
 	listTransactions(query: {
 		accountId: string;
 		from: Date;
+		to?: Date;
 	}): Promise<RedbarkTransaction[]>;
 	/** One call for up to 100 accounts. An account RedBark can't read comes back with a null `current`. */
 	listBalances(accountIds: string[]): Promise<RedbarkBalance[]>;
@@ -75,9 +76,11 @@ export class HttpRedbarkClient implements RedbarkClient {
 	listTransactions({
 		accountId,
 		from,
+		to,
 	}: {
 		accountId: string;
 		from: Date;
+		to?: Date;
 	}): Promise<RedbarkTransaction[]> {
 		return this.list(
 			"/transactions",
@@ -85,7 +88,8 @@ export class HttpRedbarkClient implements RedbarkClient {
 				account: accountId,
 				// A full timestamp is an instant to RedBark (UTC midnight = Sydney mid-morning);
 				// a bare date is the whole day in the member's zone, like each row's date.
-				from: from.toISOString().slice(0, 10),
+				from: bareDay(from),
+				...(to && { to: bareDay(to) }),
 				// adr017 facet 3: a pending row can still change amount or vanish.
 				include_pending: "false",
 			},
@@ -171,3 +175,5 @@ function parseRetryAfter(header: string | null): number | null {
 	const ms = Date.parse(header) - Date.now();
 	return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
+
+const bareDay = (value: Date) => value.toISOString().slice(0, 10);

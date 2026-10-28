@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { AllowedSender } from "~/domain/allowed-senders/allowed-sender.interface";
 import type { BalanceSnapshot } from "~/domain/balances/balance.interface";
 import type { Category } from "~/domain/categories/category.interface";
-import type { CdrSyncState } from "~/domain/cdr/cdr.interface";
+import type { CdrImport, CdrSyncState } from "~/domain/cdr/cdr.interface";
 import type { Expense } from "~/domain/expenses/expense.interface";
 import type { Income } from "~/domain/income/income.interface";
 import type { Receipt, ReceiptItem } from "~/domain/receipts/receipt.interface";
@@ -15,7 +15,7 @@ import type {
 import type { allowedSenders } from "~/server/allowed-senders/allowed-senders.schema";
 import type { balanceSnapshots } from "~/server/balances/balances.schema";
 import type { categories } from "~/server/categories/categories.schema";
-import type { cdrSyncState } from "~/server/cdr/cdr.schema";
+import type { cdrImport, cdrSyncState } from "~/server/cdr/cdr.schema";
 import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
 import type { receiptItems, receipts } from "~/server/receipts/receipts.schema";
@@ -40,13 +40,16 @@ type Contracts = [
 	Expect<Equal<typeof cdrSyncState.$inferSelect, CdrSyncState>>,
 ];
 
-// receipt_item and possible_duplicate share their parent's interface file, so they
+// receipt_item, possible_duplicate and cdr_import share their parent's interface file, so they
 // can't get their own COVERED slug; these standalone aliases still error on drift.
 type _ReceiptItemContract = Expect<
 	Equal<typeof receiptItems.$inferSelect, ReceiptItem>
 >;
 type _PossibleDuplicateContract = Expect<
 	Equal<typeof possibleDuplicates.$inferSelect, PossibleDuplicate>
+>;
+type _CdrImportContract = Expect<
+	Equal<typeof cdrImport.$inferSelect, CdrImport>
 >;
 
 // Entities whose *.interface.ts is pinned by `Contracts`. A new interface file with

@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
-import type { CdrSyncState } from "~/domain/cdr";
-import { CdrConnectionStatus } from "~/lib/constants";
-import { NotFoundError } from "~/server/errors/domain-errors";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CdrImport, CdrSyncState } from "~/domain/cdr";
+import { CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import { recorder, unstaged } from "~/test/fakes";
 import type { CdrRepository } from "./cdr.repository";
 import { CdrService } from "./cdr.service";
@@ -16,6 +20,13 @@ function serviceWith(staged: Partial<CdrRepository>) {
 		setInBalance: unstaged,
 		recordBalance: unstaged,
 		setNickname: unstaged,
+		insertImport: unstaged,
+		findActiveImport: unstaged,
+		latestImport: unstaged,
+		markImportRunning: unstaged,
+		addImportCounts: unstaged,
+		finishImport: unstaged,
+		failImport: unstaged,
 		...staged,
 	};
 	return new CdrService({ repository });
@@ -87,5 +98,155 @@ describe("CdrService.setNickname", () => {
 		await expect(
 			service.setNickname({ accountId: "acc_x", nickname: null }),
 		).rejects.toBeInstanceOf(NotFoundError);
+	});
+});
+
+// 2026-10-28 11:00 in Sydney (AEDT, UTC+11).
+const NOW = new Date("2026-10-28T00:00:00.000Z");
+const HOUR_MS = 60 * 60 * 1000;
+
+const IMPORT = {
+	id: 7,
+	fromDate: new Date("2026-01-01T00:00:00.000Z"),
+	toDate: new Date("2026-03-31T00:00:00.000Z"),
+	status: CdrImportStatus.Queued,
+	added: 0,
+	adopted: 0,
+	flagged: 0,
+	known: 0,
+	error: null,
+	createdAt: NOW,
+	finishedAt: null,
+} satisfies CdrImport;
+
+describe("CdrService.startImport", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(NOW);
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("inserts the range as UTC midnights when nothing is running", async () => {
+		const active = recorder(undefined);
+		const insert = recorder(IMPORT);
+		const service = serviceWith({
+			findActiveImport: active.method,
+			insertImport: insert.method,
+		});
+
+		await expect(
+			service.startImport({ from: "2026-01-01", to: "2026-03-31" }),
+		).resolves.toBe(IMPORT);
+		expect(insert.calls).toEqual([
+			[
+				{
+					fromDate: new Date("2026-01-01T00:00:00.000Z"),
+					toDate: new Date("2026-03-31T00:00:00.000Z"),
+				},
+			],
+		]);
+	});
+
+	// The page's "today" is Sydney's, a day ahead of UTC for part of each day.
+	it("takes today in Sydney as the latest `to`", async () => {
+		const service = serviceWith({
+			findActiveImport: async () => undefined,
+			insertImport: async () => IMPORT,
+		});
+
+		await expect(
+			service.startImport({ from: "2026-10-01", to: "2026-10-28" }),
+		).resolves.toBe(IMPORT);
+	});
+
+	it.each([
+		["`from` after `to`", "2026-03-02", "2026-03-01"],
+		["`to` after today", "2026-10-01", "2026-10-29"],
+		["`from` over 7 years ago", "2019-10-27", "2026-10-28"],
+	])("refuses %s", async (_, from, to) => {
+		const service = serviceWith({});
+
+		await expect(service.startImport({ from, to })).rejects.toBeInstanceOf(
+			InvalidInputError,
+		);
+	});
+
+	it("allows `from` exactly 7 years ago", async () => {
+		const service = serviceWith({
+			findActiveImport: async () => undefined,
+			insertImport: async () => IMPORT,
+		});
+
+		await expect(
+			service.startImport({ from: "2019-10-28", to: "2026-10-28" }),
+		).resolves.toBe(IMPORT);
+	});
+
+	it("refuses while an import is active, looking back 24 hours", async () => {
+		const active = recorder({ ...IMPORT, status: CdrImportStatus.Running });
+		const service = serviceWith({ findActiveImport: active.method });
+
+		await expect(
+			service.startImport({ from: "2026-01-01", to: "2026-03-31" }),
+		).rejects.toBeInstanceOf(ConflictError);
+		expect(active.calls).toEqual([[new Date(NOW.getTime() - 24 * HOUR_MS)]]);
+	});
+});
+
+describe("CdrService.latestImport", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(NOW);
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const createdAgo = (hours: number) =>
+		new Date(NOW.getTime() - hours * HOUR_MS);
+
+	it("is null when nothing was ever imported", async () => {
+		const service = serviceWith({ latestImport: async () => undefined });
+
+		await expect(service.latestImport()).resolves.toBeNull();
+	});
+
+	it("is active while running and just under 24 hours old", async () => {
+		const row = {
+			...IMPORT,
+			status: CdrImportStatus.Running,
+			createdAt: createdAgo(23.9),
+		};
+		const service = serviceWith({ latestImport: async () => row });
+
+		await expect(service.latestImport()).resolves.toEqual({
+			...row,
+			active: true,
+		});
+	});
+
+	// Its job may never report, so the page mustn't lock on it.
+	it("is not active once a running row is just over 24 hours old", async () => {
+		const row = {
+			...IMPORT,
+			status: CdrImportStatus.Running,
+			createdAt: createdAgo(24.1),
+		};
+		const service = serviceWith({ latestImport: async () => row });
+
+		await expect(service.latestImport()).resolves.toMatchObject({
+			active: false,
+		});
+	});
+
+	it("is not active once done", async () => {
+		const row = { ...IMPORT, status: CdrImportStatus.Done };
+		const service = serviceWith({ latestImport: async () => row });
+
+		await expect(service.latestImport()).resolves.toMatchObject({
+			active: false,
+		});
 	});
 });

@@ -1,4 +1,5 @@
 import {
+	type FailureEventArgs,
 	type Inngest,
 	type InngestFunction,
 	NonRetriableError,
@@ -10,8 +11,10 @@ import type { CdrSyncService } from "./cdr-sync.service";
 
 const RETRIES = 3;
 // Past this, retrying only draws another 429 or parks the run for days; the next
-// daily cron is the retry.
+// daily cron, or the member's re-run, is the retry.
 const MAX_RETRY_AFTER_MS = 60 * 60 * 1000;
+// One shared slot: a sync and an import interleave step by step but never reconcile at once.
+const ONE_BANK_FETCH = { limit: 1, key: '"cdr-sync"', scope: "env" } as const;
 
 interface CdrInngestControllerDeps {
 	inngest: Pick<Inngest, "createFunction">;
@@ -19,7 +22,8 @@ interface CdrInngestControllerDeps {
 }
 
 /**
- * Presentation tier: declares the daily bank sync. Function id + cron are FROZEN
+ * Presentation tier: declares the daily bank sync and the member-run history
+ * import. Function ids, triggers and the concurrency key are FROZEN
  * (`registry-golden.test.ts`).
  */
 export class CdrInngestController {
@@ -27,6 +31,8 @@ export class CdrInngestController {
 
 	/** Daily poll; 18:00 UTC is about 4–5 am Sydney. */
 	readonly sync: InngestFunction.Any;
+	/** One step per 90-day account chunk, so a retry redoes one chunk, not the import. */
+	readonly import: InngestFunction.Any;
 
 	constructor({ inngest, service }: CdrInngestControllerDeps) {
 		this.service = service;
@@ -34,27 +40,57 @@ export class CdrInngestController {
 			{
 				id: "cdr-sync",
 				retries: RETRIES,
-				// Two overlapping runs would fetch the same windows twice.
-				concurrency: { limit: 1 },
+				concurrency: ONE_BANK_FETCH,
 				triggers: [{ cron: "0 18 * * *" }],
 			},
-			async () => {
-				try {
-					await this.service.run();
-				} catch (error) {
-					throw toInngestError(error);
-				}
+			() => this.translated(() => this.service.run()),
+		);
+		this.import = inngest.createFunction(
+			{
+				id: "cdr-import",
+				retries: RETRIES,
+				concurrency: ONE_BANK_FETCH,
+				triggers: [{ event: "cdr/import.requested" }],
+				onFailure: ({ event, error }: FailureEventArgs) =>
+					this.service.failImport(
+						event.data.event.data.importId,
+						error.message,
+					),
+			},
+			async ({ event, step }) => {
+				const importId: number = event.data.importId;
+				const plan = await step.run("plan", () =>
+					this.translated(() => this.service.planImport(importId)),
+				);
+				if (!plan) return;
+				for (const chunk of plan.chunks)
+					await step.run(`chunk-${chunk.accountId}-${chunk.from}`, () =>
+						this.translated(() =>
+							this.service.importChunk(importId, chunk, plan.liveAccountIds),
+						),
+					);
+				await step.run("finish", () =>
+					this.translated(() => this.service.finishImport(importId)),
+				);
 			},
 		);
 	}
 
 	/** Everything this controller registers with `serve`. */
 	get functions(): InngestFunction.Any[] {
-		return [this.sync];
+		return [this.sync, this.import];
+	}
+
+	// Service errors know nothing about the job runner; translate them to its retry rules here.
+	private async translated<T>(work: () => Promise<T>): Promise<T> {
+		try {
+			return await work();
+		} catch (error) {
+			throw toInngestError(error);
+		}
 	}
 }
 
-// Service errors know nothing about the job runner; translate them to its retry rules here.
 function toInngestError(error: unknown): unknown {
 	if (!(error instanceof CdrSyncError)) return error;
 	if (!error.retryable)

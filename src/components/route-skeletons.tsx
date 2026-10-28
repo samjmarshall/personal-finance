@@ -74,7 +74,7 @@ export function UnplannedGroupsSkeleton() {
 		<div aria-hidden className="flex flex-col gap-6">
 			{[3, 2].map((rows) => (
 				<Card className="[--card-spacing:0px]" key={rows}>
-					<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3">
+					<div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3">
 						<Skeleton className="my-0.5 h-4 w-32" />
 						<Skeleton className="my-0.5 h-4 w-16" />
 					</div>
@@ -168,7 +168,7 @@ export function TransactionsTableSkeleton() {
 	return (
 		<TableSkeleton
 			footer={
-				<div className="flex flex-col gap-3 border-border border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+				<div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
 					{/* Page total, then "Page n of m" and the prev / next buttons */}
 					<Skeleton className="my-0.5 h-4 w-36" />
 					<div className="flex items-center gap-3">
@@ -181,6 +181,54 @@ export function TransactionsTableSkeleton() {
 				</div>
 			}
 		/>
+	);
+}
+
+export function ImportSkeleton() {
+	return (
+		<PageSkeleton
+			action="sm"
+			className="max-w-6xl"
+			description="Bring in older history from your bank, up to 7 years back."
+			title="Import from bank"
+		>
+			<div className="grid gap-4 lg:grid-cols-5">
+				<Card className="lg:col-span-3">
+					<CardContent>
+						<Skeleton className="my-0.5 h-4 w-24" />
+						{/* From and To: label, then the date input */}
+						<div className="mt-3 grid grid-cols-2 gap-3">
+							{[0, 1].map((i) => (
+								<div className="flex flex-col gap-3" key={i}>
+									<Skeleton className="my-0.5 h-4 w-12" />
+									<Skeleton className="h-8" />
+								</div>
+							))}
+						</div>
+						<div className="mt-4 flex items-center gap-4">
+							<Skeleton className="h-8 w-24" />
+							<Skeleton className="h-3 w-64" />
+						</div>
+					</CardContent>
+				</Card>
+				<Card className="lg:col-span-2">
+					<CardContent className="flex flex-col gap-3">
+						<Skeleton className="my-0.5 h-4 w-28" />
+						<Skeleton className="h-4 w-24" />
+						<Skeleton className="h-4 w-48" />
+						<Skeleton className="h-4 w-full" />
+					</CardContent>
+				</Card>
+			</div>
+			<div className="mt-8">
+				<Skeleton className="my-1 h-4 w-24" />
+				<Skeleton className="mt-2 h-4 w-full max-w-xl" />
+				<div className="mt-4 space-y-3">
+					<Skeleton className="h-40 rounded-xl" />
+					<Skeleton className="h-40 rounded-xl" />
+				</div>
+			</div>
+		</PageSkeleton>
 	);
 }
 
@@ -213,7 +261,7 @@ export function ReceiptsTableSkeleton() {
 		<Card aria-hidden className="[--card-spacing:0px]">
 			<table className="w-full table-fixed border-collapse text-sm">
 				<thead>
-					<tr className="border-border border-b bg-muted/40">
+					<tr className="border-b border-border bg-muted/40">
 						{/* Thumbnail column: the 40px image plus cell padding */}
 						<th className="w-18 px-4 py-2.5" />
 						{indices(4).map((col) => (
@@ -250,7 +298,7 @@ export function SettingsSkeleton() {
 			title="Settings"
 		>
 			<div className="grid gap-6 lg:grid-cols-[184px_1fr] lg:gap-10">
-				<div className="flex gap-1 overflow-x-auto border-border border-b lg:h-fit lg:flex-col lg:border-b-0 lg:border-l">
+				<div className="flex gap-1 overflow-x-auto border-b border-border lg:h-fit lg:flex-col lg:border-b-0 lg:border-l">
 					{[
 						{ tab: "appearance", width: "w-24" },
 						{ tab: "pay-cycle", width: "w-20" },
@@ -258,7 +306,7 @@ export function SettingsSkeleton() {
 						{ tab: "bank-accounts", width: "w-28" },
 					].map(({ tab, width }) => (
 						<div
-							className="-mb-px border-transparent border-b-2 px-3 py-2 lg:mb-0 lg:-ml-px lg:border-b-0 lg:border-l-2 lg:py-1.5 lg:pl-4"
+							className="-mb-px border-b-2 border-transparent px-3 py-2 lg:mb-0 lg:-ml-px lg:border-b-0 lg:border-l-2 lg:py-1.5 lg:pl-4"
 							key={tab}
 						>
 							<Skeleton className={cn("my-0.5 h-4", width)} />
@@ -268,10 +316,10 @@ export function SettingsSkeleton() {
 				{/* Appearance, the panel that opens first. Its text is fixed, so it's real
 				    (the blurb as it reads before mount) and wraps like the page. */}
 				<div>
-					<h2 className="font-semibold text-base text-foreground tracking-tight">
+					<h2 className="text-base font-semibold tracking-tight text-foreground">
 						Appearance
 					</h2>
-					<p className="mt-1 text-muted-foreground text-sm">
+					<p className="mt-1 text-sm text-muted-foreground">
 						Choose how Ledger looks — saved to this browser, not shared with
 						your household.
 					</p>
@@ -310,7 +358,7 @@ function GroupCardSkeleton({ rows }: { rows: number }) {
 		"grid grid-cols-2 items-center gap-2 px-4 sm:grid-cols-[1fr_repeat(3,7rem)_3rem]";
 	return (
 		<Card className="[--card-spacing:0px]">
-			<div className="flex items-center justify-between border-border border-b bg-muted/40 px-4 py-3">
+			<div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
 				<Skeleton className="my-0.5 h-4 w-28" />
 				<Skeleton className="h-3 w-16" />
 			</div>

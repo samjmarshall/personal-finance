@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { CdrSyncState } from "~/domain/cdr";
-import { CdrConnectionStatus } from "~/lib/constants";
+import type { CdrImport, CdrSyncState } from "~/domain/cdr";
+import { CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
-import { NotFoundError } from "~/server/errors/domain-errors";
+import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
 import { recorder, throwing } from "~/test/fakes";
 import type { CdrService } from "./cdr.service";
 import { cdrRouter } from "./cdr.trpc.controller";
@@ -32,6 +32,20 @@ const SYNC_STATE = {
 	nickname: null,
 	updatedAt: null,
 } satisfies CdrSyncState;
+
+const IMPORT = {
+	id: 7,
+	fromDate: new Date("2026-01-01T00:00:00.000Z"),
+	toDate: new Date("2026-03-31T00:00:00.000Z"),
+	status: CdrImportStatus.Queued,
+	added: 0,
+	adopted: 0,
+	flagged: 0,
+	known: 0,
+	error: null,
+	createdAt: new Date("2026-10-28T00:00:00.000Z"),
+	finishedAt: null,
+} satisfies CdrImport;
 
 describe("cdr router", () => {
 	it("syncState returns the service's rows", async () => {
@@ -95,8 +109,53 @@ describe("cdr router", () => {
 		).rejects.toMatchObject({ code: "NOT_FOUND", message: "unknown account" });
 	});
 
+	it("startImport hands the service the parsed range", async () => {
+		const { method, calls } = recorder(IMPORT);
+		const input = { from: "2026-01-01", to: "2026-03-31" };
+
+		await expect(
+			callerWith({ startImport: method }).cdr.startImport(input),
+		).resolves.toEqual(IMPORT);
+		expect(calls).toEqual([[input]]);
+	});
+
+	it("startImport surfaces an active import as CONFLICT", async () => {
+		const startImport = throwing(
+			new ConflictError("An import is already running."),
+		);
+
+		await expect(
+			callerWith({ startImport }).cdr.startImport({
+				from: "2026-01-01",
+				to: "2026-03-31",
+			}),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "An import is already running.",
+		});
+	});
+
+	it("latestImport returns the service's row", async () => {
+		const latest = { ...IMPORT, active: true };
+		const { method, calls } = recorder(latest);
+
+		await expect(
+			callerWith({ latestImport: method }).cdr.latestImport(),
+		).resolves.toEqual(latest);
+		expect(calls).toEqual([[]]);
+	});
+
 	it.each([
 		["syncState", (c: ReturnType<typeof callerWith>) => c.cdr.syncState()],
+		[
+			"startImport",
+			(c: ReturnType<typeof callerWith>) =>
+				c.cdr.startImport({ from: "2026-01-01", to: "2026-03-31" }),
+		],
+		[
+			"latestImport",
+			(c: ReturnType<typeof callerWith>) => c.cdr.latestImport(),
+		],
 		[
 			"setInBalance",
 			(c: ReturnType<typeof callerWith>) =>
@@ -111,6 +170,8 @@ describe("cdr router", () => {
 		const list = recorder([SYNC_STATE]);
 		const set = recorder(SYNC_STATE);
 		const rename = recorder(SYNC_STATE);
+		const start = recorder(IMPORT);
+		const latest = recorder(null);
 
 		await expect(
 			call(
@@ -119,11 +180,19 @@ describe("cdr router", () => {
 						listSyncState: list.method,
 						setInBalance: set.method,
 						setNickname: rename.method,
+						startImport: start.method,
+						latestImport: latest.method,
 					},
 					null,
 				),
 			),
 		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-		expect([...list.calls, ...set.calls, ...rename.calls]).toEqual([]);
+		expect([
+			...list.calls,
+			...set.calls,
+			...rename.calls,
+			...start.calls,
+			...latest.calls,
+		]).toEqual([]);
 	});
 });

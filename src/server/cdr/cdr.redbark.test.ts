@@ -149,6 +149,20 @@ describe("HttpRedbarkClient.listTransactions", () => {
 		});
 	});
 
+	// RedBark's `to` is inclusive and, like `from`, a bare day in the member's zone.
+	it("sends `to` as a bare day when given", async () => {
+		fetchMock.mockResolvedValue(page([]));
+
+		await client().listTransactions({
+			accountId: "acct_1",
+			from,
+			to: new Date("2026-11-29T00:00:00.000Z"),
+		});
+
+		expect(calledUrl().searchParams.get("from")).toBe("2026-09-01");
+		expect(calledUrl().searchParams.get("to")).toBe("2026-11-29");
+	});
+
 	it("follows next_page_url until it is null", async () => {
 		fetchMock
 			.mockResolvedValueOnce(

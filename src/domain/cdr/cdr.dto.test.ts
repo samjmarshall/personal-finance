@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CdrConnectionStatus } from "~/lib/constants";
 import {
+	cdrImportStartDto,
 	cdrSetInBalanceDto,
 	cdrSetNicknameDto,
 	redbarkAccountDto,
@@ -222,4 +223,21 @@ describe("cdrSetNicknameDto", () => {
 			cdrSetNicknameDto.safeParse({ accountId: "", nickname: "Bills" }).success,
 		).toBe(false);
 	});
+});
+
+describe("cdrImportStartDto", () => {
+	it("takes bare days from a date input", () => {
+		expect(
+			cdrImportStartDto.parse({ from: "2026-01-01", to: "2026-03-31" }),
+		).toEqual({ from: "2026-01-01", to: "2026-03-31" });
+	});
+
+	it.each(["", "01/02/2026", "2026-02-30", "2026-01-01T00:00:00Z"])(
+		"refuses %j",
+		(from) => {
+			expect(
+				cdrImportStartDto.safeParse({ from, to: "2026-03-31" }).success,
+			).toBe(false);
+		},
+	);
 });
