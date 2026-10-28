@@ -126,10 +126,10 @@ When a phase touches security-sensitive paths — `src/lib/**`, `src/env.ts`, `n
 After all phases are complete, update docs so the next engineer picks up cold:
 
 - **`docs/README.md`** — update when the plan adds an env var, integration, scheduled job, ADR, or Make target. Skip otherwise.
-- **`/document-feature {slug}`** — run for user-visible features (new route, flow, or integration). Take `{slug}` from the ticket title. Skip for infra, refactors, bug fixes, or test-only changes.
-- **`/domain-model`** — run when the plan adds or restructures a domain concept or entity boundary. Skip otherwise.
+- **`/document-feature {slug}`** — due for user-visible features (new route, flow, or integration). Take `{slug}` from the ticket title. Skip for infra, refactors, bug fixes, or test-only changes.
+- **`/domain-model`** — due when the plan adds or restructures a domain concept or entity boundary. Skip otherwise.
 
-If a skill is unavailable, flag it in your summary. Don't hand-write the artefact.
+Both interview the user, so they're user-only (`disable-model-invocation: true`) — don't try to run them. When one is due, end your summary with the exact command for the user to type (e.g. `/document-feature history-import`). If any other skill is unavailable, flag it in your summary. Don't hand-write the artefact.
 
 ## If You Get Stuck
 
