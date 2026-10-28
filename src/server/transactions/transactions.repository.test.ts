@@ -696,6 +696,7 @@ describe("applyReconcile", () => {
 						41,
 						"2026-10-13T00:00:00.000Z",
 						"WOOLIES",
+						1,
 					],
 				];
 			return [];
@@ -715,7 +716,7 @@ describe("applyReconcile", () => {
 			      9,
 			      "pending",
 			    ],
-			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."id" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description"",
+			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."id" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "transactionId"",
 			  },
 			  {
 			    "method": "execute",

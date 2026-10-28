@@ -376,11 +376,8 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				if (heldBy === null) continue;
 				// The household row is now the exact bank row, so the close one the
 				// review held is another purchase.
-				const released = await tx
-					.delete(possibleDuplicates)
-					.where(and(eq(possibleDuplicates.id, heldBy), isPending))
-					.returning(reviewBankRow);
-				extra.push(...released);
+				const released = await this.takeReview(tx, heldBy);
+				extra.push(...released.map(({ transactionId: _, ...bank }) => bank));
 			}
 
 			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...extra]);
@@ -651,7 +648,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				.select(reviewBankRow)
 				.from(possibleDuplicates)
 				.where(eq(possibleDuplicates.transactionId, id));
-			// A date past the sync's overlap is never fetched again.
+			// A held bank row has no other copy, and sync never refetches an old date.
 			if (held.length)
 				await tx.insert(transactions).values(held).onConflictDoNothing();
 			await tx.delete(transactions).where(eq(transactions.id, id));

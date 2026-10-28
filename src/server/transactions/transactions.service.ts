@@ -50,8 +50,8 @@ const DUPLICATE_NOT_FOUND_MESSAGE = "Possible duplicate not found.";
 const BANK_ROW_TAKEN_MESSAGE = "That bank row is already in your transactions.";
 
 const MS_PER_DAY = 86_400_000;
-// A Sydney day starts the UTC day before, so the scan takes a day of slack each
-// side; the planner keeps the exact window.
+// A Sydney day starts the UTC day before: scan a day wider each side, +1 more
+// at the end because it is exclusive. The planner keeps the exact window.
 const SCAN_BEFORE_DAYS = MATCH_DAYS + 1;
 const SCAN_AFTER_DAYS = MATCH_DAYS + 2;
 
