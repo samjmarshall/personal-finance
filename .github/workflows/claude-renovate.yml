@@ -238,7 +238,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: steps.review.outputs.found == 'true'
 
       - uses: actions/setup-node@v6
@@ -372,7 +372,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: steps.guard.outputs.skip == 'false'
 
       - uses: actions/setup-node@v6
