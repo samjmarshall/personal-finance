@@ -9,7 +9,7 @@ import {
 	type RawIssue,
 	RawIssueSchema,
 	type RawProjectItem,
-} from "./rules";
+} from "./rules.ts";
 
 // Expected project field display names (lowercased). A board rename silently
 // drops the JSON key → `assertExpectedFields` turns that into a hard failure

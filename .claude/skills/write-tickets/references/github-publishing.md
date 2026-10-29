@@ -39,7 +39,7 @@ gh api graphql -f query='mutation($p:ID!,$i:ID!,$f:ID!,$d:Date!){
 
 Set Status, Start date, Target date, and Milestone (when one applies) at creation. Start date and Target date are required.
 
-The **post-publish validation gate** (see `SKILL.md`) is the agent's final step — it runs `yarn tsx .claude/skills/write-tickets/scripts/validate-ticket.ts --epic <P>` (or `<issue>` for a single ticket), loops until exit 0, and returns the PASS/FAIL verdict. Running this validator is the agent's one sanctioned exception to its `gh`-only writes; you gate on the verdict it reports. A content failure (missing section, weak AC) comes back to you to fix in the body file and re-delegate.
+The **post-publish validation gate** (see `SKILL.md`) is the agent's final step — it runs `node .claude/skills/write-tickets/scripts/validate-ticket.ts --epic <P>` (or `<issue>` for a single ticket), loops until exit 0, and returns the PASS/FAIL verdict. Running this validator is the agent's one sanctioned exception to its `gh`-only writes; you gate on the verdict it reports. A content failure (missing section, weak AC) comes back to you to fix in the body file and re-delegate.
 
 ## Related tickets
 
