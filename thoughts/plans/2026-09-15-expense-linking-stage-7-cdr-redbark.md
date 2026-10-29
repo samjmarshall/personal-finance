@@ -1482,8 +1482,11 @@ window at 5,000 rows.
   `schema-interface-contract.test.ts`. `LatestImport = CdrImport & { active: boolean }`.
 - `src/domain/cdr/cdr.dto.ts` — `cdrImportStartDto = z.object({ from: z.iso.date(), to:
   z.iso.date() })` (bare days from `<Input type="date">`).
-- `src/domain/cdr/import-chunks.ts` — pure `importChunks(from, to, days = 90)` → inclusive
-  `{ from, to }` windows covering the range with no gap or overlap; `IMPORT_MAX_YEARS = 7`.
+- `src/domain/cdr/import-range.ts` — pure `importWindows(from, to, days = 90)` → inclusive
+  `{ from, to }` windows covering the range with no gap or overlap; `IMPORT_MAX_YEARS = 7`;
+  `importEarliestDay(today)` (Feb 29 → Feb 28); `importRangeError(from, to, today)` → the
+  member-facing reason a range is refused, or `null`. The form and `startImport` share it, so
+  both refuse the same ranges in the same words.
 - `src/server/cdr/cdr.redbark.ts` — `listTransactions` (`:26-29`, `:74-93`) takes an optional
   `to`, sent as a bare date like `from` (RedBark's `to` is inclusive).
 - `src/server/cdr/cdr.repository.ts` — deps become `{ db, outbox: OutboxWriteDoor }` (as
@@ -1506,8 +1509,9 @@ window at 5,000 rows.
 - `src/server/inngest/events.ts` — `EVENT_REGISTRY` (`:13-17`) gains `"cdr/import.requested":
   z.object({ importId: z.number().int() })`.
 - `src/server/cdr/cdr.service.ts`:
-  - `startImport({ from, to })` → `InvalidInputError` when `from` is after `to`, `to` is after
-    today, or `from` is more than 7 years ago ("today" in `HOUSEHOLD_TIME_ZONE`).
+  - `startImport({ from, to })` → `InvalidInputError(importRangeError(…))` when `from` is after
+    `to`, `to` is after today, or `from` is more than 7 years ago ("today" in
+    `HOUSEHOLD_TIME_ZONE`).
     `ConflictError("An import is already running")` when `findActiveImport(since)` finds
     one; two racing starts would run two imports, interleaved step by step as above. Then
     `insertImport`.
@@ -1518,14 +1522,17 @@ window at 5,000 rows.
   `latestImport` query.
 - `src/server/cdr/cdr-sync.service.ts`:
   - Move discovery out of `run()` into a private method that both `run()` and `planImport` use.
-  - `planImport(importId)` → `markImportRunning`. When that moves nothing (a repeat delivery)
-    it returns `null` and touches nothing else; the handler then stops, with no chunks and no
-    `finish`. With no key, it calls `failImport(importId, "Bank sync isn't set up")` and
-    returns no chunks. Otherwise it discovers, then returns
-    `{ liveAccountIds, chunks }`: `importChunks` for each account the daily sync would sync
-    (same consent and account-status rules). Each chunk is `{ accountId, accountName, from, to
-    }`, with RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:302`).
-    Dates travel as `YYYY-MM-DD` strings, because a step's result is JSON.
+  - `planImport(importId)` → with no key, it calls `failImport(importId, "Bank sync isn't set
+    up")` and returns no chunks. Otherwise it discovers, then `markImportRunning`: claiming
+    last means a retry after a failed bank call still finds the row `queued`. When the claim
+    moves nothing (a repeat delivery) it returns `null` and writes nothing; the handler then
+    stops, with no chunks and no `finish`. Otherwise it returns `{ liveAccountIds, chunks }`:
+    `importWindows` for each account the daily sync would sync (same consent and
+    account-status rules). Each chunk is `{ accountId, accountName, from, to }`, with
+    RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:302`). Dates
+    travel as `YYYY-MM-DD` strings, because a step's result is JSON. No ready account, or
+    more chunks than the step cap → `failImport` with a plain reason ("No bank account is
+    ready to import…", "This import is too big for one run…") and no chunks, not a throw.
   - `importChunk(importId, chunk, liveAccountIds)` → `listTransactions({ accountId, from, to })`
     → map with `chunk.accountName` → `reconcileSynced` → `addImportCounts`. A retried chunk re-counts its rows as `known`,
     so counts are a guide, not a ledger. Any error leaves as `syncError("cdr import chunk
@@ -1538,8 +1545,8 @@ window at 5,000 rows.
   - Add `cdr-import` (`{ event: "cdr/import.requested" }`, `retries: RETRIES`, the same
     concurrency). Handler: `step.run("plan")`, then one `step.run(\`chunk-${accountId}-${from}\`)`
     per chunk, then `step.run("finish")`. Each step's error goes through the same mapping as
-    `cdr-sync` (move it into one private method). `onFailure` calls `failImport` with the
-    error message.
+    `cdr-sync` (move it into one private method). `onFailure` calls `failImport` with plain
+    words ("The import stopped on an error. Try again later."), not the run's raw error.
   - Before coding, confirm with `web-lookup` for `inngest` 4.22: `step.run` retries per step;
     `RetryAfterError` and `NonRetriableError` inside a step; the `onFailure` signature and how
     it reads the original event; that a shared `concurrency.key` holds a slot only while a step
@@ -1566,25 +1573,29 @@ window at 5,000 rows.
     `/transactions`. Three parts:
     - `import-form.tsx` — From and To `<Input type="date">` (as `pay-cycle-section.tsx:55-67`),
       To defaulting to today, and an **Import** button. Disabled while the latest run is
-      `active`. Client checks from ≤ to; the server checks the rest, and its errors go to the
-      global MutationCache. On success, invalidate `cdr.latestImport`: the status only polls
-      while `active`, so without it the page keeps showing the last finished run. A
-      line under it: "Safe to run again. It only adds what's missing, and it never deletes."
+      `active`, but still focusable (`focusableWhenDisabled`) so a keyboard user hears why.
+      The client runs `importRangeError` before sending; the server checks again, and its
+      errors go to the global MutationCache. On settle (success or refusal), invalidate
+      `cdr.latestImport`: the status only polls while `active`, so without it the page keeps
+      showing the last finished run. A line under it: "Safe to run again. It only adds what's
+      missing, and it never deletes."
     - `import-status.tsx` — the latest run's status, range, counts ("Added 12 · Matched to
       yours 30 · To review 3 · Already here 950") and a failed run's error. Polls
       `api.cdr.latestImport` with `refetchInterval` while `active` (as
       `receipts-view.tsx:192-198`). A queued or running row that isn't `active` reads "Didn't
       finish", and the form is open. When it finishes, invalidate `transaction.possibleDuplicates`,
-      `transaction.possibleDuplicateCount` and `transaction.list`.
+      `transaction.possibleDuplicateCount` and `transaction.list`. An always-mounted sr-only
+      `role="status"` reads each status change once (counts left out: they tick every poll).
     - `possible-duplicate-list.tsx` + props-driven `possible-duplicate-card.tsx` — "In Ledger"
       and "From the bank" side by side: date, description, amount, account. The day gap and
       amount gap are called out. Three buttons: **Keep mine**, **Use bank's**, **Both are
       real**, each calling `api.transaction.resolveDuplicate`. On success, invalidate
       `transaction.possibleDuplicates`, `transaction.possibleDuplicateCount` (the header badge)
-      and `transaction.list`, so the card leaves; a toast says what happened. Empty →
-      "Nothing to review."
+      and `transaction.list`, so the card leaves; a toast says what happened. Focus moves to
+      the next card (or out of the list once it's empty). One `CHOICES` table in the card
+      drives both the buttons and the page's key above the cards. Empty → "Nothing to review."
   - `_components/import.display.ts` — pure status label (incl. "Didn't finish"), count line,
-    and gap labels ("3 days later", "$1.20 more").
+    and gap labels ("3 days later than yours", "$1.20 more than yours").
 - `src/components/route-skeletons.tsx` — `ImportSkeleton` beside `TransactionsSkeleton`
   (`:145`).
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx:144-152` — an "Import from
@@ -1595,8 +1606,9 @@ window at 5,000 rows.
 - `drizzle/0024_*.sql` — `make db_generate` + `make db_migrate` (`cdr_import_status` and
   `cdr_import`).
 - Tests:
-  - `import-chunks.test.ts` — one day; exactly 90 days → one chunk; 91 → two; 7 years → no gap
-    or overlap, last chunk ends on `to`.
+  - `import-range.test.ts` — windows: one day; exactly 90 days → one window; 91 → two; 7 years
+    → no gap or overlap, last window ends on `to`. `importEarliestDay` on Feb 29.
+    `importRangeError` passes a good range and refuses each bad one with its words.
   - `cdr.dto.test.ts` — `cdrImportStartDto` refuses a non-date.
   - `cdr.redbark.test.ts` — `to` is sent as a bare date; left out when absent.
   - `cdr.repository.test.ts` — `insertImport` goes through `outbox.commit` with one
@@ -1611,7 +1623,9 @@ window at 5,000 rows.
   - `cdr.trpc.controller.test.ts` — both procedures call the service; signed-out →
     `UNAUTHORIZED`; an active import → `CONFLICT`.
   - `cdr-sync.service.test.ts` — `planImport` with no key fails the run and returns no chunks;
-    on a row past `queued` it returns `null` and never discovers or fails the run;
+    on a row past `queued` it returns `null` and fetches nothing; a discovery error leaves the
+    row `queued` for the retry; no ready account, or past the step cap, fails the run with its
+    reason and plans nothing;
     it chunks only syncable accounts, each chunk carrying the account's name; `importChunk`
     passes `from`/`to`, maps rows with the chunk's name, reconciles with the
     live ids and adds counts; a 429 in a chunk throws a retryable `CdrSyncError` with its wait,
@@ -1620,10 +1634,10 @@ window at 5,000 rows.
     concurrency key; `cdr-sync` now has the same key. With a fake `step`, the handler runs
     plan, one step per chunk with a stable id, then finish; a `null` plan runs no chunk and no
     finish; a step error maps like `cdr-sync`;
-    `onFailure` calls `failImport`.
+    `onFailure` calls `failImport` with plain words, not the run's error.
   - `import.display.test.ts` — each status label (a running row not `active` → "Didn't
-    finish"), the count line, gap labels for earlier,
-    later, more and less.
+    finish"), the count line, gap labels for earlier, later, more and less (each ending
+    "than yours").
   - `possible-duplicate-card.test.tsx` (jsdom) — both sides render; each button calls its
     handler with its choice; queried by role and name.
 
