@@ -1,6 +1,8 @@
 import { utcDayKey } from "~/lib/utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Small windows keep each RedBark read under its 5,000-row cap.
+const WINDOW_DAYS = 90;
 
 /** How far back an import may reach: about RedBark's history depth. */
 export const IMPORT_MAX_YEARS = 7;
@@ -33,21 +35,20 @@ export interface ImportWindow {
 	to: string;
 }
 
-/**
- * Splits an inclusive day range into windows of at most `days` days, with no gap
- * or overlap. Small windows keep each RedBark read under its 5,000-row cap.
- */
-export function importWindows(
-	from: string,
-	to: string,
-	days = 90,
-): ImportWindow[] {
+/** Splits an inclusive day range into windows of at most `WINDOW_DAYS` days, with no gap or overlap. */
+export function importWindows(from: string, to: string): ImportWindow[] {
 	const end = Date.parse(to);
 	const windows: ImportWindow[] = [];
-	for (let start = Date.parse(from); start <= end; start += days * DAY_MS) {
+	for (
+		let start = Date.parse(from);
+		start <= end;
+		start += WINDOW_DAYS * DAY_MS
+	) {
 		windows.push({
 			from: utcDayKey(new Date(start)),
-			to: utcDayKey(new Date(Math.min(start + (days - 1) * DAY_MS, end))),
+			to: utcDayKey(
+				new Date(Math.min(start + (WINDOW_DAYS - 1) * DAY_MS, end)),
+			),
 		});
 	}
 	return windows;

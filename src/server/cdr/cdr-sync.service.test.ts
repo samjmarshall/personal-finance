@@ -1269,12 +1269,15 @@ describe("CdrSyncService.importChunk", () => {
 });
 
 describe("CdrSyncService.finishImport and failImport", () => {
-	it("hands each to the repository", async () => {
+	it("hands each to the repository; a failure in plain words", async () => {
 		const h = harness();
 
 		await h.service.finishImport(7);
-		await h.service.failImport(8, "boom");
+		await h.service.failImport(8);
 
-		expect(h.importEnds).toEqual([{ id: 7 }, { id: 8, failed: "boom" }]);
+		expect(h.importEnds).toEqual([
+			{ id: 7 },
+			{ id: 8, failed: "The import stopped on an error. Try again later." },
+		]);
 	});
 });

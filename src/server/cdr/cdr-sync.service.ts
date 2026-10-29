@@ -27,6 +27,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const OVERLAP_DAYS = 14;
 // Inngest caps a run at 1,000 steps; the import also spends one each on claim, plan and finish.
 const MAX_IMPORT_CHUNKS = 997;
+// The run's own error is for us (Inngest keeps it); the member gets plain words.
+const IMPORT_FAILED = "The import stopped on an error. Try again later.";
 
 /** One account's slice of an import; dates are inclusive `YYYY-MM-DD`. */
 export interface ImportChunk extends ImportWindow {
@@ -240,8 +242,9 @@ export class CdrSyncService {
 		return this.repository.finishImport(importId);
 	}
 
-	failImport(importId: number, message: string): Promise<void> {
-		return this.repository.failImport(importId, message);
+	/** Once the job's retries run out. */
+	failImport(importId: number): Promise<void> {
+		return this.repository.failImport(importId, IMPORT_FAILED);
 	}
 
 	/** `reason` is shown to the member as the import's error. */

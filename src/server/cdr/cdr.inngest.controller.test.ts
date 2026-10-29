@@ -213,7 +213,7 @@ describe("CdrInngestController", () => {
 			expect(error).toMatchObject({ retryAfter: "30", cause });
 		});
 
-		it("fails the import in plain words, not the run's error, once retries run out", async () => {
+		it("fails the import once retries run out", async () => {
 			const h = harness();
 
 			await h.imported.opts.onFailure?.({
@@ -221,10 +221,7 @@ describe("CdrInngestController", () => {
 				error: new Error("cdr import chunk failed"),
 			});
 
-			expect(h.service.failImport).toHaveBeenCalledWith(
-				7,
-				"The import stopped on an error. Try again later.",
-			);
+			expect(h.service.failImport).toHaveBeenCalledWith(7);
 		});
 	});
 
