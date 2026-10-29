@@ -744,6 +744,51 @@ describe("applyReconcile", () => {
 		`);
 	});
 
+	// The overlap re-fetches the held review's bank row in the same batch as the exact one.
+	it("adds a released review's bank row once, from this batch's copy", async () => {
+		const { repository, queries } = harness(({ sql }) => {
+			if (sql.startsWith('update "transaction"')) return [[1]];
+			if (sql.startsWith('delete from "possible_duplicate"'))
+				return [
+					[
+						"cdr",
+						"txn_close",
+						"acct_1",
+						"Everyday",
+						41,
+						"2026-10-13T00:00:00.000Z",
+						"WOOLIES",
+						1,
+					],
+				];
+			return [];
+		});
+		const refetched = {
+			...SYNCED,
+			externalId: "txn_close",
+			amount: 41.5,
+			description: "WOOLIES METRO",
+		};
+
+		const counts = await repository.applyReconcile({
+			...EMPTY_PLAN,
+			adopt: [{ transactionId: 1, row: SYNCED, heldBy: 9 }],
+			flag: [{ transactionId: 1, row: refetched, reviewId: 9 }],
+		});
+
+		expect(counts).toEqual({ added: 1, adopted: 1, flagged: -1, known: 0 });
+		const upsert = queries.find((q) =>
+			q.sql.startsWith('insert into "transaction"'),
+		);
+		expect(upsert?.params).toEqual(
+			expect.arrayContaining(["txn_close", 41.5, "WOOLIES METRO"]),
+		);
+		expect(upsert?.params).not.toContain(41);
+		expect(statements(queries)).not.toContainEqual(
+			expect.stringContaining('update "possible_duplicate"'),
+		);
+	});
+
 	it("inserts a new review once and refreshes only a pending one", async () => {
 		const { repository, queries } = harness(({ sql }) =>
 			sql.startsWith('insert into "possible_duplicate"') ? [[5]] : [],

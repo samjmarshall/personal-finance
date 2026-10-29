@@ -366,6 +366,11 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 	applyReconcile(plan: ReconcilePlan): Promise<ReconcileCounts> {
 		return this.db.transaction(async (tx) => {
 			const extra: SyncedTransaction[] = [];
+			// A held review's bank row can come in this batch too; that copy is newer.
+			const refetched = new Map<number, SyncedTransaction>();
+			for (const { reviewId, row } of plan.flag)
+				if (reviewId !== null) refetched.set(reviewId, row);
+			const releasedIds = new Set<number>();
 			let adopted = 0;
 			let released = 0;
 			for (const { transactionId, row, heldBy } of plan.adopt) {
@@ -379,7 +384,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				// review held is another purchase.
 				const taken = await this.takeReview(tx, heldBy);
 				released += taken.length;
-				extra.push(...taken.map(({ transactionId: _, ...bank }) => bank));
+				if (taken.length) releasedIds.add(heldBy);
+				extra.push(
+					...taken.map(
+						({ transactionId: _, ...bank }) => refetched.get(heldBy) ?? bank,
+					),
+				);
 			}
 
 			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...extra]);
@@ -403,8 +413,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 						.returning({ id: possibleDuplicates.id })
 				: [];
 
-			for (const { reviewId, row } of plan.flag) {
-				if (reviewId === null) continue;
+			const stillPending = plan.flag.flatMap(({ reviewId, row }) =>
+				reviewId === null || releasedIds.has(reviewId)
+					? []
+					: [{ reviewId, row }],
+			);
+			for (const { reviewId, row } of stillPending) {
 				// Not an upsert: a review resolved since the read must not come back.
 				await tx
 					.update(possibleDuplicates)
@@ -425,7 +439,8 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				known:
 					plan.refresh.length +
 					plan.skipped.length +
-					plan.flag.length -
+					stillPending.length +
+					fresh.length -
 					flagged.length,
 			};
 		});
