@@ -113,6 +113,9 @@ interface HarnessOptions {
 	runningImport?: CdrImport | undefined;
 }
 
+// The day range of the default claimed import.
+const RANGE = { from: "2026-01-01", to: "2026-04-01" };
+
 const importRow = (over: Partial<CdrImport> = {}): CdrImport => ({
 	id: 7,
 	fromDate: new Date("2026-01-01T00:00:00.000Z"),
@@ -1045,37 +1048,32 @@ describe("CdrSyncService.run", () => {
 	});
 });
 
+describe("CdrSyncService.claimImport", () => {
+	it("claims a queued import and returns its day range", async () => {
+		const h = harness();
+
+		await expect(h.service.claimImport(7)).resolves.toEqual(RANGE);
+		expect(h.calls).toEqual(["markImportRunning 7"]);
+	});
+
+	// The outbox can deliver the event twice; the second must not redo the import.
+	it("returns null when the import is past queued", async () => {
+		const h = harness({ runningImport: undefined });
+
+		await expect(h.service.claimImport(7)).resolves.toBeNull();
+		expect(h.importEnds).toEqual([]);
+	});
+});
+
 describe("CdrSyncService.planImport", () => {
 	it("fails the import with a reason and plans nothing when the key is unset", async () => {
 		const h = harness({ redbark: null });
 
-		await expect(h.service.planImport(7)).resolves.toEqual({
+		await expect(h.service.planImport(7, RANGE)).resolves.toEqual({
 			liveAccountIds: [],
 			chunks: [],
 		});
 		expect(h.importEnds).toEqual([{ id: 7, failed: "Bank sync isn't set up" }]);
-	});
-
-	// The outbox can deliver the event twice; the second must not redo the import.
-	it("returns null and fetches nothing when the import is past queued", async () => {
-		const h = harness({ runningImport: undefined });
-
-		await expect(h.service.planImport(7)).resolves.toBeNull();
-		expect(h.fetches).toEqual([]);
-		expect(h.importEnds).toEqual([]);
-	});
-
-	// A claim before a failed bank call would leave the retry finding it past queued.
-	it("leaves the import queued when discovery fails, so the retry can plan it", async () => {
-		const h = harness({
-			listConnections: async () => {
-				throw new RedbarkRetryableError("429", { retryAfterMs: 30_000 });
-			},
-		});
-
-		await caught(h.service.planImport(7));
-
-		expect(h.calls).not.toContain("markImportRunning 7");
 	});
 
 	it("chunks only accounts the daily sync would sync, each with its name", async () => {
@@ -1095,9 +1093,9 @@ describe("CdrSyncService.planImport", () => {
 			],
 		});
 
-		const plan = await h.service.planImport(7);
+		const plan = await h.service.planImport(7, RANGE);
 
-		expect(plan?.liveAccountIds).toEqual([
+		expect(plan.liveAccountIds).toEqual([
 			"acct_1",
 			"acct_2",
 			"acct_3",
@@ -1105,7 +1103,7 @@ describe("CdrSyncService.planImport", () => {
 			"acct_5",
 			"acct_6",
 		]);
-		expect(plan?.chunks).toEqual([
+		expect(plan.chunks).toEqual([
 			{
 				accountId: "acct_1",
 				accountName: "Name acct_1",
@@ -1128,7 +1126,7 @@ describe("CdrSyncService.planImport", () => {
 			connections: [connection("conn_1", CdrConnectionStatus.Revoked)],
 		});
 
-		await expect(h.service.planImport(7)).resolves.toEqual({
+		await expect(h.service.planImport(7, RANGE)).resolves.toEqual({
 			liveAccountIds: [],
 			chunks: [],
 		});
@@ -1148,7 +1146,7 @@ describe("CdrSyncService.planImport", () => {
 			},
 		});
 
-		const error = await caught(h.service.planImport(7));
+		const error = await caught(h.service.planImport(7, RANGE));
 
 		expect(error).toBeInstanceOf(CdrSyncError);
 		expect(error).toMatchObject({ retryable: true, retryAfterMs: 30_000 });
@@ -1158,13 +1156,11 @@ describe("CdrSyncService.planImport", () => {
 	it("fails the import with a reason and plans nothing when the chunks would pass the step cap", async () => {
 		const h = harness({
 			accounts: Array.from({ length: 35 }, (_, i) => account(`acct_${i}`)),
-			runningImport: importRow({
-				fromDate: new Date("2019-10-20T00:00:00.000Z"),
-				toDate: new Date("2026-10-20T00:00:00.000Z"),
-			}),
 		});
 
-		await expect(h.service.planImport(7)).resolves.toEqual({
+		await expect(
+			h.service.planImport(7, { from: "2019-10-20", to: "2026-10-20" }),
+		).resolves.toEqual({
 			liveAccountIds: [],
 			chunks: [],
 		});
@@ -1262,9 +1258,9 @@ describe("CdrSyncService.importChunk", () => {
 			rows: { acct_1: [row("t1", "2026-02-01")] },
 		});
 
-		const plan = await h.service.planImport(7);
-		for (const c of plan?.chunks ?? [])
-			await h.service.importChunk(7, c, plan?.liveAccountIds ?? []);
+		const plan = await h.service.planImport(7, RANGE);
+		for (const c of plan.chunks)
+			await h.service.importChunk(7, c, plan.liveAccountIds);
 
 		expect(h.reconciles.length).toBeGreaterThan(0);
 		expect(h.advances).toEqual([]);

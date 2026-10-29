@@ -33,7 +33,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx` — the "Import from bank" header button and its pending-review badge.
 - `src/domain/cdr/import-range.ts` — `importWindows` (90-day windows), `IMPORT_MAX_YEARS`, `importEarliestDay`, `importRangeError` (the form and `startImport` both call it).
 - `src/server/cdr/cdr.service.ts` — `startImport` (range checks, one active run) and `latestImport` (adds `active`).
-- `src/server/cdr/cdr-sync.service.ts` — `planImport`, `importChunk`, `finishImport`, `failImport`.
+- `src/server/cdr/cdr-sync.service.ts` — `claimImport`, `planImport`, `importChunk`, `finishImport`, `failImport`.
 - `src/server/cdr/cdr.inngest.controller.ts` — the `cdr-import` function and its `onFailure`.
 - `src/server/cdr/cdr.schema.ts` — the `cdr_import` table (migration `0024`).
 - `src/server/transactions/transactions.repository.ts` — `applyReconcile` (shared with `cdr-sync`) and the three resolve writes.
@@ -55,7 +55,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `REDBARK_API_KEY` unset → the row reads Failed: "Bank sync isn't set up".
 - RedBark 429 or 5xx → the step retries (3 retries) and honours `Retry-After` up to 1 hour. Asked to wait longer, it fails instead.
 - Out of retries, or a non-retryable error → `onFailure` (`cdr-import-failure`) saves the reason. The card shows Failed with that reason, plus any counts so far.
-- More than 998 chunks → fails with "This import is too big for one run. Try a shorter range."
+- More than 997 chunks → fails with "This import is too big for one run. Try a shorter range."
 - Run lost (cancelled in Inngest, or `failImport` hit a DB blip) → the card reads "Didn't finish" after 24 hours, and the form opens again.
 - An account RedBark can't sync right now → the job skips and logs it, then imports the rest.
 
@@ -83,7 +83,7 @@ sequenceDiagram
     App->>DB: insert cdr_import (queued) + outbox event
     App-->>M: ok, card polls latestImport
     DB-->>Job: cdr/import.requested { importId }
-    Job->>DB: planImport: mark running
+    Job->>DB: claimImport: mark running
     Job->>RB: list accounts + connections
     loop each account × 90-day window
         Job->>RB: listTransactions(account, from, to)
@@ -101,7 +101,7 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> queued: startImport
-    queued --> running: planImport
+    queued --> running: claimImport
     queued --> failed: onFailure
     running --> done: finishImport
     running --> failed: no API key / onFailure
@@ -126,7 +126,7 @@ After an answer, the card leaves, a toast confirms it, and focus moves to the To
 - Ranges that run past 7 years or after today, or a From after the To → stopped in the form, and again by the server with the same words.
 - Starting while a run is active → the form locks and says why; the server returns a `CONFLICT` "An import is already running."
 - The same review answered in another tab → the toast shows the error, and a refetch drops the old card.
-- A repeat event delivery → `planImport` finds the row past queued and runs nothing.
+- A repeat event delivery → `claimImport` finds the row past queued and runs nothing.
 
 **Side effects**: inserts into `transaction` and `possible_duplicate`; updates your rows on adopt and Use bank's. Never moves the daily sync's cursor and never writes a balance anchor. Never deletes a transaction.
 

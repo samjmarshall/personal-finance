@@ -20,11 +20,8 @@ describe("event registry golden", () => {
 	});
 });
 
-// Function ids, triggers and concurrency keys are also frozen: Inngest keys scheduled
-// runs by id (a rename silently drops the old schedule), event triggers are the same
-// wire strings as the registry above, and a renamed key splits a shared slot.
-// The import's failure handler takes its id from the import's id.
-// A spy client reads what each controller declares: no real db or client, env-free.
+// Frozen: Inngest keys runs by id, so a rename drops the old schedule (a failure
+// handler's id comes from its function's); a renamed concurrency key splits a shared slot.
 describe("worker golden", () => {
 	it("pins the frozen function ids, triggers and concurrency keys", () => {
 		type Opts = { id: string; triggers: unknown[]; concurrency?: unknown };

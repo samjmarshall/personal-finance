@@ -25,8 +25,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Fetch filters by txn date, but a card row can post 5+ days later (long weekend).
 // A first run fetches only this much too: older history comes from the import.
 const OVERLAP_DAYS = 14;
-// Inngest caps a run at 1,000 steps; the import also spends one on plan and one on finish.
-const MAX_IMPORT_CHUNKS = 998;
+// Inngest caps a run at 1,000 steps; the import also spends one each on claim, plan and finish.
+const MAX_IMPORT_CHUNKS = 997;
 
 /** One account's slice of an import; dates are inclusive `YYYY-MM-DD`. */
 export interface ImportChunk extends ImportWindow {
@@ -158,23 +158,27 @@ export class CdrSyncService {
 	}
 
 	/**
-	 * Claims a queued import and splits it into chunks. Null when the import is
+	 * Moves a queued import to running and returns its day range. Null when it is
 	 * past queued (a repeat delivery), so the caller runs nothing.
 	 */
-	async planImport(importId: number): Promise<ImportPlan | null> {
-		if (!this.redbark) return this.failPlan(importId, "Bank sync isn't set up");
-
-		// Claim last: a retry after a failed bank call must still find the import queued.
-		const { statuses, accounts } = await this.discover(this.redbark);
+	async claimImport(importId: number): Promise<ImportWindow | null> {
 		const row = await this.repository.markImportRunning(importId);
 		if (!row) {
 			this.logger.info("cdr import already claimed", { importId });
 			return null;
 		}
-		const windows = importWindows(
-			utcDayKey(row.fromDate),
-			utcDayKey(row.toDate),
-		);
+		return { from: utcDayKey(row.fromDate), to: utcDayKey(row.toDate) };
+	}
+
+	/** Splits a claimed import into chunks. No chunks when it failed the import instead. */
+	async planImport(
+		importId: number,
+		{ from, to }: ImportWindow,
+	): Promise<ImportPlan> {
+		if (!this.redbark) return this.failPlan(importId, "Bank sync isn't set up");
+
+		const { statuses, accounts } = await this.discover(this.redbark);
+		const windows = importWindows(from, to);
 		const chunks: ImportChunk[] = [];
 		for (const account of accounts) {
 			if (!isSyncable(account, statuses.get(account.connection))) {

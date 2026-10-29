@@ -27,6 +27,8 @@ type Declared = {
 
 const SHARED = { limit: 1, key: '"cdr-sync"', scope: "env" };
 
+const RANGE = { from: "2026-01-01", to: "2026-03-31" };
+
 const PLAN: ImportPlan = {
 	liveAccountIds: ["acct_1", "acct_2"],
 	chunks: [
@@ -59,6 +61,7 @@ function harness(
 	};
 	const service = {
 		run: vi.fn(fakes.run ?? (async () => {})),
+		claimImport: vi.fn(fakes.claimImport ?? (async () => RANGE)),
 		planImport: vi.fn(fakes.planImport ?? (async () => PLAN)),
 		importChunk: vi.fn(fakes.importChunk ?? (async () => ({}))),
 		finishImport: vi.fn(fakes.finishImport ?? (async () => {})),
@@ -131,19 +134,21 @@ describe("CdrInngestController", () => {
 	});
 
 	describe("cdr-import", () => {
-		it("plans, runs one stable-id step per chunk, then finishes", async () => {
+		it("claims, plans, runs one stable-id step per chunk, then finishes", async () => {
 			const h = harness();
 			const { ids, step } = fakeStep();
 
 			await h.imported.handler({ event: importEvent, step });
 
 			expect(ids).toEqual([
+				"claim",
 				"plan",
 				"chunk-acct_1-2026-01-01",
 				"chunk-acct_2-2026-01-01",
 				"finish",
 			]);
-			expect(h.service.planImport).toHaveBeenCalledWith(7);
+			expect(h.service.claimImport).toHaveBeenCalledWith(7);
+			expect(h.service.planImport).toHaveBeenCalledWith(7, RANGE);
 			expect(h.service.importChunk.mock.calls).toEqual([
 				[7, PLAN.chunks[0], PLAN.liveAccountIds],
 				[7, PLAN.chunks[1], PLAN.liveAccountIds],
@@ -151,13 +156,40 @@ describe("CdrInngestController", () => {
 			expect(h.service.finishImport).toHaveBeenCalledWith(7);
 		});
 
-		it("runs no chunk and no finish on a repeat delivery", async () => {
-			const h = harness({ planImport: async () => null });
+		// Inngest replays a finished step's saved result, so a retry never re-claims.
+		it("still plans and finishes when the plan step fails once after the claim", async () => {
+			let planCalls = 0;
+			const h = harness({
+				planImport: async () => {
+					planCalls += 1;
+					if (planCalls === 1) throw new Error("db blip");
+					return PLAN;
+				},
+			});
+			const saved = new Map<string, unknown>();
+			const step: Step = {
+				run: async <T>(id: string, work: () => Promise<T>) => {
+					if (!saved.has(id)) saved.set(id, await work());
+					return saved.get(id) as T;
+				},
+			};
+
+			await thrownBy(() => h.imported.handler({ event: importEvent, step }));
+			await h.imported.handler({ event: importEvent, step });
+
+			expect(h.service.claimImport).toHaveBeenCalledOnce();
+			expect(h.service.importChunk).toHaveBeenCalledTimes(2);
+			expect(h.service.finishImport).toHaveBeenCalledWith(7);
+		});
+
+		it("plans nothing, runs no chunk and no finish on a repeat delivery", async () => {
+			const h = harness({ claimImport: async () => null });
 			const { ids, step } = fakeStep();
 
 			await h.imported.handler({ event: importEvent, step });
 
-			expect(ids).toEqual(["plan"]);
+			expect(ids).toEqual(["claim"]);
+			expect(h.service.planImport).not.toHaveBeenCalled();
 			expect(h.service.importChunk).not.toHaveBeenCalled();
 			expect(h.service.finishImport).not.toHaveBeenCalled();
 		});

@@ -61,10 +61,14 @@ export class CdrInngestController {
 			},
 			async ({ event, step }) => {
 				const importId: number = event.data.importId;
-				const plan = await step.run("plan", () =>
-					this.translated(() => this.service.planImport(importId)),
+				// Its own step, so a plan retry can't find its own claim and stop with the import stuck.
+				const range = await step.run("claim", () =>
+					this.translated(() => this.service.claimImport(importId)),
 				);
-				if (!plan) return;
+				if (!range) return;
+				const plan = await step.run("plan", () =>
+					this.translated(() => this.service.planImport(importId, range)),
+				);
 				for (const chunk of plan.chunks)
 					await step.run(`chunk-${chunk.accountId}-${chunk.from}`, () =>
 						this.translated(() =>
