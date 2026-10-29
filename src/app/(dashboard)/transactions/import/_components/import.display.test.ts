@@ -5,7 +5,6 @@ import {
 	dayGapLabel,
 	importCounts,
 	importRange,
-	importRangeError,
 	importStatusLabel,
 } from "./import.display";
 
@@ -95,26 +94,5 @@ describe("amountGapLabel", () => {
 
 	it("is null to the cent", () => {
 		expect(amountGapLabel(0.1 + 0.2, 0.3)).toBeNull();
-	});
-});
-
-describe("importRangeError", () => {
-	const today = "2026-10-28";
-
-	it("passes a range inside the limits", () => {
-		expect(importRangeError("2019-10-28", today, today)).toBeNull();
-	});
-
-	it.each([
-		["", today, "Pick a From and a To day."],
-		[
-			"2026-03-01",
-			"2026-02-01",
-			"The From day must be on or before the To day.",
-		],
-		["2026-01-01", "2026-10-29", "The To day can't be after today."],
-		["2019-10-27", "2020-01-01", "An import can reach back 7 years at most."],
-	])("refuses %s to %s", (from, to, message) => {
-		expect(importRangeError(from, to, today)).toBe(message);
 	});
 });

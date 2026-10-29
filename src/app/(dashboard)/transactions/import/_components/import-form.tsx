@@ -4,11 +4,10 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { importEarliestDay } from "~/domain/cdr";
+import { importEarliestDay, importRangeError } from "~/domain/cdr";
 import { HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import { dayKeyInZone } from "~/lib/utils";
 import { api } from "~/trpc/react";
-import { importRangeError } from "./import.display";
 
 /** Picks the range and starts an import. The server checks the range too; its refusals toast globally. */
 export function ImportForm({ locked }: { locked: boolean }) {

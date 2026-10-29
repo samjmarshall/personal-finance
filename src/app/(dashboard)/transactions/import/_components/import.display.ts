@@ -1,9 +1,4 @@
-import {
-	type CdrImport,
-	IMPORT_MAX_YEARS,
-	importEarliestDay,
-	type LatestImport,
-} from "~/domain/cdr";
+import type { CdrImport, LatestImport } from "~/domain/cdr";
 import type { ReconcileCounts } from "~/domain/transactions";
 import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import { dayKeyInZone, formatCurrency, formatDate } from "~/lib/utils";
@@ -40,20 +35,6 @@ export function importCounts({
 		`To review ${Math.max(flagged, 0).toLocaleString("en-AU")}`,
 		`Already here ${known.toLocaleString("en-AU")}`,
 	];
-}
-
-/** Why a `YYYY-MM-DD` range can't run, or null. The server's checks and words, so a member hears them before submitting. */
-export function importRangeError(
-	from: string,
-	to: string,
-	today: string,
-): string | null {
-	if (!from || !to) return "Pick a From and a To day.";
-	if (from > to) return "The From day must be on or before the To day.";
-	if (to > today) return "The To day can't be after today.";
-	if (from < importEarliestDay(today))
-		return `An import can reach back ${IMPORT_MAX_YEARS} years at most.`;
-	return null;
 }
 
 // Stored as UTC midnight of each bare day; a local render would show the day before west of UTC.

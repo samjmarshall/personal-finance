@@ -2,7 +2,7 @@ import {
 	anchorFromBalances,
 	type CdrSyncState,
 	type ImportWindow,
-	importChunks,
+	importWindows,
 	inBalanceByDefault,
 	isDeadConsent,
 	isSyncingConsent,
@@ -173,7 +173,7 @@ export class CdrSyncService {
 			this.logger.info("cdr import already claimed", { importId });
 			return null;
 		}
-		const windows = importChunks(bareDay(row.fromDate), bareDay(row.toDate));
+		const windows = importWindows(bareDay(row.fromDate), bareDay(row.toDate));
 		const chunks: ImportChunk[] = [];
 		for (const account of accounts) {
 			if (!isSyncable(account, statuses.get(account.connection))) {

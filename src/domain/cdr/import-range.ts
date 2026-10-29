@@ -10,6 +10,20 @@ export function importEarliestDay(today: string): string {
 	return `${Number(today.slice(0, 4)) - IMPORT_MAX_YEARS}${monthDay}`;
 }
 
+/** Why an inclusive `YYYY-MM-DD` range can't import, or null. The form and the server both ask, so they say the same words. */
+export function importRangeError(
+	from: string,
+	to: string,
+	today: string,
+): string | null {
+	if (!from || !to) return "Pick a From and a To day.";
+	if (from > to) return "The From day must be on or before the To day.";
+	if (to > today) return "The To day can't be after today.";
+	if (from < importEarliestDay(today))
+		return `An import can reach back ${IMPORT_MAX_YEARS} years at most.`;
+	return null;
+}
+
 export interface ImportWindow {
 	/** `YYYY-MM-DD`, inclusive. */
 	from: string;
@@ -21,20 +35,20 @@ export interface ImportWindow {
  * Splits an inclusive day range into windows of at most `days` days, with no gap
  * or overlap. Small windows keep each RedBark read under its 5,000-row cap.
  */
-export function importChunks(
+export function importWindows(
 	from: string,
 	to: string,
 	days = 90,
 ): ImportWindow[] {
 	const end = Date.parse(to);
-	const chunks: ImportWindow[] = [];
+	const windows: ImportWindow[] = [];
 	for (let start = Date.parse(from); start <= end; start += days * DAY_MS) {
-		chunks.push({
+		windows.push({
 			from: dayOf(start),
 			to: dayOf(Math.min(start + (days - 1) * DAY_MS, end)),
 		});
 	}
-	return chunks;
+	return windows;
 }
 
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);

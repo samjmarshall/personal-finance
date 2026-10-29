@@ -4,8 +4,7 @@ import {
 	type CdrSetInBalanceInput,
 	type CdrSetNicknameInput,
 	type CdrSyncState,
-	IMPORT_MAX_YEARS,
-	importEarliestDay,
+	importRangeError,
 	type LatestImport,
 } from "~/domain/cdr";
 import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
@@ -64,16 +63,8 @@ export class CdrService {
 	/** Refuses a bad range or a second active import. Days are inclusive, in the household's zone. */
 	async startImport({ from, to }: CdrImportStartInput): Promise<CdrImport> {
 		const today = dayKeyInZone(new Date(), HOUSEHOLD_TIME_ZONE);
-		if (from > to)
-			throw new InvalidInputError(
-				"The From day must be on or before the To day.",
-			);
-		if (to > today)
-			throw new InvalidInputError("The To day can't be after today.");
-		if (from < importEarliestDay(today))
-			throw new InvalidInputError(
-				`An import can reach back ${IMPORT_MAX_YEARS} years at most.`,
-			);
+		const rangeError = importRangeError(from, to, today);
+		if (rangeError) throw new InvalidInputError(rangeError);
 		if (await this.repository.findActiveImport(activeSince()))
 			throw new ConflictError("An import is already running.");
 		return this.repository.insertImport({

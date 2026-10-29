@@ -22,9 +22,10 @@ import { isDeadConsent, isSyncingConsent } from "./consent";
 import {
 	IMPORT_MAX_YEARS,
 	type ImportWindow,
-	importChunks,
 	importEarliestDay,
-} from "./import-chunks";
+	importRangeError,
+	importWindows,
+} from "./import-range";
 import {
 	anchorFromBalances,
 	inBalanceByDefault,
@@ -52,8 +53,9 @@ export {
 	cdrSetInBalanceDto,
 	cdrSetNicknameDto,
 	IMPORT_MAX_YEARS,
-	importChunks,
 	importEarliestDay,
+	importRangeError,
+	importWindows,
 	inBalanceByDefault,
 	isDeadConsent,
 	isSyncingConsent,

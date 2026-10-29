@@ -29,9 +29,9 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `src/app/(dashboard)/transactions/import/_components/import-form.tsx` — the From / To form; locked while a run is active.
 - `src/app/(dashboard)/transactions/import/_components/import-status.tsx` — the Latest import card: status, range, counts, failure reason.
 - `src/app/(dashboard)/transactions/import/_components/possible-duplicate-list.tsx` + `possible-duplicate-card.tsx` — the To review list: your row beside the bank's, with the gaps marked, and three answers.
-- `src/app/(dashboard)/transactions/import/_components/import.display.ts` — labels, counts, the client copy of the range check.
+- `src/app/(dashboard)/transactions/import/_components/import.display.ts` — status labels, counts, the range line, the gap chips.
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx` — the "Import from bank" header button and its pending-review badge.
-- `src/domain/cdr/import-chunks.ts` — `importChunks` (90-day windows), `IMPORT_MAX_YEARS`, `importEarliestDay`.
+- `src/domain/cdr/import-range.ts` — `importWindows` (90-day windows), `IMPORT_MAX_YEARS`, `importEarliestDay`, `importRangeError` (the form and `startImport` both call it).
 - `src/server/cdr/cdr.service.ts` — `startImport` (range checks, one active run) and `latestImport` (adds `active`).
 - `src/server/cdr/cdr-sync.service.ts` — `planImport`, `importChunk`, `finishImport`, `failImport`.
 - `src/server/cdr/cdr.inngest.controller.ts` — the `cdr-import` function and its `onFailure`.
@@ -45,7 +45,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `cdr-import` and `cdr-sync` share one concurrency slot (`"cdr-sync"`). The slot limits steps, not whole runs, so a daily sync can slip in between import steps. That's safe: two reconciles never run at once, and each one only adds what's missing.
 - `flagged` is the change in pending reviews, not the number made. Joining a bank row to your row can close a review an earlier step opened, so a run's total can go below 0. The page shows it as 0 at the lowest.
 - A queued or running row older than 24 hours counts as not active, so a run that died without reaching `onFailure` can't block the form forever.
-- The same 7-year and after-today checks run in the form and in `startImport`, with the same words. `importEarliestDay` keeps the date math in one place.
+- The form and `startImport` share one range check, `importRangeError`, so they refuse the same ranges with the same words.
 
 ### Operations
 
