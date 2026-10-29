@@ -50,8 +50,10 @@ describe("PossibleDuplicateCard", () => {
 			within(bank).getByText("WOOLWORTHS 1234 SYDNEY"),
 		).toBeInTheDocument();
 		expect(within(bank).getByText("Everyday")).toBeInTheDocument();
-		expect(within(bank).getByText("3 days later")).toBeInTheDocument();
-		expect(within(bank).getByText("$1.20 more")).toBeInTheDocument();
+		expect(
+			within(bank).getByText("3 days later than yours"),
+		).toBeInTheDocument();
+		expect(within(bank).getByText("$1.20 more than yours")).toBeInTheDocument();
 	});
 
 	it.each([

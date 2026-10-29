@@ -69,10 +69,10 @@ describe("dayGapLabel", () => {
 	const mine = new Date("2026-02-01T13:00:00.000Z"); // 2 Feb in Sydney
 
 	it.each([
-		["2026-02-04T13:00:00.000Z", "3 days later"],
-		["2026-02-02T13:00:00.000Z", "1 day later"],
-		["2026-01-29T13:00:00.000Z", "3 days earlier"],
-		["2026-01-31T13:00:00.000Z", "1 day earlier"],
+		["2026-02-04T13:00:00.000Z", "3 days later than yours"],
+		["2026-02-02T13:00:00.000Z", "1 day later than yours"],
+		["2026-01-29T13:00:00.000Z", "3 days earlier than yours"],
+		["2026-01-31T13:00:00.000Z", "1 day earlier than yours"],
 	])("bank on %s → %s", (bank, label) => {
 		expect(dayGapLabel(new Date(bank), mine)).toBe(label);
 	});
@@ -84,10 +84,10 @@ describe("dayGapLabel", () => {
 
 describe("amountGapLabel", () => {
 	it.each([
-		[51.2, 50, "$1.20 more"],
-		[48.8, 50, "$1.20 less"],
+		[51.2, 50, "$1.20 more than yours"],
+		[48.8, 50, "$1.20 less than yours"],
 		// A refund: size, not sign, says more or less.
-		[-51.2, -50, "$1.20 more"],
+		[-51.2, -50, "$1.20 more than yours"],
 	])("bank %s vs mine %s → %s", (bank, mine, label) => {
 		expect(amountGapLabel(bank, mine)).toBe(label);
 	});

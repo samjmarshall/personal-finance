@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import type { PossibleDuplicateReview } from "~/domain/transactions";
 import { api } from "~/trpc/react";
@@ -15,11 +16,25 @@ const DONE: Record<DuplicateChoice, string> = {
 };
 
 export function PossibleDuplicateList({
-	onResolved,
+	onEmptied,
 }: {
-	onResolved: () => void;
+	/** The last card was answered; focus needs somewhere to go. */
+	onEmptied: () => void;
 }) {
 	const [reviews] = api.transaction.possibleDuplicates.useSuspenseQuery();
+	const list = useRef<HTMLUListElement>(null);
+	// The answered card leaves and the next one takes its place; focus goes there, not the top.
+	const answeredAt = useRef<number | null>(null);
+	useEffect(() => {
+		const at = answeredAt.current;
+		if (at === null) return;
+		answeredAt.current = null;
+		const next = list.current?.querySelectorAll<HTMLElement>(
+			":scope > li > article",
+		)[Math.min(at, reviews.length - 1)];
+		if (next) next.focus();
+		else onEmptied();
+	}, [reviews, onEmptied]);
 
 	if (!reviews.length)
 		return (
@@ -28,10 +43,15 @@ export function PossibleDuplicateList({
 			</p>
 		);
 	return (
-		<ul className="space-y-3">
-			{reviews.map((review) => (
+		<ul className="space-y-3" ref={list}>
+			{reviews.map((review, index) => (
 				<li key={review.id}>
-					<ReviewItem onResolved={onResolved} review={review} />
+					<ReviewItem
+						onAnswered={() => {
+							answeredAt.current = index;
+						}}
+						review={review}
+					/>
 				</li>
 			))}
 		</ul>
@@ -41,10 +61,10 @@ export function PossibleDuplicateList({
 // One mutation per card, so answering one card never holds another.
 function ReviewItem({
 	review,
-	onResolved,
+	onAnswered,
 }: {
 	review: PossibleDuplicateReview;
-	onResolved: () => void;
+	onAnswered: () => void;
 }) {
 	const utils = api.useUtils();
 	// Every transaction query: the list, totals, the header badge and this list all move.
@@ -56,8 +76,8 @@ function ReviewItem({
 	const resolve = api.transaction.resolveDuplicate.useMutation({
 		onSuccess: async (_, { choice }) => {
 			toast.success(DONE[choice]);
+			onAnswered();
 			await refresh();
-			onResolved();
 		},
 		// Likely answered in another tab; the refetch drops the stale card (toast: src/trpc/query-client.ts).
 		onError: () => refresh(),

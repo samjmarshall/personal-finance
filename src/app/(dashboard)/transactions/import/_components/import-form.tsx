@@ -20,8 +20,9 @@ export function ImportForm({ locked }: { locked: boolean }) {
 
 	const utils = api.useUtils();
 	// The status only polls while a run is active, so it needs a nudge to see the new one.
+	// A refusal nudges too: "already running" means a run this page hasn't seen yet.
 	const start = api.cdr.startImport.useMutation({
-		onSuccess: () => utils.cdr.latestImport.invalidate(),
+		onSettled: () => utils.cdr.latestImport.invalidate(),
 	});
 
 	function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -85,6 +86,8 @@ export function ImportForm({ locked }: { locked: boolean }) {
 					aria-describedby="import-note"
 					className="w-24"
 					disabled={locked}
+					// Stays focusable while locked: keeps focus after a start and lets a keyboard user hear why.
+					focusableWhenDisabled
 					loading={start.isPending}
 					type="submit"
 				>

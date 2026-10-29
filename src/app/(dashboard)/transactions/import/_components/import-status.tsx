@@ -7,9 +7,12 @@ import { importCounts, importRange, importStatusLabel } from "./import.display";
 
 /** The latest import, or a note that there's none. Polling lives with the view. */
 export function ImportStatus({ latest }: { latest: LatestImport | null }) {
-	// Polite and always mounted, so each status change is read out once.
 	return (
-		<div aria-live="polite">
+		<div>
+			{/* Always mounted, so each status change is read out once. Counts stay out: they tick every poll. */}
+			<p className="sr-only" role="status">
+				{latest ? statusAnnouncement(latest) : ""}
+			</p>
 			{latest ? (
 				<RunStatus run={latest} />
 			) : (
@@ -68,6 +71,11 @@ function RunStatus({ run }: { run: LatestImport }) {
 			)}
 		</div>
 	);
+}
+
+function statusAnnouncement(run: LatestImport): string {
+	const status = `Import status: ${importStatusLabel(run)}.`;
+	return run.error ? `${status} ${run.error}` : status;
 }
 
 function StatusIcon({ run }: { run: LatestImport }) {

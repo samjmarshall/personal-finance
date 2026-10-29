@@ -2,6 +2,7 @@ import { PageSkeleton } from "~/components/page-skeleton";
 import { TableSkeleton } from "~/components/skeletons";
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
+import { IMPORT_MAX_YEARS } from "~/domain/cdr";
 import { cn } from "~/lib/utils";
 
 // One per page, used on nav and on hard load, so both paint the same frame.
@@ -189,14 +190,13 @@ export function ImportSkeleton() {
 		<PageSkeleton
 			action="sm"
 			className="max-w-6xl"
-			description="Bring in older history from your bank, up to 7 years back."
+			description={`Bring in older history from your bank, up to ${IMPORT_MAX_YEARS} years back.`}
 			title="Import from bank"
 		>
 			<div className="grid gap-4 lg:grid-cols-5">
 				<Card className="lg:col-span-3">
 					<CardContent>
 						<Skeleton className="my-0.5 h-4 w-24" />
-						{/* From and To: label, then the date input */}
 						<div className="mt-3 grid grid-cols-2 gap-3">
 							{[0, 1].map((i) => (
 								<div className="flex flex-col gap-3" key={i}>
@@ -220,9 +220,15 @@ export function ImportSkeleton() {
 					</CardContent>
 				</Card>
 			</div>
-			<div className="mt-8">
+			{/* Flex, so the bars' margins add up like the text lines' heights instead of collapsing. */}
+			<div className="mt-8 flex flex-col">
 				<Skeleton className="my-1 h-4 w-24" />
 				<Skeleton className="mt-2 h-4 w-full max-w-xl" />
+				<div className="mt-2 flex flex-col gap-0.5">
+					{["w-48", "w-64", "w-44"].map((width) => (
+						<Skeleton className={cn("my-0.5 h-4", width)} key={width} />
+					))}
+				</div>
 				<div className="mt-4 space-y-3">
 					<Skeleton className="h-40 rounded-xl" />
 					<Skeleton className="h-40 rounded-xl" />

@@ -40,6 +40,30 @@ describe("ImportStatus", () => {
 			expect(screen.getByText(count)).toBeInTheDocument();
 	});
 
+	// Counts change every poll; reading them out each time would drown the status.
+	it("reads out only the status and any reason, never the counts", () => {
+		const { rerender } = render(<ImportStatus latest={RUN} />);
+
+		expect(screen.getByRole("status")).toHaveTextContent(
+			/^Import status: Importing\.$/,
+		);
+
+		rerender(
+			<ImportStatus
+				latest={{
+					...RUN,
+					status: CdrImportStatus.Failed,
+					active: false,
+					error: "Bank sync isn't set up",
+				}}
+			/>,
+		);
+
+		expect(screen.getByRole("status")).toHaveTextContent(
+			/^Import status: Failed\. Bank sync isn't set up$/,
+		);
+	});
+
 	it("hides the counts while it waits to start", () => {
 		render(
 			<ImportStatus latest={{ ...RUN, status: CdrImportStatus.Queued }} />,

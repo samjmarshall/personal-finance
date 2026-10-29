@@ -51,7 +51,7 @@ export function dayGapLabel(bank: Date, mine: Date): string | null {
 	const gap = householdDay(bank) - householdDay(mine);
 	if (gap === 0) return null;
 	const days = Math.abs(gap) === 1 ? "1 day" : `${Math.abs(gap)} days`;
-	return `${days} ${gap > 0 ? "later" : "earlier"}`;
+	return `${days} ${gap > 0 ? "later" : "earlier"} than yours`;
 }
 
 /** The bank's amount against the member's, by size, so a refund reads the same way. Null to the cent. */
@@ -59,7 +59,7 @@ export function amountGapLabel(bank: number, mine: number): string | null {
 	const cents =
 		Math.round(Math.abs(bank) * 100) - Math.round(Math.abs(mine) * 100);
 	if (cents === 0) return null;
-	return `${formatCurrency(Math.abs(cents) / 100)} ${cents > 0 ? "more" : "less"}`;
+	return `${formatCurrency(Math.abs(cents) / 100)} ${cents > 0 ? "more" : "less"} than yours`;
 }
 
 function householdDay(value: Date): number {

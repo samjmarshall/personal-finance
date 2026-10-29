@@ -10,10 +10,23 @@ import { amountGapLabel, dayGapLabel } from "./import.display";
 
 export type DuplicateChoice = ResolveDuplicateInput["choice"];
 
-const CHOICES: { choice: DuplicateChoice; label: string }[] = [
-	{ choice: "keep_mine", label: "Keep mine" },
-	{ choice: "use_bank", label: "Use bank's" },
-	{ choice: "both_real", label: "Both are real" },
+/** In button order. The page's key above the cards reads each label, then what it does. */
+export const CHOICES: {
+	choice: DuplicateChoice;
+	label: string;
+	effect: string;
+}[] = [
+	{ choice: "keep_mine", label: "Keep mine", effect: "drops the bank's copy." },
+	{
+		choice: "use_bank",
+		label: "Use bank's",
+		effect: "gives yours its date and amount.",
+	},
+	{
+		choice: "both_real",
+		label: "Both are real",
+		effect: "adds the bank's row.",
+	},
 ];
 
 export function PossibleDuplicateCard({
@@ -36,6 +49,8 @@ export function PossibleDuplicateCard({
 		<article
 			aria-labelledby={titleId}
 			className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10"
+			// Focus lands here after the card before it is answered.
+			tabIndex={-1}
 		>
 			<h3 className="sr-only" id={titleId}>
 				Possible duplicate of {mine.description}

@@ -6,19 +6,15 @@ import { useEffect, useId, useRef } from "react";
 import { PageHeader } from "~/components/page-header";
 import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { IMPORT_MAX_YEARS } from "~/domain/cdr";
 import { cn } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { ImportForm } from "./import-form";
 import { ImportStatus } from "./import-status";
+import { CHOICES } from "./possible-duplicate-card";
 import { PossibleDuplicateList } from "./possible-duplicate-list";
 
 const POLL_MS = 3000;
-
-const ANSWERS = [
-	["Keep mine", "drops the bank's copy."],
-	["Use bank's", "gives yours its date and amount."],
-	["Both are real", "adds the bank's row."],
-] as const;
 
 export function ImportView() {
 	const [latest] = api.cdr.latestImport.useSuspenseQuery(undefined, {
@@ -48,7 +44,7 @@ export function ImportView() {
 			<PageHeader
 				actions={
 					<Link
-						// Merged, or the base transparent border beats the outline one.
+						// Merge classes: a plain join lets the base transparent border win.
 						className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 						href="/transactions"
 					>
@@ -56,7 +52,7 @@ export function ImportView() {
 						Transactions
 					</Link>
 				}
-				description="Bring in older history from your bank, up to 7 years back."
+				description={`Bring in older history from your bank, up to ${IMPORT_MAX_YEARS} years back.`}
 				title="Import from bank"
 			/>
 
@@ -100,17 +96,16 @@ export function ImportView() {
 					These bank rows look like ones you already have, but not exactly.
 				</p>
 				<ul className="mt-2 space-y-0.5 text-sm text-muted-foreground">
-					{ANSWERS.map(([name, effect]) => (
-						<li key={name}>
-							<span className="font-medium text-foreground">{name}</span>{" "}
+					{CHOICES.map(({ choice, label, effect }) => (
+						<li key={choice}>
+							<span className="font-medium text-foreground">{label}</span>{" "}
 							{effect}
 						</li>
 					))}
 				</ul>
 				<div className="mt-4">
 					<PossibleDuplicateList
-						// The answered card leaves, and focus would drop to the page top.
-						onResolved={() => reviewHeading.current?.focus()}
+						onEmptied={() => reviewHeading.current?.focus()}
 					/>
 				</div>
 			</section>
