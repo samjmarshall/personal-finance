@@ -70,7 +70,7 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -130,7 +130,7 @@ jobs:
 
       - uses: shmokmt/actions-setup-tfcmt@v2
 
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -301,7 +301,7 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
