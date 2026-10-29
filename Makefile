@@ -84,8 +84,10 @@ db_branch_status:
 	scripts/neon-branch.sh status
 
 clean:
-	test ! -d node_modules || pnpm exec portless clean
 	rm -rf .next/ next-env.d.ts tsconfig.tsbuildinfo node_modules .playwright-mcp
+
+teardown: stop clean
+	test ! -d node_modules || pnpm exec portless clean
 
 # Terraform targets (make plan env=preview, make apply env=production, ...).
 include infrastructure/Makefile
