@@ -1525,19 +1525,21 @@ window at 5,000 rows.
   - `planImport(importId)` → with no key, it calls `failImport(importId, "Bank sync isn't set
     up")` and returns no chunks. Otherwise it discovers, then `markImportRunning`: claiming
     last means a retry after a failed bank call still finds the row `queued`. When the claim
-    moves nothing (a repeat delivery) it returns `null` and writes nothing; the handler then
-    stops, with no chunks and no `finish`. Otherwise it returns `{ liveAccountIds, chunks }`:
+    moves nothing (a repeat delivery) it returns `null` and leaves the import alone (discovery
+    has re-run, a harmless account refresh); the handler then stops, with no chunks and no
+    `finish`. Otherwise it returns `{ liveAccountIds, chunks }`:
     `importWindows` for each account the daily sync would sync (same consent and
     account-status rules). Each chunk is `{ accountId, accountName, from, to }`, with
-    RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:302`). Dates
+    RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:402`). Dates
     travel as `YYYY-MM-DD` strings, because a step's result is JSON. No ready account, or
     more chunks than the step cap → `failImport` with a plain reason ("No bank account is
     ready to import…", "This import is too big for one run…") and no chunks, not a throw.
   - `importChunk(importId, chunk, liveAccountIds)` → `listTransactions({ accountId, from, to })`
     → map with `chunk.accountName` → `reconcileSynced` → `addImportCounts`. A retried chunk re-counts its rows as `known`,
-    so counts are a guide, not a ledger. Any error leaves as `syncError("cdr import chunk
-    failed", [cause])`, as discovery does: the shared mapping only reads a `CdrSyncError`, so a
-    raw 429 would lose its wait and a 4xx or mapping throw would be retried.
+    so counts are a guide, not a ledger. A fetch or mapping error leaves as `syncError("cdr
+    import chunk failed", [cause])`, as discovery does: the shared mapping only reads a
+    `CdrSyncError`, so a raw 429 would lose its wait and a 4xx or mapping throw would be
+    retried. A reconcile or count error leaves bare, so Inngest retries a database blip.
   - `finishImport(importId)`, `failImport(importId, message)`.
   - An import never calls `advanceHighWaterMark` or the anchor.
 - `src/server/cdr/cdr.inngest.controller.ts`:
@@ -1580,18 +1582,18 @@ window at 5,000 rows.
       showing the last finished run. A line under it: "Safe to run again. It only adds what's
       missing, and it never deletes."
     - `import-status.tsx` — the latest run's status, range, counts ("Added 12 · Matched to
-      yours 30 · To review 3 · Already here 950") and a failed run's error. Polls
-      `api.cdr.latestImport` with `refetchInterval` while `active` (as
+      yours 30 · To review 3 · Already here 950") and a failed run's error. `import-view.tsx`
+      polls `api.cdr.latestImport` with `refetchInterval` while `active` (as
       `receipts-view.tsx:192-198`). A queued or running row that isn't `active` reads "Didn't
-      finish", and the form is open. When it finishes, invalidate `transaction.possibleDuplicates`,
-      `transaction.possibleDuplicateCount` and `transaction.list`. An always-mounted sr-only
+      finish", and the form is open. When it finishes, `import-view.tsx` invalidates all of
+      `transaction.*` and `expense.consumption` (linked amounts move). An always-mounted sr-only
       `role="status"` reads each status change once (counts left out: they tick every poll).
     - `possible-duplicate-list.tsx` + props-driven `possible-duplicate-card.tsx` — "In Ledger"
       and "From the bank" side by side: date, description, amount, account. The day gap and
       amount gap are called out. Three buttons: **Keep mine**, **Use bank's**, **Both are
-      real**, each calling `api.transaction.resolveDuplicate`. On success, invalidate
-      `transaction.possibleDuplicates`, `transaction.possibleDuplicateCount` (the header badge)
-      and `transaction.list`, so the card leaves; a toast says what happened. Focus moves to
+      real**, each calling `api.transaction.resolveDuplicate`. On success (and on error, to drop
+      a stale card), invalidate all of `transaction.*` (list, totals, header badge, this list)
+      and `expense.consumption`, so the card leaves; a toast says what happened. Focus moves to
       the next card (or out of the list once it's empty). One `CHOICES` table in the card
       drives both the buttons and the page's key above the cards. Empty → "Nothing to review."
   - `_components/import.display.ts` — pure status label (incl. "Didn't finish"), count line,
@@ -1629,7 +1631,8 @@ window at 5,000 rows.
     it chunks only syncable accounts, each chunk carrying the account's name; `importChunk`
     passes `from`/`to`, maps rows with the chunk's name, reconciles with the
     live ids and adds counts; a 429 in a chunk throws a retryable `CdrSyncError` with its wait,
-    a mapping throw a non-retryable one; an import never advances a mark or writes an anchor.
+    a mapping throw a non-retryable one, a reconcile error passes through unwrapped; an import
+    never advances a mark or writes an anchor.
   - `cdr.inngest.controller.test.ts` — `cdr-import`'s id, event trigger, retries and shared
     concurrency key; `cdr-sync` now has the same key. With a fake `step`, the handler runs
     plan, one step per chunk with a stable id, then finish; a `null` plan runs no chunk and no
@@ -1720,12 +1723,16 @@ unpublished today.
     shared error mapping (Phase 8).
   - It takes the shared `concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" }` that
     Phase 8 gave `cdr-sync` and `cdr-import`, so a webhook run never overlaps either.
-  - Add `cdr-connection-changed` (`{ event: "cdr/connection.changed" }`, the same shared
-    concurrency). The event is a nudge, not data: its handler calls
-    `CdrSyncService.refreshConnections()`, Phase 8's shared discovery made public, which sets
-    every connection's status from RedBark's current list (`setConnectionStatus`). RedBark
-    sends "expired" then "active" on a reauth; writing the event's own status would let a
-    late or retried "expired" win, and race the daily discovery. It reads
+  - Add `cdr-connection-changed` (`{ event: "cdr/connection.changed" }`, `retries: RETRIES`,
+    the same shared concurrency). The event is a nudge, not data: its handler calls
+    `CdrSyncService.refreshConnections()` through the shared error mapping (Phase 8), so a 429
+    keeps its wait and a 4xx isn't retried. `refreshConnections()` wraps the private
+    `discover(redbark)`; with no key it logs and returns, as `run()` does
+    (`cdr-sync.service.ts:83-86`). It sets every connection's status from RedBark's current
+    list (`setConnectionStatus`). RedBark sends "expired" then "active" on a reauth; writing
+    the event's own status would let a late or retried "expired" win, and race the daily
+    discovery. No debounce: each run is two list calls that write RedBark's current state, so
+    a burst queued behind an import only repeats a cheap, idempotent refresh. It reads
     `event.data.connectionId` by name for its log (never spreads `event.data`).
 - `src/app/api/cdr/webhook/route.ts` + `src/app/api/cdr/events/route.ts` — each is its own
   composition root (per `src/app/api/receipts/inbound/route.ts:25-58`):
@@ -1737,8 +1744,8 @@ unpublished today.
   server-only and optional.
 - `src/server/inngest/registry-golden.test.ts` — **deliberate** golden update:
   - Add the two keys to the keys assertion (`:11-19`).
-  - Append `cdr-sync-requested` (with the shared `"cdr-sync"` concurrency key) and
-    `cdr-connection-changed`.
+  - Append `cdr-sync-requested` and `cdr-connection-changed`, each with the shared
+    `"cdr-sync"` concurrency key.
 - `.claude/rules/server-architecture.md` — add `cdr-sync-requested` and `cdr-connection-changed`
   to the FROZEN list.
 - Tests:
