@@ -1,9 +1,29 @@
 import { AlertCircle, CheckCircle2, Clock, TimerOff } from "lucide-react";
+import type { ComponentType } from "react";
 import { Spinner } from "~/components/ui/spinner";
 import type { LatestImport } from "~/domain/cdr";
-import { CdrImportStatus } from "~/lib/constants";
 import { cn } from "~/lib/utils";
-import { importCounts, importRange, importStatusLabel } from "./import.display";
+import {
+	type ImportPhase,
+	importCounts,
+	importPhase,
+	importRange,
+	importStatusLabel,
+} from "./import.display";
+
+const PHASE_LOOK: Record<
+	ImportPhase,
+	{
+		tone: string;
+		Icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+	}
+> = {
+	waiting: { tone: "text-foreground", Icon: Clock },
+	importing: { tone: "text-foreground", Icon: Spinner },
+	stalled: { tone: "text-muted-foreground", Icon: TimerOff },
+	done: { tone: "text-positive", Icon: CheckCircle2 },
+	failed: { tone: "text-destructive", Icon: AlertCircle },
+};
 
 /** The latest import, or a note that there's none. Polling lives with the view. */
 export function ImportStatus({ latest }: { latest: LatestImport | null }) {
@@ -25,30 +45,21 @@ export function ImportStatus({ latest }: { latest: LatestImport | null }) {
 }
 
 function RunStatus({ run }: { run: LatestImport }) {
-	const label = importStatusLabel(run);
+	const phase = importPhase(run);
+	const { tone, Icon } = PHASE_LOOK[phase];
 	const counted = [run.added, run.adopted, run.flagged, run.known].some(
 		(count) => count !== 0,
 	);
 	// A stopped run that counted nothing would only show a row of zeros.
-	const showCounts = run.active
-		? run.status === CdrImportStatus.Running
-		: run.status === CdrImportStatus.Done || counted;
+	const showCounts =
+		phase === "importing" ||
+		phase === "done" ||
+		(phase !== "waiting" && counted);
 	return (
 		<div className="space-y-2">
-			<p
-				className={cn(
-					"flex items-center gap-1.5 text-sm font-medium",
-					run.status === CdrImportStatus.Failed
-						? "text-destructive"
-						: run.status === CdrImportStatus.Done
-							? "text-positive"
-							: run.active
-								? "text-foreground"
-								: "text-muted-foreground",
-				)}
-			>
-				<StatusIcon run={run} />
-				{label}
+			<p className={cn("flex items-center gap-1.5 text-sm font-medium", tone)}>
+				<Icon aria-hidden className="size-4" />
+				{importStatusLabel(run)}
 			</p>
 			<p className="tabular text-sm text-muted-foreground">
 				{importRange(run)}
@@ -76,15 +87,4 @@ function RunStatus({ run }: { run: LatestImport }) {
 function statusAnnouncement(run: LatestImport): string {
 	const status = `Import status: ${importStatusLabel(run)}.`;
 	return run.error ? `${status} ${run.error}` : status;
-}
-
-function StatusIcon({ run }: { run: LatestImport }) {
-	if (run.active && run.status === CdrImportStatus.Running)
-		return <Spinner className="size-4" />;
-	if (run.active) return <Clock aria-hidden className="size-4" />;
-	if (run.status === CdrImportStatus.Done)
-		return <CheckCircle2 aria-hidden className="size-4" />;
-	if (run.status === CdrImportStatus.Failed)
-		return <AlertCircle aria-hidden className="size-4" />;
-	return <TimerOff aria-hidden className="size-4" />;
 }

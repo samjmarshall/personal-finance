@@ -1,34 +1,43 @@
 import type { CdrImport, LatestImport } from "~/domain/cdr";
 import type { ReconcileCounts } from "~/domain/transactions";
+import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import {
-	CdrImportStatus,
-	HOUSEHOLD_TIME_ZONE,
-	isUnfinishedImport,
-} from "~/lib/constants";
-import {
-	dayKeyInZone,
+	dayNumberInZone,
 	formatCurrency,
 	formatDate,
 	utcDayKey,
 } from "~/lib/utils";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+/** Where an import stands for the member. Stalled: queued or running, but the server has given up on it. */
+export type ImportPhase =
+	| "waiting"
+	| "importing"
+	| "stalled"
+	| "done"
+	| "failed";
 
-const STATUS_LABEL: Record<CdrImportStatus, string> = {
-	[CdrImportStatus.Queued]: "Waiting to start",
-	[CdrImportStatus.Running]: "Importing",
-	[CdrImportStatus.Done]: "Done",
-	[CdrImportStatus.Failed]: "Failed",
-};
-
-/** "Didn't finish" for a queued or running import the server has given up on. */
-export function importStatusLabel({
+export function importPhase({
 	status,
 	active,
-}: Pick<LatestImport, "status" | "active">): string {
-	return isUnfinishedImport(status) && !active
-		? "Didn't finish"
-		: STATUS_LABEL[status];
+}: Pick<LatestImport, "status" | "active">): ImportPhase {
+	if (status === CdrImportStatus.Done) return "done";
+	if (status === CdrImportStatus.Failed) return "failed";
+	if (!active) return "stalled";
+	return status === CdrImportStatus.Running ? "importing" : "waiting";
+}
+
+const PHASE_LABEL: Record<ImportPhase, string> = {
+	waiting: "Waiting to start",
+	importing: "Importing",
+	stalled: "Didn't finish",
+	done: "Done",
+	failed: "Failed",
+};
+
+export function importStatusLabel(
+	run: Pick<LatestImport, "status" | "active">,
+): string {
+	return PHASE_LABEL[importPhase(run)];
 }
 
 /** `flagged` nets out released reviews, so it can dip below 0; shown floored. */
@@ -56,7 +65,9 @@ export function importRange({
 
 /** The bank's day against the member's, in household days, as the reconcile counts them. Null on the same day. */
 export function dayGapLabel(bank: Date, mine: Date): string | null {
-	const gap = householdDay(bank) - householdDay(mine);
+	const gap =
+		dayNumberInZone(bank, HOUSEHOLD_TIME_ZONE) -
+		dayNumberInZone(mine, HOUSEHOLD_TIME_ZONE);
 	if (gap === 0) return null;
 	const days = Math.abs(gap) === 1 ? "1 day" : `${Math.abs(gap)} days`;
 	return `${days} ${gap > 0 ? "later" : "earlier"} than yours`;
@@ -68,10 +79,4 @@ export function amountGapLabel(bank: number, mine: number): string | null {
 		Math.round(Math.abs(bank) * 100) - Math.round(Math.abs(mine) * 100);
 	if (cents === 0) return null;
 	return `${formatCurrency(Math.abs(cents) / 100)} ${cents > 0 ? "more" : "less"} than yours`;
-}
-
-function householdDay(value: Date): number {
-	return (
-		Date.parse(`${dayKeyInZone(value, HOUSEHOLD_TIME_ZONE)}T00:00:00Z`) / DAY_MS
-	);
 }

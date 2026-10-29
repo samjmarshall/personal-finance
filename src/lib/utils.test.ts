@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	dayKeyInZone,
+	dayNumberInZone,
 	formatDate,
 	formatMonthKey,
 	fromDateInput,
@@ -66,6 +67,26 @@ describe("dayKeyInZone", () => {
 	])("gives UTC and Sydney midnight one key (%s)", (_, utc, sydney, key) => {
 		expect(dayKeyInZone(new Date(utc), "Australia/Sydney")).toBe(key);
 		expect(dayKeyInZone(new Date(sydney), "Australia/Sydney")).toBe(key);
+	});
+});
+
+describe("dayNumberInZone", () => {
+	it("gives UTC and Sydney midnight one number", () => {
+		expect(
+			dayNumberInZone(new Date("2026-06-09T14:00:00Z"), "Australia/Sydney"),
+		).toBe(
+			dayNumberInZone(new Date("2026-06-10T00:00:00Z"), "Australia/Sydney"),
+		);
+	});
+
+	// DST starts 2026-10-04 in Sydney: that day is 23 hours long, still one day.
+	it("steps by exactly one across a DST change", () => {
+		const before = new Date("2026-10-03T14:00:00Z");
+		const after = new Date("2026-10-04T13:00:00Z");
+		expect(
+			dayNumberInZone(after, "Australia/Sydney") -
+				dayNumberInZone(before, "Australia/Sydney"),
+		).toBe(1);
 	});
 });
 

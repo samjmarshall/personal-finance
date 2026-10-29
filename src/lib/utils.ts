@@ -120,6 +120,12 @@ export function dayKeyInZone(value: Date, timeZone: string): string {
 	return zonedDayFormatter(timeZone).format(value);
 }
 
+// Days since 1970 of the day `value` lands on in `timeZone`. Two subtract to a
+// whole-day gap, with no stray DST hour.
+export function dayNumberInZone(value: Date, timeZone: string): number {
+	return Date.parse(`${dayKeyInZone(value, timeZone)}T00:00:00Z`) / 86_400_000;
+}
+
 // A bank day travels as UTC midnight. Read it back in UTC too: a local read shows
 // the day before anywhere west of UTC.
 export function utcDayKey(value: Date): string {

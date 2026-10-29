@@ -1,5 +1,5 @@
 import { PossibleDuplicateStatus } from "~/lib/constants";
-import { dayKeyInZone } from "~/lib/utils";
+import { dayNumberInZone } from "~/lib/utils";
 import type { SyncedTransaction, Transaction } from "./transaction.interface";
 
 /** Furthest apart, in calendar days, a close pair may be. */
@@ -74,10 +74,6 @@ interface Pair {
 // `amount` is a double, so 0.1 + 0.2 must still equal 0.3.
 const toCents = (amount: number) => Math.round(amount * 100);
 
-function dayNumber(date: Date, timeZone: string): number {
-	return Date.parse(`${dayKeyInZone(date, timeZone)}T00:00:00Z`) / 86_400_000;
-}
-
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
@@ -130,7 +126,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		let found = sides.get(item);
 		if (!found) {
 			found = {
-				day: dayNumber(item.date, input.timeZone),
+				day: dayNumberInZone(item.date, input.timeZone),
 				cents: toCents(item.amount),
 			};
 			sides.set(item, found);
