@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
 import type { PossibleDuplicateReview } from "~/domain/transactions";
 import { api } from "~/trpc/react";
@@ -25,6 +25,8 @@ export function PossibleDuplicateList({
 	const list = useRef<HTMLUListElement>(null);
 	// The answered card leaves and the next one takes its place; focus goes there, not the top.
 	const answeredAt = useRef<number | null>(null);
+	// Read when the list changes, not as a dep: a parent re-render mid-refetch would focus the leaving card.
+	const emptied = useEffectEvent(onEmptied);
 	useEffect(() => {
 		const at = answeredAt.current;
 		if (at === null) return;
@@ -33,8 +35,8 @@ export function PossibleDuplicateList({
 			":scope > li > article",
 		)[Math.min(at, reviews.length - 1)];
 		if (next) next.focus();
-		else onEmptied();
-	}, [reviews, onEmptied]);
+		else emptied();
+	}, [reviews]);
 
 	if (!reviews.length)
 		return (
