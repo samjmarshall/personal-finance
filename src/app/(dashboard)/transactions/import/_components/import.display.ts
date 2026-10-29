@@ -1,7 +1,16 @@
 import type { CdrImport, LatestImport } from "~/domain/cdr";
 import type { ReconcileCounts } from "~/domain/transactions";
-import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
-import { dayKeyInZone, formatCurrency, formatDate } from "~/lib/utils";
+import {
+	CdrImportStatus,
+	HOUSEHOLD_TIME_ZONE,
+	isUnfinishedImport,
+} from "~/lib/constants";
+import {
+	dayKeyInZone,
+	formatCurrency,
+	formatDate,
+	utcDayKey,
+} from "~/lib/utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -17,9 +26,9 @@ export function importStatusLabel({
 	status,
 	active,
 }: Pick<LatestImport, "status" | "active">): string {
-	const unfinished =
-		status === CdrImportStatus.Queued || status === CdrImportStatus.Running;
-	return unfinished && !active ? "Didn't finish" : STATUS_LABEL[status];
+	return isUnfinishedImport(status) && !active
+		? "Didn't finish"
+		: STATUS_LABEL[status];
 }
 
 /** `flagged` nets out released reviews, so it can dip below 0; shown floored. */
@@ -42,8 +51,7 @@ export function importRange({
 	fromDate,
 	toDate,
 }: Pick<CdrImport, "fromDate" | "toDate">): string {
-	const bareDay = (value: Date) => value.toISOString().slice(0, 10);
-	return `${formatDate(bareDay(fromDate))} – ${formatDate(bareDay(toDate))}`;
+	return `${formatDate(utcDayKey(fromDate))} – ${formatDate(utcDayKey(toDate))}`;
 }
 
 /** The bank's day against the member's, in household days, as the reconcile counts them. Null on the same day. */

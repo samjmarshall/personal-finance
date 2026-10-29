@@ -120,6 +120,17 @@ export function dayKeyInZone(value: Date, timeZone: string): string {
 	return zonedDayFormatter(timeZone).format(value);
 }
 
+// A bank day travels as UTC midnight. Read it back in UTC too: a local read shows
+// the day before anywhere west of UTC.
+export function utcDayKey(value: Date): string {
+	return value.toISOString().slice(0, 10);
+}
+
+/** Inverse of `utcDayKey`. */
+export function utcMidnight(day: string): Date {
+	return new Date(`${day}T00:00:00.000Z`);
+}
+
 // Compare by local calendar day, not instant: a one-time due today is upcoming,
 // not past (adr011 — the date does the work, no archive flag). Local to agree
 // with toDateInput/formatDate's local rendering.

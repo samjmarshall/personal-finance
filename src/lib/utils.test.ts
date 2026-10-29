@@ -7,6 +7,8 @@ import {
 	isPast,
 	startOfDayInZone,
 	toDateInput,
+	utcDayKey,
+	utcMidnight,
 } from "~/lib/utils";
 
 describe("formatDate", () => {
@@ -64,6 +66,20 @@ describe("dayKeyInZone", () => {
 	])("gives UTC and Sydney midnight one key (%s)", (_, utc, sydney, key) => {
 		expect(dayKeyInZone(new Date(utc), "Australia/Sydney")).toBe(key);
 		expect(dayKeyInZone(new Date(sydney), "Australia/Sydney")).toBe(key);
+	});
+});
+
+describe("utcDayKey and utcMidnight", () => {
+	it("round-trip a bare day through UTC midnight", () => {
+		expect(utcMidnight("2026-02-28").toISOString()).toBe(
+			"2026-02-28T00:00:00.000Z",
+		);
+		expect(utcDayKey(utcMidnight("2026-02-28"))).toBe("2026-02-28");
+	});
+
+	it("keys an instant by its UTC day, not the local one", () => {
+		expect(utcDayKey(new Date("2026-06-09T23:30:00+10:00"))).toBe("2026-06-09");
+		expect(utcDayKey(new Date("2026-06-10T00:30:00+10:00"))).toBe("2026-06-09");
 	});
 });
 

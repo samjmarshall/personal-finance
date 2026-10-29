@@ -7,8 +7,8 @@ import {
 	importRangeError,
 	type LatestImport,
 } from "~/domain/cdr";
-import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
-import { dayKeyInZone } from "~/lib/utils";
+import { HOUSEHOLD_TIME_ZONE, isUnfinishedImport } from "~/lib/constants";
+import { dayKeyInZone, utcMidnight } from "~/lib/utils";
 import {
 	ConflictError,
 	InvalidInputError,
@@ -77,13 +77,11 @@ export class CdrService {
 	async latestImport(): Promise<LatestImport | null> {
 		const row = await this.repository.latestImport();
 		if (!row) return null;
-		const unfinished =
-			row.status === CdrImportStatus.Queued ||
-			row.status === CdrImportStatus.Running;
-		return { ...row, active: unfinished && row.createdAt > activeSince() };
+		return {
+			...row,
+			active: isUnfinishedImport(row.status) && row.createdAt > activeSince(),
+		};
 	}
 }
 
 const activeSince = () => new Date(Date.now() - IMPORT_ACTIVE_HOURS * HOUR_MS);
-
-const utcMidnight = (day: string) => new Date(`${day}T00:00:00.000Z`);

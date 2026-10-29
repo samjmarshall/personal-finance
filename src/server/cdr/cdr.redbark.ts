@@ -10,6 +10,7 @@ import {
 	redbarkPageDto,
 	redbarkTransactionDto,
 } from "~/domain/cdr";
+import { utcDayKey } from "~/lib/utils";
 
 /** Pinned in code, not env: a new version can change response shapes. Beta until v2 GA (adr017). */
 export const REDBARK_VERSION = "2026-10-01.wattle";
@@ -88,8 +89,8 @@ export class HttpRedbarkClient implements RedbarkClient {
 				account: accountId,
 				// A full timestamp is an instant to RedBark (UTC midnight = Sydney mid-morning);
 				// a bare date is the whole day in the member's zone, like each row's date.
-				from: bareDay(from),
-				...(to && { to: bareDay(to) }),
+				from: utcDayKey(from),
+				...(to && { to: utcDayKey(to) }),
 				// adr017 facet 3: a pending row can still change amount or vanish.
 				include_pending: "false",
 			},
@@ -175,5 +176,3 @@ function parseRetryAfter(header: string | null): number | null {
 	const ms = Date.parse(header) - Date.now();
 	return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
-
-const bareDay = (value: Date) => value.toISOString().slice(0, 10);

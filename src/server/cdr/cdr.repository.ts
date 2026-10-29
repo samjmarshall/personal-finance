@@ -2,13 +2,15 @@ import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { BalanceSetInput } from "~/domain/balances";
 import type { CdrImport, CdrSyncState } from "~/domain/cdr";
 import type { ReconcileCounts } from "~/domain/transactions";
-import { type CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
+import {
+	type CdrConnectionStatus,
+	CdrImportStatus,
+	UNFINISHED_IMPORT_STATUSES,
+} from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
 import { buildOutboxEvent } from "~/server/inngest/events";
 import type { OutboxWriteDoor } from "~/server/outbox/outbox.service";
 import { cdrImport, cdrSyncState } from "./cdr.schema";
-
-const UNFINISHED = [CdrImportStatus.Queued, CdrImportStatus.Running];
 
 export type DiscoveredAccount = Pick<
 	CdrSyncState,
@@ -205,7 +207,7 @@ export class DrizzleCdrRepository implements CdrRepository {
 			.from(cdrImport)
 			.where(
 				and(
-					inArray(cdrImport.status, UNFINISHED),
+					inArray(cdrImport.status, UNFINISHED_IMPORT_STATUSES),
 					gt(cdrImport.createdAt, since),
 				),
 			)
@@ -268,6 +270,11 @@ export class DrizzleCdrRepository implements CdrRepository {
 				error: message,
 				finishedAt: new Date(),
 			})
-			.where(and(eq(cdrImport.id, id), inArray(cdrImport.status, UNFINISHED)));
+			.where(
+				and(
+					eq(cdrImport.id, id),
+					inArray(cdrImport.status, UNFINISHED_IMPORT_STATUSES),
+				),
+			);
 	}
 }

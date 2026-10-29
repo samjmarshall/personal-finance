@@ -11,8 +11,9 @@ import {
 	type RedbarkAccount,
 	type RedbarkBalance,
 } from "~/domain/cdr";
-import type { ReconcileCounts } from "~/domain/transactions";
+import type { ReconcileCounts, SyncedTransaction } from "~/domain/transactions";
 import { CdrConnectionStatus } from "~/lib/constants";
+import { utcDayKey, utcMidnight } from "~/lib/utils";
 import type { BalancesService } from "~/server/balances/balances.service";
 import type { Logger } from "~/server/observability/logging/logger";
 import type { TransactionsService } from "~/server/transactions/transactions.service";
@@ -161,10 +162,7 @@ export class CdrSyncService {
 	 * past queued (a repeat delivery), so the caller runs nothing.
 	 */
 	async planImport(importId: number): Promise<ImportPlan | null> {
-		if (!this.redbark) {
-			await this.repository.failImport(importId, "Bank sync isn't set up");
-			return { liveAccountIds: [], chunks: [] };
-		}
+		if (!this.redbark) return this.failPlan(importId, "Bank sync isn't set up");
 
 		// Claim last: a retry after a failed bank call must still find the import queued.
 		const { statuses, accounts } = await this.discover(this.redbark);
@@ -173,7 +171,10 @@ export class CdrSyncService {
 			this.logger.info("cdr import already claimed", { importId });
 			return null;
 		}
-		const windows = importWindows(bareDay(row.fromDate), bareDay(row.toDate));
+		const windows = importWindows(
+			utcDayKey(row.fromDate),
+			utcDayKey(row.toDate),
+		);
 		const chunks: ImportChunk[] = [];
 		for (const account of accounts) {
 			if (!isSyncable(account, statuses.get(account.connection))) {
@@ -190,20 +191,16 @@ export class CdrSyncService {
 					...window,
 				});
 		}
-		if (chunks.length === 0) {
-			await this.repository.failImport(
+		if (chunks.length === 0)
+			return this.failPlan(
 				importId,
 				"No bank account is ready to import. Check Settings → Bank accounts.",
 			);
-			return { liveAccountIds: [], chunks: [] };
-		}
-		if (chunks.length > MAX_IMPORT_CHUNKS) {
-			await this.repository.failImport(
+		if (chunks.length > MAX_IMPORT_CHUNKS)
+			return this.failPlan(
 				importId,
 				"This import is too big for one run. Try a shorter range.",
 			);
-			return { liveAccountIds: [], chunks: [] };
-		}
 		return { liveAccountIds: accounts.map((a) => a.id), chunks };
 	}
 
@@ -215,22 +212,24 @@ export class CdrSyncService {
 	): Promise<ReconcileCounts> {
 		if (!this.redbark)
 			throw new CdrSyncError("Bank sync isn't set up", { retryable: false });
+		let rows: SyncedTransaction[];
 		try {
-			const rows = (
+			rows = (
 				await this.redbark.listTransactions({
 					accountId,
 					from: utcMidnight(from),
 					to: utcMidnight(to),
 				})
 			).map((row) => mapRedbarkTransaction(row, accountName));
-			const counts = await this.transactions.reconcileSynced(rows, {
-				liveAccountIds,
-			});
-			await this.repository.addImportCounts(importId, counts);
-			return counts;
 		} catch (cause) {
 			throw syncError("cdr import chunk failed", [cause]);
 		}
+		// Left bare so the job retries it: a database blip passes, unlike a bad bank row.
+		const counts = await this.transactions.reconcileSynced(rows, {
+			liveAccountIds,
+		});
+		await this.repository.addImportCounts(importId, counts);
+		return counts;
 	}
 
 	finishImport(importId: number): Promise<void> {
@@ -239,6 +238,15 @@ export class CdrSyncService {
 
 	failImport(importId: number, message: string): Promise<void> {
 		return this.repository.failImport(importId, message);
+	}
+
+	/** `reason` is shown to the member as the import's error. */
+	private async failPlan(
+		importId: number,
+		reason: string,
+	): Promise<ImportPlan> {
+		await this.repository.failImport(importId, reason);
+		return { liveAccountIds: [], chunks: [] };
 	}
 
 	private async discover(redbark: RedbarkClient): Promise<{
@@ -428,9 +436,6 @@ function isSyncable(
 		isSyncingConsent(consent)
 	);
 }
-
-const bareDay = (value: Date) => value.toISOString().slice(0, 10);
-const utcMidnight = (day: string) => new Date(`${day}T00:00:00.000Z`);
 
 // A mapping throw or a 4xx fails the same way every attempt; only a
 // transient error is worth a retry.

@@ -56,13 +56,22 @@ export enum CdrConnectionStatus {
 	Revoked = "revoked",
 }
 
-// A member-run history import. Queued or running for over a day counts as
+// A member-run history import. One left queued or running too long counts as
 // dead: its job may never report.
 export enum CdrImportStatus {
 	Queued = "queued",
 	Running = "running",
 	Done = "done",
 	Failed = "failed",
+}
+
+export const UNFINISHED_IMPORT_STATUSES: readonly CdrImportStatus[] = [
+	CdrImportStatus.Queued,
+	CdrImportStatus.Running,
+];
+
+export function isUnfinishedImport(status: CdrImportStatus): boolean {
+	return UNFINISHED_IMPORT_STATUSES.includes(status);
 }
 
 // A bank row held for a member's answer. A kept one stays as the record of "Keep

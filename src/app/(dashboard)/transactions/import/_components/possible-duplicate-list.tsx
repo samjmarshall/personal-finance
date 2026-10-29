@@ -67,7 +67,7 @@ function ReviewItem({
 	onAnswered: () => void;
 }) {
 	const utils = api.useUtils();
-	// Every transaction query: the list, totals, the header badge and this list all move.
+	// An answer changes rows, totals, the header badge and the review list, so refetch all.
 	const refresh = () =>
 		Promise.all([
 			utils.transaction.invalidate(),

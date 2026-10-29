@@ -1240,6 +1240,22 @@ describe("CdrSyncService.importChunk", () => {
 		expect(h.reconciles).toEqual([]);
 	});
 
+	// Only bank errors are sorted into retry or not; a database blip keeps the job's retries.
+	it("lets a reconcile error through unwrapped", async () => {
+		const blip = new Error("connection terminated");
+		const h = harness({
+			rows: { acct_1: [row("t1", "2026-02-01")] },
+			reconcileSynced: async () => {
+				throw blip;
+			},
+		});
+
+		await expect(h.service.importChunk(7, chunk, ["acct_1"])).rejects.toBe(
+			blip,
+		);
+		expect(h.importCounts).toEqual([]);
+	});
+
 	it("never advances a mark, reads balances or writes an anchor", async () => {
 		const h = harness({
 			saved: [savedState("acct_1", { inBalance: true })],

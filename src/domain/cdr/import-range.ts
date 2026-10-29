@@ -1,3 +1,5 @@
+import { utcDayKey } from "~/lib/utils";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** How far back an import may reach: about RedBark's history depth. */
@@ -5,7 +7,7 @@ export const IMPORT_MAX_YEARS = 7;
 
 /** The first `YYYY-MM-DD` an import may start on: the same day `IMPORT_MAX_YEARS` before `today`. */
 export function importEarliestDay(today: string): string {
-	// Seven years before a leap year is never one, so Feb 29 has no twin there.
+	// The span isn't a multiple of 4 years, so that far back from a leap day is never a leap year.
 	const monthDay = today.slice(4) === "-02-29" ? "-02-28" : today.slice(4);
 	return `${Number(today.slice(0, 4)) - IMPORT_MAX_YEARS}${monthDay}`;
 }
@@ -44,11 +46,9 @@ export function importWindows(
 	const windows: ImportWindow[] = [];
 	for (let start = Date.parse(from); start <= end; start += days * DAY_MS) {
 		windows.push({
-			from: dayOf(start),
-			to: dayOf(Math.min(start + (days - 1) * DAY_MS, end)),
+			from: utcDayKey(new Date(start)),
+			to: utcDayKey(new Date(Math.min(start + (days - 1) * DAY_MS, end))),
 		});
 	}
 	return windows;
 }
-
-const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
