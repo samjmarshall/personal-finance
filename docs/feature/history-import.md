@@ -120,7 +120,7 @@ stateDiagram-v2
 - **Use bank's**: your row takes the bank's date and amount.
 - **Both are real**: adds the bank's row too.
 
-After an answer, the card leaves, a toast confirms it, and focus moves to the To review heading.
+After an answer, the card leaves, a toast confirms it, and focus moves to the next card, or to the To review heading when none are left.
 
 **Edge cases**:
 - Ranges that run past 7 years or after today, or a From after the To → stopped in the form, and again by the server with the same words.
@@ -136,7 +136,7 @@ After an answer, the card leaves, a toast confirms it, and focus moves to the To
 - Design: [Expense linking, receipts and cash flow](../../thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md) (build stage 7)
 - Related plans: [Stage 7: CDR via RedBark](../../thoughts/plans/2026-09-15-expense-linking-stage-7-cdr-redbark.md) (Phases 7–8)
 - GitHub issues: none
-- Shipping commits: `1b1496a` (import page and job), `4d3daef` (net released reviews out of `flagged`)
+- Shipping commits: `e7c5107` (import page and job), `a9a8cd6` (net released reviews out of `flagged`)
 
 ---
 *Generated from interview on 2026-10-28. To regenerate, run `/document-feature history-import`.*

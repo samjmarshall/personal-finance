@@ -113,8 +113,7 @@ interface HarnessOptions {
 	runningImport?: CdrImport | undefined;
 }
 
-// The day range of the default claimed import.
-const RANGE = { from: "2026-01-01", to: "2026-04-01" };
+const IMPORT_ROW_RANGE = { from: "2026-01-01", to: "2026-04-01" };
 
 const importRow = (over: Partial<CdrImport> = {}): CdrImport => ({
 	id: 7,
@@ -1052,7 +1051,7 @@ describe("CdrSyncService.claimImport", () => {
 	it("claims a queued import and returns its day range", async () => {
 		const h = harness();
 
-		await expect(h.service.claimImport(7)).resolves.toEqual(RANGE);
+		await expect(h.service.claimImport(7)).resolves.toEqual(IMPORT_ROW_RANGE);
 		expect(h.calls).toEqual(["markImportRunning 7"]);
 	});
 
@@ -1069,7 +1068,7 @@ describe("CdrSyncService.planImport", () => {
 	it("fails the import with a reason and plans nothing when the key is unset", async () => {
 		const h = harness({ redbark: null });
 
-		await expect(h.service.planImport(7, RANGE)).resolves.toEqual({
+		await expect(h.service.planImport(7, IMPORT_ROW_RANGE)).resolves.toEqual({
 			liveAccountIds: [],
 			chunks: [],
 		});
@@ -1093,7 +1092,7 @@ describe("CdrSyncService.planImport", () => {
 			],
 		});
 
-		const plan = await h.service.planImport(7, RANGE);
+		const plan = await h.service.planImport(7, IMPORT_ROW_RANGE);
 
 		expect(plan.liveAccountIds).toEqual([
 			"acct_1",
@@ -1126,7 +1125,7 @@ describe("CdrSyncService.planImport", () => {
 			connections: [connection("conn_1", CdrConnectionStatus.Revoked)],
 		});
 
-		await expect(h.service.planImport(7, RANGE)).resolves.toEqual({
+		await expect(h.service.planImport(7, IMPORT_ROW_RANGE)).resolves.toEqual({
 			liveAccountIds: [],
 			chunks: [],
 		});
@@ -1146,7 +1145,7 @@ describe("CdrSyncService.planImport", () => {
 			},
 		});
 
-		const error = await caught(h.service.planImport(7, RANGE));
+		const error = await caught(h.service.planImport(7, IMPORT_ROW_RANGE));
 
 		expect(error).toBeInstanceOf(CdrSyncError);
 		expect(error).toMatchObject({ retryable: true, retryAfterMs: 30_000 });
@@ -1258,7 +1257,7 @@ describe("CdrSyncService.importChunk", () => {
 			rows: { acct_1: [row("t1", "2026-02-01")] },
 		});
 
-		const plan = await h.service.planImport(7, RANGE);
+		const plan = await h.service.planImport(7, IMPORT_ROW_RANGE);
 		for (const c of plan.chunks)
 			await h.service.importChunk(7, c, plan.liveAccountIds);
 

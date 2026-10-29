@@ -57,7 +57,6 @@ export interface CdrRepository {
 	latestImport(): Promise<CdrImport | undefined>;
 	/** Moves only a queued import and returns it; `undefined` when it was already past queued. */
 	markImportRunning(id: number): Promise<CdrImport | undefined>;
-	/** Adds to the saved counts. */
 	addImportCounts(id: number, counts: ReconcileCounts): Promise<void>;
 	/** Moves only a running import to done. */
 	finishImport(id: number): Promise<void>;

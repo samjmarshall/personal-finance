@@ -61,7 +61,7 @@ export class CdrInngestController {
 			},
 			async ({ event, step }) => {
 				const importId: number = event.data.importId;
-				// Its own step, so a plan retry can't find its own claim and stop with the import stuck.
+				// Own step, so a plan retry doesn't claim again, find the import running, and quit with it stuck.
 				const range = await step.run("claim", () =>
 					this.translated(() => this.service.claimImport(importId)),
 				);
