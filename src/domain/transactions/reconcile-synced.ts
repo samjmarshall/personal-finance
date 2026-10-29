@@ -137,6 +137,8 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	const pairs: Pair[] = [];
 	for (const bank of unmatched) {
 		const b = side(bank);
+		// A $0 row is a note (a waived fee, a loan notice), not a Spend: pairing two is noise.
+		if (b.cents === 0) continue;
 		for (const candidate of input.candidates) {
 			if (!canAdopt(candidate) && !canFlag(candidate)) continue;
 			const c = side(candidate);

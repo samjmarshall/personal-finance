@@ -120,6 +120,13 @@ describe("planReconcile", () => {
 		}
 	});
 
+	it("never pairs a $0 bank row with a $0 one; it is added", () => {
+		const row = bank("t1", "2026-11-10", 0);
+		expect(
+			plan({ incoming: [row], candidates: [mine(1, "2026-11-10", 0)] }),
+		).toEqual({ ...EMPTY, add: [row] });
+	});
+
 	it("uses a candidate once; the other bank row is added", () => {
 		const first = bank("t1", "2026-11-10", 5);
 		const second = bank("t2", "2026-11-10", 5);
