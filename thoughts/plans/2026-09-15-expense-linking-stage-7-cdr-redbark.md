@@ -1522,15 +1522,17 @@ window at 5,000 rows.
   `latestImport` query.
 - `src/server/cdr/cdr-sync.service.ts`:
   - Move discovery out of `run()` into a private method that both `run()` and `planImport` use.
-  - `planImport(importId)` → with no key, it calls `failImport(importId, "Bank sync isn't set
-    up")` and returns no chunks. Otherwise it discovers, then `markImportRunning`: claiming
-    last means a retry after a failed bank call still finds the row `queued`. When the claim
-    moves nothing (a repeat delivery) it returns `null` and leaves the import alone (discovery
-    has re-run, a harmless account refresh); the handler then stops, with no chunks and no
-    `finish`. Otherwise it returns `{ liveAccountIds, chunks }`:
+  - `claimImport(importId)` → `markImportRunning`, returning the row's `{ from, to }` days.
+    When the claim moves nothing (a repeat delivery) it returns `null`; the handler then
+    stops, fetching nothing, with no plan, chunks or `finish`. The claim is its own step, so a
+    retried plan replays it instead of finding its own claim and stopping with the row stuck
+    `running`.
+  - `planImport(importId, { from, to })` → with no key, it calls `failImport(importId, "Bank
+    sync isn't set up")` and returns no chunks. Otherwise it discovers and returns
+    `{ liveAccountIds, chunks }`:
     `importWindows` for each account the daily sync would sync (same consent and
     account-status rules). Each chunk is `{ accountId, accountName, from, to }`, with
-    RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:402`). Dates
+    RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:414`). Dates
     travel as `YYYY-MM-DD` strings, because a step's result is JSON. No ready account, or
     more chunks than the step cap → `failImport` with a plain reason ("No bank account is
     ready to import…", "This import is too big for one run…") and no chunks, not a throw.
@@ -1545,7 +1547,7 @@ window at 5,000 rows.
 - `src/server/cdr/cdr.inngest.controller.ts`:
   - `cdr-sync`'s `concurrency` becomes `{ limit: 1, key: '"cdr-sync"', scope: "env" }`.
   - Add `cdr-import` (`{ event: "cdr/import.requested" }`, `retries: RETRIES`, the same
-    concurrency). Handler: `step.run("plan")`, then one `step.run(\`chunk-${accountId}-${from}\`)`
+    concurrency). Handler: `step.run("claim")`, `step.run("plan")`, then one `step.run(\`chunk-${accountId}-${from}\`)`
     per chunk, then `step.run("finish")`. Each step's error goes through the same mapping as
     `cdr-sync` (move it into one private method). `onFailure` calls `failImport` with plain
     words ("The import stopped on an error. Try again later."), not the run's raw error.
@@ -1624,9 +1626,8 @@ window at 5,000 rows.
     not just over; `startImport` passes `findActiveImport` the same cut-off.
   - `cdr.trpc.controller.test.ts` — both procedures call the service; signed-out →
     `UNAUTHORIZED`; an active import → `CONFLICT`.
-  - `cdr-sync.service.test.ts` — `planImport` with no key fails the run and returns no chunks;
-    on a row past `queued` it returns `null` and fetches nothing; a discovery error leaves the
-    row `queued` for the retry; no ready account, or past the step cap, fails the run with its
+  - `cdr-sync.service.test.ts` — `claimImport` returns the day range, or `null` on a row past
+    `queued`; `planImport` with no key fails the run and returns no chunks; no ready account, or past the step cap, fails the run with its
     reason and plans nothing;
     it chunks only syncable accounts, each chunk carrying the account's name; `importChunk`
     passes `from`/`to`, maps rows with the chunk's name, reconciles with the
@@ -1635,8 +1636,9 @@ window at 5,000 rows.
     never advances a mark or writes an anchor.
   - `cdr.inngest.controller.test.ts` — `cdr-import`'s id, event trigger, retries and shared
     concurrency key; `cdr-sync` now has the same key. With a fake `step`, the handler runs
-    plan, one step per chunk with a stable id, then finish; a `null` plan runs no chunk and no
-    finish; a step error maps like `cdr-sync`;
+    claim, plan, one step per chunk with a stable id, then finish; a `null` claim runs no plan,
+    chunk or finish; a plan step that fails once after the claim still plans and finishes on
+    its retry, claiming once; a step error maps like `cdr-sync`;
     `onFailure` calls `failImport` with plain words, not the run's error.
   - `import.display.test.ts` — each status label (a running row not `active` → "Didn't
     finish"), the count line, gap labels for earlier, later, more and less (each ending
@@ -1752,7 +1754,7 @@ unpublished today.
   - `cdr.signature.test.ts` — known-vector HMACs. Each verifier accepts its own scheme and
     rejects the other's header, a stale timestamp, and a tampered body.
   - `cdr.http.controller.test.ts` — fake verifiers + fake service; call
-    `webhook(new Request(…))` / `event(…)` (pattern `email.http.controller.test.ts:56-115`).
+    `webhook(new Request(…))` / `event(…)` (pattern `email.http.controller.test.ts:85-199`).
     Valid → 200 and the service is called; bad signature → 401 and the service is not called;
     signed bad JSON or no delivery id → 200 ignored, a `warn`, and the service is not called;
     irrelevant type → 200 ignored; service throw → rethrown.
@@ -1767,7 +1769,7 @@ unpublished today.
     with no status from the event.
   - `route.test.ts` in each route dir — mock the tier modules and assert only the root's job:
     the env gate per secret, built once, delegates (pattern
-    `src/app/api/receipts/inbound/route.test.ts:40-113`).
+    `src/app/api/receipts/inbound/route.test.ts:72-114`).
 
 ### Success
 - [ ] `make check` passes
