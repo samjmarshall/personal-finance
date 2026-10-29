@@ -5,7 +5,9 @@ export const IMPORT_MAX_YEARS = 7;
 
 /** The first `YYYY-MM-DD` an import may start on: the same day `IMPORT_MAX_YEARS` before `today`. */
 export function importEarliestDay(today: string): string {
-	return `${Number(today.slice(0, 4)) - IMPORT_MAX_YEARS}${today.slice(4)}`;
+	// Seven years before a leap year is never one, so Feb 29 has no twin there.
+	const monthDay = today.slice(4) === "-02-29" ? "-02-28" : today.slice(4);
+	return `${Number(today.slice(0, 4)) - IMPORT_MAX_YEARS}${monthDay}`;
 }
 
 export interface ImportWindow {

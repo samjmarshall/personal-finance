@@ -43,4 +43,9 @@ describe("importEarliestDay", () => {
 	it("is the same day seven years back", () => {
 		expect(importEarliestDay("2026-10-28")).toBe("2019-10-28");
 	});
+
+	// A bad day like "2021-02-29" makes the date picker drop its min.
+	it("gives a real day when today is Feb 29", () => {
+		expect(importEarliestDay("2028-02-29")).toBe("2021-02-28");
+	});
 });

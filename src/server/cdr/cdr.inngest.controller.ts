@@ -15,6 +15,8 @@ const RETRIES = 3;
 const MAX_RETRY_AFTER_MS = 60 * 60 * 1000;
 // One shared slot: a sync and an import interleave step by step but never reconcile at once.
 const ONE_BANK_FETCH = { limit: 1, key: '"cdr-sync"', scope: "env" } as const;
+// The run's own error is for us (Inngest keeps it); the member gets plain words.
+const IMPORT_FAILED = "The import stopped on an error. Try again later.";
 
 interface CdrInngestControllerDeps {
 	inngest: Pick<Inngest, "createFunction">;
@@ -31,7 +33,7 @@ export class CdrInngestController {
 
 	/** Daily poll; 18:00 UTC is about 4–5 am Sydney. */
 	readonly sync: InngestFunction.Any;
-	/** One step per 90-day account chunk, so a retry redoes one chunk, not the import. */
+	/** One step per account chunk, so a retry redoes one chunk, not the import. */
 	readonly import: InngestFunction.Any;
 
 	constructor({ inngest, service }: CdrInngestControllerDeps) {
@@ -51,10 +53,10 @@ export class CdrInngestController {
 				retries: RETRIES,
 				concurrency: ONE_BANK_FETCH,
 				triggers: [{ event: "cdr/import.requested" }],
-				onFailure: ({ event, error }: FailureEventArgs) =>
+				onFailure: ({ event }: FailureEventArgs) =>
 					this.service.failImport(
 						event.data.event.data.importId,
-						error.message,
+						IMPORT_FAILED,
 					),
 			},
 			async ({ event, step }) => {

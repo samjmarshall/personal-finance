@@ -161,17 +161,18 @@ export class CdrSyncService {
 	 * past queued (a repeat delivery), so the caller runs nothing.
 	 */
 	async planImport(importId: number): Promise<ImportPlan | null> {
-		const row = await this.repository.markImportRunning(importId);
-		if (!row) {
-			this.logger.info("cdr import already claimed", { importId });
-			return null;
-		}
 		if (!this.redbark) {
 			await this.repository.failImport(importId, "Bank sync isn't set up");
 			return { liveAccountIds: [], chunks: [] };
 		}
 
+		// Claim last: a retry after a failed bank call must still find the import queued.
 		const { statuses, accounts } = await this.discover(this.redbark);
+		const row = await this.repository.markImportRunning(importId);
+		if (!row) {
+			this.logger.info("cdr import already claimed", { importId });
+			return null;
+		}
 		const windows = importChunks(bareDay(row.fromDate), bareDay(row.toDate));
 		const chunks: ImportChunk[] = [];
 		for (const account of accounts) {
@@ -189,11 +190,20 @@ export class CdrSyncService {
 					...window,
 				});
 		}
-		if (chunks.length > MAX_IMPORT_CHUNKS)
-			throw new CdrSyncError(
-				"This import is too big for one run. Try a shorter range.",
-				{ retryable: false },
+		if (chunks.length === 0) {
+			await this.repository.failImport(
+				importId,
+				"No bank account is ready to import. Check Settings → Bank accounts.",
 			);
+			return { liveAccountIds: [], chunks: [] };
+		}
+		if (chunks.length > MAX_IMPORT_CHUNKS) {
+			await this.repository.failImport(
+				importId,
+				"This import is too big for one run. Try a shorter range.",
+			);
+			return { liveAccountIds: [], chunks: [] };
+		}
 		return { liveAccountIds: accounts.map((a) => a.id), chunks };
 	}
 

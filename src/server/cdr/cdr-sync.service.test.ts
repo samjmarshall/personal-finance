@@ -109,7 +109,7 @@ interface HarnessOptions {
 	listBalances?: (accountIds: string[]) => Promise<RedbarkBalance[]>;
 	recordSynced?: (input: BalanceSetInput) => Promise<void>;
 	redbark?: null;
-	/** What markImportRunning returns; `undefined` when the import is past queued. */
+	/** Result of claiming a queued import; none if already past queued. */
 	runningImport?: CdrImport | undefined;
 }
 
@@ -149,7 +149,6 @@ function harness(opts: HarnessOptions = {}) {
 	const logs: LogEntry[] = [];
 	const importCounts: { id: number; counts: unknown }[] = [];
 	const importEnds: { id: number; failed?: string }[] = [];
-	const discoveries = { count: 0 };
 
 	const repository: CdrRepository = {
 		listSyncState: opts.listSyncState ?? (async () => [...states.values()]),
@@ -208,12 +207,10 @@ function harness(opts: HarnessOptions = {}) {
 		},
 	};
 	const redbark: RedbarkClient = {
-		listConnections: async () => {
-			discoveries.count++;
-			return opts.listConnections
+		listConnections: async () =>
+			opts.listConnections
 				? opts.listConnections()
-				: (opts.connections ?? [connection("conn_1")]);
-		},
+				: (opts.connections ?? [connection("conn_1")]),
 		listAccounts: async () => opts.accounts ?? [account("acct_1")],
 		listTransactions: async ({ accountId, from, to }) => {
 			calls.push(`fetch ${accountId}`);
@@ -278,7 +275,6 @@ function harness(opts: HarnessOptions = {}) {
 		logs,
 		importCounts,
 		importEnds,
-		discoveries,
 	};
 }
 
@@ -1061,12 +1057,25 @@ describe("CdrSyncService.planImport", () => {
 	});
 
 	// The outbox can deliver the event twice; the second must not redo the import.
-	it("returns null and touches nothing else when the import is past queued", async () => {
+	it("returns null and fetches nothing when the import is past queued", async () => {
 		const h = harness({ runningImport: undefined });
 
 		await expect(h.service.planImport(7)).resolves.toBeNull();
-		expect(h.discoveries.count).toBe(0);
-		expect(h.calls).toEqual(["markImportRunning 7"]);
+		expect(h.fetches).toEqual([]);
+		expect(h.importEnds).toEqual([]);
+	});
+
+	// A claim before a failed bank call would leave the retry finding it past queued.
+	it("leaves the import queued when discovery fails, so the retry can plan it", async () => {
+		const h = harness({
+			listConnections: async () => {
+				throw new RedbarkRetryableError("429", { retryAfterMs: 30_000 });
+			},
+		});
+
+		await caught(h.service.planImport(7));
+
+		expect(h.calls).not.toContain("markImportRunning 7");
 	});
 
 	it("chunks only accounts the daily sync would sync, each with its name", async () => {
@@ -1113,6 +1122,25 @@ describe("CdrSyncService.planImport", () => {
 		expect(h.calls).toContain("upsertAccount acct_1");
 	});
 
+	// A "Done" with all zeros would hide that nothing was fetched.
+	it("fails the import with a reason when no account is ready to import", async () => {
+		const h = harness({
+			connections: [connection("conn_1", CdrConnectionStatus.Revoked)],
+		});
+
+		await expect(h.service.planImport(7)).resolves.toEqual({
+			liveAccountIds: [],
+			chunks: [],
+		});
+		expect(h.importEnds).toEqual([
+			{
+				id: 7,
+				failed:
+					"No bank account is ready to import. Check Settings → Bank accounts.",
+			},
+		]);
+	});
+
 	it("wraps a discovery failure like the daily sync", async () => {
 		const h = harness({
 			listConnections: async () => {
@@ -1127,7 +1155,7 @@ describe("CdrSyncService.planImport", () => {
 	});
 
 	// Inngest caps a run at 1,000 steps.
-	it("fails without a retry when the chunks would pass the step cap", async () => {
+	it("fails the import with a reason and plans nothing when the chunks would pass the step cap", async () => {
 		const h = harness({
 			accounts: Array.from({ length: 35 }, (_, i) => account(`acct_${i}`)),
 			runningImport: importRow({
@@ -1136,13 +1164,16 @@ describe("CdrSyncService.planImport", () => {
 			}),
 		});
 
-		const error = await caught(h.service.planImport(7));
-
-		expect(error).toBeInstanceOf(CdrSyncError);
-		expect(error).toMatchObject({
-			retryable: false,
-			message: expect.stringMatching(/shorter range/),
+		await expect(h.service.planImport(7)).resolves.toEqual({
+			liveAccountIds: [],
+			chunks: [],
 		});
+		expect(h.importEnds).toEqual([
+			{
+				id: 7,
+				failed: "This import is too big for one run. Try a shorter range.",
+			},
+		]);
 	});
 });
 
