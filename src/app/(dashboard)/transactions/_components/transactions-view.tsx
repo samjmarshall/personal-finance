@@ -257,7 +257,7 @@ function ImportLink() {
 	const { data: toReview } = api.transaction.possibleDuplicateCount.useQuery();
 	return (
 		<Link
-			// Merged, or the base transparent border beats the outline one.
+			// Merge classes: a plain join lets the base transparent border win.
 			className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 			href="/transactions/import"
 		>

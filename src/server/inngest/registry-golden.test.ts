@@ -23,8 +23,8 @@ describe("event registry golden", () => {
 // Function ids, triggers and concurrency keys are also frozen: Inngest keys scheduled
 // runs by id (a rename silently drops the old schedule), event triggers are the same
 // wire strings as the registry above, and a renamed key splits a shared slot.
-// `cdr-import`'s onFailure registers as `cdr-import-failure`, derived from its id. Drive the controllers with a spy client to read what they declare
-// — avoids importing the real db/client (env-free, like the block above).
+// The import's failure handler takes its id from the import's id.
+// A spy client reads what each controller declares: no real db or client, env-free.
 describe("worker golden", () => {
 	it("pins the frozen function ids, triggers and concurrency keys", () => {
 		type Opts = { id: string; triggers: unknown[]; concurrency?: unknown };

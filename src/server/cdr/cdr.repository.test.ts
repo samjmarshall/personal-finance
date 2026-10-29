@@ -498,7 +498,7 @@ describe("addImportCounts", () => {
 });
 
 describe("finishImport", () => {
-	// A run planImport already failed must not turn back into done.
+	// A run that failed while planning must not turn back into done.
 	it("moves only a running import to done", async () => {
 		const { repository, queries } = harness();
 

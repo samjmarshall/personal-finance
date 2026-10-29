@@ -56,8 +56,8 @@ export enum CdrConnectionStatus {
 	Revoked = "revoked",
 }
 
-// A member-run history import. A queued or running row past a day old is
-// treated as dead (see IMPORT_ACTIVE_HOURS), since its job may never report.
+// A member-run history import. Queued or running for over a day counts as
+// dead: its job may never report.
 export enum CdrImportStatus {
 	Queued = "queued",
 	Running = "running",

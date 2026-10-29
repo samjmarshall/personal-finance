@@ -46,7 +46,7 @@ export interface CdrRepository {
 		accountId: string,
 		nickname: string | null,
 	): Promise<CdrSyncState | undefined>;
-	/** Commits the row with its `cdr/import.requested` event. */
+	/** Saves the row and its start event in one write. */
 	insertImport(
 		range: Pick<CdrImport, "fromDate" | "toDate">,
 	): Promise<CdrImport>;
