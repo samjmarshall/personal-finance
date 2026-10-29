@@ -69,14 +69,14 @@ importers:
         specifier: 5.105.0
         version: 5.105.0(@types/react@19.3.0)(react@19.3.1)
       '@trpc/client':
-        specifier: 11.18.0
-        version: 11.18.0(@trpc/server@11.18.0(typescript@7.0.2))(typescript@7.0.2)
+        specifier: 11.22.1
+        version: 11.22.1(@trpc/server@11.22.1(typescript@7.0.2))(typescript@7.0.2)
       '@trpc/react-query':
-        specifier: 11.18.0
-        version: 11.18.0(@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1))(@trpc/client@11.18.0(@trpc/server@11.18.0(typescript@7.0.2))(typescript@7.0.2))(@trpc/server@11.18.0(typescript@7.0.2))(react@19.3.1)(typescript@7.0.2)
+        specifier: 11.22.1
+        version: 11.22.1(@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1))(@trpc/client@11.22.1(@trpc/server@11.22.1(typescript@7.0.2))(typescript@7.0.2))(@trpc/server@11.22.1(typescript@7.0.2))(react@19.3.1)(typescript@7.0.2)
       '@trpc/server':
-        specifier: 11.18.0
-        version: 11.18.0(typescript@7.0.2)
+        specifier: 11.22.1
+        version: 11.22.1(typescript@7.0.2)
       '@upstash/redis':
         specifier: 1.40.0
         version: 1.40.0
@@ -2436,24 +2436,24 @@ packages:
     resolution: {integrity: sha512-xQcPxVrKr3yT9+ZEM3skYXikJc/ocZlGDIcsBQ3mMwL3Weq1QL7jx/uGLXvrSO2Yh0DWUjWI6Q/oiRCEUM6P8w==}
     engines: {node: '>=14'}
 
-  '@trpc/client@11.18.0':
-    resolution: {integrity: sha512-wOqeg3Fvl25V1ZisQhUD3K8G60ZJDlSGJNSyeXrLH24xAo5w6GSR2Kzb1cSNY9Y+IQ2YZvYGZstBU+V/ulo/ow==}
+  '@trpc/client@11.22.1':
+    resolution: {integrity: sha512-flkAwF8bzzNCVJ5xcTMS+Az6Go/XK30ZIOGT94UJBYAmMq1w2tY7gk7+CIMiRUdvHzOYAVPitX2H+20qcIIomA==}
     hasBin: true
     peerDependencies:
-      '@trpc/server': 11.18.0
+      '@trpc/server': 11.22.1
       typescript: '>=5.7.2'
 
-  '@trpc/react-query@11.18.0':
-    resolution: {integrity: sha512-C1+Wwm2pCeUJucI+bnFpxGYjNuvV+ko1BC1T9tUxBVdrhHRCdn9ubxdevdLSAa49XRJRJiZnSuzl3Ys/yvs1vg==}
+  '@trpc/react-query@11.22.1':
+    resolution: {integrity: sha512-PEd3EzQwiJDSi2qlOm1kkfnh5q4rsQcjVGBdKqcbW9iLl7f6/NH/5NOPDdWu/yiV8cY4QJ1pWHENLuD0A1j9uA==}
     peerDependencies:
       '@tanstack/react-query': ^5.80.3
-      '@trpc/client': 11.18.0
-      '@trpc/server': 11.18.0
+      '@trpc/client': 11.22.1
+      '@trpc/server': 11.22.1
       react: '>=18.2.0'
       typescript: '>=5.7.2'
 
-  '@trpc/server@11.18.0':
-    resolution: {integrity: sha512-JAvXOuNTxgXjIDfQaOvDq1j66LMNfDJUH1IU7Slfn8EvRv2EkH6ehu3A7zpYhjO0syHHiYg77v2lG2JFJgvw7Q==}
+  '@trpc/server@11.22.1':
+    resolution: {integrity: sha512-9SjWTS5iwENHOVPqpTjm0I1Os/CtuT6p8kDlovyEm00pXhpHX55tQM2vszJTEpcQhm/JfUz4ut/7Y9JZZQZo6A==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.7.2'
@@ -7237,20 +7237,20 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@trpc/client@11.18.0(@trpc/server@11.18.0(typescript@7.0.2))(typescript@7.0.2)':
+  '@trpc/client@11.22.1(@trpc/server@11.22.1(typescript@7.0.2))(typescript@7.0.2)':
     dependencies:
-      '@trpc/server': 11.18.0(typescript@7.0.2)
+      '@trpc/server': 11.22.1(typescript@7.0.2)
       typescript: 7.0.2
 
-  '@trpc/react-query@11.18.0(@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1))(@trpc/client@11.18.0(@trpc/server@11.18.0(typescript@7.0.2))(typescript@7.0.2))(@trpc/server@11.18.0(typescript@7.0.2))(react@19.3.1)(typescript@7.0.2)':
+  '@trpc/react-query@11.22.1(@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1))(@trpc/client@11.22.1(@trpc/server@11.22.1(typescript@7.0.2))(typescript@7.0.2))(@trpc/server@11.22.1(typescript@7.0.2))(react@19.3.1)(typescript@7.0.2)':
     dependencies:
       '@tanstack/react-query': 5.105.0(@types/react@19.3.0)(react@19.3.1)
-      '@trpc/client': 11.18.0(@trpc/server@11.18.0(typescript@7.0.2))(typescript@7.0.2)
-      '@trpc/server': 11.18.0(typescript@7.0.2)
+      '@trpc/client': 11.22.1(@trpc/server@11.22.1(typescript@7.0.2))(typescript@7.0.2)
+      '@trpc/server': 11.22.1(typescript@7.0.2)
       react: 19.3.1
       typescript: 7.0.2
 
-  '@trpc/server@11.18.0(typescript@7.0.2)':
+  '@trpc/server@11.22.1(typescript@7.0.2)':
     dependencies:
       typescript: 7.0.2
 
