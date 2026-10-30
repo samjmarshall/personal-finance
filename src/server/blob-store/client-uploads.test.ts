@@ -1,12 +1,10 @@
 import { handleUpload } from "@vercel/blob/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { VercelClientUploads } from "./client-uploads";
 
 vi.mock("@vercel/blob/client", () => ({ handleUpload: vi.fn() }));
 
 const handleUploadMock = vi.mocked(handleUpload);
-
-beforeEach(() => vi.clearAllMocks());
 
 const event = {
 	type: "blob.generate-client-token",

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { deferred } from "~/test/fakes";
 
 // The route is a readiness probe: it runs one `select 1` against the module-scope
@@ -16,7 +16,6 @@ vi.mock("next/server", () => ({ connection }));
 
 const { GET } = await import("./route");
 
-beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
 
 describe("GET /api/health", () => {

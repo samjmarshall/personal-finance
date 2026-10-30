@@ -1,5 +1,5 @@
 import { del, get, put } from "@vercel/blob";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { VercelBlobStore } from "./blob-store";
 
 vi.mock("@vercel/blob", () => ({ del: vi.fn(), get: vi.fn(), put: vi.fn() }));
@@ -7,8 +7,6 @@ vi.mock("@vercel/blob", () => ({ del: vi.fn(), get: vi.fn(), put: vi.fn() }));
 const delMock = vi.mocked(del);
 const getMock = vi.mocked(get);
 const putMock = vi.mocked(put);
-
-beforeEach(() => vi.clearAllMocks());
 
 describe("VercelBlobStore.read", () => {
 	it("reads privately by pathname and returns the bytes with the stored content type", async () => {

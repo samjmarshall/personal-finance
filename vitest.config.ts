@@ -15,7 +15,6 @@ export default defineConfig({
 		// vitest would otherwise collect and fail on. Split by extension: node vs jsdom.
 		projects: [
 			{
-				extends: true,
 				test: {
 					name: "unit",
 					environment: "node",
@@ -23,7 +22,6 @@ export default defineConfig({
 				},
 			},
 			{
-				extends: true,
 				test: {
 					name: "component",
 					environment: "jsdom",

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const { getSession } = vi.hoisted(() => ({
 	getSession:
@@ -9,8 +9,6 @@ const { getSession } = vi.hoisted(() => ({
 vi.mock("./config", () => ({ auth: { api: { getSession } } }));
 
 const { BetterAuthSessionReader } = await import("./session-reader");
-
-beforeEach(() => vi.clearAllMocks());
 
 describe("BetterAuthSessionReader.memberId", () => {
 	it("returns the signed-in member's id, reading the headers it was given", async () => {
