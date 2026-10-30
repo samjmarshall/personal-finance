@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v6
 
       # The default wrapper echoes stdout, which corrupts `$(terraform output -raw)`.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -76,7 +76,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Terraform cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: infrastructure/.terraform/providers
           key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
@@ -124,7 +124,7 @@ jobs:
         run: echo "number=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number // empty')" >> "$GITHUB_OUTPUT"
 
       # The wrapper echoes extra output that tfcmt would parse as plan output.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -137,7 +137,7 @@ jobs:
 
       # Restore-only: terraform-apply, running alongside, is the cache writer.
       - name: Terraform cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: infrastructure/.terraform/providers
           key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
@@ -297,7 +297,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -308,7 +308,7 @@ jobs:
 
       # Restore-only: terraform-apply is the cache writer, and it has already run.
       - name: Terraform cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: infrastructure/.terraform/providers
           key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
