@@ -27,6 +27,11 @@ export function formatCompact(value: number | null | undefined) {
 	return compactFormatter.format(value ?? 0);
 }
 
+// `amount` is a double, so 0.1 + 0.2 must still equal 0.3.
+export function toCents(amount: number) {
+	return Math.round(amount * 100);
+}
+
 const dateFormatter = new Intl.DateTimeFormat("en-AU", {
 	day: "2-digit",
 	month: "short",
@@ -95,9 +100,9 @@ function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 	};
 	let formatter: Intl.DateTimeFormat;
 	try {
-		formatter = new Intl.DateTimeFormat("en-CA", { ...options, timeZone });
+		formatter = new Intl.DateTimeFormat("en-AU", { ...options, timeZone });
 	} catch {
-		formatter = new Intl.DateTimeFormat("en-CA", options);
+		formatter = new Intl.DateTimeFormat("en-AU", options);
 	}
 	zonedDayFormatters.set(timeZone, formatter);
 	return formatter;
@@ -108,16 +113,23 @@ function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 // runtime's own zone is UTC on the server. Returned at local midnight so it subtracts
 // cleanly against fromDateInput's parse of a YYYY-MM-DD calendar column.
 export function startOfDayInZone(value: Date, timeZone: string): Date {
-	const parts = zonedDayFormatter(timeZone).formatToParts(value);
-	const part = (type: Intl.DateTimeFormatPartTypes) =>
-		Number(parts.find((p) => p.type === type)?.value);
-	return new Date(part("year"), part("month") - 1, part("day"));
+	const { year, month, day } = zonedDayParts(value, timeZone);
+	return new Date(Number(year), Number(month) - 1, Number(day));
 }
 
 // `YYYY-MM-DD` of the calendar day `value` lands on in `timeZone` (IANA), so two
 // instants from either side of UTC midnight compare as one day.
 export function dayKeyInZone(value: Date, timeZone: string): string {
-	return zonedDayFormatter(timeZone).format(value);
+	const { year, month, day } = zonedDayParts(value, timeZone);
+	return `${year}-${month}-${day}`;
+}
+
+// Joined from parts, so the key is always YYYY-MM-DD, whatever order the locale prints.
+function zonedDayParts(value: Date, timeZone: string) {
+	const parts = zonedDayFormatter(timeZone).formatToParts(value);
+	const part = (type: Intl.DateTimeFormatPartTypes) =>
+		parts.find((p) => p.type === type)?.value;
+	return { year: part("year"), month: part("month"), day: part("day") };
 }
 
 // Days since 1970 of the day `value` lands on in `timeZone`. Two subtract to a

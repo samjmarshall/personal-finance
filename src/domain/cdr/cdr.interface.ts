@@ -1,3 +1,4 @@
+import type { ReconcileCounts } from "~/domain/transactions";
 import type { CdrConnectionStatus, CdrImportStatus } from "~/lib/constants";
 
 export interface CdrSyncState {
@@ -19,16 +20,13 @@ export interface CdrSyncState {
 	updatedAt: Date | null;
 }
 
-export interface CdrImport {
+// The counts are every chunk's reconcile, summed.
+export interface CdrImport extends ReconcileCounts {
 	id: number;
-	added: number;
-	adopted: number;
 	createdAt: Date;
 	error: string | null;
 	finishedAt: Date | null;
-	flagged: number;
 	fromDate: Date;
-	known: number;
 	status: CdrImportStatus;
 	toDate: Date;
 }

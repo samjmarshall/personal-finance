@@ -1,5 +1,5 @@
 import { PossibleDuplicateStatus } from "~/lib/constants";
-import { dayNumberInZone } from "~/lib/utils";
+import { dayNumberInZone, toCents } from "~/lib/utils";
 import type { SyncedTransaction, Transaction } from "./transaction.interface";
 
 /** Furthest apart, in calendar days, a close pair may be. */
@@ -70,9 +70,6 @@ interface Pair {
 	dayGap: number;
 	centGap: number;
 }
-
-// `amount` is a double, so 0.1 + 0.2 must still equal 0.3.
-const toCents = (amount: number) => Math.round(amount * 100);
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
