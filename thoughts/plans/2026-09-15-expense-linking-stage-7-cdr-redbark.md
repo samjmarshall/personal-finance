@@ -1534,7 +1534,7 @@ window at 5,000 rows.
     `{ liveAccountIds, chunks }`:
     `importWindows` for each account the daily sync would sync (same consent and
     account-status rules). Each chunk is `{ accountId, accountName, from, to }`, with
-    RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:414`). Dates
+    RedBark's `account.name` as the daily sync maps it (`cdr-sync.service.ts:417`). Dates
     travel as `YYYY-MM-DD` strings, because a step's result is JSON. No ready account, or
     more chunks than the step cap → `failImport` with a plain reason ("No bank account is
     ready to import…", "This import is too big for one run…") and no chunks, not a throw.
@@ -1660,7 +1660,7 @@ window at 5,000 rows.
       ones for review, and adds the rest; each review choice works from the page and the
       header badge drops to match
 - [x] Rows dated `from` match the bank statement for that day: none missing. The client sends
-      `from` and `to` as bare dates (`cdr.redbark.ts:88`); a timestamp would be UTC midnight,
+      `from` and `to` as bare dates (`cdr.redbark.ts:92`); a timestamp would be UTC midnight,
       10–11 am in Sydney, and drop that morning
 - [x] Starting while one runs is refused with a message; a `to` after today, or a `from` over 7
       years ago, is refused; with the key unset the run shows failed with a reason
@@ -1732,7 +1732,7 @@ unpublished today.
     `CdrSyncService.refreshConnections()` through the shared error mapping (Phase 8), so a 429
     keeps its wait and a 4xx isn't retried. `refreshConnections()` wraps the private
     `discover(redbark)`; with no key it logs and returns, as `run()` does
-    (`cdr-sync.service.ts:83-86`). It sets every connection's status from RedBark's current
+    (`cdr-sync.service.ts:86-89`). It sets every connection's status from RedBark's current
     list (`setConnectionStatus`). RedBark sends "expired" then "active" on a reauth; writing
     the event's own status would let a late or retried "expired" win, and race the daily
     discovery. No debounce: each run is two list calls that write RedBark's current state, so

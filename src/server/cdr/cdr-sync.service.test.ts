@@ -109,7 +109,7 @@ interface HarnessOptions {
 	listBalances?: (accountIds: string[]) => Promise<RedbarkBalance[]>;
 	recordSynced?: (input: BalanceSetInput) => Promise<void>;
 	redbark?: null;
-	/** Result of claiming a queued import; none if already past queued. */
+	/** Result of claiming an import; none if it already finished. */
 	runningImport?: CdrImport | undefined;
 }
 

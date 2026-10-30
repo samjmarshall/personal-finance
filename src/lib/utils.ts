@@ -124,7 +124,7 @@ export function dayKeyInZone(value: Date, timeZone: string): string {
 	return `${year}-${month}-${day}`;
 }
 
-// Joined from parts, so the key is always YYYY-MM-DD, whatever order the locale prints.
+// Read as parts, not one formatted string, so the locale's date order can't scramble the day.
 function zonedDayParts(value: Date, timeZone: string) {
 	const parts = zonedDayFormatter(timeZone).formatToParts(value);
 	const part = (type: Intl.DateTimeFormatPartTypes) =>
