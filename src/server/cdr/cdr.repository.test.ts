@@ -438,8 +438,8 @@ describe("latestImport", () => {
 });
 
 describe("markImportRunning", () => {
-	// The outbox can deliver the event again past Inngest's dedup window.
-	it("moves only a queued import and returns it", async () => {
+	// Running too: a claim step retried after its write landed finds its own claim.
+	it("moves only an unfinished import and returns it", async () => {
 		const running = { ...IMPORT, status: CdrImportStatus.Running };
 		const { repository, queries } = harness(() => [
 			rowOf(IMPORT_COLUMNS, running),
@@ -454,14 +454,16 @@ describe("markImportRunning", () => {
 			      "running",
 			      7,
 			      "queued",
+			      "running",
 			    ],
-			    "sql": "update "cdr_import" set "status" = $1 where ("cdr_import"."id" = $2 and "cdr_import"."status" = $3) returning "id", "fromDate", "toDate", "status", "added", "adopted", "flagged", "known", "error", "createdAt", "finishedAt"",
+			    "sql": "update "cdr_import" set "status" = $1 where ("cdr_import"."id" = $2 and "cdr_import"."status" in ($3, $4)) returning "id", "fromDate", "toDate", "status", "added", "adopted", "flagged", "known", "error", "createdAt", "finishedAt"",
 			  },
 			]
 		`);
 	});
 
-	it("returns undefined when the import is past queued", async () => {
+	// The outbox can deliver the event again past Inngest's dedup window.
+	it("returns undefined when the import already finished", async () => {
 		const { repository } = harness(() => []);
 
 		await expect(repository.markImportRunning(7)).resolves.toBeUndefined();

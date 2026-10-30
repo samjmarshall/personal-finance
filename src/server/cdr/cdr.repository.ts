@@ -227,8 +227,12 @@ export class DrizzleCdrRepository implements CdrRepository {
 		const [row] = await this.db
 			.update(cdrImport)
 			.set({ status: CdrImportStatus.Running })
+			// Running too: a retried claim step must find its own claim, not quit with it stuck.
 			.where(
-				and(eq(cdrImport.id, id), eq(cdrImport.status, CdrImportStatus.Queued)),
+				and(
+					eq(cdrImport.id, id),
+					inArray(cdrImport.status, UNFINISHED_IMPORT_STATUSES),
+				),
 			)
 			.returning();
 		return row;

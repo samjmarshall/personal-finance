@@ -160,8 +160,8 @@ export class CdrSyncService {
 	}
 
 	/**
-	 * Moves a queued import to running and returns its day range. Null when it is
-	 * past queued (a repeat delivery), so the caller runs nothing.
+	 * Moves an unfinished import to running and returns its day range. Null when it
+	 * already finished (a repeat delivery), so the caller runs nothing.
 	 */
 	async claimImport(importId: number): Promise<ImportWindow | null> {
 		const row = await this.repository.markImportRunning(importId);

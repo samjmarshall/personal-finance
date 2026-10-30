@@ -126,7 +126,7 @@ After an answer, the card leaves, a toast confirms it, and focus moves to the ne
 - Ranges that run past 7 years or after today, or a From after the To → stopped in the form, and again by the server with the same words.
 - Starting while a run is active → the form locks and says why; the server returns a `CONFLICT` "An import is already running."
 - The same review answered in another tab → the toast shows the error, and a refetch drops the old card.
-- A repeat event delivery → `claimImport` finds the row past queued and runs nothing.
+- A repeat event delivery → `claimImport` finds the row finished and runs nothing. A retried claim finds its own `running` row and carries on.
 
 **Side effects**: inserts into `transaction` and `possible_duplicate`; updates your rows on adopt and Use bank's. Never moves the daily sync's cursor and never writes a balance anchor. Never deletes a transaction.
 

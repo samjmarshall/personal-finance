@@ -1056,7 +1056,7 @@ describe("CdrSyncService.claimImport", () => {
 	});
 
 	// The outbox can deliver the event twice; the second must not redo the import.
-	it("returns null when the import is past queued", async () => {
+	it("returns null when the import already finished", async () => {
 		const h = harness({ runningImport: undefined });
 
 		await expect(h.service.claimImport(7)).resolves.toBeNull();
