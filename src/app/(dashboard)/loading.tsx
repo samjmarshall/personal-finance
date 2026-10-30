@@ -7,6 +7,7 @@ import { PageSkeleton } from "~/components/page-skeleton";
 import {
 	CategoriesSkeleton,
 	ExpensesSkeleton,
+	ImportSkeleton,
 	IncomeSkeleton,
 	OverviewSkeleton,
 	ReceiptsSkeleton,
@@ -32,6 +33,10 @@ const pages: Record<string, { label: string; skeleton: ReactNode }> = {
 	"/transactions": {
 		label: "transactions",
 		skeleton: <TransactionsSkeleton />,
+	},
+	"/transactions/import": {
+		label: "bank import",
+		skeleton: <ImportSkeleton />,
 	},
 	"/receipts": { label: "receipts", skeleton: <ReceiptsSkeleton /> },
 	"/settings": { label: "settings", skeleton: <SettingsSkeleton /> },

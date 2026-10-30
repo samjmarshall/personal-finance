@@ -195,6 +195,8 @@ export function ImportSkeleton() {
 	return (
 		<PageSkeleton
 			action="sm"
+			// The back link, arrow and "Transactions"
+			actionWidths={["w-29"]}
 			className="max-w-6xl"
 			description={`Bring in older history from your bank, up to ${IMPORT_MAX_YEARS} years back.`}
 			title="Import from bank"
@@ -203,7 +205,7 @@ export function ImportSkeleton() {
 				<Card className="lg:col-span-3">
 					<CardContent className="flex flex-col">
 						<Skeleton className="my-0.5 h-4 w-24" />
-						<div className="mt-3 grid grid-cols-2 gap-3">
+						<div className="mt-3 grid gap-3 min-[22.5rem]:grid-cols-2">
 							{[0, 1].map((i) => (
 								<div className="flex flex-col gap-2" key={i}>
 									<Skeleton className="my-0.5 h-4 w-12" />
@@ -214,10 +216,10 @@ export function ImportSkeleton() {
 						<div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
 							<Skeleton className="h-8 w-24" />
 							{/* The note's own width, so it drops under the button where the
-							    real one does. On a phone it wraps to two lines. */}
+							    real one does. It wraps to two lines below about 27rem. */}
 							<div className="flex max-w-full flex-col">
 								<Skeleton className="my-0.5 h-3 w-[22.625rem] max-w-full" />
-								<Skeleton className="my-0.5 h-3 w-40 sm:hidden" />
+								<Skeleton className="my-0.5 h-3 w-40 min-[26.75rem]:hidden" />
 							</div>
 						</div>
 					</CardContent>
@@ -225,13 +227,13 @@ export function ImportSkeleton() {
 				<Card className="lg:col-span-2">
 					<CardContent className="flex flex-col">
 						<Skeleton className="my-0.5 h-4 w-28" />
-						{/* Status, range, then the counts, which take two lines */}
+						{/* Status, range, then the counts: two lines, but one when the card spans the page (28rem up to lg) */}
 						<div className="mt-3 flex flex-col gap-2">
 							<Skeleton className="my-0.5 h-4 w-24" />
 							<Skeleton className="my-0.5 h-4 w-48" />
 							<div className="flex flex-col">
 								<Skeleton className="my-0.5 h-4 w-full" />
-								<Skeleton className="my-0.5 h-4 w-28" />
+								<Skeleton className="my-0.5 h-4 w-28 min-[28rem]:max-lg:hidden" />
 							</div>
 						</div>
 					</CardContent>
@@ -240,7 +242,11 @@ export function ImportSkeleton() {
 			{/* Flex, so the bars' margins add up like the text lines' heights instead of collapsing. */}
 			<div className="mt-8 flex flex-col">
 				<Skeleton className="my-1 h-4 w-24" />
-				<Skeleton className="mt-2 h-4 w-full max-w-xl" />
+				{/* The intro wraps to two lines below about 28rem. */}
+				<div className="mt-1 flex flex-col">
+					<Skeleton className="my-0.5 h-4 w-full max-w-xl" />
+					<Skeleton className="my-0.5 h-4 w-40 min-[28rem]:hidden" />
+				</div>
 				<div className="mt-2 flex flex-col gap-0.5">
 					{["w-48", "w-64", "w-44"].map((width) => (
 						<Skeleton className={cn("my-0.5 h-4", width)} key={width} />
