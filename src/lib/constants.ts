@@ -56,8 +56,6 @@ export enum CdrConnectionStatus {
 	Revoked = "revoked",
 }
 
-// A member-run history import. One left queued or running too long counts as
-// dead: its job may never report.
 export enum CdrImportStatus {
 	Queued = "queued",
 	Running = "running",

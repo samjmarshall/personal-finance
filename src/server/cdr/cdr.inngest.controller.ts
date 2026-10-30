@@ -14,7 +14,7 @@ const RETRIES = 3;
 // daily cron, or the member's re-run, is the retry.
 const MAX_RETRY_AFTER_MS = 60 * 60 * 1000;
 // One shared slot: a sync and an import interleave step by step but never reconcile at once.
-const ONE_BANK_FETCH = { limit: 1, key: '"cdr-sync"', scope: "env" } as const;
+const SHARED_CDR_SLOT = { limit: 1, key: '"cdr-sync"', scope: "env" } as const;
 
 interface CdrInngestControllerDeps {
 	inngest: Pick<Inngest, "createFunction">;
@@ -40,16 +40,16 @@ export class CdrInngestController {
 			{
 				id: "cdr-sync",
 				retries: RETRIES,
-				concurrency: ONE_BANK_FETCH,
+				concurrency: SHARED_CDR_SLOT,
 				triggers: [{ cron: "0 18 * * *" }],
 			},
-			() => this.translated(() => this.service.run()),
+			() => this.translateErrors(() => this.service.run()),
 		);
 		this.import = inngest.createFunction(
 			{
 				id: "cdr-import",
 				retries: RETRIES,
-				concurrency: ONE_BANK_FETCH,
+				concurrency: SHARED_CDR_SLOT,
 				triggers: [{ event: "cdr/import.requested" }],
 				onFailure: ({ event }: FailureEventArgs) =>
 					this.service.failImport(event.data.event.data.importId),
@@ -58,20 +58,20 @@ export class CdrInngestController {
 				const importId: number = event.data.importId;
 				// Own step, so a plan retry doesn't claim again.
 				const range = await step.run("claim", () =>
-					this.translated(() => this.service.claimImport(importId)),
+					this.translateErrors(() => this.service.claimImport(importId)),
 				);
 				if (!range) return;
 				const plan = await step.run("plan", () =>
-					this.translated(() => this.service.planImport(importId, range)),
+					this.translateErrors(() => this.service.planImport(importId, range)),
 				);
 				for (const chunk of plan.chunks)
 					await step.run(`chunk-${chunk.accountId}-${chunk.from}`, () =>
-						this.translated(() =>
+						this.translateErrors(() =>
 							this.service.importChunk(importId, chunk, plan.liveAccountIds),
 						),
 					);
 				await step.run("finish", () =>
-					this.translated(() => this.service.finishImport(importId)),
+					this.translateErrors(() => this.service.finishImport(importId)),
 				);
 			},
 		);
@@ -83,7 +83,7 @@ export class CdrInngestController {
 	}
 
 	// Service errors know nothing about the job runner; translate them to its retry rules here.
-	private async translated<T>(work: () => Promise<T>): Promise<T> {
+	private async translateErrors<T>(work: () => Promise<T>): Promise<T> {
 		try {
 			return await work();
 		} catch (error) {

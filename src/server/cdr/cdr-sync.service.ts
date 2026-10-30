@@ -230,7 +230,7 @@ export class CdrSyncService {
 		} catch (cause) {
 			throw syncError("cdr import chunk failed", [cause]);
 		}
-		// Left bare so the job retries it: a database blip passes, unlike a bad bank row.
+		// Not wrapped, so a database error retries the job; a bad bank row above won't.
 		const counts = await this.transactions.reconcileSynced(rows, {
 			liveAccountIds,
 		});
