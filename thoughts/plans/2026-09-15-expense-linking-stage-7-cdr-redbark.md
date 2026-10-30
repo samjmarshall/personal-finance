@@ -1502,9 +1502,11 @@ window at 5,000 rows.
   - `markImportRunning(id)`, `addImportCounts(id, counts)` (adds to the columns),
     `finishImport(id)`, `failImport(id, message)`. `finishImport` moves only a `running` row,
     so the `finish` step can't turn a run `planImport` already failed back into `done`.
-    `markImportRunning` moves only a `queued` row and returns whether it did: the outbox
-    re-sends past Inngest's 24 h dedup (`outbox.service.ts:84-85`), and a second delivery
-    mustn't restart a finished import or add its counts again.
+    `markImportRunning` moves only an unfinished (`queued` or `running`) row and returns
+    whether it did: the outbox re-sends past Inngest's 24 h dedup (`outbox.service.ts:84-85`),
+    and a second delivery mustn't restart a finished import or add its counts again. `running`
+    counts too, so a claim step retried after its write landed finds its own claim instead of
+    leaving the import stuck.
   - It now touches `cdr_sync_state` and `cdr_import` only.
 - `src/server/inngest/events.ts` — `EVENT_REGISTRY` (`:13-17`) gains `"cdr/import.requested":
   z.object({ importId: z.number().int() })`.
@@ -1597,7 +1599,7 @@ window at 5,000 rows.
       a stale card), invalidate all of `transaction.*` (list, totals, header badge, this list)
       and `expense.consumption`, so the card leaves; a toast says what happened. Focus moves to
       the next card (or out of the list once it's empty). One `CHOICES` table in the card
-      drives both the buttons and the page's key above the cards. Empty → "Nothing to review."
+      drives both the buttons and the key above the cards. Empty → "Nothing to review.", no key.
   - `_components/import.display.ts` — pure status label (incl. "Didn't finish"), count line,
     and gap labels ("3 days later than yours", "$1.20 more than yours").
 - `src/components/route-skeletons.tsx` — `ImportSkeleton` beside `TransactionsSkeleton`
@@ -1619,15 +1621,15 @@ window at 5,000 rows.
     `cdr/import.requested` event carrying the new id (fake outbox as in
     `receipts.repository.test.ts`); `addImportCounts` adds, not sets; `findActiveImport`
     filters queued and running created after `since`; `finishImport` updates only a
-    `running` row; `markImportRunning` only a `queued` one.
+    `running` row; `markImportRunning` only a `queued` or `running` one.
   - `cdr.schema.test.ts` — `cdr_import` status default and count defaults.
   - `cdr.service.test.ts` — `startImport` refuses each bad range and an active import; a good
     one inserts. `latestImport` is `active` for a running row just under 24 hours old, and
     not just over; `startImport` passes `findActiveImport` the same cut-off.
   - `cdr.trpc.controller.test.ts` — both procedures call the service; signed-out →
     `UNAUTHORIZED`; an active import → `CONFLICT`.
-  - `cdr-sync.service.test.ts` — `claimImport` returns the day range, or `null` on a row past
-    `queued`; `planImport` with no key fails the run and returns no chunks; no ready account, or past the step cap, fails the run with its
+  - `cdr-sync.service.test.ts` — `claimImport` returns the day range, or `null` on a finished
+    row; `planImport` with no key fails the run and returns no chunks; no ready account, or past the step cap, fails the run with its
     reason and plans nothing;
     it chunks only syncable accounts, each chunk carrying the account's name; `importChunk`
     passes `from`/`to`, maps rows with the chunk's name, reconciles with the
@@ -1839,7 +1841,7 @@ unpublished today.
   `ui-components.md`, `unit-testing.md`.
 - Terminology: `CONTEXT.md`:
   - **Provenance** (`:101-105`; column `provenance`, avoid "source")
-  - **Spend** / **Inflow** sign convention (`:171-173`; positive `amount` = Spend)
+  - **Spend** / **Inflow** sign convention (`:10-17`, resolved `:190-192`; positive `amount` = Spend)
   - **Unplanned** (`:33-36`)
   - **Group** vs **Category** (`:62-65`, `:96-99`)
   - **Transaction** (`:25-26`)
