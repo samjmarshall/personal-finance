@@ -76,7 +76,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Terraform cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: infrastructure/.terraform/providers
           key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
@@ -137,7 +137,7 @@ jobs:
 
       # Restore-only: terraform-apply, running alongside, is the cache writer.
       - name: Terraform cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: infrastructure/.terraform/providers
           key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
@@ -308,7 +308,7 @@ jobs:
 
       # Restore-only: terraform-apply is the cache writer, and it has already run.
       - name: Terraform cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: infrastructure/.terraform/providers
           key: terraform-${{ hashFiles('infrastructure/.terraform.lock.hcl') }}
