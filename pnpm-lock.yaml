@@ -61,7 +61,7 @@ importers:
         version: 2.12.0(@opentelemetry/api@1.9.1)
       '@posthog/ai':
         specifier: 8.17.2
-        version: 8.17.2(@ai-sdk/provider@4.0.34)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.223.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace@3.0.0(@opentelemetry/api@1.9.1))(posthog-node@5.57.2(@opentelemetry/api@1.9.1)(rxjs@7.8.2))
+        version: 8.17.2(@ai-sdk/provider@4.0.34)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.223.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace@3.0.0(@opentelemetry/api@1.9.1))(posthog-node@5.61.1(@opentelemetry/api@1.9.1)(rxjs@7.8.2))
       '@t3-oss/env-nextjs':
         specifier: 0.13.11
         version: 0.13.11(typescript@7.0.2)(zod@4.6.7)
@@ -126,8 +126,8 @@ importers:
         specifier: 3.4.9
         version: 3.4.9
       posthog-node:
-        specifier: 5.57.2
-        version: 5.57.2(@opentelemetry/api@1.9.1)(rxjs@7.8.2)
+        specifier: 5.61.1
+        version: 5.61.1(@opentelemetry/api@1.9.1)(rxjs@7.8.2)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -2056,14 +2056,11 @@ packages:
       openai:
         optional: true
 
-  '@posthog/core@1.61.0':
-    resolution: {integrity: sha512-FxOHbuxCZCFGb/46KdcBtilTX5ROeB4Gs8ZrWESzyNlCCxLw4/5xBVh8nfmPjbztuPvxRs5tOcpQ1kNnr2nlAA==}
-
   '@posthog/core@1.61.2':
     resolution: {integrity: sha512-l3b6Dc2NmItwmyu6ot7K2jtStQOAQjZw/PB/gpZwk2W6SBCbvPg6YJzReSBSQLuok19ridbfVNk70a5hgoGX2Q==}
 
-  '@posthog/types@1.416.1':
-    resolution: {integrity: sha512-PG06HE2axHNyyZ9CKSSHKSW4pWfQwEtPA1dewFqIwggcIgk1BsQ+tHSNqvZz+IvE2WnBZ8OcOkF9SWI55VxQfA==}
+  '@posthog/core@1.62.0':
+    resolution: {integrity: sha512-KjNwGC7s0141wnWWHubNMdg1lOhZjqKRw2OTNstuzdVvNDfvv2RbFJQSSvvABmbCmTXwlMpdnbb/M/aAigDnNQ==}
 
   '@posthog/types@1.418.0':
     resolution: {integrity: sha512-WqDXUWH1R8OilBp2PfDpQIRZSCs3QyOnw7H3YK7lvZLCMIsOqSZAKJrrqYWt4f7FvnVCACRuNGCC0HKh3J/HWw==}
@@ -4354,8 +4351,8 @@ packages:
     resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
     engines: {node: '>=12'}
 
-  posthog-node@5.57.2:
-    resolution: {integrity: sha512-S03L9YC21EV0CIo7GW1lv/faTU0ENjO4uyFTuERxGIuDebjl3+UcRvJIq8RzAM2YJumpAlXPoDNyrxAvUZctfg==}
+  posthog-node@5.61.1:
+    resolution: {integrity: sha512-Az2H3hHyxxZ5PQpQAQEoJfa9FrLsM4OnuyIQwzi9hei5mtN0/mepw1yvLtAmPAbEkC6+muWXiBShBnVMKeBSXw==}
     engines: {node: ^20.20.0 || >=22.22.0}
     peerDependencies:
       '@opentelemetry/api': ^1.2.0
@@ -6837,10 +6834,10 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@posthog/ai@8.17.2(@ai-sdk/provider@4.0.34)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.223.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace@3.0.0(@opentelemetry/api@1.9.1))(posthog-node@5.57.2(@opentelemetry/api@1.9.1)(rxjs@7.8.2))':
+  '@posthog/ai@8.17.2(@ai-sdk/provider@4.0.34)(@opentelemetry/api@1.9.1)(@opentelemetry/exporter-trace-otlp-http@0.223.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.12.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace@3.0.0(@opentelemetry/api@1.9.1))(posthog-node@5.61.1(@opentelemetry/api@1.9.1)(rxjs@7.8.2))':
     dependencies:
       '@posthog/core': 1.61.2
-      posthog-node: 5.57.2(@opentelemetry/api@1.9.1)(rxjs@7.8.2)
+      posthog-node: 5.61.1(@opentelemetry/api@1.9.1)(rxjs@7.8.2)
       uuid: 11.1.1
       zod: 4.6.7
     optionalDependencies:
@@ -6850,15 +6847,13 @@ snapshots:
       '@opentelemetry/sdk-trace': 3.0.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-trace-base': 2.12.0(@opentelemetry/api@1.9.1)
 
-  '@posthog/core@1.61.0':
-    dependencies:
-      '@posthog/types': 1.416.1
-
   '@posthog/core@1.61.2':
     dependencies:
       '@posthog/types': 1.418.0
 
-  '@posthog/types@1.416.1': {}
+  '@posthog/core@1.62.0':
+    dependencies:
+      '@posthog/types': 1.418.0
 
   '@posthog/types@1.418.0': {}
 
@@ -8831,9 +8826,9 @@ snapshots:
 
   postgres@3.4.9: {}
 
-  posthog-node@5.57.2(@opentelemetry/api@1.9.1)(rxjs@7.8.2):
+  posthog-node@5.61.1(@opentelemetry/api@1.9.1)(rxjs@7.8.2):
     dependencies:
-      '@posthog/core': 1.61.0
+      '@posthog/core': 1.62.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       rxjs: 7.8.2
