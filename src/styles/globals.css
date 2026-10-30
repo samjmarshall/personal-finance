@@ -220,7 +220,8 @@
 		@apply border-border outline-ring/50;
 	}
 	html {
-		@apply bg-background font-sans;
+		/* Phones have a sticky top bar; focus and jumps land below it. */
+		@apply bg-background font-sans max-lg:scroll-pt-20;
 	}
 	body {
 		@apply text-foreground antialiased;

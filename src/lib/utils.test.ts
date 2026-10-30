@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	dayKeyInZone,
 	dayNumberInZone,
+	formatCount,
 	formatDate,
 	formatMonthKey,
 	fromDateInput,
@@ -11,6 +12,12 @@ import {
 	utcDayKey,
 	utcMidnight,
 } from "~/lib/utils";
+
+describe("formatCount", () => {
+	it("groups thousands", () => {
+		expect(formatCount(12345)).toBe("12,345");
+	});
+});
 
 describe("formatDate", () => {
 	// A `date` column (receiptDate) arrives as a bare calendar day. `new Date()` reads

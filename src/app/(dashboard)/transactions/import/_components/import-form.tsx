@@ -9,7 +9,7 @@ import { HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import { dayKeyInZone } from "~/lib/utils";
 import { api } from "~/trpc/react";
 
-/** Picks the range and starts an import. The server checks the range too; its refusals toast globally. */
+/** The server re-checks the range; its refusals show as a global toast. */
 export function ImportForm({ locked }: { locked: boolean }) {
 	// The server's "today", so the To day's limit agrees with its check; fixed zone, so SSR agrees too.
 	const [today] = useState(() => dayKeyInZone(new Date(), HOUSEHOLD_TIME_ZONE));
@@ -49,7 +49,7 @@ export function ImportForm({ locked }: { locked: boolean }) {
 
 	return (
 		<form noValidate onSubmit={onSubmit}>
-			<div className="grid grid-cols-2 gap-3">
+			<div className="grid gap-3 min-[22.5rem]:grid-cols-2">
 				<Field>
 					<FieldLabel htmlFor="import-from">From</FieldLabel>
 					<Input

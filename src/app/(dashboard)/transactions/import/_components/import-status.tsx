@@ -28,7 +28,7 @@ const PHASE_LOOK: Record<
 // The server saw no failure, so there's no reason to show; say what to do instead.
 const STALLED_NEXT = "Run the same range again to bring in the rest.";
 
-/** The latest import, or a note that there's none. Polling lives with the view. */
+/** Polling lives in the view, not here. */
 export function ImportStatus({ latest }: { latest: LatestImport | null }) {
 	return (
 		<div>
@@ -69,10 +69,11 @@ function RunStatus({ run }: { run: LatestImport }) {
 			</p>
 			{showCounts && (
 				<p className="tabular flex flex-wrap gap-x-1.5 text-sm text-foreground">
-					{importCountLabels(run).map((count, index) => (
+					{importCountLabels(run).map((count, index, counts) => (
+						// The dot trails, so a wrapped line never starts with one.
 						<span className="whitespace-nowrap" key={count}>
-							{index > 0 && <span aria-hidden="true">· </span>}
 							{count}
+							{index < counts.length - 1 && <span aria-hidden="true"> ·</span>}
 						</span>
 					))}
 				</p>

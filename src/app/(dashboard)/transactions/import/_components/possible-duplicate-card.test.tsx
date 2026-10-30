@@ -76,7 +76,7 @@ describe("PossibleDuplicateCard", () => {
 		expect(
 			screen.getByRole("button", { name: "Keep mine" }),
 		).toHaveAccessibleDescription(
-			`Keep mine drops the bank's copy. Possible duplicate of Groceries, ${formatDate(REVIEW.mine.date)}, $50.00`,
+			`drops the bank's copy. Possible duplicate of Groceries, ${formatDate(REVIEW.mine.date)}, $50.00`,
 		);
 	});
 

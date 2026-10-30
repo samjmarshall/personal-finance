@@ -27,6 +27,12 @@ export function formatCompact(value: number | null | undefined) {
 	return compactFormatter.format(value ?? 0);
 }
 
+const countFormatter = new Intl.NumberFormat("en-AU");
+
+export function formatCount(value: number) {
+	return countFormatter.format(value);
+}
+
 // `amount` is a double, so 0.1 + 0.2 must still equal 0.3.
 export function toCents(amount: number) {
 	return Math.round(amount * 100);

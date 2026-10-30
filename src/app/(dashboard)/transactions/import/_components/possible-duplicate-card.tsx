@@ -48,7 +48,7 @@ export function PossibleDuplicateCard({
 	return (
 		<article
 			aria-labelledby={titleId}
-			className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-lg:scroll-mt-20"
+			className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 			// Focus moves here once a nearby card is answered.
 			tabIndex={-1}
 		>
@@ -93,7 +93,7 @@ export function PossibleDuplicateCard({
 						</Button>
 						{/* Hidden, so browsing the card doesn't read it; a description still can. */}
 						<span hidden id={`${titleId}-${choice}`}>
-							{label} {effect}
+							{effect}
 						</span>
 					</Fragment>
 				))}

@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import type { PossibleDuplicateReview } from "~/domain/transactions";
+import { formatCount } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import {
 	CHOICES,
@@ -30,12 +31,18 @@ export function PossibleDuplicateList({
 	const list = useRef<HTMLUListElement>(null);
 	// The answered card leaves and the next one takes its place; focus goes there, not the top.
 	const answeredAt = useRef<number | null>(null);
+	// A card can also leave on a refetch (a run ended, another tab answered it); focus follows it too.
+	const lastFocused = useRef<{ id: number; index: number } | null>(null);
 	// Read when the list changes, not as a dep: a parent re-render mid-refetch would focus the leaving card.
 	const emptied = useEffectEvent(onEmptied);
 	useEffect(() => {
-		const at = answeredAt.current;
+		const last = lastFocused.current;
+		const at =
+			answeredAt.current ??
+			(last && !reviews.some((r) => r.id === last.id) ? last.index : null);
 		if (at === null) return;
 		answeredAt.current = null;
+		lastFocused.current = null;
 		// Only pick focus up if it fell to the page: a card that stayed keeps it.
 		if (document.activeElement && document.activeElement !== document.body)
 			return;
@@ -78,7 +85,12 @@ export function PossibleDuplicateList({
 			</ul>
 			<ul className="mt-4 space-y-3" ref={list}>
 				{reviews.slice(0, shown).map((review, index) => (
-					<li key={review.id}>
+					<li
+						key={review.id}
+						onFocus={() => {
+							lastFocused.current = { id: review.id, index };
+						}}
+					>
 						<ReviewItem
 							onAnswered={() => {
 								answeredAt.current = index;
@@ -89,9 +101,14 @@ export function PossibleDuplicateList({
 				))}
 			</ul>
 			{hidden > 0 && (
-				<Button className="mt-4" onClick={showMore} variant="outline">
-					Show {Math.min(hidden, PAGE_SIZE).toLocaleString("en-AU")} more
-				</Button>
+				<div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+					<Button onClick={showMore} variant="outline">
+						Show {formatCount(Math.min(hidden, PAGE_SIZE))} more
+					</Button>
+					<p className="tabular text-sm text-muted-foreground">
+						Showing {formatCount(shown)} of {formatCount(reviews.length)}
+					</p>
+				</div>
 			)}
 		</>
 	);

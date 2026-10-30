@@ -7,6 +7,7 @@ import { PageHeader } from "~/components/page-header";
 import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { IMPORT_MAX_YEARS } from "~/domain/cdr";
+import { formatCount } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { ImportForm } from "./import-form";
 import { ImportStatus } from "./import-status";
@@ -87,7 +88,7 @@ export function ImportView() {
 
 			<section aria-labelledby={reviewId} className="mt-8">
 				<h2
-					className="text-base font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-lg:scroll-mt-20"
+					className="text-base font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 					id={reviewId}
 					ref={reviewHeading}
 					tabIndex={-1}
@@ -97,7 +98,7 @@ export function ImportView() {
 						<span className="tabular font-normal text-muted-foreground">
 							<span aria-hidden="true"> · </span>
 							<span className="sr-only">, </span>
-							{reviews.length.toLocaleString("en-AU")}
+							{formatCount(reviews.length)}
 						</span>
 					)}
 				</h2>

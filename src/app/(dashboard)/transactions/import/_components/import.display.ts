@@ -3,6 +3,7 @@ import type { ReconcileCounts } from "~/domain/transactions";
 import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import {
 	dayNumberInZone,
+	formatCount,
 	formatCurrency,
 	formatDate,
 	toCents,
@@ -49,10 +50,10 @@ export function importCountLabels({
 	known,
 }: ReconcileCounts): string[] {
 	return [
-		`Added ${added.toLocaleString("en-AU")}`,
-		`Matched to yours ${adopted.toLocaleString("en-AU")}`,
-		`To review ${Math.max(flagged, 0).toLocaleString("en-AU")}`,
-		`Already here ${known.toLocaleString("en-AU")}`,
+		`Added ${formatCount(added)}`,
+		`Matched to yours ${formatCount(adopted)}`,
+		`To review ${formatCount(Math.max(flagged, 0))}`,
+		`Already here ${formatCount(known)}`,
 	];
 }
 
