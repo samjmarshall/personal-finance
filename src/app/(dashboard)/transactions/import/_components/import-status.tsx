@@ -5,9 +5,9 @@ import type { LatestImport } from "~/domain/cdr";
 import { cn } from "~/lib/utils";
 import {
 	type ImportPhase,
-	importCounts,
+	importCountLabels,
 	importPhase,
-	importRange,
+	importRangeLabel,
 	importStatusLabel,
 } from "./import.display";
 
@@ -62,11 +62,11 @@ function RunStatus({ run }: { run: LatestImport }) {
 				{importStatusLabel(run)}
 			</p>
 			<p className="tabular text-sm text-muted-foreground">
-				{importRange(run)}
+				{importRangeLabel(run)}
 			</p>
 			{showCounts && (
 				<p className="tabular flex flex-wrap gap-x-1.5 text-sm text-foreground">
-					{importCounts(run).map((count, index) => (
+					{importCountLabels(run).map((count, index) => (
 						// Each count wraps whole, never mid-label.
 						<span className="whitespace-nowrap" key={count}>
 							{index > 0 && <span aria-hidden="true">· </span>}
@@ -76,7 +76,7 @@ function RunStatus({ run }: { run: LatestImport }) {
 				</p>
 			)}
 			{run.error && (
-				<p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+				<p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-foreground">
 					{run.error}
 				</p>
 			)}

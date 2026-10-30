@@ -3,8 +3,8 @@ import { CdrImportStatus } from "~/lib/constants";
 import {
 	amountGapLabel,
 	dayGapLabel,
-	importCounts,
-	importRange,
+	importCountLabels,
+	importRangeLabel,
 	importStatusLabel,
 } from "./import.display";
 
@@ -22,10 +22,10 @@ describe("importStatusLabel", () => {
 	});
 });
 
-describe("importCounts", () => {
+describe("importCountLabels", () => {
 	it("names each count in member words", () => {
 		expect(
-			importCounts({ added: 12, adopted: 30, flagged: 3, known: 950 }),
+			importCountLabels({ added: 12, adopted: 30, flagged: 3, known: 950 }),
 		).toEqual([
 			"Added 12",
 			"Matched to yours 30",
@@ -36,7 +36,7 @@ describe("importCounts", () => {
 
 	it("groups thousands", () => {
 		expect(
-			importCounts({ added: 1200, adopted: 0, flagged: 0, known: 0 }),
+			importCountLabels({ added: 1200, adopted: 0, flagged: 0, known: 0 }),
 		).toEqual([
 			"Added 1,200",
 			"Matched to yours 0",
@@ -48,16 +48,16 @@ describe("importCounts", () => {
 	// Below zero when it cleared more older reviews than it made.
 	it("never shows fewer than zero to review", () => {
 		expect(
-			importCounts({ added: 2, adopted: 2, flagged: -2, known: 0 }),
+			importCountLabels({ added: 2, adopted: 2, flagged: -2, known: 0 }),
 		).toContain("To review 0");
 	});
 });
 
-describe("importRange", () => {
+describe("importRangeLabel", () => {
 	// A bare day: a member west of UTC must not see the day before.
 	it("shows the stored UTC days as they are", () => {
 		expect(
-			importRange({
+			importRangeLabel({
 				fromDate: new Date("2026-01-01T00:00:00.000Z"),
 				toDate: new Date("2026-03-31T00:00:00.000Z"),
 			}),

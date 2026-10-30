@@ -5,12 +5,12 @@ import type {
 	PossibleDuplicateReview,
 	ResolveDuplicateInput,
 } from "~/domain/transactions";
-import { formatDate } from "~/lib/utils";
+import { formatCurrency, formatDate } from "~/lib/utils";
 import { amountGapLabel, dayGapLabel } from "./import.display";
 
 export type DuplicateChoice = ResolveDuplicateInput["choice"];
 
-/** In button order. The page's key above the cards reads each label, then what it does. */
+/** Drives both the buttons and the legend above the cards, so their order can't drift. */
 export const CHOICES: {
 	choice: DuplicateChoice;
 	label: string;
@@ -52,8 +52,10 @@ export function PossibleDuplicateCard({
 			// Focus lands here after the card before it is answered.
 			tabIndex={-1}
 		>
+			{/* Date and amount too: many cards share a description (every Coles shop). */}
 			<h3 className="sr-only" id={titleId}>
-				Possible duplicate of {mine.description}
+				Possible duplicate of {mine.description}, {formatDate(mine.date)},{" "}
+				{formatCurrency(Math.abs(mine.amount))}
 			</h3>
 			<div className="grid divide-border max-sm:divide-y sm:grid-cols-2 sm:divide-x">
 				<Side label="In Ledger" row={mine} />

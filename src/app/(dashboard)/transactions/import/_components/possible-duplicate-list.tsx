@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { PossibleDuplicateReview } from "~/domain/transactions";
 import { api } from "~/trpc/react";
 import {
+	CHOICES,
 	type DuplicateChoice,
 	PossibleDuplicateCard,
 } from "./possible-duplicate-card";
@@ -40,23 +41,36 @@ export function PossibleDuplicateList({
 
 	if (!reviews.length)
 		return (
-			<p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+			<p className="mt-4 rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
 				Nothing to review.
 			</p>
 		);
 	return (
-		<ul className="space-y-3" ref={list}>
-			{reviews.map((review, index) => (
-				<li key={review.id}>
-					<ReviewItem
-						onAnswered={() => {
-							answeredAt.current = index;
-						}}
-						review={review}
-					/>
-				</li>
-			))}
-		</ul>
+		<>
+			<p className="mt-1 text-sm text-pretty text-muted-foreground">
+				These bank rows look like ones you already have, but not exactly.
+			</p>
+			<ul className="mt-2 space-y-0.5 text-sm text-muted-foreground">
+				{CHOICES.map(({ choice, label, effect }) => (
+					<li key={choice}>
+						<span className="font-medium text-foreground">{label}</span>{" "}
+						{effect}
+					</li>
+				))}
+			</ul>
+			<ul className="mt-4 space-y-3" ref={list}>
+				{reviews.map((review, index) => (
+					<li key={review.id}>
+						<ReviewItem
+							onAnswered={() => {
+								answeredAt.current = index;
+							}}
+							review={review}
+						/>
+					</li>
+				))}
+			</ul>
+		</>
 	);
 }
 

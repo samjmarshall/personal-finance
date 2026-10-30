@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { PossibleDuplicateReview } from "~/domain/transactions";
 import { Provenance } from "~/lib/constants";
+import { formatDate } from "~/lib/utils";
 import {
 	type DuplicateChoice,
 	PossibleDuplicateCard,
@@ -74,7 +75,9 @@ describe("PossibleDuplicateCard", () => {
 
 		expect(
 			screen.getByRole("button", { name: "Keep mine" }),
-		).toHaveAccessibleDescription("Possible duplicate of Groceries");
+		).toHaveAccessibleDescription(
+			`Possible duplicate of Groceries, ${formatDate(REVIEW.mine.date)}, $50.00`,
+		);
 	});
 
 	it("holds every answer while one saves", async () => {

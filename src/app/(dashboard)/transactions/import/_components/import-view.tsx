@@ -11,7 +11,6 @@ import { cn } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { ImportForm } from "./import-form";
 import { ImportStatus } from "./import-status";
-import { CHOICES } from "./possible-duplicate-card";
 import { PossibleDuplicateList } from "./possible-duplicate-list";
 
 const POLL_MS = 3000;
@@ -92,22 +91,9 @@ export function ImportView() {
 				>
 					To review
 				</h2>
-				<p className="mt-1 text-sm text-pretty text-muted-foreground">
-					These bank rows look like ones you already have, but not exactly.
-				</p>
-				<ul className="mt-2 space-y-0.5 text-sm text-muted-foreground">
-					{CHOICES.map(({ choice, label, effect }) => (
-						<li key={choice}>
-							<span className="font-medium text-foreground">{label}</span>{" "}
-							{effect}
-						</li>
-					))}
-				</ul>
-				<div className="mt-4">
-					<PossibleDuplicateList
-						onEmptied={() => reviewHeading.current?.focus()}
-					/>
-				</div>
+				<PossibleDuplicateList
+					onEmptied={() => reviewHeading.current?.focus()}
+				/>
 			</section>
 		</div>
 	);

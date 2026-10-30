@@ -5,6 +5,7 @@ import {
 	dayNumberInZone,
 	formatCurrency,
 	formatDate,
+	toCents,
 	utcDayKey,
 } from "~/lib/utils";
 
@@ -41,7 +42,7 @@ export function importStatusLabel(
 }
 
 /** `flagged` nets out released reviews, so it can dip below 0; shown floored. */
-export function importCounts({
+export function importCountLabels({
 	added,
 	adopted,
 	flagged,
@@ -56,7 +57,7 @@ export function importCounts({
 }
 
 // Stored as UTC midnight of each bare day; a local render would show the day before west of UTC.
-export function importRange({
+export function importRangeLabel({
 	fromDate,
 	toDate,
 }: Pick<CdrImport, "fromDate" | "toDate">): string {
@@ -75,8 +76,7 @@ export function dayGapLabel(bank: Date, mine: Date): string | null {
 
 /** The bank's amount against the member's, by size, so a refund reads the same way. Null when equal to the cent. */
 export function amountGapLabel(bank: number, mine: number): string | null {
-	const cents =
-		Math.round(Math.abs(bank) * 100) - Math.round(Math.abs(mine) * 100);
+	const cents = Math.abs(toCents(bank)) - Math.abs(toCents(mine));
 	if (cents === 0) return null;
 	return `${formatCurrency(Math.abs(cents) / 100)} ${cents > 0 ? "more" : "less"} than yours`;
 }
