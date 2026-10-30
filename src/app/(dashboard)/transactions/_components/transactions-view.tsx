@@ -257,8 +257,7 @@ function ImportLink() {
 	const { data: toReview } = api.transaction.possibleDuplicateCount.useQuery();
 	return (
 		<Link
-			// Merge classes: a plain join lets the base transparent border win.
-			className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+			className={buttonVariants({ variant: "outline", size: "sm" })}
 			href="/transactions/import"
 		>
 			<Landmark aria-hidden className="h-4 w-4" />

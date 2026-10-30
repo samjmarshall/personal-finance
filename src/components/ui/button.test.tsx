@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlusIcon } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 
 // The spinner is decorative (aria-hidden) with no role, so its slot is the hook.
 const spinnerIn = (el: HTMLElement) =>
@@ -58,5 +58,13 @@ describe("Button loading", () => {
 		const button = screen.getByRole("button", { name: "Save" });
 		expect(button).not.toHaveAttribute("aria-busy");
 		expect(spinnerIn(button)).not.toBeInTheDocument();
+	});
+});
+
+describe("buttonVariants", () => {
+	it("gives a Link the outline border, not the base's transparent one", () => {
+		const classes = buttonVariants({ variant: "outline" }).split(" ");
+		expect(classes).toContain("border-border");
+		expect(classes).not.toContain("border-transparent");
 	});
 });
