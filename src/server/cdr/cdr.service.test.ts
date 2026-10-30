@@ -149,8 +149,9 @@ describe("CdrService.startImport", () => {
 		]);
 	});
 
-	// The page's "today" is Sydney's, a day ahead of UTC for part of each day.
+	// 2 am on the 28th in Sydney is still the 27th in UTC.
 	it("takes today in Sydney as the latest `to`", async () => {
+		vi.setSystemTime(new Date("2026-10-27T15:00:00.000Z"));
 		const service = serviceWith({
 			findActiveImport: async () => undefined,
 			insertImport: async () => IMPORT,
