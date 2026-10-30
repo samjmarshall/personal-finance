@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 // The route is a composition root: it builds the controller once and delegates.
 // Everything it wires is stubbed so this stays a unit over that job; the gates
@@ -39,8 +39,6 @@ const call = (id: string) =>
 	GET(new Request(`https://ledger.test/api/receipts/${id}/html`), {
 		params: Promise.resolve({ id }),
 	});
-
-beforeEach(() => vi.clearAllMocks());
 
 describe("GET /api/receipts/[id]/html", () => {
 	it("builds the controller once over the shared service, and delegates each request with its id", async () => {

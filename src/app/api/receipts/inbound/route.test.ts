@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushAfterResponse } from "~/server/observability/sdk/flush.fake";
 
 // The route is a composition root: it reads the env, builds the tiers once, and
@@ -62,7 +62,6 @@ const post = () =>
 		}),
 	);
 
-beforeEach(() => vi.clearAllMocks());
 afterEach(() => {
 	env.RESEND_API_KEY = "re_test";
 	env.RESEND_WEBHOOK_SECRET = "whsec_test";

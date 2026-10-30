@@ -49,10 +49,7 @@ beforeAll(() =>
 	}),
 );
 afterAll(() => provider.shutdown());
-beforeEach(() => {
-	exporter.reset();
-	vi.mocked(captureException).mockClear();
-});
+beforeEach(() => exporter.reset());
 // Restore any global spy (e.g. process.stdout.write) even if a test throws
 // before its own mockRestore — a leaked stdout mock corrupts sibling tests.
 afterEach(() => vi.restoreAllMocks());

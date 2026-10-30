@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 // route.ts is a composition root over the whole app router; stub what it wires
 // so this stays a unit over the pre-procedure error report.
@@ -20,8 +20,6 @@ const { captureException } = await import(
 );
 
 describe("reportPreProcedureError", () => {
-	beforeEach(() => vi.mocked(captureException).mockClear());
-
 	it("captures a 500 with no ctx — it failed before any procedure ran", () => {
 		const error = new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 

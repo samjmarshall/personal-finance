@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { flushAfterResponse } from "~/server/observability/sdk/flush.fake";
 
 // The route is a composition root: it builds the controller once, delegates, and
@@ -48,8 +48,6 @@ const post = () =>
 			body: "{}",
 		}),
 	);
-
-beforeEach(() => vi.clearAllMocks());
 
 describe("POST /api/receipts/upload", () => {
 	it("builds the controller once over the shared service, delegates every request, and flushes after each", async () => {

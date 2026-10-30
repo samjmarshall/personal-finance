@@ -34,7 +34,6 @@ function ignored(url: string, patterns: (string | RegExp)[]): boolean {
 }
 
 beforeEach(() => {
-	vi.mocked(registerOTel).mockClear();
 	env.POSTHOG_KEY = undefined;
 });
 
