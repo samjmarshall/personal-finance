@@ -146,7 +146,13 @@ export function IncomeSkeleton() {
 export function TransactionsSkeleton() {
 	// No description: it counts the rows, so it isn't known yet.
 	return (
-		<PageSkeleton action="sm" className="max-w-6xl" title="Transaction History">
+		<PageSkeleton
+			action="sm"
+			// Import from bank (no review badge), then Add transaction.
+			actionWidths={["w-36", "w-34"]}
+			className="max-w-6xl"
+			title="Transaction History"
+		>
 			<Card>
 				<CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
 					{/* Search, then the priority and frequency filters */}
@@ -195,28 +201,39 @@ export function ImportSkeleton() {
 		>
 			<div className="grid gap-4 lg:grid-cols-5">
 				<Card className="lg:col-span-3">
-					<CardContent>
+					<CardContent className="flex flex-col">
 						<Skeleton className="my-0.5 h-4 w-24" />
 						<div className="mt-3 grid grid-cols-2 gap-3">
 							{[0, 1].map((i) => (
-								<div className="flex flex-col gap-3" key={i}>
+								<div className="flex flex-col gap-2" key={i}>
 									<Skeleton className="my-0.5 h-4 w-12" />
 									<Skeleton className="h-8" />
 								</div>
 							))}
 						</div>
-						<div className="mt-4 flex items-center gap-4">
+						<div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
 							<Skeleton className="h-8 w-24" />
-							<Skeleton className="h-3 w-64" />
+							{/* The note's own width, so it drops under the button where the
+							    real one does. On a phone it wraps to two lines. */}
+							<div className="flex max-w-full flex-col">
+								<Skeleton className="my-0.5 h-3 w-[22.625rem] max-w-full" />
+								<Skeleton className="my-0.5 h-3 w-40 sm:hidden" />
+							</div>
 						</div>
 					</CardContent>
 				</Card>
 				<Card className="lg:col-span-2">
-					<CardContent className="flex flex-col gap-3">
+					<CardContent className="flex flex-col">
 						<Skeleton className="my-0.5 h-4 w-28" />
-						<Skeleton className="h-4 w-24" />
-						<Skeleton className="h-4 w-48" />
-						<Skeleton className="h-4 w-full" />
+						{/* Status, range, then the counts, which take two lines */}
+						<div className="mt-3 flex flex-col gap-2">
+							<Skeleton className="my-0.5 h-4 w-24" />
+							<Skeleton className="my-0.5 h-4 w-48" />
+							<div className="flex flex-col">
+								<Skeleton className="my-0.5 h-4 w-full" />
+								<Skeleton className="my-0.5 h-4 w-28" />
+							</div>
+						</div>
 					</CardContent>
 				</Card>
 			</div>
