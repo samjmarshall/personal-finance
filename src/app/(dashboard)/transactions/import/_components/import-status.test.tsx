@@ -117,9 +117,15 @@ describe("ImportStatus", () => {
 		expect(screen.getByText("Added 1,204")).toBeInTheDocument();
 	});
 
-	it("calls a run that stopped without finishing what it is", () => {
+	it("calls a run that stopped without finishing what it is, and what to do", () => {
 		render(<ImportStatus latest={{ ...RUN, active: false }} />);
 
 		expect(screen.getByText("Didn't finish")).toBeInTheDocument();
+		expect(
+			screen.getByText("Run the same range again to bring in the rest."),
+		).toBeInTheDocument();
+		expect(screen.getByRole("status")).toHaveTextContent(
+			/^Import status: Didn't finish\. Run the same range again to bring in the rest\.$/,
+		);
 	});
 });

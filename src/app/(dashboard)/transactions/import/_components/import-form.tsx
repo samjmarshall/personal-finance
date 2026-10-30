@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -17,13 +17,19 @@ export function ImportForm({ locked }: { locked: boolean }) {
 	const [from, setFrom] = useState("");
 	const [to, setTo] = useState(today);
 	const [error, setError] = useState<string | null>(null);
+	const importButton = useRef<HTMLButtonElement>(null);
 
 	const utils = api.useUtils();
 	// The status only polls while a run is active, so it needs a nudge to see the new one.
 	// A refusal nudges too: "already running" means a run this page hasn't seen yet.
 	const start = api.cdr.startImport.useMutation({
+		// Show the new run now, not the last one until the refetch lands.
+		onSuccess: (run) =>
+			utils.cdr.latestImport.setData(undefined, { ...run, active: true }),
 		onSettled: () => utils.cdr.latestImport.invalidate(),
 	});
+	// Lock from the click, not from the first refetch.
+	const busy = locked || start.isPending;
 
 	function onSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -31,6 +37,9 @@ export function ImportForm({ locked }: { locked: boolean }) {
 		if (rangeError) return setError(rangeError);
 		// TODO(observability): capture an import-started event, and alert when a run
 		// ends Failed. Today a failure only shows on this page and in the logs.
+		// Enter in a date field submits too, and the fields lock once the run starts:
+		// without this, focus falls to the page.
+		importButton.current?.focus();
 		start.mutate({ from, to });
 	}
 
@@ -46,7 +55,7 @@ export function ImportForm({ locked }: { locked: boolean }) {
 					<Input
 						aria-describedby={error ? "import-range-error" : undefined}
 						aria-invalid={error ? true : undefined}
-						disabled={locked}
+						disabled={busy}
 						id="import-from"
 						max={to || today}
 						min={earliest}
@@ -64,7 +73,7 @@ export function ImportForm({ locked }: { locked: boolean }) {
 					<Input
 						aria-describedby={error ? "import-range-error" : undefined}
 						aria-invalid={error ? true : undefined}
-						disabled={locked}
+						disabled={busy}
 						id="import-to"
 						max={today}
 						min={from || earliest}
@@ -85,16 +94,17 @@ export function ImportForm({ locked }: { locked: boolean }) {
 				<Button
 					aria-describedby="import-note"
 					className="w-24"
-					disabled={locked}
+					disabled={busy}
 					// Stays focusable while locked: keeps focus after a start and lets a keyboard user hear why.
 					focusableWhenDisabled
 					loading={start.isPending}
+					ref={importButton}
 					type="submit"
 				>
 					Import
 				</Button>
 				<p className="text-xs text-muted-foreground" id="import-note">
-					{locked
+					{busy
 						? "An import is running. You can start another when it's done."
 						: "Safe to run again. It only adds what's missing, and it never deletes."}
 				</p>

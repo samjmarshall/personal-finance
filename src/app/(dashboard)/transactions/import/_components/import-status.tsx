@@ -25,6 +25,9 @@ const PHASE_LOOK: Record<
 	failed: { tone: "text-destructive", Icon: AlertCircle },
 };
 
+// The server saw no failure, so there's no reason to show; say what to do instead.
+const STALLED_NEXT = "Run the same range again to bring in the rest.";
+
 /** The latest import, or a note that there's none. Polling lives with the view. */
 export function ImportStatus({ latest }: { latest: LatestImport | null }) {
 	return (
@@ -67,7 +70,6 @@ function RunStatus({ run }: { run: LatestImport }) {
 			{showCounts && (
 				<p className="tabular flex flex-wrap gap-x-1.5 text-sm text-foreground">
 					{importCountLabels(run).map((count, index) => (
-						// Each count wraps whole, never mid-label.
 						<span className="whitespace-nowrap" key={count}>
 							{index > 0 && <span aria-hidden="true">· </span>}
 							{count}
@@ -80,11 +82,16 @@ function RunStatus({ run }: { run: LatestImport }) {
 					{run.error}
 				</p>
 			)}
+			{phase === "stalled" && (
+				<p className="text-sm text-muted-foreground">{STALLED_NEXT}</p>
+			)}
 		</div>
 	);
 }
 
 function statusAnnouncement(run: LatestImport): string {
 	const status = `Import status: ${importStatusLabel(run)}.`;
-	return run.error ? `${status} ${run.error}` : status;
+	const next =
+		run.error ?? (importPhase(run) === "stalled" ? STALLED_NEXT : null);
+	return next ? `${status} ${next}` : status;
 }

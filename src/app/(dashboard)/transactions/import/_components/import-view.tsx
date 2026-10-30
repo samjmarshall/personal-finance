@@ -7,7 +7,6 @@ import { PageHeader } from "~/components/page-header";
 import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { IMPORT_MAX_YEARS } from "~/domain/cdr";
-import { cn } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { ImportForm } from "./import-form";
 import { ImportStatus } from "./import-status";
@@ -21,17 +20,22 @@ export function ImportView() {
 		refetchInterval: (query) => (query.state.data?.active ? POLL_MS : false),
 	});
 	const active = latest?.active ?? false;
+	// Same cache as the list below, so the heading's count and the cards can't disagree.
+	const [reviews] = api.transaction.possibleDuplicates.useSuspenseQuery();
 
 	const utils = api.useUtils();
-	const wasActive = useRef(active);
+	const runId = latest?.id;
+	const seen = useRef({ id: runId, active });
 	useEffect(() => {
-		// The run just ended: its new rows and reviews are in.
-		if (wasActive.current && !active) {
+		// A run ended: its new rows and reviews are in. A short run can end before
+		// the first poll, so a new run already finished counts too.
+		const ended = seen.current.active || seen.current.id !== runId;
+		if (ended && !active) {
 			void utils.transaction.invalidate();
 			void utils.expense.consumption.invalidate();
 		}
-		wasActive.current = active;
-	}, [active, utils]);
+		seen.current = { id: runId, active };
+	}, [active, runId, utils]);
 
 	const rangeId = useId();
 	const latestId = useId();
@@ -43,8 +47,7 @@ export function ImportView() {
 			<PageHeader
 				actions={
 					<Link
-						// Merge classes: a plain join lets the base transparent border win.
-						className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+						className={buttonVariants({ variant: "outline", size: "sm" })}
 						href="/transactions"
 					>
 						<ArrowLeft aria-hidden />
@@ -84,12 +87,19 @@ export function ImportView() {
 
 			<section aria-labelledby={reviewId} className="mt-8">
 				<h2
-					className="text-base font-semibold text-foreground"
+					className="text-base font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-lg:scroll-mt-20"
 					id={reviewId}
 					ref={reviewHeading}
 					tabIndex={-1}
 				>
 					To review
+					{reviews.length > 0 && (
+						<span className="tabular font-normal text-muted-foreground">
+							<span aria-hidden="true"> · </span>
+							<span className="sr-only">, </span>
+							{reviews.length.toLocaleString("en-AU")}
+						</span>
+					)}
 				</h2>
 				<PossibleDuplicateList
 					onEmptied={() => reviewHeading.current?.focus()}

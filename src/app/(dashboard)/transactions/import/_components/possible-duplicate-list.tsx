@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
+import { Button } from "~/components/ui/button";
 import type { PossibleDuplicateReview } from "~/domain/transactions";
 import { api } from "~/trpc/react";
 import {
@@ -9,6 +11,8 @@ import {
 	type DuplicateChoice,
 	PossibleDuplicateCard,
 } from "./possible-duplicate-card";
+
+const PAGE_SIZE = 25;
 
 const DONE: Record<DuplicateChoice, string> = {
 	keep_mine: "Kept yours.",
@@ -32,12 +36,26 @@ export function PossibleDuplicateList({
 		const at = answeredAt.current;
 		if (at === null) return;
 		answeredAt.current = null;
+		// Only pick focus up if it fell to the page: a card that stayed keeps it.
+		if (document.activeElement && document.activeElement !== document.body)
+			return;
 		const next = list.current?.querySelectorAll<HTMLElement>(
 			":scope > li > article",
 		)[Math.min(at, reviews.length - 1)];
 		if (next) next.focus();
 		else emptied();
 	}, [reviews]);
+
+	// A long import can leave hundreds; all at once is a very long page and tab order.
+	const [shown, setShown] = useState(PAGE_SIZE);
+	const hidden = reviews.length - shown;
+	function showMore() {
+		// The button moves below the new cards, so focus goes to the first of them.
+		flushSync(() => setShown((count) => count + PAGE_SIZE));
+		list.current
+			?.querySelectorAll<HTMLElement>(":scope > li > article")
+			[shown]?.focus();
+	}
 
 	if (!reviews.length)
 		return (
@@ -59,7 +77,7 @@ export function PossibleDuplicateList({
 				))}
 			</ul>
 			<ul className="mt-4 space-y-3" ref={list}>
-				{reviews.map((review, index) => (
+				{reviews.slice(0, shown).map((review, index) => (
 					<li key={review.id}>
 						<ReviewItem
 							onAnswered={() => {
@@ -70,6 +88,11 @@ export function PossibleDuplicateList({
 					</li>
 				))}
 			</ul>
+			{hidden > 0 && (
+				<Button className="mt-4" onClick={showMore} variant="outline">
+					Show {Math.min(hidden, PAGE_SIZE).toLocaleString("en-AU")} more
+				</Button>
+			)}
 		</>
 	);
 }
@@ -96,7 +119,10 @@ function ReviewItem({
 			await refresh();
 		},
 		// Likely answered in another tab; the refetch drops the stale card (toast: src/trpc/query-client.ts).
-		onError: () => refresh(),
+		onError: () => {
+			onAnswered();
+			return refresh();
+		},
 	});
 	return (
 		<PossibleDuplicateCard

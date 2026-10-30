@@ -43,8 +43,8 @@ describe("PossibleDuplicateCard", () => {
 	it("shows the member's row beside the bank's, with the gaps called out", () => {
 		renderCard();
 
-		const mine = screen.getByRole("region", { name: "In Ledger" });
-		const bank = screen.getByRole("region", { name: "From the bank" });
+		const mine = screen.getByRole("group", { name: "In Ledger" });
+		const bank = screen.getByRole("group", { name: "From the bank" });
 		expect(within(mine).getByText("Groceries")).toBeInTheDocument();
 		expect(within(mine).getByText("No account")).toBeInTheDocument();
 		expect(
@@ -70,13 +70,13 @@ describe("PossibleDuplicateCard", () => {
 		expect(onResolve).toHaveBeenCalledExactlyOnceWith(choice);
 	});
 
-	it("tells each answer which row it's for", () => {
+	it("tells each answer what it does and which row it's for", () => {
 		renderCard();
 
 		expect(
 			screen.getByRole("button", { name: "Keep mine" }),
 		).toHaveAccessibleDescription(
-			`Possible duplicate of Groceries, ${formatDate(REVIEW.mine.date)}, $50.00`,
+			`Keep mine drops the bank's copy. Possible duplicate of Groceries, ${formatDate(REVIEW.mine.date)}, $50.00`,
 		);
 	});
 

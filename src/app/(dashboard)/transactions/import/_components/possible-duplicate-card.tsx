@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from "react";
+import { Fragment, type ReactNode, useId } from "react";
 import { Money } from "~/components/money";
 import { Button } from "~/components/ui/button";
 import type {
@@ -48,8 +48,8 @@ export function PossibleDuplicateCard({
 	return (
 		<article
 			aria-labelledby={titleId}
-			className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10"
-			// Focus lands here after the card before it is answered.
+			className="overflow-hidden rounded-xl bg-card text-sm ring-1 ring-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-lg:scroll-mt-20"
+			// Focus moves here once a nearby card is answered.
 			tabIndex={-1}
 		>
 			{/* Date and amount too: many cards share a description (every Coles shop). */}
@@ -78,19 +78,24 @@ export function PossibleDuplicateCard({
 				</Side>
 			</div>
 			<div className="flex flex-wrap gap-2 border-t border-border bg-muted/30 px-4 py-3">
-				{CHOICES.map(({ choice, label }) => (
-					<Button
-						// Every card has the same three names; this says which row.
-						aria-describedby={titleId}
-						disabled={pending !== null && pending !== choice}
-						key={choice}
-						loading={pending === choice}
-						onClick={() => onResolve(choice)}
-						size="sm"
-						variant="outline"
-					>
-						{label}
-					</Button>
+				{CHOICES.map(({ choice, label, effect }) => (
+					<Fragment key={choice}>
+						<Button
+							// Every card has the same three names; this says what each does, and to which row.
+							aria-describedby={`${titleId}-${choice} ${titleId}`}
+							disabled={pending !== null && pending !== choice}
+							loading={pending === choice}
+							onClick={() => onResolve(choice)}
+							size="sm"
+							variant="outline"
+						>
+							{label}
+						</Button>
+						{/* Hidden, so browsing the card doesn't read it; a description still can. */}
+						<span hidden id={`${titleId}-${choice}`}>
+							{label} {effect}
+						</span>
+					</Fragment>
 				))}
 			</div>
 		</article>
@@ -111,13 +116,14 @@ function Side({
 }) {
 	const labelId = useId();
 	return (
-		<section aria-labelledby={labelId} className="min-w-0 px-4 py-3.5">
-			<h4
+		// biome-ignore lint/a11y/useSemanticElements: not a form, so no fieldset; a section would add two landmarks per card
+		<div aria-labelledby={labelId} className="min-w-0 px-4 py-3.5" role="group">
+			<p
 				className="text-xs font-medium tracking-wide text-muted-foreground uppercase"
 				id={labelId}
 			>
 				{label}
-			</h4>
+			</p>
 			<div className="mt-1.5 flex items-baseline justify-between gap-3">
 				{/* Wraps, never cut: the tail is often what tells two rows apart. */}
 				<p className="min-w-0 font-medium wrap-anywhere text-foreground">
@@ -136,6 +142,6 @@ function Side({
 				<span>{row.accountName ?? "No account"}</span>
 			</p>
 			{children}
-		</section>
+		</div>
 	);
 }
