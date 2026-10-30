@@ -10,9 +10,10 @@ import { env } from "~/env";
 import { stringifyThrown } from "~/server/observability/errors/thrown";
 import { type BaggageEntries, setBaggage } from "./baggage";
 
-// The one app tracer, keyed on the OTel service name. A no-op proxy until the SDK
-// registers (otel.ts), so importing it at module load is safe everywhere.
-export const tracer = trace.getTracer(env.PROJECT_NAME);
+// The one app tracer, keyed on the OTel service name. Looked up per span, not at
+// module load: @opentelemetry/api >=1.10 ships separate ESM and CJS copies, and a
+// tracer taken early from one copy never sees the SDK registered (otel.ts) via the other.
+const getTracer = () => trace.getTracer(env.PROJECT_NAME);
 
 type WithSpanOptions = SpanOptions & {
 	parent?: Context;
@@ -31,7 +32,7 @@ export function withSpan<T>(
 	fn: (span: Span) => Promise<T>,
 ): Promise<T> {
 	const base = parent ?? context.active();
-	return tracer.startActiveSpan(
+	return getTracer().startActiveSpan(
 		name,
 		options,
 		baggage ? setBaggage(baggage, base) : base,
