@@ -20,8 +20,8 @@ import {
 import type { CdrImport, CdrSyncState, LatestImport } from "./cdr.interface";
 import { isDeadConsent, isSyncingConsent } from "./consent";
 import {
+	type DayRange,
 	IMPORT_MAX_YEARS,
-	type ImportWindow,
 	importEarliestDay,
 	importRangeError,
 	importWindows,
@@ -39,7 +39,7 @@ export type {
 	CdrSetInBalanceInput,
 	CdrSetNicknameInput,
 	CdrSyncState,
-	ImportWindow,
+	DayRange,
 	LatestImport,
 	RedbarkAccount,
 	RedbarkBalance,

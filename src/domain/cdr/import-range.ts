@@ -28,7 +28,8 @@ export function importRangeError(
 	return null;
 }
 
-export interface ImportWindow {
+/** A whole import's range, or one window of it. */
+export interface DayRange {
 	/** `YYYY-MM-DD`, inclusive. */
 	from: string;
 	/** `YYYY-MM-DD`, inclusive. */
@@ -36,9 +37,9 @@ export interface ImportWindow {
 }
 
 /** Splits an inclusive day range into windows of at most `WINDOW_DAYS` days, with no gap or overlap. */
-export function importWindows(from: string, to: string): ImportWindow[] {
+export function importWindows(from: string, to: string): DayRange[] {
 	const end = Date.parse(to);
-	const windows: ImportWindow[] = [];
+	const windows: DayRange[] = [];
 	for (
 		let start = Date.parse(from);
 		start <= end;

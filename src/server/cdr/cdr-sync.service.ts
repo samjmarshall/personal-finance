@@ -1,7 +1,7 @@
 import {
 	anchorFromBalances,
 	type CdrSyncState,
-	type ImportWindow,
+	type DayRange,
 	importWindows,
 	inBalanceByDefault,
 	isDeadConsent,
@@ -31,7 +31,7 @@ const MAX_IMPORT_CHUNKS = 997;
 const IMPORT_FAILED = "The import stopped on an error. Try again later.";
 
 /** One account's slice of an import; dates are inclusive `YYYY-MM-DD`. */
-export interface ImportChunk extends ImportWindow {
+export interface ImportChunk extends DayRange {
 	accountId: string;
 	accountName: string;
 }
@@ -163,7 +163,7 @@ export class CdrSyncService {
 	 * Moves an unfinished import to running and returns its day range. Null when it
 	 * already finished (a repeat delivery), so the caller runs nothing.
 	 */
-	async claimImport(importId: number): Promise<ImportWindow | null> {
+	async claimImport(importId: number): Promise<DayRange | null> {
 		const row = await this.repository.markImportRunning(importId);
 		if (!row) {
 			this.logger.info("cdr import already claimed", { importId });
@@ -175,7 +175,7 @@ export class CdrSyncService {
 	/** Splits a claimed import into chunks. No chunks when it failed the import instead. */
 	async planImport(
 		importId: number,
-		{ from, to }: ImportWindow,
+		{ from, to }: DayRange,
 	): Promise<ImportPlan> {
 		if (!this.redbark) return this.failPlan(importId, "Bank sync isn't set up");
 
