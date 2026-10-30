@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v6
 
       # The default wrapper echoes stdout, which corrupts `$(terraform output -raw)`.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -124,7 +124,7 @@ jobs:
         run: echo "number=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number // empty')" >> "$GITHUB_OUTPUT"
 
       # The wrapper echoes extra output that tfcmt would parse as plan output.
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -297,7 +297,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
