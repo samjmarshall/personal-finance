@@ -365,17 +365,18 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 
 	applyReconcile(plan: ReconcilePlan): Promise<ReconcileCounts> {
 		return this.db.transaction(async (tx) => {
-			const extra: SyncedTransaction[] = [];
+			// Added on top of plan.add: a bank row whose adopt missed, a released review's.
+			const alsoAdd: SyncedTransaction[] = [];
 			// A held review's bank row can come in this batch too; that copy is newer.
-			const refetched = new Map<number, SyncedTransaction>();
+			const newerCopy = new Map<number, SyncedTransaction>();
 			for (const { reviewId, row } of plan.flag)
-				if (reviewId !== null) refetched.set(reviewId, row);
+				if (reviewId !== null) newerCopy.set(reviewId, row);
 			const releasedIds = new Set<number>();
 			let adopted = 0;
 			let released = 0;
 			for (const { transactionId, row, heldBy } of plan.adopt) {
 				if (!(await this.adopt(tx, transactionId, row))) {
-					extra.push(row);
+					alsoAdd.push(row);
 					continue;
 				}
 				adopted++;
@@ -385,21 +386,21 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				const taken = await this.takeReview(tx, heldBy);
 				released += taken.length;
 				if (taken.length) releasedIds.add(heldBy);
-				extra.push(
+				alsoAdd.push(
 					...taken.map(
-						({ transactionId: _, ...bank }) => refetched.get(heldBy) ?? bank,
+						({ transactionId: _, ...bank }) => newerCopy.get(heldBy) ?? bank,
 					),
 				);
 			}
 
-			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...extra]);
+			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...alsoAdd]);
 
-			const fresh = plan.flag.filter((f) => f.reviewId === null);
-			const flagged = fresh.length
+			const newFlags = plan.flag.filter((f) => f.reviewId === null);
+			const inserted = newFlags.length
 				? await tx
 						.insert(possibleDuplicates)
 						.values(
-							fresh.map(({ transactionId, row }) => ({
+							newFlags.map(({ transactionId, row }) => ({
 								transactionId,
 								...row,
 							})),
@@ -413,12 +414,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 						.returning({ id: possibleDuplicates.id })
 				: [];
 
-			const stillPending = plan.flag.flatMap(({ reviewId, row }) =>
+			const refreshedReviews = plan.flag.flatMap(({ reviewId, row }) =>
 				reviewId === null || releasedIds.has(reviewId)
 					? []
 					: [{ reviewId, row }],
 			);
-			for (const { reviewId, row } of stillPending) {
+			for (const { reviewId, row } of refreshedReviews) {
 				// Not an upsert: a review resolved since the read must not come back.
 				await tx
 					.update(possibleDuplicates)
@@ -432,16 +433,17 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					.where(and(eq(possibleDuplicates.id, reviewId), isPending));
 			}
 
+			// A new flag the insert skipped already has a review: known, not flagged.
+			const alreadyFlagged = newFlags.length - inserted.length;
 			return {
-				added: plan.add.length + extra.length,
+				added: plan.add.length + alsoAdd.length,
 				adopted,
-				flagged: flagged.length - released,
+				flagged: inserted.length - released,
 				known:
 					plan.refresh.length +
 					plan.skipped.length +
-					stillPending.length +
-					fresh.length -
-					flagged.length,
+					refreshedReviews.length +
+					alreadyFlagged,
 			};
 		});
 	}
