@@ -242,19 +242,61 @@ export function ImportSkeleton() {
 			{/* Flex, so the bars' margins add up like the text lines' heights instead of collapsing. */}
 			<div className="mt-8 flex flex-col">
 				<Skeleton className="my-1 h-4 w-24" />
-				{/* The intro wraps to two lines below about 28rem. */}
+				{/* The intro wraps to two lines below about 46.5rem, three below about 23.5rem. */}
 				<div className="mt-1 flex flex-col">
-					<Skeleton className="my-0.5 h-4 w-full max-w-xl" />
-					<Skeleton className="my-0.5 h-4 w-40 min-[28rem]:hidden" />
+					<Skeleton className="my-0.5 h-4 w-[42.375rem] max-w-full" />
+					<Skeleton className="my-0.5 h-4 w-40 min-[46.5rem]:hidden" />
+					<Skeleton className="my-0.5 h-4 w-24 min-[23.5rem]:hidden" />
 				</div>
 				<div className="mt-2 flex flex-col gap-0.5">
-					{["w-48", "w-64", "w-44"].map((width) => (
+					{["w-54", "w-70", "w-55"].map((width) => (
 						<Skeleton className={cn("my-0.5 h-4", width)} key={width} />
 					))}
 				</div>
-				<div className="mt-4 space-y-3">
-					<Skeleton className="h-40 rounded-xl" />
-					<Skeleton className="h-40 rounded-xl" />
+				{/* The first pile, open. Same container steps as its rows. */}
+				<div className="@container/pile mt-4 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+					<div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-border bg-muted/30 px-3 py-3 @lg/pile:px-4">
+						<div className="flex min-w-0 flex-col">
+							<Skeleton className="my-0.5 h-4 w-38" />
+							{/* The why line wraps to two lines below about 27rem. */}
+							<div className="mt-0.5 flex flex-col pl-5.5">
+								<Skeleton className="my-0.5 h-3 w-97 max-w-full" />
+								<Skeleton className="my-0.5 h-3 w-24 @min-[27.125rem]/pile:hidden" />
+							</div>
+						</div>
+						<Skeleton className="h-7 w-42" />
+					</div>
+					<div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1fr)_11rem_17.5rem] gap-x-4 border-b border-border px-4 py-2 @4xl/pile:grid">
+						{["w-8", "w-20", "w-16", "w-11"].map((width) => (
+							<Skeleton className={cn("my-0.5 h-3", width)} key={width} />
+						))}
+					</div>
+					<div className="divide-y divide-border">
+						{[0, 1, 2, 3].map((row) => (
+							<div
+								className="grid items-start gap-x-4 gap-y-3 px-3 py-3 @lg/pile:grid-cols-2 @lg/pile:px-4 @4xl/pile:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_11rem_17.5rem] @4xl/pile:py-2.5"
+								key={row}
+							>
+								{/* Yours, then the bank's: label, description, then date · amount · account */}
+								{[0, 1].map((side) => (
+									<div className="flex flex-col" key={side}>
+										<Skeleton className="mt-0.5 mb-1 h-3 w-12 @4xl/pile:hidden" />
+										<Skeleton className="my-0.5 h-4 w-3/4" />
+										<Skeleton className="mt-1 mb-0.5 h-3 w-46 max-w-full" />
+									</div>
+								))}
+								<Skeleton className="h-5.5 w-36 rounded-full @lg/pile:col-span-2 @2xl/pile:col-span-1" />
+								<Skeleton className="h-7 rounded-lg @lg/pile:col-span-2 @2xl/pile:col-span-1" />
+							</div>
+						))}
+					</div>
+				</div>
+				<div className="sticky bottom-4 z-10 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-card/95 px-4 py-3 shadow-lg ring-1 ring-foreground/10">
+					<Skeleton className="my-0.5 h-4 w-30" />
+					<div className="flex gap-2">
+						<Skeleton className="h-7 w-13.5" />
+						<Skeleton className="h-7 w-30" />
+					</div>
 				</div>
 			</div>
 		</PageSkeleton>

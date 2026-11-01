@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CdrImportStatus } from "~/lib/constants";
+import type { PossibleDuplicateReview } from "~/domain/transactions";
+import { CdrImportStatus, Provenance } from "~/lib/constants";
 import {
 	amountGapLabel,
+	appliedLabel,
 	dayGapLabel,
+	duplicatePile,
+	fillLabel,
 	importCountLabels,
 	importRangeLabel,
 	importStatusLabel,
@@ -94,5 +98,77 @@ describe("amountGapLabel", () => {
 
 	it("is null to the cent", () => {
 		expect(amountGapLabel(0.1 + 0.2, 0.3)).toBeNull();
+	});
+});
+
+// Bank days are UTC midnight; yours are Sydney midnight (13:00 UTC the day before, AEDT).
+function review(
+	id: number,
+	{ bankDay, mineDay }: { bankDay: string; mineDay: string },
+): PossibleDuplicateReview {
+	const mineDate = new Date(`${mineDay}T00:00:00.000Z`);
+	mineDate.setUTCHours(-11);
+	return {
+		id,
+		bank: {
+			date: new Date(`${bankDay}T00:00:00.000Z`),
+			amount: 9,
+			description: `BANK ${id}`,
+			accountName: "Everyday",
+		},
+		mine: {
+			id: id + 100,
+			date: mineDate,
+			amount: 9,
+			description: `Mine ${id}`,
+			accountName: null,
+			provenance: Provenance.Manual,
+		},
+	};
+}
+
+describe("duplicatePile", () => {
+	it("sorts the nearest day first, then the newest", () => {
+		const far = review(1, { bankDay: "2026-02-08", mineDay: "2026-02-03" });
+		const sameDay = review(2, { bankDay: "2026-01-10", mineDay: "2026-01-10" });
+		const oneOld = review(3, { bankDay: "2026-01-02", mineDay: "2026-01-01" });
+		const oneNew = review(4, { bankDay: "2026-03-02", mineDay: "2026-03-01" });
+
+		const pile = duplicatePile([far, sameDay, oneOld, oneNew]);
+
+		expect(pile.reviews.map((r) => r.id)).toEqual([2, 4, 3, 1]);
+		expect(pile.suggestion).toBe("use_bank");
+	});
+});
+
+describe("fillLabel", () => {
+	it.each([
+		[12, 12, "Use bank's for all 12"],
+		[4, 12, "Use bank's for the other 4"],
+		[1, 12, "Use bank's for the last one"],
+		[1, 1, "Use bank's for this one"],
+		[0, 12, "All answered"],
+	])("%i of %i unanswered → %s", (unanswered, total, label) => {
+		expect(fillLabel("Use bank's", unanswered, total)).toBe(label);
+	});
+});
+
+describe("appliedLabel", () => {
+	it("counts what was applied", () => {
+		expect(appliedLabel({ resolved: 1, gone: 0, taken: 0 })).toBe(
+			"Applied 1 answer.",
+		);
+		expect(appliedLabel({ resolved: 3, gone: 0, taken: 0 })).toBe(
+			"Applied 3 answers.",
+		);
+	});
+
+	it("says which were already answered and which still need one", () => {
+		expect(appliedLabel({ resolved: 2, gone: 1, taken: 2 })).toBe(
+			"Applied 2 answers. 1 was already answered. 2 still need an answer: the bank's row is already in your transactions.",
+		);
+		expect(appliedLabel({ resolved: 0, gone: 2, taken: 1 })).toBe(
+			"2 were already answered. 1 still needs an answer: the bank's row is already in your transactions.",
+		);
 	});
 });
