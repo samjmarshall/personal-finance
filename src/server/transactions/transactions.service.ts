@@ -268,7 +268,7 @@ export class TransactionsService {
 		);
 	}
 
-	/** 404s a missing row; refuses a changed amount or date on a synced row. True when synced. */
+	// Missing or already answered counts as gone; a bank row held elsewhere counts as taken.
 	private async resolveOne({
 		id,
 		choice,
@@ -287,6 +287,7 @@ export class TransactionsService {
 		}
 	}
 
+	/** 404s a missing row; refuses a changed amount or date on a synced row. True when synced. */
 	private async guardBankValues(
 		id: number,
 		{ amount, date }: Pick<TransactionUpdateInput, "amount" | "date">,
