@@ -772,7 +772,7 @@ money in unlinked banks is not counted. Precedence stays pure latest-`asOf`.
     - Per bank: a heading with "{n} of {m} counted" over a card list of rows.
     - A Total row under the groups, lined up with the balances: `cashTotal` and "{n} of {m}
       accounts counted"; "—" and "Waiting on {n} new account(s)" while any is undecided.
-    - Footer "Recounted at the next bank sync." Empty list → "No bank accounts yet. They show
+    - Footer "Your dashboard balance updates at the next bank sync." Empty list → "No bank accounts yet. They show
       here after the first bank sync."
     - `setInBalance` and `setNickname` update the `cdr.syncState` cache at once (cancel the
       in-flight read, patch the row, then mutate; `onSuccess` puts the saved row in, `onError`
@@ -980,8 +980,8 @@ Not needed for this phase's Success. Pick up when this page is next touched.
   at 375 (+31px).
 - The Total's `w-8` spacer and the skeleton's switch pill copy the switch's size, so they drift
   if it changes.
-- On a phone the "Bank accounts" tab starts off-screen in the settings tab rail; only a half-cut
-  tab hints that it scrolls (`settings-view.tsx`).
+- ~~On a phone the "Bank accounts" tab starts off-screen in the settings tab rail.~~ Fixed: the
+  rail wraps instead of scrolling (`settings-view.tsx`).
 - The global error toast shows raw error text (`src/trpc/query-client.ts`).
 
 ---
@@ -1467,10 +1467,14 @@ staged table. Four drafts sit on local branch `prototype/import-review-variants`
 time (no), B a table where you pick answers then apply them all (yes), C an inbox (no), D rows
 grouped by what differs (yes). The page now joins B and D:
 
-- **One pile: Same amount.** Only the date or wording differs, nearest day first. The pile
-  folds, and its fill button puts **Use bank's** on rows with no answer yet. A second pile,
-  **Different amount**, shipped first; the member reviewed all 137 and none was a real copy,
-  so near amounts are no longer flagged (see Matcher).
+- **Two piles, by description.** Every pair shares its amount, so the words tell them apart:
+  `sharedWords` counts the distinct words (case-blind, split on anything but letters and
+  digits) both descriptions share. **Similar description** (`SIMILAR_WORDS` = 3 or more; fill
+  **Use bank's**) comes before **Different description** (fill **Both are real**). Two is too
+  few: "PAYPAL" and "AUS" alone join Netflix to Spotify, and "99 BIKES" a transfer to a
+  purchase. Each pile folds, nearest day first; a fill only answers rows with no answer yet.
+  A **Different amount** pile shipped first; the member reviewed all 137 and none was a real
+  copy, so near amounts are no longer flagged (see Matcher).
 - **Stage, then apply.** Each row has a radio answer; a second click clears it. A sticky bar
   shows "N of M answered", **Clear** and **Apply N answers**. One apply calls
   `transaction.resolveDuplicates` (replaces `resolveDuplicate`; up to 200 answers a call, and
@@ -1481,6 +1485,9 @@ grouped by what differs (yes). The page now joins B and D:
   of a missed copy for far less review noise. Migration
   `drizzle/0025_release_near_amount_reviews.sql` answers each pending different-amount review
   **Both are real** (adds its bank row, drops the review); it runs on production at deploy.
+  Pairs now sort by most shared words, then nearest day (adopt: words, then ids), so two
+  same-priced subscriptions a day apart no longer cross. `findMatchCandidates` reads
+  `description` for it. Reviews already crossed stay; the member answers them **Use bank's**.
 - The 25-row paging is gone. `possible-duplicate-piles.tsx` replaces
   `possible-duplicate-card.tsx`. The table steps by the pile's width (container queries), not
   the screen's, since the sidebar takes 16rem from `lg` up.
