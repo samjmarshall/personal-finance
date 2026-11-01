@@ -31,7 +31,12 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { useHydrating } from "~/hooks/use-hydrating";
-import { Frequency, Priority, priorityStyle } from "~/lib/constants";
+import {
+	Frequency,
+	Priority,
+	Provenance,
+	priorityStyle,
+} from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { TransactionForm } from "./transaction-form";
@@ -410,6 +415,14 @@ function TransactionsTable({
 										<span className="font-medium text-foreground">
 											{tx.description}
 										</span>
+										{/* Its date and amount are locked, so say so before Edit does. */}
+										{tx.provenance !== Provenance.Manual && (
+											<span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+												<Landmark aria-hidden className="size-3 shrink-0" />
+												<span className="sr-only">From the bank: </span>
+												{tx.accountName ?? "Bank"}
+											</span>
+										)}
 										{tx.notes && (
 											<span className="mt-0.5 block text-xs text-muted-foreground">
 												{tx.notes}

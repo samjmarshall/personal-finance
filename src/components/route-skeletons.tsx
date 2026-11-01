@@ -253,18 +253,18 @@ export function ImportSkeleton() {
 						<Skeleton className={cn("my-0.5 h-4", width)} key={width} />
 					))}
 				</div>
-				{/* The first pile, open. Same container steps as its rows. */}
+				{/* The first pile, open: Similar description, first whenever it has rows. Same container steps as its rows. */}
 				<div className="@container/pile mt-4 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
 					<div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-border bg-muted/30 px-3 py-3 @lg/pile:px-4">
 						<div className="flex min-w-0 flex-col">
-							<Skeleton className="my-0.5 h-4 w-38" />
-							{/* The why line wraps to two lines below about 27rem. */}
+							<Skeleton className="my-0.5 h-4 w-42" />
+							{/* The why line wraps to two lines below about 23.6rem. */}
 							<div className="mt-0.5 flex flex-col pl-5.5">
-								<Skeleton className="my-0.5 h-3 w-97 max-w-full" />
-								<Skeleton className="my-0.5 h-3 w-24 @min-[27.125rem]/pile:hidden" />
+								<Skeleton className="my-0.5 h-3 w-83 max-w-full" />
+								<Skeleton className="my-0.5 h-3 w-22 @min-[23.625rem]/pile:hidden" />
 							</div>
 						</div>
-						<Skeleton className="h-7 w-42" />
+						<Skeleton className="h-7 w-38.5" />
 					</div>
 					<div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1fr)_11rem_17.5rem] gap-x-4 border-b border-border px-4 py-2 @4xl/pile:grid">
 						{["w-8", "w-20", "w-16", "w-11"].map((width) => (
@@ -369,7 +369,7 @@ export function SettingsSkeleton() {
 			title="Settings"
 		>
 			<div className="grid gap-6 lg:grid-cols-[184px_1fr] lg:gap-10">
-				<div className="flex gap-1 overflow-x-auto border-b border-border lg:h-fit lg:flex-col lg:border-b-0 lg:border-l">
+				<div className="flex flex-wrap gap-1 border-b border-border lg:h-fit lg:flex-col lg:border-b-0 lg:border-l">
 					{[
 						{ tab: "appearance", width: "w-24" },
 						{ tab: "pay-cycle", width: "w-20" },

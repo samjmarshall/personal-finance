@@ -11,7 +11,7 @@ import {
 	NICKNAME_MAX_LENGTH,
 } from "~/domain/cdr";
 import { cn } from "~/lib/utils";
-import { formatBalance } from "./bank-accounts.display";
+import { formatBalance, spokenAccountNumber } from "./bank-accounts.display";
 
 export type BankAccountRowProps = {
 	account: Pick<
@@ -56,7 +56,9 @@ export function BankAccountRow({
 
 	const label = accountLabel(account);
 	// Two accounts can share a bank's name; the number tells them apart.
-	const name = [label, account.accountNumber].filter(Boolean).join(" ");
+	const spokenNumber =
+		account.accountNumber && spokenAccountNumber(account.accountNumber);
+	const name = [label, spokenNumber].filter(Boolean).join(" ");
 	const undecided = account.inBalance === null;
 
 	function open() {
@@ -125,7 +127,8 @@ export function BankAccountRow({
 				<p className="flex flex-wrap gap-x-2 text-muted-foreground text-xs">
 					{account.accountNumber && (
 						<span className="font-mono" id={numberId}>
-							{account.accountNumber}
+							<span aria-hidden="true">{account.accountNumber}</span>
+							<span className="sr-only">{spokenNumber}</span>
 						</span>
 					)}
 					{account.nickname && account.accountName && (

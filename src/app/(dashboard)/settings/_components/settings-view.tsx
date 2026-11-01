@@ -7,7 +7,7 @@ import {
 	type LucideIcon,
 	Palette,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { AsyncBoundary } from "~/components/async-boundary";
 import { PageHeader } from "~/components/page-header";
 import { cn } from "~/lib/utils";
@@ -83,25 +83,6 @@ const sections: Section[] = [
 
 export function SettingsView({ inboundAddress }: SettingsViewProps) {
 	const [active, setActive] = useState<SectionId>("appearance");
-	const navRef = useRef<HTMLElement | null>(null);
-
-	// The rail is a horizontally scrolling strip on narrow screens, wide enough to
-	// overflow once there are four tabs, so the active tab can sit past the edge
-	// and render half-clipped — which reads as broken.
-	//
-	// Explicit maths rather than scrollIntoView: `inline: "nearest"` leaves a tab
-	// that overhangs the right edge unscrolled in Chromium, and "start"/"end"/
-	// "center" all move the rail even when the tab is already fully visible.
-	useEffect(() => {
-		const nav = navRef.current;
-		const tab = nav?.querySelector<HTMLElement>(`[data-section="${active}"]`);
-		if (!nav || !tab) return;
-
-		const overhang =
-			tab.offsetLeft + tab.offsetWidth - (nav.scrollLeft + nav.clientWidth);
-		if (overhang > 0) nav.scrollLeft += overhang;
-		else if (tab.offsetLeft < nav.scrollLeft) nav.scrollLeft = tab.offsetLeft;
-	}, [active]);
 
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
@@ -112,11 +93,11 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 
 			<div className="mt-8 grid gap-6 lg:grid-cols-[184px_1fr] lg:gap-10">
 				{/* One rail, two shapes: an underlined strip on narrow screens, a sticky
-				    vertical index once there's a column to spare. */}
+				    vertical index once there's a column to spare. The strip wraps on a
+				    phone, so no tab hides past the edge. */}
 				<nav
 					aria-label="Settings sections"
-					className="flex gap-1 overflow-x-auto border-border border-b lg:sticky lg:top-8 lg:h-fit lg:flex-col lg:border-b-0 lg:border-l"
-					ref={navRef}
+					className="flex flex-wrap gap-1 border-border border-b lg:sticky lg:top-8 lg:h-fit lg:flex-col lg:border-b-0 lg:border-l"
 				>
 					{sections.map(({ id, label, icon: Icon }) => (
 						<button
@@ -127,7 +108,6 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 									? "border-primary text-foreground"
 									: "border-transparent text-muted-foreground hover:text-foreground",
 							)}
-							data-section={id}
 							key={id}
 							onClick={() => setActive(id)}
 							type="button"

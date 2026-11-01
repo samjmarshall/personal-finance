@@ -4,6 +4,7 @@ import {
 	formatBalance,
 	groupByBank,
 	newAccountsNote,
+	spokenAccountNumber,
 	totalNote,
 } from "./bank-accounts.display";
 
@@ -122,5 +123,15 @@ describe("formatBalance", () => {
 
 	it("shows a positive balance plainly", () => {
 		expect(formatBalance(5489.69)).toBe("$5,489.69");
+	});
+});
+
+describe("spokenAccountNumber", () => {
+	it("says the last digits, not the mask", () => {
+		expect(spokenAccountNumber("xxxx8273")).toBe("ending 8273");
+	});
+
+	it("keeps a number with no trailing digits", () => {
+		expect(spokenAccountNumber("Savings")).toBe("Savings");
 	});
 });

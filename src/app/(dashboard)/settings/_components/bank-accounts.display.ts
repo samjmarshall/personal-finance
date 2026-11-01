@@ -69,6 +69,12 @@ export function newAccountsNote(accounts: Counted[]): string | null {
 		: `${undecided} new accounts need a choice. Find them marked New below.`;
 }
 
+/** "xxxx8273" → "ending 8273", so a screen reader skips the x's. Unchanged with no trailing digits. */
+export function spokenAccountNumber(masked: string): string {
+	const last = /\d+$/.exec(masked)?.[0];
+	return last ? `ending ${last}` : masked;
+}
+
 export function formatBalance(amount: number): string {
 	return `${amount < 0 ? "-" : ""}${formatCurrency(Math.abs(amount))}`;
 }

@@ -135,9 +135,10 @@ export function BankAccountsSection() {
 						{/* Switch-wide, so the Total lines up under the balances. */}
 						<span aria-hidden="true" className="w-8 shrink-0" />
 					</div>
-					{/* The sync writes the balance, so a change waits for its next run. */}
+					{/* The sync writes the balance, so a change waits for its next run. The
+					    Total above moves at once, so name the number that waits. */}
 					<p className="mt-3 text-muted-foreground text-xs">
-						Recounted at the next bank sync.
+						Your dashboard balance updates at the next bank sync.
 					</p>
 				</>
 			) : (

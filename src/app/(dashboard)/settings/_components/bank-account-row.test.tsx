@@ -29,12 +29,12 @@ function renderRow(over: Partial<BankAccountRowProps["account"]> = {}) {
 
 const toggle = (name = "Everyday Offset") =>
 	screen.getByRole("switch", {
-		name: `Count ${name} xxxx8273 in cash balance`,
+		name: `Count ${name} ending 8273 in cash balance`,
 	});
 const pencil = (name = "Everyday Offset") =>
-	screen.getByRole("button", { name: `Rename ${name} xxxx8273` });
+	screen.getByRole("button", { name: `Rename ${name} ending 8273` });
 const nameBox = (name = "Everyday Offset") =>
-	screen.getByRole("textbox", { name: `New name for ${name} xxxx8273` });
+	screen.getByRole("textbox", { name: `New name for ${name} ending 8273` });
 
 describe("BankAccountRow", () => {
 	it.each([

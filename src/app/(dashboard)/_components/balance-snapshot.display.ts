@@ -5,7 +5,7 @@ const LABELS: Record<BalanceSource, string> = {
 	[BalanceSource.Manual]: "Entered by you",
 };
 
-// Who set the balance, so a member knows whether the next sync will replace it.
+// Whose number the projection rests on: the bank's sync or the member's own.
 export function balanceSourceLabel(source: BalanceSource): string {
 	return LABELS[source];
 }
