@@ -99,10 +99,11 @@ describe("planReconcile", () => {
 	});
 
 	it.each([
-		["3 days and 4% off", "2026-11-13", 104, "flag"],
-		["7 days and exactly 5% off", "2026-11-17", 105, "flag"],
+		["3 days off", "2026-11-13", 100, "flag"],
+		["7 days off", "2026-11-17", 100, "flag"],
 		["8 days off", "2026-11-18", 100, "add"],
-		["6% off", "2026-11-10", 106, "add"],
+		["1 cent off on the day", "2026-11-10", 100.01, "add"],
+		["1 cent off 3 days later", "2026-11-13", 99.99, "add"],
 		["the opposite sign", "2026-11-10", -100, "add"],
 	])("with %s it does a %s", (_, day, amount, outcome) => {
 		const row = bank("t1", day, amount);
@@ -154,11 +155,20 @@ describe("planReconcile", () => {
 		});
 	});
 
-	it("pairs the closest day first among near pairs", () => {
+	it("flags a same-amount row days off, never a near amount on the day", () => {
+		const row = bank("t1", "2026-11-10", 30);
+		const result = plan({
+			incoming: [row],
+			candidates: [mine(1, "2026-11-10", 29.5), mine(2, "2026-11-13", 30)],
+		});
+		expect(result.flag).toEqual([{ transactionId: 2, row, reviewId: null }]);
+	});
+
+	it("pairs the closest day first among same-amount pairs", () => {
 		const row = bank("t1", "2026-11-10", 100);
 		const result = plan({
 			incoming: [row],
-			candidates: [mine(1, "2026-11-14", 101), mine(2, "2026-11-11", 103)],
+			candidates: [mine(1, "2026-11-14", 100), mine(2, "2026-11-11", 100)],
 		});
 		expect(result.flag).toEqual([{ transactionId: 2, row, reviewId: null }]);
 	});
@@ -196,7 +206,7 @@ describe("planReconcile", () => {
 	});
 
 	it("never flags a held row a second time", () => {
-		const row = bank("t1", "2026-11-11", 5.1);
+		const row = bank("t1", "2026-11-11", 5);
 		expect(
 			plan({
 				incoming: [row],

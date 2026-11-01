@@ -4,8 +4,6 @@ import type { SyncedTransaction, Transaction } from "./transaction.interface";
 
 /** Furthest apart, in calendar days, a close pair may be. */
 export const MATCH_DAYS = 7;
-/** Largest share of the household row's amount a close pair may differ by. */
-export const MATCH_SHARE = 0.05;
 
 export interface ReconcileReview {
 	id: number;
@@ -68,15 +66,15 @@ interface Pair {
 	bank: SyncedTransaction;
 	candidate: MatchCandidate;
 	dayGap: number;
-	centGap: number;
 }
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * Decides, per bank row: refresh a known one, refresh or skip its review, adopt an
- * exact household row, flag a close one, or add it. Pairs one-to-one, exact first,
- * in an order fixed by the data alone, so a retry gives the same plan.
+ * exact household row, flag a close one (same cent, other day), or add it. Pairs
+ * one-to-one, exact first, then nearest day, in an order fixed by the data alone,
+ * so a retry gives the same plan.
  */
 export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	const known = new Set(input.knownIds);
@@ -139,14 +137,11 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		for (const candidate of input.candidates) {
 			if (!canAdopt(candidate) && !canFlag(candidate)) continue;
 			const c = side(candidate);
+			// A real copy keeps its amount; a near one was always another purchase in review.
+			if (b.cents !== c.cents) continue;
 			const dayGap = Math.abs(b.day - c.day);
 			if (dayGap > MATCH_DAYS) continue;
-			pairs.push({
-				bank,
-				candidate,
-				dayGap,
-				centGap: Math.abs(b.cents - c.cents),
-			});
+			pairs.push({ bank, candidate, dayGap });
 		}
 	}
 
@@ -161,7 +156,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	};
 
 	const exact = pairs
-		.filter((p) => p.dayGap === 0 && p.centGap === 0 && canAdopt(p.candidate))
+		.filter((p) => p.dayGap === 0 && canAdopt(p.candidate))
 		.sort(
 			(x, y) =>
 				byId(x.bank.externalId, y.bank.externalId) ||
@@ -177,19 +172,10 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	}
 
 	const close = pairs
-		.filter((p) => {
-			const b = side(p.bank);
-			const c = side(p.candidate);
-			return (
-				canFlag(p.candidate) &&
-				Math.sign(b.cents) === Math.sign(c.cents) &&
-				p.centGap <= Math.abs(c.cents) * MATCH_SHARE
-			);
-		})
+		.filter((p) => canFlag(p.candidate))
 		.sort(
 			(x, y) =>
 				x.dayGap - y.dayGap ||
-				x.centGap - y.centGap ||
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,
 		);

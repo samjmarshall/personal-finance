@@ -176,6 +176,13 @@
 			"when": 1793164959780,
 			"tag": "0024_reflective_ares",
 			"breakpoints": true
+		},
+		{
+			"idx": 25,
+			"version": "7",
+			"when": 1793509160039,
+			"tag": "0025_release_near_amount_reviews",
+			"breakpoints": true
 		}
 	]
 }
