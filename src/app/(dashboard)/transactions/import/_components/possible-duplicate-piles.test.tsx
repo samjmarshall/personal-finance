@@ -34,8 +34,13 @@ function review(
 	};
 }
 
-const COFFEE = review(1, "Coffee", { bank: 5, mine: 5, days: 2 });
-const GROCERIES = review(2, "Groceries", { bank: 80, mine: 80, days: 1 });
+// The bank's description is yours in capitals after "BANK": 3 words shared is similar, 1 is not.
+const COFFEE = review(1, "Coffee Club Brisbane", { bank: 5, mine: 5, days: 2 });
+const GROCERIES = review(2, "Coles Groceries Redcliffe", {
+	bank: 80,
+	mine: 80,
+	days: 1,
+});
 const VERCEL = review(3, "Vercel", { bank: 30, mine: 30 });
 const REVIEWS = [COFFEE, GROCERIES, VERCEL];
 
@@ -61,16 +66,17 @@ function renderPiles({
 
 const answerFor = (description: string) =>
 	screen.getByRole("group", {
-		name: new RegExp(`^Answer for ${description},`),
+		name: new RegExp(`^Answer for ${description}`),
 	});
 
 describe("PossibleDuplicatePiles", () => {
-	it("shows every row in one same-amount pile", () => {
+	it("puts similar descriptions in the first pile and different ones last", () => {
 		renderPiles();
 
 		const piles = screen.getAllByRole("heading", { level: 3 });
 		expect(piles.map((pile) => pile.textContent)).toEqual([
-			"Same amount · , 3",
+			"Similar description · , 2",
+			"Different description · , 1",
 		]);
 	});
 
@@ -93,7 +99,7 @@ describe("PossibleDuplicatePiles", () => {
 
 		expect(
 			screen.getByRole("group", {
-				name: `Answer for Coffee, ${formatDate(COFFEE.mine.date)}, $5.00`,
+				name: `Answer for Coffee Club Brisbane, ${formatDate(COFFEE.mine.date)}, $5.00`,
 			}),
 		).toBeInTheDocument();
 	});
@@ -133,17 +139,20 @@ describe("PossibleDuplicatePiles", () => {
 			within(answerFor("Coffee")).getByRole("radio", { name: "Keep mine" }),
 		);
 		await user.click(
-			screen.getByRole("button", { name: "Use bank's for the other 2" }),
+			screen.getByRole("button", { name: "Use bank's for the last one" }),
+		);
+		await user.click(
+			screen.getByRole("button", { name: "Both are real for this one" }),
 		);
 
 		expect(
-			screen.getByRole("button", { name: "All answered" }),
-		).toBeInTheDocument();
+			screen.getAllByRole("button", { name: "All answered" }),
+		).toHaveLength(2);
 		await user.click(screen.getByRole("button", { name: "Apply 3 answers" }));
 		expect(onApply).toHaveBeenCalledWith([
 			{ id: 1, choice: "keep_mine" },
 			{ id: 2, choice: "use_bank" },
-			{ id: 3, choice: "use_bank" },
+			{ id: 3, choice: "both_real" },
 		]);
 	});
 
@@ -158,7 +167,7 @@ describe("PossibleDuplicatePiles", () => {
 		expect(keep).not.toBeChecked();
 
 		await user.click(
-			screen.getByRole("button", { name: "Use bank's for all 3" }),
+			screen.getByRole("button", { name: "Use bank's for all 2" }),
 		);
 		await user.click(screen.getByRole("button", { name: "Clear" }));
 		expect(screen.getByText(/of 3 answered/)).toHaveTextContent(
@@ -213,13 +222,15 @@ describe("PossibleDuplicatePiles", () => {
 		for (const radio of screen.getAllByRole("radio"))
 			expect(radio).toBeDisabled();
 		expect(
-			screen.getByRole("button", { name: "Use bank's for all 3" }),
+			screen.getByRole("button", { name: "Use bank's for all 2" }),
 		).toHaveAttribute("aria-disabled", "true");
 	});
 
 	it("folds a pile away", async () => {
 		const { user } = renderPiles();
-		const trigger = screen.getByRole("button", { name: /^Same amount/ });
+		const trigger = screen.getByRole("button", {
+			name: /^Similar description/,
+		});
 
 		await user.click(trigger);
 

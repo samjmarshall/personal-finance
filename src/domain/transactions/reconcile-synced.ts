@@ -5,6 +5,27 @@ import type { SyncedTransaction, Transaction } from "./transaction.interface";
 /** Furthest apart, in calendar days, a close pair may be. */
 export const MATCH_DAYS = 7;
 
+/** Fewest shared words for two descriptions to count as similar. Two is only "PAYPAL" and "AUS". */
+export const SIMILAR_WORDS = 3;
+
+/** Distinct words, case-blind; any run of non-letters or digits splits ("*SPOTIFY*P3E65F" is two). */
+export function descriptionWords(text: string): Set<string> {
+	return new Set(
+		text
+			.toUpperCase()
+			.split(/[^\p{L}\p{N}]+/u)
+			.filter(Boolean),
+	);
+}
+
+/** How many distinct words two descriptions share. */
+export function sharedWords(a: string, b: string): number {
+	const words = descriptionWords(b);
+	let shared = 0;
+	for (const word of descriptionWords(a)) if (words.has(word)) shared++;
+	return shared;
+}
+
 export interface ReconcileReview {
 	id: number;
 	externalId: string;
@@ -16,7 +37,12 @@ export interface ReconcileReview {
 export interface MatchCandidate
 	extends Pick<
 		Transaction,
-		"id" | "date" | "amount" | "externalId" | "externalAccountId"
+		| "id"
+		| "date"
+		| "amount"
+		| "description"
+		| "externalId"
+		| "externalAccountId"
 	> {
 	heldBy: number | null;
 }
@@ -66,6 +92,7 @@ interface Pair {
 	bank: SyncedTransaction;
 	candidate: MatchCandidate;
 	dayGap: number;
+	words: number;
 }
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -73,8 +100,8 @@ const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 /**
  * Decides, per bank row: refresh a known one, refresh or skip its review, adopt an
  * exact household row, flag a close one (same cent, other day), or add it. Pairs
- * one-to-one, exact first, then nearest day, in an order fixed by the data alone,
- * so a retry gives the same plan.
+ * one-to-one, exact first; within each, most shared words, then nearest day, in an
+ * order fixed by the data alone, so a retry gives the same plan.
  */
 export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	const known = new Set(input.knownIds);
@@ -141,7 +168,12 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 			if (b.cents !== c.cents) continue;
 			const dayGap = Math.abs(b.day - c.day);
 			if (dayGap > MATCH_DAYS) continue;
-			pairs.push({ bank, candidate, dayGap });
+			pairs.push({
+				bank,
+				candidate,
+				dayGap,
+				words: sharedWords(bank.description, candidate.description),
+			});
 		}
 	}
 
@@ -155,10 +187,12 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		return true;
 	};
 
+	// Words before days: two same-priced subscriptions a day apart must not cross.
 	const exact = pairs
 		.filter((p) => p.dayGap === 0 && canAdopt(p.candidate))
 		.sort(
 			(x, y) =>
+				y.words - x.words ||
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,
 		);
@@ -175,6 +209,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		.filter((p) => canFlag(p.candidate))
 		.sort(
 			(x, y) =>
+				y.words - x.words ||
 				x.dayGap - y.dayGap ||
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,

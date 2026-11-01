@@ -1,9 +1,11 @@
 import type { CdrImport, LatestImport } from "~/domain/cdr";
-import type {
-	PossibleDuplicateReview,
-	ReconcileCounts,
-	ResolveDuplicateInput,
-	ResolveDuplicatesResult,
+import {
+	type PossibleDuplicateReview,
+	type ReconcileCounts,
+	type ResolveDuplicateInput,
+	type ResolveDuplicatesResult,
+	SIMILAR_WORDS,
+	sharedWords,
 } from "~/domain/transactions";
 import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import {
@@ -47,7 +49,7 @@ export function importStatusLabel(
 	return PHASE_LABEL[importPhase(run)];
 }
 
-/** `flagged` nets out released reviews, so it can dip below 0; shown floored. */
+/** This run's outcomes; the "To review" heading counts every waiting one. `flagged` nets out released reviews, so it can dip below 0; shown floored. */
 export function importCountLabels({
 	added,
 	adopted,
@@ -57,7 +59,7 @@ export function importCountLabels({
 	return [
 		`Added ${formatCount(added)}`,
 		`Matched to yours ${formatCount(adopted)}`,
-		`To review ${formatCount(Math.max(flagged, 0))}`,
+		`Flagged ${formatCount(Math.max(flagged, 0))}`,
 		`Already here ${formatCount(known)}`,
 	];
 }
@@ -109,6 +111,7 @@ export const CHOICES: {
 ];
 
 export interface DuplicatePile {
+	key: "similar_description" | "different_description";
 	title: string;
 	why: string;
 	/** What the pile's fill button picks for its unanswered rows. */
@@ -116,24 +119,43 @@ export interface DuplicatePile {
 	reviews: PossibleDuplicateReview[];
 }
 
-/** Only a same-amount pair is flagged, so one pile. Strongest match first: nearest day, then newest. */
-export function duplicatePile(
-	reviews: PossibleDuplicateReview[],
-): DuplicatePile {
-	return {
-		title: "Same amount",
-		why: "Only the date or the wording differs. Almost always the same purchase.",
+// Every pair shares its amount to the cent, so the words are what tell a copy from a twin.
+const PILES: Omit<DuplicatePile, "reviews">[] = [
+	{
+		key: "similar_description",
+		title: "Similar description",
+		why: "Most of the words match. Almost always the same purchase.",
 		suggestion: "use_bank",
-		reviews: reviews
-			.map((review) => ({ review, days: dayGap(review) }))
-			.sort(
-				(x, y) =>
-					x.days - y.days ||
-					y.review.bank.date.getTime() - x.review.bank.date.getTime() ||
-					y.review.id - x.review.id,
-			)
-			.map(({ review }) => review),
-	};
+	},
+	{
+		key: "different_description",
+		title: "Different description",
+		why: "The words don't match. Most likely two purchases.",
+		suggestion: "both_real",
+	},
+];
+
+/** Reviews by how alike the descriptions are, similar first; empty piles left out. Each pile is nearest day first, then newest. */
+export function duplicatePiles(
+	reviews: PossibleDuplicateReview[],
+): DuplicatePile[] {
+	const sorted = reviews
+		.map((review) => ({ review, days: dayGap(review) }))
+		.sort(
+			(x, y) =>
+				x.days - y.days ||
+				y.review.bank.date.getTime() - x.review.bank.date.getTime() ||
+				y.review.id - x.review.id,
+		)
+		.map(({ review }) => review);
+	return PILES.map((pile) => ({
+		...pile,
+		reviews: sorted.filter(
+			({ bank, mine }) =>
+				sharedWords(bank.description, mine.description) >= SIMILAR_WORDS ===
+				(pile.key === "similar_description"),
+		),
+	})).filter((pile) => pile.reviews.length > 0);
 }
 
 /** How far apart the two rows are, in household days. */

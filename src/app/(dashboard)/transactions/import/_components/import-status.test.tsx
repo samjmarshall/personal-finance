@@ -34,7 +34,7 @@ describe("ImportStatus", () => {
 		for (const count of [
 			"Added 1,204",
 			"Matched to yours 3",
-			"To review 2",
+			"Flagged 2",
 			"Already here 40",
 		])
 			expect(screen.getByText(count)).toBeInTheDocument();

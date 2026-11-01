@@ -5,7 +5,7 @@ import {
 	amountGapLabel,
 	appliedLabel,
 	dayGapLabel,
-	duplicatePile,
+	duplicatePiles,
 	fillLabel,
 	importCountLabels,
 	importRangeLabel,
@@ -33,7 +33,7 @@ describe("importCountLabels", () => {
 		).toEqual([
 			"Added 12",
 			"Matched to yours 30",
-			"To review 3",
+			"Flagged 3",
 			"Already here 950",
 		]);
 	});
@@ -44,7 +44,7 @@ describe("importCountLabels", () => {
 		).toEqual([
 			"Added 1,200",
 			"Matched to yours 0",
-			"To review 0",
+			"Flagged 0",
 			"Already here 0",
 		]);
 	});
@@ -53,7 +53,7 @@ describe("importCountLabels", () => {
 	it("never shows fewer than zero to review", () => {
 		expect(
 			importCountLabels({ added: 2, adopted: 2, flagged: -2, known: 0 }),
-		).toContain("To review 0");
+		).toContain("Flagged 0");
 	});
 });
 
@@ -104,7 +104,12 @@ describe("amountGapLabel", () => {
 // Bank days are UTC midnight; yours are Sydney midnight (13:00 UTC the day before, AEDT).
 function review(
 	id: number,
-	{ bankDay, mineDay }: { bankDay: string; mineDay: string },
+	{
+		bankDay,
+		mineDay,
+		bank = "BANK",
+		mine = "Mine",
+	}: { bankDay: string; mineDay: string; bank?: string; mine?: string },
 ): PossibleDuplicateReview {
 	const mineDate = new Date(`${mineDay}T00:00:00.000Z`);
 	mineDate.setUTCHours(-11);
@@ -113,31 +118,63 @@ function review(
 		bank: {
 			date: new Date(`${bankDay}T00:00:00.000Z`),
 			amount: 9,
-			description: `BANK ${id}`,
+			description: bank,
 			accountName: "Everyday",
 		},
 		mine: {
 			id: id + 100,
 			date: mineDate,
 			amount: 9,
-			description: `Mine ${id}`,
+			description: mine,
 			accountName: null,
 			provenance: Provenance.Manual,
 		},
 	};
 }
 
-describe("duplicatePile", () => {
+const ids = (piles: ReturnType<typeof duplicatePiles>) =>
+	piles.map((pile) => [pile.key, pile.reviews.map((r) => r.id)]);
+
+describe("duplicatePiles", () => {
+	it("puts 3 shared words in Similar and 2 in Different", () => {
+		const netflix = review(1, {
+			bankDay: "2026-01-13",
+			mineDay: "2026-01-14",
+			bank: "PAYPAL *NETFLIX AUS 4029357733 AUS",
+			mine: "PAYPAL *NETFLIX AUS AUS",
+		});
+		const crossed = review(2, {
+			bankDay: "2026-01-13",
+			mineDay: "2026-01-14",
+			bank: "PAYPAL *SPOTIFY*P3E65F 4029357733 AUS",
+			mine: "PAYPAL *NETFLIX AUS AUS",
+		});
+
+		const piles = duplicatePiles([crossed, netflix]);
+
+		expect(ids(piles)).toEqual([
+			["similar_description", [1]],
+			["different_description", [2]],
+		]);
+		expect(piles.map((pile) => pile.suggestion)).toEqual([
+			"use_bank",
+			"both_real",
+		]);
+	});
+
 	it("sorts the nearest day first, then the newest", () => {
 		const far = review(1, { bankDay: "2026-02-08", mineDay: "2026-02-03" });
 		const sameDay = review(2, { bankDay: "2026-01-10", mineDay: "2026-01-10" });
 		const oneOld = review(3, { bankDay: "2026-01-02", mineDay: "2026-01-01" });
 		const oneNew = review(4, { bankDay: "2026-03-02", mineDay: "2026-03-01" });
 
-		const pile = duplicatePile([far, sameDay, oneOld, oneNew]);
+		expect(ids(duplicatePiles([far, sameDay, oneOld, oneNew]))).toEqual([
+			["different_description", [2, 4, 3, 1]],
+		]);
+	});
 
-		expect(pile.reviews.map((r) => r.id)).toEqual([2, 4, 3, 1]);
-		expect(pile.suggestion).toBe("use_bank");
+	it("leaves out a pile with no rows", () => {
+		expect(duplicatePiles([])).toEqual([]);
 	});
 });
 

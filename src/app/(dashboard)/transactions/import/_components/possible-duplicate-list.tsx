@@ -68,7 +68,8 @@ export function PossibleDuplicateList({
 	if (!reviews.length)
 		return (
 			<p className="mt-4 rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-				Nothing to review.
+				Nothing to review. When an import finds a bank row that may copy one of
+				yours, it shows here.
 			</p>
 		);
 	return (

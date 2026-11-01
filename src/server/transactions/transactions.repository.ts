@@ -328,6 +328,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				id: transactions.id,
 				date: transactions.date,
 				amount: transactions.amount,
+				description: transactions.description,
 				externalId: transactions.externalId,
 				externalAccountId: transactions.externalAccountId,
 				heldBy: possibleDuplicates.id,

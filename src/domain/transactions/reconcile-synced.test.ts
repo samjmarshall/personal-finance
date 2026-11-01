@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { PossibleDuplicateStatus, Provenance } from "~/lib/constants";
 import {
+	descriptionWords,
 	type MatchCandidate,
 	planReconcile,
 	type ReconcileInput,
 	type ReconcileReview,
+	sharedWords,
 } from "./reconcile-synced";
 import type { SyncedTransaction } from "./transaction.interface";
 
@@ -41,6 +43,7 @@ function mine(
 		id,
 		date,
 		amount,
+		description: `Mine ${id}`,
 		externalId: null,
 		externalAccountId: null,
 		heldBy: null,
@@ -69,6 +72,38 @@ function review(
 }
 
 const EMPTY = { refresh: [], add: [], adopt: [], flag: [], skipped: [] };
+
+describe("sharedWords", () => {
+	it("counts distinct words both share", () => {
+		expect(
+			sharedWords(
+				"PAYPAL *NETFLIX AUS AUS",
+				"PAYPAL *NETFLIX AUS 4029357733 AUS",
+			),
+		).toBe(3);
+	});
+
+	it("ignores case and splits on anything but letters and digits", () => {
+		expect([...descriptionWords("Transfer To Sam, *SPOTIFY*P3E65F")]).toEqual([
+			"TRANSFER",
+			"TO",
+			"SAM",
+			"SPOTIFY",
+			"P3E65F",
+		]);
+		expect(sharedWords("99 Bikes - Lawnton", "CommBank App 99 BIKES")).toBe(2);
+	});
+});
+
+// Two subscriptions at one price, yours a day after the bank's (as seen on import).
+const NETFLIX_BANK = {
+	...bank("a_netflix", "2026-01-13", 20.99),
+	description: "PAYPAL *NETFLIX AUS 4029357733 AUS",
+};
+const SPOTIFY_BANK = {
+	...bank("b_spotify", "2026-01-13", 20.99),
+	description: "PAYPAL *SPOTIFY*P3E65F 4029357733 AUS",
+};
 
 describe("planReconcile", () => {
 	it("refreshes a known bank id and never matches it", () => {
@@ -171,6 +206,55 @@ describe("planReconcile", () => {
 			candidates: [mine(1, "2026-11-14", 100), mine(2, "2026-11-11", 100)],
 		});
 		expect(result.flag).toEqual([{ transactionId: 2, row, reviewId: null }]);
+	});
+
+	it("pairs the most shared words first, so same-priced rows never cross", () => {
+		const result = plan({
+			incoming: [NETFLIX_BANK, SPOTIFY_BANK],
+			candidates: [
+				mine(1, "2026-01-14", 20.99, {
+					description: "PAYPAL *SPOTIFY*P3E65F AUS",
+				}),
+				mine(2, "2026-01-14", 20.99, {
+					description: "PAYPAL *NETFLIX AUS AUS",
+				}),
+			],
+		});
+		expect(result.flag).toEqual([
+			{ transactionId: 2, row: NETFLIX_BANK, reviewId: null },
+			{ transactionId: 1, row: SPOTIFY_BANK, reviewId: null },
+		]);
+	});
+
+	it("adopts by the most shared words on the same day", () => {
+		const result = plan({
+			incoming: [NETFLIX_BANK, SPOTIFY_BANK],
+			candidates: [
+				mine(1, "2026-01-13", 20.99, {
+					description: "PAYPAL *SPOTIFY*P3E65F AUS",
+				}),
+				mine(2, "2026-01-13", 20.99, {
+					description: "PAYPAL *NETFLIX AUS AUS",
+				}),
+			],
+		});
+		expect(result.adopt).toEqual([
+			{ transactionId: 2, row: NETFLIX_BANK, heldBy: null },
+			{ transactionId: 1, row: SPOTIFY_BANK, heldBy: null },
+		]);
+	});
+
+	it("puts more shared words before a nearer day", () => {
+		const result = plan({
+			incoming: [NETFLIX_BANK],
+			candidates: [
+				mine(1, "2026-01-14", 20.99, { description: "Groceries" }),
+				mine(2, "2026-01-19", 20.99, { description: "Netflix" }),
+			],
+		});
+		expect(result.flag).toEqual([
+			{ transactionId: 2, row: NETFLIX_BANK, reviewId: null },
+		]);
 	});
 
 	it("refreshes a pending review instead of matching its bank row again", () => {

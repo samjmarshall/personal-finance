@@ -20,7 +20,7 @@ import {
 	type DuplicateChoice,
 	type DuplicatePile,
 	dayGapLabel,
-	duplicatePile,
+	duplicatePiles,
 	fillLabel,
 } from "./import.display";
 
@@ -39,7 +39,7 @@ export function PossibleDuplicatePiles({
 }) {
 	const [staged, setStaged] = useState<Staged>({});
 	const legendId = useId();
-	const pile = duplicatePile(reviews);
+	const piles = duplicatePiles(reviews);
 	// A pick for a row that has since gone (another tab, a re-import) is dropped here.
 	const answers = reviews.flatMap(({ id }) => {
 		const choice = staged[id];
@@ -55,10 +55,10 @@ export function PossibleDuplicatePiles({
 		});
 	}
 
-	function fill() {
+	function fill({ reviews: rows, suggestion }: DuplicatePile) {
 		setStaged((current) => {
 			const next = { ...current };
-			for (const { id } of pile.reviews) next[id] ??= pile.suggestion;
+			for (const { id } of rows) next[id] ??= suggestion;
 			return next;
 		});
 	}
@@ -89,14 +89,19 @@ export function PossibleDuplicatePiles({
 				))}
 			</ul>
 
-			<Pile
-				applying={applying}
-				legendId={legendId}
-				onFill={fill}
-				onPick={pick}
-				pile={pile}
-				staged={staged}
-			/>
+			<div className="mt-4 space-y-4">
+				{piles.map((pile) => (
+					<Pile
+						applying={applying}
+						key={pile.key}
+						legendId={legendId}
+						onFill={() => fill(pile)}
+						onPick={pick}
+						pile={pile}
+						staged={staged}
+					/>
+				))}
+			</div>
 
 			<div className="sticky bottom-4 z-10 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-card/95 px-4 py-3 shadow-lg ring-1 ring-foreground/10 backdrop-blur-sm">
 				<p
@@ -158,7 +163,7 @@ function Pile({
 	return (
 		// Sized by its own width, not the screen's: the sidebar takes 16rem from lg up.
 		<Collapsible
-			className="@container/pile mt-4 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
+			className="@container/pile overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
 			defaultOpen
 		>
 			{/* No rule under a closed pile: the card edge is right there. */}

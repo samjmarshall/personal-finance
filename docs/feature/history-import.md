@@ -112,7 +112,9 @@ stateDiagram-v2
 **What each bank row becomes** (`planReconcile`):
 - **Already here** (`known`): the bank id is already in Ledger or waiting in a review, or a member already chose Keep mine on it. Ledger refreshes the row or review instead of doubling it.
 - **Matched to yours** (`adopted`): same household day and same amount as a row you made. Your row takes the bank's id, date and amount, but keeps your description and edits. If that row was waiting in a review, the review closes and Ledger adds its bank row.
-- **To review** (`flagged`): the same amount as a row you made, on another day within 7 days. A near amount is added, not flagged: a real copy keeps its amount. A `possible_duplicate` waits on the page.
+- **Flagged** (`flagged`): the same amount as a row you made, on another day within 7 days. A near amount is added, not flagged: a real copy keeps its amount. A `possible_duplicate` waits on the page.
+
+When a bank row could pair with more than one of yours, the pair whose descriptions share the most words wins, then the nearest day. A word is any run of letters or digits, case-blind, counted once.
 - **Added**: no match. Added as a new bank row.
 
 **Review answers**:
@@ -120,7 +122,11 @@ stateDiagram-v2
 - **Use bank's**: your row takes the bank's date and amount.
 - **Both are real**: adds the bank's row too.
 
-After an answer, the card leaves, a toast confirms it, and focus moves to the next card, or to the To review heading when none are left.
+Reviews sit in two piles:
+- **Similar description**: 3 or more shared words. Its fill button picks **Use bank's**.
+- **Different description**: the rest. Its fill button picks **Both are real**.
+
+A fill only answers rows with no answer yet. **Apply** sends every answer at once, and a toast confirms it.
 
 **Edge cases**:
 - Ranges that run past 7 years or after today, or a From after the To → stopped in the form, and again by the server with the same words.

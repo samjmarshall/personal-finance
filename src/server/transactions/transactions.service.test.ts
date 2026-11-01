@@ -278,6 +278,7 @@ describe("reconcileSynced", () => {
 					id: 1,
 					date: new Date("2026-10-14T13:00:00.000Z"),
 					amount: 42.5,
+					description: "Coffee",
 					externalId: null,
 					externalAccountId: null,
 					heldBy: null,

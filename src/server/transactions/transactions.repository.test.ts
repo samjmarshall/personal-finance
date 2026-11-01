@@ -538,7 +538,7 @@ describe("findReviews", () => {
 describe("findMatchCandidates", () => {
 	it("selects household and retired-account rows no kept review holds", async () => {
 		const { repository, queries } = harness(() => [
-			[1, "2026-10-14T13:00:00.000Z", 42.5, null, null, 9],
+			[1, "2026-10-14T13:00:00.000Z", 42.5, "Coffee", null, null, 9],
 		]);
 
 		const rows = await repository.findMatchCandidates({
@@ -552,6 +552,7 @@ describe("findMatchCandidates", () => {
 				id: 1,
 				date: new Date("2026-10-14T13:00:00.000Z"),
 				amount: 42.5,
+				description: "Coffee",
 				externalId: null,
 				externalAccountId: null,
 				heldBy: 9,
@@ -569,7 +570,7 @@ describe("findMatchCandidates", () => {
 			      "acct_2",
 			      "kept",
 			    ],
-			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."externalId", "transaction"."externalAccountId", "possible_duplicate"."id" from "transaction" left join "possible_duplicate" on ("possible_duplicate"."transactionId" = "transaction"."id" and "possible_duplicate"."status" = $1) where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
+			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."externalId", "transaction"."externalAccountId", "possible_duplicate"."id" from "transaction" left join "possible_duplicate" on ("possible_duplicate"."transactionId" = "transaction"."id" and "possible_duplicate"."status" = $1) where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
 			  },
 			]
 		`);

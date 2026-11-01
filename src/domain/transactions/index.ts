@@ -7,6 +7,8 @@ import {
 	type ReconcileInput,
 	type ReconcilePlan,
 	type ReconcileReview,
+	SIMILAR_WORDS,
+	sharedWords,
 } from "./reconcile-synced";
 import {
 	type LinkExpenseInput,
@@ -72,6 +74,8 @@ export {
 	RESOLVE_DUPLICATES_MAX,
 	resolveDuplicateDto,
 	resolveDuplicatesDto,
+	SIMILAR_WORDS,
+	sharedWords,
 	transactionCreateDto,
 	transactionListQueryDto,
 	transactionUpdateDto,
