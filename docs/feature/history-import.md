@@ -112,7 +112,7 @@ stateDiagram-v2
 **What each bank row becomes** (`planReconcile`):
 - **Already here** (`known`): the bank id is already in Ledger or waiting in a review, or a member already chose Keep mine on it. Ledger refreshes the row or review instead of doubling it.
 - **Matched to yours** (`adopted`): same household day and same amount as a row you made. Your row takes the bank's id, date and amount, but keeps your description and edits. If that row was waiting in a review, the review closes and Ledger adds its bank row.
-- **To review** (`flagged`): within 7 days and 5% of a row you made. A `possible_duplicate` waits on the page.
+- **To review** (`flagged`): the same amount as a row you made, on another day within 7 days. A near amount is added, not flagged: a real copy keeps its amount. A `possible_duplicate` waits on the page.
 - **Added**: no match. Added as a new bank row.
 
 **Review answers**:

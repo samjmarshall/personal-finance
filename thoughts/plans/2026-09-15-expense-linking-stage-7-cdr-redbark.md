@@ -153,8 +153,8 @@ Per linked account, it:
 2. Maps them into the app's Spend-positive glossary with a fail-loud sign check.
 3. Reconciles them through `TransactionsService.reconcileSynced`. A known bank id refreshes
    **bank-owned columns only**. A household row with no bank id and the same date and amount is
-   adopted. A close one (same direction, within 5% and 7 days) becomes a pending possible
-   duplicate. Anything else is added.
+   adopted. A close one (same amount, another day within 7 days; within 5% until Phase 8
+   reopened) becomes a pending possible duplicate. Anything else is added.
 4. Only then advances the account's cursor in `cdr_sync_state` (never backwards).
 
 History comes from `/transactions/import`. A member picks a date range, and an Inngest job
@@ -186,9 +186,9 @@ every import.
 - **Deleted synced rows.** A member-deleted bank row comes back when a later run's 14-day
   overlap or an import covers its date. No tombstones. Only a **Keep mine** choice is
   remembered.
-- **Tuning the match.** The window is fixed at 7 days and 5% of the member's amount.
-- **Bulk review or undo.** Each possible duplicate is resolved one at a time, and a choice
-  can't be undone in the UI.
+- **Tuning the match.** The window is fixed at 7 days and the same amount to the cent.
+- **Undo.** A review choice can't be undone in the UI. (Bulk review moved in: Phase 8,
+  reopened 2026-11-01.)
 - **Choosing accounts per import.** An import covers every account the daily sync would sync.
 - **In-app per-user consent / redirect flow** — banks are linked manually in RedBark's
   dashboard (adr017 credential posture).
@@ -1462,6 +1462,29 @@ in 90-day chunks and reconciles each one (Phase 7). The page shows progress and 
 possible duplicate. A request can't fetch 7 years inside a page load, and RedBark caps a
 window at 5,000 rows.
 
+**Reopened 2026-11-01 (prototype B + D).** The review list moves from one card per review to a
+staged table. Four drafts sit on local branch `prototype/import-review-variants`: A one at a
+time (no), B a table where you pick answers then apply them all (yes), C an inbox (no), D rows
+grouped by what differs (yes). The page now joins B and D:
+
+- **One pile: Same amount.** Only the date or wording differs, nearest day first. The pile
+  folds, and its fill button puts **Use bank's** on rows with no answer yet. A second pile,
+  **Different amount**, shipped first; the member reviewed all 137 and none was a real copy,
+  so near amounts are no longer flagged (see Matcher).
+- **Stage, then apply.** Each row has a radio answer; a second click clears it. A sticky bar
+  shows "N of M answered", **Clear** and **Apply N answers**. One apply calls
+  `transaction.resolveDuplicates` (replaces `resolveDuplicate`; up to 200 answers a call, and
+  the page splits a bigger batch). Each answer lands on its own: a gone or taken review is
+  counted, not thrown, and the toast says how many.
+- **Matcher.** `planReconcile` flags only the same amount to the cent, on another day within
+  7 days; a near amount is added. `MATCH_SHARE` is gone. The member accepts the small chance
+  of a missed copy for far less review noise. Migration
+  `drizzle/0025_release_near_amount_reviews.sql` answers each pending different-amount review
+  **Both are real** (adds its bank row, drops the review); it runs on production at deploy.
+- The 25-row paging is gone. `possible-duplicate-piles.tsx` replaces
+  `possible-duplicate-card.tsx`. The table steps by the pile's width (container queries), not
+  the screen's, since the sidebar takes 16rem from `lg` up.
+
 ### Changes
 - `src/lib/constants.ts` — `export enum CdrImportStatus { Queued = "queued", Running =
   "running", Done = "done", Failed = "failed" }`.
@@ -1636,7 +1659,7 @@ window at 5,000 rows.
     live ids and adds counts; a 429 in a chunk throws a retryable `CdrSyncError` with its wait,
     a mapping throw a non-retryable one, a reconcile error passes through unwrapped; an import
     never advances a mark or writes an anchor.
-  - `cdr.inngest.controller.test.ts` — `cdr-import`'s id, event trigger, retries and shared
+  - `cdr.inngstaest.controller.test.ts` — `cdr-import`'s id, event trigger, retries and shared
     concurrency key; `cdr-sync` now has the same key. With a fake `step`, the handler runs
     claim, plan, one step per chunk with a stable id, then finish; a `null` claim runs no plan,
     chunk or finish; a plan step that fails once after the claim still plans and finishes on
