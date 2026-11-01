@@ -69,6 +69,14 @@ export interface PossibleDuplicateReview {
 	>;
 }
 
+// What one apply did. `gone`: already answered or no longer pending. `taken`: the
+// bank row already sits on another row.
+export interface ResolveDuplicatesResult {
+	resolved: number;
+	gone: number;
+	taken: number;
+}
+
 // What one reconcile did. `known` counts refreshed rows and reviews, and bank
 // rows a member already kept theirs over. Flagged is net pending reviews: a
 // released review becomes an added row, so it can go below 0.

@@ -6,6 +6,8 @@ import {
 	planReconcile,
 	type ReconcileCounts,
 	type ResolveDuplicateInput,
+	type ResolveDuplicatesInput,
+	type ResolveDuplicatesResult,
 	type SyncedTransaction,
 	type Transaction,
 	type TransactionCreateInput,
@@ -45,9 +47,6 @@ const LINKED_CATEGORY_MESSAGE =
 const NOT_FOUND_MESSAGE = "Transaction not found.";
 // Each re-sync rewrites a synced row's amount and date, so an edit would vanish.
 const BANK_OWNED_MESSAGE = "Amount and date come from the bank.";
-const DUPLICATE_NOT_FOUND_MESSAGE = "Possible duplicate not found.";
-// Use bank's moves the bank id onto the household row; another row may hold it.
-const BANK_ROW_TAKEN_MESSAGE = "That bank row is already in your transactions.";
 
 const MS_PER_DAY = 86_400_000;
 // A Sydney day starts the UTC day before: scan a day wider each side, +1 more
@@ -172,19 +171,14 @@ export class TransactionsService {
 		return this.repository.countPendingDuplicates();
 	}
 
-	async resolveDuplicate({ id, choice }: ResolveDuplicateInput): Promise<void> {
-		const resolve = {
-			keep_mine: () => this.repository.keepMine(id),
-			use_bank: () => this.repository.useBanks(id),
-			both_real: () => this.repository.bothReal(id),
-		}[choice];
-		const found = await resolve().catch((error: unknown) => {
-			if (isPgViolation(error, PgViolation.UniqueViolation)) {
-				throw new ConflictError(BANK_ROW_TAKEN_MESSAGE, { cause: error });
-			}
-			throw error;
-		});
-		if (!found) throw new NotFoundError(DUPLICATE_NOT_FOUND_MESSAGE);
+	// One at a time, each on its own: a gone or taken review is counted, not
+	// thrown, so the rest still land.
+	async resolveDuplicates({
+		answers,
+	}: ResolveDuplicatesInput): Promise<ResolveDuplicatesResult> {
+		const result: ResolveDuplicatesResult = { resolved: 0, gone: 0, taken: 0 };
+		for (const answer of answers) result[await this.resolveOne(answer)] += 1;
+		return result;
 	}
 
 	// A missing id 404s at the first read; a row deleted between that read and
@@ -275,6 +269,24 @@ export class TransactionsService {
 	}
 
 	/** 404s a missing row; refuses a changed amount or date on a synced row. True when synced. */
+	private async resolveOne({
+		id,
+		choice,
+	}: ResolveDuplicateInput): Promise<keyof ResolveDuplicatesResult> {
+		const resolve = {
+			keep_mine: () => this.repository.keepMine(id),
+			use_bank: () => this.repository.useBanks(id),
+			both_real: () => this.repository.bothReal(id),
+		}[choice];
+		try {
+			return (await resolve()) ? "resolved" : "gone";
+		} catch (error) {
+			// Use bank's moves the bank id onto the household row; another row may hold it.
+			if (isPgViolation(error, PgViolation.UniqueViolation)) return "taken";
+			throw error;
+		}
+	}
+
 	private async guardBankValues(
 		id: number,
 		{ amount, date }: Pick<TransactionUpdateInput, "amount" | "date">,

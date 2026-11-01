@@ -148,36 +148,45 @@ describe("transaction router", () => {
 		expect([list.calls, count.calls]).toEqual([[[]], [[]]]);
 	});
 
-	it("resolveDuplicate hands the service the id and choice", async () => {
-		const { method, calls } = recorder(undefined);
-
-		await callerWith({ resolveDuplicate: method }).transaction.resolveDuplicate(
+	it("resolveDuplicates hands the service the answers and returns its tally", async () => {
+		const tally = { resolved: 2, gone: 0, taken: 0 };
+		const { method, calls } = recorder(tally);
+		const answers = [
 			{ id: 4, choice: "use_bank" },
-		);
-
-		expect(calls).toEqual([[{ id: 4, choice: "use_bank" }]]);
-	});
-
-	it("resolveDuplicate refuses an unknown choice before reaching the service", async () => {
-		const { method, calls } = recorder(undefined);
+			{ id: 5, choice: "keep_mine" },
+		] as const;
 
 		await expect(
-			callerWith({ resolveDuplicate: method }).transaction.resolveDuplicate({
-				id: 4,
-				choice: "merge" as never,
+			callerWith({
+				resolveDuplicates: method,
+			}).transaction.resolveDuplicates({ answers: [...answers] }),
+		).resolves.toEqual(tally);
+		expect(calls).toEqual([[{ answers }]]);
+	});
+
+	it("resolveDuplicates refuses an unknown choice before reaching the service", async () => {
+		const { method, calls } = recorder({ resolved: 0, gone: 0, taken: 0 });
+
+		await expect(
+			callerWith({
+				resolveDuplicates: method,
+			}).transaction.resolveDuplicates({
+				answers: [{ id: 4, choice: "merge" as never }],
 			}),
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
 		expect(calls).toEqual([]);
 	});
 
-	it("rejects a signed-out resolveDuplicate before reaching the service", async () => {
-		const { method, calls } = recorder(undefined);
+	it("rejects a signed-out resolveDuplicates before reaching the service", async () => {
+		const { method, calls } = recorder({ resolved: 0, gone: 0, taken: 0 });
 
 		await expect(
 			callerWith(
-				{ resolveDuplicate: method },
+				{ resolveDuplicates: method },
 				null,
-			).transaction.resolveDuplicate({ id: 4, choice: "keep_mine" }),
+			).transaction.resolveDuplicates({
+				answers: [{ id: 4, choice: "keep_mine" }],
+			}),
 		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
 		expect(calls).toEqual([]);
 	});

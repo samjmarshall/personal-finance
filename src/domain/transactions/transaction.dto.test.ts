@@ -4,6 +4,8 @@ import { Frequency, Priority } from "~/lib/constants";
 import type { Expect, WritesInto } from "~/test/type-contracts";
 import {
 	linkExpenseDto,
+	RESOLVE_DUPLICATES_MAX,
+	resolveDuplicatesDto,
 	transactionCreateDto,
 	transactionUpdateDto,
 	unplannedDto,
@@ -294,6 +296,35 @@ describe("linkExpenseDto", () => {
 	// omitted value can't silently no-op the link.
 	it("rejects a missing expenseId", () => {
 		expect(linkExpenseDto.safeParse({ id: 1 }).success).toBe(false);
+	});
+});
+
+describe("resolveDuplicatesDto", () => {
+	const answer = (id: number) => ({ id, choice: "use_bank" as const });
+
+	it("accepts one answer per review", () => {
+		expect(
+			resolveDuplicatesDto.safeParse({ answers: [answer(1), answer(2)] })
+				.success,
+		).toBe(true);
+	});
+
+	it("rejects no answers", () => {
+		expect(resolveDuplicatesDto.safeParse({ answers: [] }).success).toBe(false);
+	});
+
+	it("rejects two answers for one review", () => {
+		expect(
+			resolveDuplicatesDto.safeParse({ answers: [answer(1), answer(1)] })
+				.success,
+		).toBe(false);
+	});
+
+	it("rejects more answers than one apply sends", () => {
+		const answers = Array.from({ length: RESOLVE_DUPLICATES_MAX + 1 }, (_, i) =>
+			answer(i + 1),
+		);
+		expect(resolveDuplicatesDto.safeParse({ answers }).success).toBe(false);
 	});
 });
 

@@ -369,33 +369,54 @@ describe("possible duplicates", () => {
 			},
 		});
 
-		await service.resolveDuplicate({ id: 4, choice });
-
+		await expect(
+			service.resolveDuplicates({ answers: [{ id: 4, choice }] }),
+		).resolves.toEqual({ resolved: 1, gone: 0, taken: 0 });
 		expect(calls).toEqual([4]);
 	});
 
-	it("404s a review that is gone or already answered", async () => {
-		const service = serviceWith({ keepMine: async () => false });
+	it("answers each review in turn, in the order given", async () => {
+		const calls: unknown[][] = [];
+		const service = serviceWith({
+			keepMine: async (id) => {
+				calls.push(["keepMine", id]);
+				return true;
+			},
+			useBanks: async (id) => {
+				calls.push(["useBanks", id]);
+				return true;
+			},
+		});
 
-		const thrown = await service
-			.resolveDuplicate({ id: 4, choice: "keep_mine" })
-			.catch((e: unknown) => e);
+		await service.resolveDuplicates({
+			answers: [
+				{ id: 7, choice: "use_bank" },
+				{ id: 4, choice: "keep_mine" },
+			],
+		});
 
-		expect(thrown).toBeInstanceOf(NotFoundError);
-		expect(thrown).toMatchObject({ message: "Possible duplicate not found." });
+		expect(calls).toEqual([
+			["useBanks", 7],
+			["keepMine", 4],
+		]);
 	});
 
-	it("conflicts when the bank row already sits on another row", async () => {
-		const service = serviceWith({ useBanks: throwing(failedQuery("23505")) });
-
-		const thrown = await service
-			.resolveDuplicate({ id: 4, choice: "use_bank" })
-			.catch((e: unknown) => e);
-
-		expect(thrown).toBeInstanceOf(ConflictError);
-		expect(thrown).toMatchObject({
-			message: "That bank row is already in your transactions.",
+	it("counts a review that is gone and a bank row that is taken, and keeps going", async () => {
+		const service = serviceWith({
+			keepMine: async () => false,
+			useBanks: throwing(failedQuery("23505")),
+			bothReal: async () => true,
 		});
+
+		await expect(
+			service.resolveDuplicates({
+				answers: [
+					{ id: 1, choice: "keep_mine" },
+					{ id: 2, choice: "use_bank" },
+					{ id: 3, choice: "both_real" },
+				],
+			}),
+		).resolves.toEqual({ resolved: 1, gone: 1, taken: 1 });
 	});
 
 	it("lets any other driver error bubble", async () => {
@@ -403,7 +424,7 @@ describe("possible duplicates", () => {
 		const service = serviceWith({ bothReal: throwing(error) });
 
 		await expect(
-			service.resolveDuplicate({ id: 4, choice: "both_real" }),
+			service.resolveDuplicates({ answers: [{ id: 4, choice: "both_real" }] }),
 		).rejects.toBe(error);
 	});
 });
