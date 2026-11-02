@@ -305,7 +305,10 @@ function Row({
 								name={`answer-${id}`}
 								onChange={() => onPick(choice)}
 								// A second click on the picked answer clears it; from the keyboard, Delete.
-								onClick={() => answer === choice && onPick(null)}
+								// Space also fires a click, with detail 0, and must keep it.
+								onClick={(event) =>
+									event.detail > 0 && answer === choice && onPick(null)
+								}
 								onKeyDown={(event) => {
 									if (
 										answer === choice &&

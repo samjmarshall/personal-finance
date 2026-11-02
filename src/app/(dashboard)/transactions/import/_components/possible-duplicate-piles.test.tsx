@@ -191,6 +191,18 @@ describe("PossibleDuplicatePiles", () => {
 		expect(keep).toHaveFocus();
 	});
 
+	it("keeps a picked answer on Space", async () => {
+		const { user } = renderPiles({ reviews: [COFFEE] });
+		const keep = within(answerFor("Coffee")).getByRole("radio", {
+			name: "Keep mine",
+		});
+
+		await user.click(keep);
+		await user.keyboard(" ");
+
+		expect(keep).toBeChecked();
+	});
+
 	it("starts the applied rows blank once saved", async () => {
 		const { user } = renderPiles();
 		const keep = within(answerFor("Coffee")).getByRole("radio", {

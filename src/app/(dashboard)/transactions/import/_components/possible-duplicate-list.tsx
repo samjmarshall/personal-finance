@@ -53,7 +53,9 @@ export function PossibleDuplicateList({
 			else toast.success(appliedLabel(tally));
 			return true;
 		} catch {
-			// Toast: src/trpc/query-client.ts.
+			// Error toast: src/trpc/query-client.ts. Earlier calls still landed, so count them.
+			const landed = appliedLabel(tally);
+			if (landed) toast.warning(landed);
 			return false;
 		} finally {
 			// An answer changes rows, totals, the header badge and the review list, so refetch all.
