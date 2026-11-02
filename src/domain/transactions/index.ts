@@ -1,15 +1,9 @@
 import {
-	ADOPT_MEANING_SCORE,
-	ADOPT_WORD_SCORE,
 	cleanDescription,
-	type DescriptionScore,
 	EMBEDDING_DIMENSIONS,
-	meaningScore,
-	mergedScore,
 	SIMILAR_SCORE,
 	scoreDescriptions,
 	type WordWeights,
-	wordScore,
 	wordWeights,
 } from "./description-score";
 import {
@@ -17,7 +11,6 @@ import {
 	type Flag,
 	MATCH_DAYS,
 	type MatchCandidate,
-	type MatchInput,
 	type MatchPair,
 	matchPairs,
 	planReconcile,
@@ -62,12 +55,10 @@ import type {
 export type {
 	Adoption,
 	DescriptionEmbedding,
-	DescriptionScore,
 	ExpenseConsumption,
 	Flag,
 	LinkExpenseInput,
 	MatchCandidate,
-	MatchInput,
 	MatchPair,
 	PossibleDuplicate,
 	PossibleDuplicateReview,
@@ -91,15 +82,11 @@ export type {
 	WordWeights,
 };
 export {
-	ADOPT_MEANING_SCORE,
-	ADOPT_WORD_SCORE,
 	cleanDescription,
 	EMBEDDING_DIMENSIONS,
 	linkExpenseDto,
 	MATCH_DAYS,
 	matchPairs,
-	meaningScore,
-	mergedScore,
 	planReconcile,
 	RESOLVE_DUPLICATES_MAX,
 	resolveDuplicateDto,
@@ -112,6 +99,5 @@ export {
 	transactionListQueryDto,
 	transactionUpdateDto,
 	unplannedDto,
-	wordScore,
 	wordWeights,
 };
