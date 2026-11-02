@@ -375,11 +375,13 @@ jobs:
       - uses: pnpm/action-setup@v4
         if: steps.guard.outputs.skip == 'false'
 
+      # No `cache: pnpm` here. workflow_run runs as `main`, so any cache this job
+      # saves lands in main's scope, where deploys restore it. It installs a
+      # Renovate branch's packages, so it must not write that cache.
       - uses: actions/setup-node@v7
         if: steps.guard.outputs.skip == 'false'
         with:
           node-version-file: .nvmrc
-          cache: pnpm
 
       - run: make install
         if: steps.guard.outputs.skip == 'false'
