@@ -1,10 +1,20 @@
 // No imports: `scripts/` loads this file under plain node (adr029 spike).
 
 /** Payment processors banks put before a merchant, as "PAYPAL *NETFLIX". */
-export const PROCESSOR_PREFIXES = ["PAYPAL", "SQ", "SP", "ZLR", "IZ", "LS"];
+export const PROCESSOR_PREFIXES = [
+	"PAYPAL",
+	"SQ",
+	"SP",
+	"ZLR",
+	"IZ",
+	"LS",
+	"DBS",
+	"PIN",
+	"SMP",
+];
 
-/** Words in nearly every bank description that never name a merchant. */
-export const NOISE_WORDS = ["AUS", "AU"];
+/** Country, state and card-suffix words ("Card xx6857, Value date: …") that never name a merchant. */
+export const NOISE_WORDS = ["AUS", "AU", "QL", "QLD", "CARD", "VALUE", "DATE"];
 
 /** Fits Titan Text Embeddings V2's default and Cohere Embed v3. */
 export const EMBEDDING_DIMENSIONS = 1024;
@@ -28,6 +38,8 @@ const PROCESSOR = new RegExp(
 	"i",
 );
 const NOISE = new Set(NOISE_WORDS);
+// Its day and month would survive the 3-digit code rule.
+const DATE = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g;
 
 // Card numbers and reference codes (4029357733, P40603); "99 BIKES" keeps its 99.
 const isCode = (word: string) => (word.match(/\p{N}/gu)?.length ?? 0) >= 3;
@@ -36,6 +48,7 @@ const isCode = (word: string) => (word.match(/\p{N}/gu)?.length ?? 0) >= 3;
 export function cleanDescription(text: string): string {
 	const words = text
 		.replace(PROCESSOR, "")
+		.replace(DATE, "")
 		.toUpperCase()
 		.split(/[^\p{L}\p{N}]+/u)
 		.filter((word) => word && !NOISE.has(word) && !isCode(word));

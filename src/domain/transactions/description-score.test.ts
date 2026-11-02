@@ -13,6 +13,15 @@ describe("cleanDescription", () => {
 		["PAYPAL *SPOTIFY*P40603 AUS", "SPOTIFY"],
 		["NETFLIX.COM SYDNEY AUS", "NETFLIX COM SYDNEY"],
 		["SQ *BEAN THERE CAFE", "BEAN THERE CAFE"],
+		["DBS*KC Sandgate Pty Lt Sandgate AUS", "KC SANDGATE PTY LT"],
+		["Pin* imedical Pyrmont AUS", "IMEDICAL PYRMONT"],
+		["SMP*EW Cosmetic Injec9 Lawnton AUS", "EW COSMETIC INJEC9 LAWNTON"],
+		["BWS 2923 BRIGHTON QL AUS", "BWS BRIGHTON"],
+		["TRANSLINK TICKETING QLD AUS", "TRANSLINK TICKETING"],
+		[
+			"WESTFIELD CHERMSIDE CHERMSIDE AUS, Card xx6857, Value date: 03/07/2026",
+			"WESTFIELD CHERMSIDE",
+		],
 	])("cleans %s to %s", (raw, cleaned) => {
 		expect(cleanDescription(raw)).toBe(cleaned);
 	});
