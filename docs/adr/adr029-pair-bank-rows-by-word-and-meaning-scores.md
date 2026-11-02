@@ -1,5 +1,5 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
 Date: '2026-11-02'
 # prettier-ignore
@@ -55,7 +55,7 @@ The decision in detail:
    - **Adopt:** the same day, the same amount to the cent, **and** both scores at or above their high thresholds.
    - **Possible duplicate:** the same amount within 7 days but not an Adopt. That now includes a same-day pair whose descriptions fall short.
    - **Partner and pile:** the merged score picks the partner (then the nearest day) and splits "Similar" from "Different".
-6. **When the meaning score is unavailable** (Bedrock error after the AI SDK's 2 retries, or no AWS access): no Adopt, so a same-day pair goes to review; the word score alone picks the partner and the pile; the step logs `embedding unavailable`. Bank data still lands.
+6. **When the meaning score is unavailable** (Bedrock error after the AI SDK's 2 retries, or no AWS access): the step logs `embedding unavailable` and uses only cached vectors. A pair missing either vector never Adopts, so a same-day pair goes to review; the word score alone picks its partner and pile. Bank data still lands.
 7. **No backfill.** Adopts made under the old rule stay. A crossed one only took a date and amount that were already equal; the Member fixes it by hand.
 8. **Tuned on real rows.** A spike (branch `spike/adr029-description-scores`, `scripts/spike-description-scores.ts`) imported Dec 2025 to Aug 2026 into the branch DB with Adopts turned off, so every pair kept both descriptions. It labelled the 574 pairs the import flagged plus 3 fixed cases: 561 same purchase, 15 two purchases, 1 dropped as unclear. It picked by a rule fixed before scoring:
    - **Model:** Titan V2. Meaning-score AUC 1.000, against 0.9999 for Cohere Embed English v3. Within 0.02, so the cheaper Titan wins. The word score alone scored 0.999. Both models answered in `ap-southeast-2` through `@ai-sdk/amazon-bedrock`'s `embedMany`, with local AWS keys; the OIDC path is checked on the preview deploy.

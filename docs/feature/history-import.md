@@ -4,8 +4,8 @@ last-updated: 2026-11-02
 related-adrs: [adr017, adr022, adr029]
 related-design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 related-epic: none
-related-issues: []
-related-prs: []
+related-issues: [108]
+related-prs: [120]
 ---
 
 # History import
@@ -18,7 +18,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 
 **Who it's for**: a household member who linked a bank through RedBark and wants older history in Ledger.
 **Problem it solves**: older bank rows are missing, and many of them were already typed in by hand or made from receipts, so a plain copy would double them.
-**Outcome they get**: Ledger adds the missing bank rows and joins each exact match to the row you already have. Close matches wait on the page for your answer. Nothing is deleted.
+**Outcome they get**: Ledger adds the missing bank rows. When a bank row has the same day and amount as one of yours and the descriptions clearly match, Ledger joins it to your row. Close calls wait on the page for your answer. Nothing is deleted.
 **Out of scope**: picking which accounts to import (the run includes every live, syncable account); stopping a run partway; more than 7 years back; ranges ending after today; alerts or PostHog events for imports (see Operations).
 
 ## Design
@@ -40,6 +40,8 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `src/server/transactions/transactions.repository.ts` — `applyReconcile` (shared with `cdr-sync`) and the three resolve writes.
 - `src/domain/transactions/reconcile-synced.ts` — `planReconcile`: known, adopt, flag or add, per bank row.
 - `src/domain/transactions/description-score.ts` — cleans descriptions, scores words and meaning, holds the Adopt bars (adr029).
+- `src/server/transactions/transactions.schema.ts` — `possible_duplicate.descriptionScore` (migration `0026`) and the `description_embedding` cache (`0027` turns on pgvector, `0028` adds the table).
+- `src/server/inngest/functions.ts` — binds the reconcile to Bedrock (`BEDROCK_EMBEDDING_MODEL`).
 
 **Choice made**: a background Inngest job split into one step per account per 90-day window. Each step reconciles its rows the same way the daily sync does. Counts add up on the `cdr_import` row, and the page polls that row.
 **Rejected alternatives**: fetching inside the request (7 years won't fit in a page load, and RedBark caps one read at 5,000 rows); one big step (a retry would redo the whole import).
@@ -48,7 +50,21 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `flagged` is the change in pending reviews, not the number made. Joining a bank row to your row can close a review an earlier step opened, so a run's total can go below 0. The page shows it as 0 at the lowest.
 - A queued or running row older than 24 hours counts as not active, so a run that died without reaching `onFailure` can't block the form forever.
 - The form and `startImport` share one range check, `importRangeError`, so they refuse the same ranges with the same words.
-- A chunk with any pair reads every distinct description once, to weigh words by how rare they are. A chunk with none skips that read.
+- A chunk with any pair reads every distinct description once, to weigh words by how rare they are, and embeds only descriptions not yet cached. A chunk with no pair skips both.
+
+### Scoring (adr029)
+
+A same-day, same-amount pair Adopts only when its descriptions match. `description-score.ts` decides:
+
+- **Clean first.** Drop processor prefixes (`PAYPAL *`, `SQ *`, …), place and card-suffix words (`AUS`, `QLD`, `Card`, `Value date`), dates, words with 3 or more digits, and the bank's `FRGN AMT: …` ending. Both scores and the embedding cache use the cleaned text.
+- **Word score.** Cosine over shared words, each weighted by how rare it is across your saved descriptions plus the incoming rows.
+- **Meaning score.** Cosine of two Titan V2 embeddings, cached in `description_embedding` by model and cleaned text.
+- **Adopt** needs word ≥ `ADOPT_WORD_SCORE` and meaning ≥ `ADOPT_MEANING_SCORE`. With no meaning score, nothing Adopts.
+- **Merged score** is the mean of both, or the word score alone when meaning is missing. It picks the partner (highest, then nearest day). Each new review saves it, and the page piles by it: `SIMILAR_SCORE` or more is Similar.
+
+adr029 item 8 holds the full cleaning list and the tuning behind the cut-offs.
+
+**Rejected**: words alone (it can't tell that "Woolies" means "WOOLWORTHS"); meaning alone (shared noise such as "PAYPAL … AUS" makes two subscriptions read alike, and a Bedrock outage leaves nothing to fall back on).
 
 ### Operations
 
@@ -148,11 +164,12 @@ A fill only answers rows with no answer yet. **Apply** sends every answer at onc
 
 ## Links
 
-- ADRs: [adr017 — external transaction sync via CDR (RedBark)](../adr/adr017-external-transaction-sync-via-cdr-redbark.md), [adr022 — cross-domain data through the owning service](../adr/adr022-cross-domain-data-through-the-owning-service.md)
+- ADRs: [adr017 — external transaction sync via CDR (RedBark)](../adr/adr017-external-transaction-sync-via-cdr-redbark.md), [adr022 — cross-domain data through the owning service](../adr/adr022-cross-domain-data-through-the-owning-service.md), [adr029 — pair bank rows by word and meaning scores](../adr/adr029-pair-bank-rows-by-word-and-meaning-scores.md)
 - Design: [Expense linking, receipts and cash flow](../../thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md) (build stage 7)
-- Related plans: [Stage 7: CDR via RedBark](../../thoughts/plans/2026-09-15-expense-linking-stage-7-cdr-redbark.md) (Phases 7–8)
-- GitHub issues: none
-- Shipping commits: `e7c5107` (import page and job), `a9a8cd6` (net released reviews out of `flagged`)
+- Related plans: [Stage 7: CDR via RedBark](../../thoughts/plans/2026-09-15-expense-linking-stage-7-cdr-redbark.md) (Phases 7–8), [adr029 description scores](../../thoughts/plans/2026-11-02-adr029-description-scores.md)
+- GitHub issues: #108 (open follow-up: animate an answered review leaving To review)
+- PRs: #120 (import page, job and duplicate review)
+- Shipping commits: `e7c5107` (import page and job), `a9a8cd6` (net released reviews out of `flagged`), `8457e0f` + `ffd464e` (clean descriptions, word score), `1b1fbef` (score pairs, gate Adopts), `21876ed` (meaning score, embedding cache), `01afbf5` (pile by saved score), `4fc1d29` (strip `FRGN AMT`)
 
 ---
-*Generated from interview on 2026-10-28. To regenerate, run `/document-feature history-import`.*
+*Generated from interview on 2026-10-28; updated for adr029 on 2026-11-02. To regenerate, run `/document-feature history-import`.*
