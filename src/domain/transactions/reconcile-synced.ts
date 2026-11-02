@@ -92,7 +92,7 @@ interface Pair {
 	bank: SyncedTransaction;
 	candidate: MatchCandidate;
 	dayGap: number;
-	words: number;
+	sharedWords: number;
 }
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -172,7 +172,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 				bank,
 				candidate,
 				dayGap,
-				words: sharedWords(bank.description, candidate.description),
+				sharedWords: sharedWords(bank.description, candidate.description),
 			});
 		}
 	}
@@ -192,7 +192,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		.filter((p) => p.dayGap === 0 && canAdopt(p.candidate))
 		.sort(
 			(x, y) =>
-				y.words - x.words ||
+				y.sharedWords - x.sharedWords ||
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,
 		);
@@ -209,7 +209,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		.filter((p) => canFlag(p.candidate))
 		.sort(
 			(x, y) =>
-				y.words - x.words ||
+				y.sharedWords - x.sharedWords ||
 				x.dayGap - y.dayGap ||
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,

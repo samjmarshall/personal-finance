@@ -74,9 +74,7 @@ export function importRangeLabel({
 
 /** The bank's day against the member's, in household days, as the reconcile counts them. Null on the same day. */
 export function dayGapLabel(bank: Date, mine: Date): string | null {
-	const gap =
-		dayNumberInZone(bank, HOUSEHOLD_TIME_ZONE) -
-		dayNumberInZone(mine, HOUSEHOLD_TIME_ZONE);
+	const gap = householdDays(bank, mine);
 	if (gap === 0) return null;
 	const days = Math.abs(gap) === 1 ? "1 day" : `${Math.abs(gap)} days`;
 	return `${days} ${gap > 0 ? "later" : "earlier"} than yours`;
@@ -148,21 +146,27 @@ export function duplicatePiles(
 				y.review.id - x.review.id,
 		)
 		.map(({ review }) => review);
-	return PILES.map((pile) => ({
-		...pile,
-		reviews: sorted.filter(
-			({ bank, mine }) =>
-				sharedWords(bank.description, mine.description) >= SIMILAR_WORDS ===
-				(pile.key === "similar_description"),
-		),
-	})).filter((pile) => pile.reviews.length > 0);
+	const isSimilar = ({ bank, mine }: PossibleDuplicateReview) =>
+		sharedWords(bank.description, mine.description) >= SIMILAR_WORDS;
+	const byPile: Record<DuplicatePile["key"], PossibleDuplicateReview[]> = {
+		similar_description: sorted.filter(isSimilar),
+		different_description: sorted.filter((review) => !isSimilar(review)),
+	};
+	return PILES.map((pile) => ({ ...pile, reviews: byPile[pile.key] })).filter(
+		(pile) => pile.reviews.length > 0,
+	);
 }
 
 /** How far apart the two rows are, in household days. */
 function dayGap({ bank, mine }: PossibleDuplicateReview): number {
-	return Math.abs(
-		dayNumberInZone(bank.date, HOUSEHOLD_TIME_ZONE) -
-			dayNumberInZone(mine.date, HOUSEHOLD_TIME_ZONE),
+	return Math.abs(householdDays(bank.date, mine.date));
+}
+
+/** Household days from the member's row to the bank's; positive when the bank's is later. */
+function householdDays(bank: Date, mine: Date): number {
+	return (
+		dayNumberInZone(bank, HOUSEHOLD_TIME_ZONE) -
+		dayNumberInZone(mine, HOUSEHOLD_TIME_ZONE)
 	);
 }
 
