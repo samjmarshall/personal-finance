@@ -105,14 +105,15 @@ transaction), so consolidation keys on Provenance.
 _Avoid_: source, origin
 
 **Adopt**:
-The bank sync takes a household Transaction as its own when a bank row has the same day and
-the same amount to the cent. The row keeps every Member edit; its date and amount then come
-from the bank.
+The bank sync takes a household Transaction as its own when a bank row has the same day, the
+same amount to the cent and a description that means the same purchase. The row keeps every
+Member edit; its date and amount then come from the bank. (Description test: adr029, Proposed.)
 _Avoid_: link (an Expense), match (a Receipt), merge
 
 **Possible duplicate**:
-A bank row that looks like a household Transaction (same direction, within 5% and 7 days) but
-isn't exact, held until a Member keeps theirs, uses the bank's, or says both are real.
+A bank row with the same amount to the cent as a household Transaction within 7 days, but not
+an Adopt, held until a Member keeps theirs, uses the bank's, or says both are real. (Same-day
+pairs: adr029, Proposed.)
 _Avoid_: conflict, dupe
 
 **Channel**:
