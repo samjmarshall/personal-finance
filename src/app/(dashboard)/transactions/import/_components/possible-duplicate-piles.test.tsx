@@ -132,6 +132,11 @@ describe("PossibleDuplicatePiles", () => {
 		expect(
 			within(answerFor("Coffee")).getByRole("radio", { name: "Keep mine" }),
 		).toHaveAccessibleDescription("Keep mine drops the bank's copy.");
+		expect(
+			within(answerFor("Coffee")).getByRole("radio", { name: "Use bank's" }),
+		).toHaveAccessibleDescription(
+			"Use bank's gives yours its date and amount, and keeps your description, category, expense and receipt.",
+		);
 	});
 
 	it("applies the picked answers together", async () => {

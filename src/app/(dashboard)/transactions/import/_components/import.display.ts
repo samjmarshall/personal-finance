@@ -100,7 +100,8 @@ export const CHOICES: {
 	{
 		choice: "use_bank",
 		label: "Use bank's",
-		effect: "gives yours its date and amount.",
+		effect:
+			"gives yours its date and amount, and keeps your description, category, expense and receipt.",
 	},
 	{
 		choice: "both_real",

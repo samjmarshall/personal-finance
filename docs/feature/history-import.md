@@ -145,7 +145,7 @@ When a bank row could pair with more than one of yours, the pair whose descripti
 
 **Review answers**:
 - **Keep mine**: drops the bank's copy.
-- **Use bank's**: your row takes the bank's date and amount.
+- **Use bank's**: your row takes the bank's date and amount, and keeps your description, category, expense and receipt.
 - **Both are real**: adds the bank's row too.
 
 Reviews sit in two piles:
