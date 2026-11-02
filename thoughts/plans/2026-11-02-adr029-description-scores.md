@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
 adrs: [adr029]
-status: Ready for Review - Phase 1 of 6
+status: Ready for Review - Phase 2 of 6
 ---
 # Pair bank rows by word and meaning scores (adr029) Implementation Plan
 
@@ -139,11 +139,11 @@ Build on a new branch, `feat/adr029-description-scores`.
 - `src/domain/transactions/description-score.ts` and its test: add any tokens the spike promoted to the lists, with one test case each.
 
 ### Success
-- [ ] The user confirmed the labelled pair list
-- [ ] The script ran against `local/<branch>` with both models, or with Titan V2 alone and the reason recorded
-- [ ] adr029 names the model, the three thresholds, the cleaning list and the IDF corpus, and has no open questions left
-- [ ] `make check` passes
-- [ ] `make test` passes
+- [x] The user confirmed the labelled pair list
+- [x] The script ran against `local/<branch>` with both models, or with Titan V2 alone and the reason recorded
+- [x] adr029 names the model, the three thresholds, the cleaning list and the IDF corpus, and has no open questions left
+- [x] `make check` passes
+- [x] `make test` passes
 
 ## Phase 3: Move the reconcile into its own service
 ### Changes
