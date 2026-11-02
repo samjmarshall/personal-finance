@@ -318,7 +318,7 @@ describe("reconcileSynced", () => {
 		const failing = new Set(
 			shops.slice(31).map(({ description }) => description.toUpperCase()),
 		);
-		const { service, saves, logs } = reconciling(
+		const { service, saves, logs, plans } = reconciling(
 			{ findMatchCandidates: async () => shops },
 			new MockEmbeddingModelV4({
 				modelId: MODEL_ID,
@@ -337,6 +337,8 @@ describe("reconcileSynced", () => {
 		expect(logs).toMatchObject([
 			{ msg: "embedding unavailable", attrs: { descriptions: 9 } },
 		]);
+		// No shared words, so 0.5 is the meaning half alone: the saved batch was scored.
+		expect(plans[0]?.flag).toMatchObject([{ descriptionScore: 0.5 }]);
 	});
 
 	it("weighs words over every saved description plus the incoming ones", async () => {

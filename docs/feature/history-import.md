@@ -111,8 +111,10 @@ sequenceDiagram
         RB-->>Job: bank rows
         opt a bank row pairs with one of yours
             Job->>DB: read descriptions + cached embeddings
-            Job->>Bedrock: embedMany(cache misses)
-            Job->>DB: save new embeddings
+            loop each 32 cache misses, one 30 s limit for all
+                Job->>Bedrock: embedMany(batch)
+                Job->>DB: save batch
+            end
         end
         Job->>DB: applyReconcile (add / adopt / flag / known)
         Job->>DB: add counts to cdr_import

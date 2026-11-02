@@ -34,12 +34,12 @@ const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
 	known: a.known + b.known,
 });
 const NO_WEIGHTS = wordWeights([]);
-// One time budget for the whole batch: a big first import makes one model call per text.
+// One time limit shared by every batch: a big first import makes one model call per text.
 const EMBED_TIMEOUT_MS = 30_000;
 // The cache's unique index refuses a key over ~2.7 KB, and that failed save would
 // fail the sync. 500 characters is at most 1.5 KB.
 const MAX_EMBED_LENGTH = 500;
-// Saved as each lands, so a failed or slow call keeps the vectors before it.
+// Each batch is saved as it lands, so a failure keeps the batches before it.
 const EMBED_BATCH_SIZE = 32;
 
 type ReconcileRepository = Pick<
@@ -146,7 +146,7 @@ export class TransactionReconcileService {
 		return wordWeights([...saved, ...incoming.map((row) => row.description)]);
 	}
 
-	/** Keyed by cleaned text. Overlong text and a failed model call's misses are left out, so they never Adopt. */
+	/** Keyed by cleaned text. Overlong text, and any not embedded before a model call fails, are left out, so they never Adopt. */
 	private async vectorsFor(pairs: MatchPair[]): Promise<Map<string, number[]>> {
 		const texts = new Set(
 			pairs
@@ -169,20 +169,7 @@ export class TransactionReconcileService {
 			const batch = misses.slice(start, start + EMBED_BATCH_SIZE);
 			let embeddings: number[][];
 			try {
-				({ embeddings } = await embedMany({
-					model: this.embeddingModel,
-					values: batch,
-					dimensions: EMBEDDING_DIMENSIONS,
-					maxRetries: 2,
-					maxParallelCalls: 4,
-					abortSignal,
-					// Titan reads `normalize`, Cohere `inputType`; each ignores the other.
-					providerOptions: {
-						bedrock: { normalize: true, inputType: "clustering" },
-					},
-					// The span processor would price an ai.* span as Claude tokens.
-					telemetry: { isEnabled: false },
-				}));
+				embeddings = await this.embedBatch(batch, abortSignal);
 			} catch (error) {
 				// Words alone still score and flag. A pair flagged now stays a review: no later sync rescores it.
 				this.logger.warn("embedding unavailable", {
@@ -201,5 +188,26 @@ export class TransactionReconcileService {
 				vectors.set(description, embedding);
 		}
 		return vectors;
+	}
+
+	private async embedBatch(
+		values: string[],
+		abortSignal: AbortSignal,
+	): Promise<number[][]> {
+		const { embeddings } = await embedMany({
+			model: this.embeddingModel,
+			values,
+			dimensions: EMBEDDING_DIMENSIONS,
+			maxRetries: 2,
+			maxParallelCalls: 4,
+			abortSignal,
+			// Titan reads `normalize`, Cohere `inputType`; each ignores the other.
+			providerOptions: {
+				bedrock: { normalize: true, inputType: "clustering" },
+			},
+			// The span processor would price an ai.* span as Claude tokens.
+			telemetry: { isEnabled: false },
+		});
+		return embeddings;
 	}
 }
