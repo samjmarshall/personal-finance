@@ -39,6 +39,7 @@ import {
 	pickCategory,
 	pickExpense,
 } from "./category-expense-link";
+import { ComboboxField, type ComboboxFieldOption } from "./combobox-field";
 import { submittedDate } from "./submitted-date";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
@@ -129,20 +130,15 @@ export function TransactionForm({
 	};
 
 	// Categories are chosen from the managed list, never invented mid-entry.
-	const categoryOptions: SelectFieldOption<string>[] = [
-		{ value: "", label: "— None —" },
-		...categories.map((c) => ({
-			value: String(c.id),
-			label: c.name,
-		})),
-	];
+	const categoryOptions: ComboboxFieldOption<number>[] = categories.map(
+		(c) => ({ value: c.id, label: c.name }),
+	);
 
 	// A Category narrows the Expenses to the ones filed under it.
 	const shownExpenses = expensesInCategory(expenses, categoryId);
-	const expenseOptions: SelectFieldOption<string>[] = [
-		{ value: "", label: "— None —" },
-		...shownExpenses.map((e) => ({ value: String(e.id), label: e.name })),
-	];
+	const expenseOptions: ComboboxFieldOption<number>[] = shownExpenses.map(
+		(e) => ({ value: e.id, label: e.name }),
+	);
 	// One line in every state, so the swap never resizes the centred dialog.
 	const expenseHint =
 		categoryId === null
@@ -278,15 +274,15 @@ export function TransactionForm({
 								Category
 								<FieldOptional />
 							</FieldLabel>
-							<SelectField
+							<ComboboxField
 								className="w-full"
 								disabled={pending}
+								emptyText="No categories found."
 								id="tx-category"
 								items={categoryOptions}
-								onValueChange={(v) =>
-									setLink(pickCategory(link, v ? Number(v) : null, expenses))
-								}
-								value={categoryId ? String(categoryId) : ""}
+								onValueChange={(v) => setLink(pickCategory(link, v, expenses))}
+								placeholder="None"
+								value={categoryId}
 							/>
 						</Field>
 						<Field>
@@ -294,16 +290,16 @@ export function TransactionForm({
 								Expense
 								<FieldOptional />
 							</FieldLabel>
-							<SelectField
+							<ComboboxField
 								aria-describedby="tx-expense-hint"
 								className="w-full"
 								disabled={pending}
+								emptyText="No expenses found."
 								id="tx-expense"
 								items={expenseOptions}
-								onValueChange={(v) =>
-									setLink(pickExpense(link, v ? Number(v) : null, expenses))
-								}
-								value={expenseId ? String(expenseId) : ""}
+								onValueChange={(v) => setLink(pickExpense(link, v, expenses))}
+								placeholder="None"
+								value={expenseId}
 							/>
 							<FieldDescription aria-live="polite" id="tx-expense-hint">
 								{expenseHint}
