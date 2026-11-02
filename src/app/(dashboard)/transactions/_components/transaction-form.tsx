@@ -197,7 +197,8 @@ export function TransactionForm({
 									<FieldLabel htmlFor="tx-date">Date</FieldLabel>
 									<Input
 										aria-describedby={bankOwned ? "tx-amount-hint" : undefined}
-										className={BANK_OWNED_CLASS}
+										// Only when locked: a save disables every field, which :read-only matches too.
+										className={bankOwned ? BANK_OWNED_CLASS : undefined}
 										id="tx-date"
 										onChange={(e) => setDate(e.target.value)}
 										readOnly={bankOwned}
@@ -212,7 +213,7 @@ export function TransactionForm({
 									<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
 									<Input
 										aria-describedby="tx-amount-hint"
-										className={BANK_OWNED_CLASS}
+										className={bankOwned ? BANK_OWNED_CLASS : undefined}
 										id="tx-amount"
 										inputMode="decimal"
 										onChange={(e) => setAmount(e.target.value)}
