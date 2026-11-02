@@ -100,6 +100,10 @@ Either way the cursor never passes un-ingested rows. Each account syncs in isola
 - **The sign rule is observed, not documented.** A live spike confirmed it (facet 4), but RedBark could change it silently; the direction-vs-sign cross-check is the guard.
 - Denormalized `connectionStatus` will want promoting to a `cdr_connection` table if the project launches publicly and households manage their own connections on `/settings`.
 - RedBark's hierarchical categories are not adopted; synced rows land uncategorised pending a later review of that taxonomy.
+- **Pairing counts words; it doesn't understand them.** A short typed name ("Netflix") shares 1 word with the bank's "NETFLIX.COM SYDNEY AUS", so a real copy lands in "Different description", and bank noise ("AUS", a card number) counts as a shared word. Future options, each a new decision for its own ADR:
+  1. **Semantic.** Embed each description (e.g. a VoyageAI model; normalise the vector if the API doesn't), store it in Postgres with pgvector, and pair same-amount rows by nearest vector.
+  2. **Lexical.** Split each description on whitespace, index the words in a BM25 store, and pair by best score.
+  3. **Both.** Run 1 and 2, then merge the rankings.
 
 ## Pros and Cons of the Options
 

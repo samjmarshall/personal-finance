@@ -28,7 +28,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `src/app/(dashboard)/transactions/import/_components/import-view.tsx` — layout; polls `latestImport` every 3 s while a run is active and refreshes transaction queries when it ends.
 - `src/app/(dashboard)/transactions/import/_components/import-form.tsx` — the From / To form; locked while a run is active.
 - `src/app/(dashboard)/transactions/import/_components/import-status.tsx` — the Latest import card: status, range, counts, failure reason.
-- `src/app/(dashboard)/transactions/import/_components/possible-duplicate-list.tsx` + `possible-duplicate-card.tsx` — the To review list: your row beside the bank's, with the gaps marked, and three answers.
+- `src/app/(dashboard)/transactions/import/_components/possible-duplicate-list.tsx` + `possible-duplicate-piles.tsx` — the To review list: two piles of your row beside the bank's, with the gaps marked, three answers per row, and one Apply.
 - `src/app/(dashboard)/transactions/import/_components/import.display.ts` — status labels, counts, the range line, the gap chips.
 - `src/app/(dashboard)/transactions/_components/transactions-view.tsx` — the "Import from bank" header button and its pending-review badge.
 - `src/domain/cdr/import-range.ts` — `importWindows` (90-day windows), `IMPORT_MAX_YEARS`, `importEarliestDay`, `importRangeError` (the form and `startImport` both call it).
@@ -66,7 +66,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 **Triggers**:
 - UI: the Import button on `/transactions/import` → `cdr.startImport`.
 - Event: `cdr/import.requested` (sent through the outbox in the same transaction as the new `cdr_import` row) → Inngest `cdr-import`.
-- UI: Keep mine / Use bank's / Both are real on a review card → `transaction.resolveDuplicate`.
+- UI: Apply on the To review list → `transaction.resolveDuplicates`, 200 answers per call.
 
 **Data path**: `startImport` saves the picked range as a `cdr_import` row plus an outbox event. The job splits the range into account × 90-day chunks, reads each from RedBark, and reconciles the rows into `transaction` and `possible_duplicate`. Each chunk adds its counts to the row, which the page polls.
 
@@ -92,8 +92,8 @@ sequenceDiagram
         Job->>DB: add counts to cdr_import
     end
     Job->>DB: finishImport: running → done
-    M->>App: resolveDuplicate(id, choice)
-    App->>DB: keep mine / use bank's / both real
+    M->>App: resolveDuplicates(answers)
+    App->>DB: keep mine / use bank's / both real, one at a time
 ```
 
 **State transitions** (`cdr_import.status`):
@@ -113,9 +113,9 @@ stateDiagram-v2
 - **Already here** (`known`): the bank id is already in Ledger or waiting in a review, or a member already chose Keep mine on it. Ledger refreshes the row or review instead of doubling it.
 - **Matched to yours** (`adopted`): same household day and same amount as a row you made. Your row takes the bank's id, date and amount, but keeps your description and edits. If that row was waiting in a review, the review closes and Ledger adds its bank row.
 - **Flagged** (`flagged`): the same amount as a row you made, on another day within 7 days. A near amount is added, not flagged: a real copy keeps its amount. A `possible_duplicate` waits on the page.
+- **Added**: no match. Added as a new bank row.
 
 When a bank row could pair with more than one of yours, the pair whose descriptions share the most words wins, then the nearest day. A word is any run of letters or digits, case-blind, counted once.
-- **Added**: no match. Added as a new bank row.
 
 **Review answers**:
 - **Keep mine**: drops the bank's copy.
@@ -131,7 +131,7 @@ A fill only answers rows with no answer yet. **Apply** sends every answer at onc
 **Edge cases**:
 - Ranges that run past 7 years or after today, or a From after the To → stopped in the form, and again by the server with the same words.
 - Starting while a run is active → the form locks and says why; the server returns a `CONFLICT` "An import is already running."
-- The same review answered in another tab → the toast shows the error, and a refetch drops the old card.
+- The same review answered in another tab → the toast counts it as already answered, and a refetch drops the row.
 - A repeat event delivery → `claimImport` finds the row finished and runs nothing. A retried claim finds its own `running` row and carries on.
 
 **Side effects**: inserts into `transaction` and `possible_duplicate`; updates your rows on adopt and Use bank's. Never moves the daily sync's cursor and never writes a balance anchor. Never deletes a transaction.
