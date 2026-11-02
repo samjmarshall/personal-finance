@@ -5,7 +5,7 @@ import {
 	SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { registerTelemetry } from "ai";
+import { embedMany, registerTelemetry } from "ai";
 import { MockEmbeddingModelV4 } from "ai/test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -241,6 +241,24 @@ describe("reconcileSynced", () => {
 		]);
 	});
 
+	// Postgres caps a unique index key near 2.7 KB; a pasted note must not stall the sync.
+	it("never embeds or caches an overlong description", async () => {
+		const { service, reads, saves, plans, model } = reconciling({
+			findMatchCandidates: async () => [mine("A".repeat(501))],
+		});
+
+		await service.reconcileSynced([SYNCED], LIVE);
+
+		expect(reads).toContainEqual(["embeddings", MODEL_ID, ["WOOLWORTHS"]]);
+		expect(model.doEmbedCalls.map((call) => call.values)).toEqual([
+			["WOOLWORTHS"],
+		]);
+		expect(saves).toEqual([
+			[MODEL_ID, [{ description: "WOOLWORTHS", embedding: [1, 0] }]],
+		]);
+		expect(plans[0]?.flag).toHaveLength(1);
+	});
+
 	it("calls no model when every description is cached", async () => {
 		const { service, plans, saves, model } = reconciling({
 			findMatchCandidates: async () => [mine("Woolworths")],
@@ -358,6 +376,18 @@ describe("reconcileSynced", () => {
 			trace.disable();
 			context.disable();
 			propagation.disable();
+		});
+
+		// Proves the setup above records ai.* spans, so the next test can't pass empty.
+		it("records an ai.* span for an embedding left at the default", async () => {
+			await embedMany({ model: sameMeaning(), values: ["WOOLWORTHS"] });
+
+			expect(
+				exporter
+					.getFinishedSpans()
+					.filter(({ name }) => name.startsWith("ai.")),
+			).not.toEqual([]);
+			exporter.reset();
 		});
 
 		// The span processor would price an ai.* span as Claude tokens.

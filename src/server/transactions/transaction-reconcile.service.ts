@@ -36,6 +36,9 @@ const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
 const NO_WEIGHTS = wordWeights([]);
 // Each Titan call embeds one text, so a big first import makes many.
 const EMBED_TIMEOUT_MS = 30_000;
+// The cache's unique index refuses a key over ~2.7 KB, and that failed save would
+// fail the sync. 500 characters is at most 1.5 KB.
+const MAX_EMBED_LENGTH = 500;
 
 type ReconcileRepository = Pick<
 	TransactionsRepository,
@@ -141,15 +144,16 @@ export class TransactionReconcileService {
 		return wordWeights([...saved, ...incoming.map((row) => row.description)]);
 	}
 
-	/** Keyed by cleaned text. A failed model call leaves its misses out, so they never Adopt. */
+	/** Keyed by cleaned text. Overlong text and a failed model call's misses are left out, so they never Adopt. */
 	private async vectorsFor(pairs: MatchPair[]): Promise<Map<string, number[]>> {
 		const texts = new Set(
-			pairs.flatMap(({ bank, candidate }) => [
-				cleanDescription(bank.description),
-				cleanDescription(candidate.description),
-			]),
+			pairs
+				.flatMap(({ bank, candidate }) => [
+					cleanDescription(bank.description),
+					cleanDescription(candidate.description),
+				])
+				.filter((text) => text && text.length <= MAX_EMBED_LENGTH),
 		);
-		texts.delete("");
 		const model = this.embeddingModel.modelId;
 		const cached = await this.repository.findEmbeddings(model, [...texts]);
 		const vectors = new Map(
@@ -175,7 +179,7 @@ export class TransactionReconcileService {
 				telemetry: { isEnabled: false },
 			}));
 		} catch (error) {
-			// Words alone still score and flag; the next sync embeds these again.
+			// Words alone still score and flag. A pair flagged now stays a review: no later sync rescores it.
 			this.logger.warn("embedding unavailable", {
 				error,
 				descriptions: misses.length,
