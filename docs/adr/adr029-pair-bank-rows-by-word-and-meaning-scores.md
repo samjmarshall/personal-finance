@@ -85,6 +85,7 @@ This changes adr017 facet 2: its **Adopt** rule gains the description test, its 
 
 - **More reviews.** A real same-day copy with very different wording (a typed "Coffee" against "SQ \*BEAN THERE CAFE") now waits for a click instead of matching.
 - **A network call inside the reconcile.** Embeddings are fetched before the reconcile's database transaction, so the transaction stays short, but a sync step now depends on Bedrock as well as RedBark.
+- **An outage leaves reviews behind.** A pair flagged while Bedrock is down stays a review; a later sync refreshes it but never rescores it, so a Member answers it by hand.
 - **New moving parts.** The pgvector extension, an embedding cache table, a cleaning list to keep up, and thresholds that need tuning on real data.
 - **Determinism rests on the cache.** The same model returns the same vector for the same text, and the cache pins it, so a retry gives the same pairs. A model change can move a borderline pair to the other side of a threshold.
 - **Descriptions leave the database.** They go to Bedrock in the app's own AWS account and region, under the same terms as receipt images today.

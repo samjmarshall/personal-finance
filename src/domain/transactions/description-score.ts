@@ -14,7 +14,7 @@ export const PROCESSOR_PREFIXES = [
 /** Country, state and card-suffix words ("Card xx6857, Value date: …") that never name a merchant. */
 export const NOISE_WORDS = ["AUS", "AU", "QL", "QLD", "CARD", "VALUE", "DATE"];
 
-/** Fits Titan Text Embeddings V2's default and Cohere Embed v3. */
+/** Titan Text Embeddings V2's default. Every call asks for this size, which Cohere supports from Embed v4 only. */
 export const EMBEDDING_DIMENSIONS = 1024;
 
 // Tuned on 576 labelled real pairs (adr029 item 8). An Adopt needs both bars;

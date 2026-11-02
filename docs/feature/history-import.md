@@ -77,7 +77,7 @@ adr029 item 8 holds the full cleaning list and the tuning behind the cut-offs.
 - More than 997 chunks → fails with "This import is too big for one run. Try a shorter range."
 - Run lost (cancelled in Inngest, or `failImport` hit a DB blip) → the card reads "Didn't finish" after 24 hours, and the form opens again.
 - An account RedBark can't sync right now → the job skips and logs it, then imports the rest.
-- Bedrock down or no AWS creds → logs `embedding unavailable`. A pair with an uncached description scores on words alone, so it is flagged, never adopted. The next run tries those again.
+- Bedrock down or no AWS creds → logs `embedding unavailable`. A pair with an uncached description scores on words alone, so it is flagged, never adopted. It stays a review for you to answer: a later run refreshes a review but never rescores it.
 
 **Flags / env vars**: `REDBARK_API_KEY`, `BEDROCK_EMBEDDING_MODEL` (both optional; see `docs/README.md`).
 
@@ -145,7 +145,7 @@ When a bank row could pair with more than one of yours, the pair whose descripti
 
 **Review answers**:
 - **Keep mine**: drops the bank's copy.
-- **Use bank's**: your row takes the bank's date and amount, and keeps your description, category, expense and receipt.
+- **Use bank's**: your row takes the bank's date and amount, and keeps your description, category, expense and receipt. Any other review on your row becomes its own row: your row is now that bank copy, so the other is a second purchase. (A row gets a second review when its same-day bank copy lands after a close one and falls short of an Adopt.)
 - **Both are real**: adds the bank's row too.
 
 Reviews sit in two piles:
