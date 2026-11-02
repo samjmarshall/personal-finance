@@ -774,7 +774,14 @@ describe("applyReconcile", () => {
 		const counts = await repository.applyReconcile({
 			...EMPTY_PLAN,
 			adopt: [{ transactionId: 1, row: SYNCED, heldBy: 9 }],
-			flag: [{ transactionId: 1, row: refetched, reviewId: 9 }],
+			flag: [
+				{
+					transactionId: 1,
+					row: refetched,
+					reviewId: 9,
+					descriptionScore: null,
+				},
+			],
 		});
 
 		expect(counts).toEqual({ added: 1, adopted: 1, flagged: -1, known: 0 });
@@ -790,7 +797,7 @@ describe("applyReconcile", () => {
 		);
 	});
 
-	it("inserts a new review once and refreshes only a pending one", async () => {
+	it("inserts a new review with its score, and refreshes a pending one's bank columns only", async () => {
 		const { repository, queries } = harness(({ sql }) =>
 			sql.startsWith('insert into "possible_duplicate"') ? [[5]] : [],
 		);
@@ -798,11 +805,17 @@ describe("applyReconcile", () => {
 		const counts = await repository.applyReconcile({
 			...EMPTY_PLAN,
 			flag: [
-				{ transactionId: 1, row: SYNCED, reviewId: null },
+				{
+					transactionId: 1,
+					row: SYNCED,
+					reviewId: null,
+					descriptionScore: 0.81,
+				},
 				{
 					transactionId: 2,
 					row: { ...SYNCED, externalId: "txn_2" },
 					reviewId: 4,
+					descriptionScore: null,
 				},
 			],
 		});
@@ -826,10 +839,11 @@ describe("applyReconcile", () => {
 			      42.5,
 			      "2026-10-15T00:00:00.000Z",
 			      "WOOLWORTHS",
+			      0.81,
 			      "2026-09-29T00:00:00.000Z",
 			      "2026-09-29T00:00:00.000Z",
 			    ],
-			    "sql": "insert into "possible_duplicate" ("id", "transactionId", "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "status", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5, $6, $7, $8, default, $9, $10) on conflict ("provenance","externalId") do nothing returning "id"",
+			    "sql": "insert into "possible_duplicate" ("id", "transactionId", "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "descriptionScore", "status", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5, $6, $7, $8, $9, default, $10, $11) on conflict ("provenance","externalId") do nothing returning "id"",
 			  },
 			  {
 			    "method": "execute",
@@ -859,7 +873,14 @@ describe("applyReconcile", () => {
 
 		const counts = await repository.applyReconcile({
 			...EMPTY_PLAN,
-			flag: [{ transactionId: 1, row: SYNCED, reviewId: null }],
+			flag: [
+				{
+					transactionId: 1,
+					row: SYNCED,
+					reviewId: null,
+					descriptionScore: 0.81,
+				},
+			],
 		});
 
 		expect(counts).toEqual({ added: 0, adopted: 0, flagged: 0, known: 1 });
@@ -1144,6 +1165,29 @@ describe("findDescriptions", () => {
 			      2,
 			    ],
 			    "sql": "select "id", "description" from "transaction" where "transaction"."id" in ($1, $2)",
+			  },
+			]
+		`);
+	});
+});
+
+describe("listDescriptions", () => {
+	it("selects each distinct description once", async () => {
+		const { repository, queries } = harness(() => [
+			["Groceries"],
+			["NETFLIX.COM"],
+		]);
+
+		await expect(repository.listDescriptions()).resolves.toEqual([
+			"Groceries",
+			"NETFLIX.COM",
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [],
+			    "sql": "select distinct "description" from "transaction"",
 			  },
 			]
 		`);

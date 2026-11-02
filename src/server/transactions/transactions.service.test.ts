@@ -50,6 +50,7 @@ function serviceWith(
 		update: unstaged,
 		findUnplanned: unstaged,
 		findDescriptions: unstaged,
+		listDescriptions: unstaged,
 		findInDateWindow: unstaged,
 		findLink: unstaged,
 		setLink: unstaged,

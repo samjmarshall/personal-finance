@@ -104,6 +104,8 @@ export const possibleDuplicates = pgTable(
 		amount: d.doublePrecision().notNull(),
 		date: d.timestamp({ withTimezone: true }).notNull(),
 		description: d.text().notNull(),
+		// Merged score at flag time (adr029); null on reviews flagged before it.
+		descriptionScore: d.doublePrecision(),
 		status: possibleDuplicateStatus()
 			.notNull()
 			.default(PossibleDuplicateStatus.Pending),

@@ -1,5 +1,3 @@
-// No imports: `scripts/` loads this file under plain node (adr029 spike).
-
 /** Payment processors banks put before a merchant, as "PAYPAL *NETFLIX". */
 export const PROCESSOR_PREFIXES = [
 	"PAYPAL",
@@ -18,6 +16,13 @@ export const NOISE_WORDS = ["AUS", "AU", "QL", "QLD", "CARD", "VALUE", "DATE"];
 
 /** Fits Titan Text Embeddings V2's default and Cohere Embed v3. */
 export const EMBEDDING_DIMENSIONS = 1024;
+
+// Tuned on 576 labelled real pairs (adr029 item 8). An Adopt needs both bars;
+// each sits 0.05 above the highest two-purchase pair, or at its floor.
+export const ADOPT_WORD_SCORE = 0.55;
+export const ADOPT_MEANING_SCORE = 0.7;
+/** Merged score at or above this piles a review under "Similar". */
+export const SIMILAR_SCORE = 0.59;
 
 export interface WordWeights {
 	docs: number;
@@ -109,4 +114,20 @@ export function meaningScore(a: number[], b: number[]): number {
 /** Equal-weight mean; the word score alone when meaning is unavailable. */
 export function mergedScore(word: number, meaning: number | null): number {
 	return meaning === null ? word : (word + meaning) / 2;
+}
+
+/** `vectors` is keyed by cleaned text; null meaning when null or either side is missing. */
+export function scoreDescriptions(
+	bank: string,
+	mine: string,
+	weights: WordWeights,
+	vectors: ReadonlyMap<string, number[]> | null,
+): DescriptionScore {
+	const a = cleanDescription(bank);
+	const b = cleanDescription(mine);
+	const word = wordScore(a, b, weights);
+	const vectorA = vectors?.get(a);
+	const vectorB = vectors?.get(b);
+	const meaning = vectorA && vectorB ? meaningScore(vectorA, vectorB) : null;
+	return { word, meaning, merged: mergedScore(word, meaning) };
 }

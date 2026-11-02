@@ -1,5 +1,12 @@
 import { PossibleDuplicateStatus } from "~/lib/constants";
 import { dayNumberInZone, toCents } from "~/lib/utils";
+import {
+	ADOPT_MEANING_SCORE,
+	ADOPT_WORD_SCORE,
+	type DescriptionScore,
+	scoreDescriptions,
+	type WordWeights,
+} from "./description-score";
 import type { SyncedTransaction, Transaction } from "./transaction.interface";
 
 /** Furthest apart, in calendar days, a close pair may be. */
@@ -58,6 +65,18 @@ export interface ReconcileInput {
 	/** Every account id RedBark listed this run. */
 	liveAccountIds: readonly string[];
 	timeZone: string;
+	/** Over every saved description plus the incoming ones. */
+	weights: WordWeights;
+	/** Embeddings by cleaned description; null when none could be had. */
+	vectors: ReadonlyMap<string, number[]> | null;
+}
+
+export type MatchInput = Omit<ReconcileInput, "weights" | "vectors">;
+
+export interface MatchPair {
+	bank: SyncedTransaction;
+	candidate: MatchCandidate;
+	dayGap: number;
 }
 
 /** `heldBy` is the review to release into a row once the adoption lands. */
@@ -72,6 +91,8 @@ export interface Flag {
 	transactionId: number;
 	row: SyncedTransaction;
 	reviewId: number | null;
+	/** Merged score for a new review; null on a refresh, which keeps its saved one. */
+	descriptionScore: number | null;
 }
 
 export interface ReconcilePlan {
@@ -88,24 +109,31 @@ interface Side {
 	cents: number;
 }
 
-interface Pair {
-	bank: SyncedTransaction;
-	candidate: MatchCandidate;
-	dayGap: number;
-	sharedWords: number;
+interface Pair extends MatchPair {
+	score: DescriptionScore;
 }
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/**
- * Decides, per bank row: refresh a known one, refresh or skip its review, adopt an
- * exact household row, flag a close one (same cent, other day), or add it. Pairs
- * one-to-one, exact first; within each, most shared words, then nearest day, in an
- * order fixed by the data alone, so a retry gives the same plan.
- */
-export function planReconcile(input: ReconcileInput): ReconcilePlan {
+// A household row can be adopted or flagged; a held one only adopted (the
+// exact row wins, the close one is another purchase); a retired account's
+// bank row only flagged. A listed account's bank row is never a candidate.
+const canAdopt = (c: MatchCandidate) => c.externalId === null;
+const isRetired = (c: MatchCandidate, live: ReadonlySet<string>) =>
+	c.externalId !== null &&
+	c.externalAccountId !== null &&
+	!live.has(c.externalAccountId);
+const canFlag = (c: MatchCandidate, live: ReadonlySet<string>) =>
+	c.heldBy === null && (canAdopt(c) || isRetired(c, live));
+
+const clearsAdoptBars = ({ word, meaning }: DescriptionScore) =>
+	word >= ADOPT_WORD_SCORE &&
+	meaning !== null &&
+	meaning >= ADOPT_MEANING_SCORE;
+
+/** Fills refresh, skipped and the pending-review flags; the rest are unmatched, by bank id. */
+function splitIncoming(input: MatchInput) {
 	const known = new Set(input.knownIds);
-	const live = new Set(input.liveAccountIds);
 	const reviews = new Map(input.reviews.map((r) => [r.externalId, r]));
 	const result: ReconcilePlan = {
 		refresh: [],
@@ -114,7 +142,6 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		flag: [],
 		skipped: [],
 	};
-
 	const unmatched: SyncedTransaction[] = [];
 	const incoming = [...input.incoming].sort((a, b) =>
 		byId(a.externalId, b.externalId),
@@ -127,22 +154,16 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 				transactionId: review.transactionId,
 				row,
 				reviewId: review.id,
+				descriptionScore: null,
 			});
 		else if (review) result.skipped.push(row);
 		else unmatched.push(row);
 	}
+	return { result, unmatched };
+}
 
-	// A household row can be adopted or flagged; a held one only adopted (the
-	// exact row wins, the close one is another purchase); a retired account's
-	// bank row only flagged. A listed account's bank row is never a candidate.
-	const canAdopt = (c: MatchCandidate) => c.externalId === null;
-	const isRetired = (c: MatchCandidate) =>
-		c.externalId !== null &&
-		c.externalAccountId !== null &&
-		!live.has(c.externalAccountId);
-	const canFlag = (c: MatchCandidate) =>
-		c.heldBy === null && (canAdopt(c) || isRetired(c));
-
+function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
+	const live = new Set(input.liveAccountIds);
 	const sides = new Map<SyncedTransaction | MatchCandidate, Side>();
 	const side = (item: SyncedTransaction | MatchCandidate) => {
 		let found = sides.get(item);
@@ -156,26 +177,51 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		return found;
 	};
 
-	const pairs: Pair[] = [];
+	const pairs: MatchPair[] = [];
 	for (const bank of unmatched) {
 		const b = side(bank);
 		// A $0 row is a note (a waived fee, a loan notice), not a Spend: pairing two is noise.
 		if (b.cents === 0) continue;
 		for (const candidate of input.candidates) {
-			if (!canAdopt(candidate) && !canFlag(candidate)) continue;
+			if (!canAdopt(candidate) && !canFlag(candidate, live)) continue;
 			const c = side(candidate);
 			// A real copy keeps its amount; a near one was always another purchase in review.
 			if (b.cents !== c.cents) continue;
 			const dayGap = Math.abs(b.day - c.day);
 			if (dayGap > MATCH_DAYS) continue;
-			pairs.push({
-				bank,
-				candidate,
-				dayGap,
-				sharedWords: sharedWords(bank.description, candidate.description),
-			});
+			pairs.push({ bank, candidate, dayGap });
 		}
 	}
+	return pairs;
+}
+
+/**
+ * Unscored pairs (same cent, within 7 days) for bank rows not yet saved or
+ * reviewed. Lets the caller skip loading word weights when nothing pairs.
+ */
+export function matchPairs(input: MatchInput): MatchPair[] {
+	return pairUp(splitIncoming(input).unmatched, input);
+}
+
+/**
+ * Decides, per bank row: refresh a known one, refresh or skip its review, adopt
+ * a same-day household row whose description clears both Adopt bars, flag a
+ * close one (same cent, within 7 days), or add it. Pairs one-to-one, Adopts
+ * first; within each, highest merged score, then nearest day, in an order fixed
+ * by the data alone, so a retry gives the same plan.
+ */
+export function planReconcile(input: ReconcileInput): ReconcilePlan {
+	const live = new Set(input.liveAccountIds);
+	const { result, unmatched } = splitIncoming(input);
+	const pairs: Pair[] = pairUp(unmatched, input).map((pair) => ({
+		...pair,
+		score: scoreDescriptions(
+			pair.bank.description,
+			pair.candidate.description,
+			input.weights,
+			input.vectors,
+		),
+	}));
 
 	const usedBanks = new Set<SyncedTransaction>();
 	const usedCandidates = new Set<MatchCandidate>();
@@ -187,12 +233,15 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		return true;
 	};
 
-	// Words before days: two same-priced subscriptions a day apart must not cross.
+	// Score before days: two same-priced subscriptions a day apart must not cross.
 	const exact = pairs
-		.filter((p) => p.dayGap === 0 && canAdopt(p.candidate))
+		.filter(
+			(p) =>
+				p.dayGap === 0 && canAdopt(p.candidate) && clearsAdoptBars(p.score),
+		)
 		.sort(
 			(x, y) =>
-				y.sharedWords - x.sharedWords ||
+				y.score.merged - x.score.merged ||
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,
 		);
@@ -206,10 +255,10 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	}
 
 	const close = pairs
-		.filter((p) => canFlag(p.candidate))
+		.filter((p) => canFlag(p.candidate, live))
 		.sort(
 			(x, y) =>
-				y.sharedWords - x.sharedWords ||
+				y.score.merged - x.score.merged ||
 				x.dayGap - y.dayGap ||
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,
@@ -220,6 +269,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 				transactionId: pair.candidate.id,
 				row: pair.bank,
 				reviewId: null,
+				descriptionScore: pair.score.merged,
 			});
 	}
 

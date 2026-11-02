@@ -114,6 +114,8 @@ export interface TransactionsRepository {
 	/** Unlinked Spend in the half-open `[from, to)` window. */
 	findUnplanned(window: UnplannedWindow): Promise<Transaction[]>;
 	findDescriptions(ids: number[]): Promise<TransactionDescription[]>;
+	/** Every distinct description: the word-weight corpus (adr029). */
+	listDescriptions(): Promise<string[]>;
 	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]>;
 	/** `undefined` when no row has the id. */
 	findLink(id: number): Promise<TransactionLink | undefined>;
@@ -401,9 +403,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				? await tx
 						.insert(possibleDuplicates)
 						.values(
-							newFlags.map(({ transactionId, row }) => ({
+							newFlags.map(({ transactionId, row, descriptionScore }) => ({
 								transactionId,
 								...row,
+								descriptionScore,
 							})),
 						)
 						.onConflictDoNothing({
@@ -620,6 +623,13 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.select({ id: transactions.id, description: transactions.description })
 			.from(transactions)
 			.where(inArray(transactions.id, ids));
+	}
+
+	async listDescriptions(): Promise<string[]> {
+		const rows = await this.db
+			.selectDistinct({ description: transactions.description })
+			.from(transactions);
+		return rows.map((row) => row.description);
 	}
 
 	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]> {

@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
 adrs: [adr029]
-status: Ready for Review - Phase 3 of 6
+status: Ready for Review - Phase 4 of 6
 ---
 # Pair bank rows by word and meaning scores (adr029) Implementation Plan
 
@@ -215,10 +215,10 @@ Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning
 - `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md:51,52,55,103`: Adopt needs the description test, Possible duplicate includes same-day pairs that fall short, pairing goes by merged score, and :103 notes the fix (adr029). The same changes go in `docs/feature/history-import.md:114,116,120`. `CONTEXT.md` already has the wording; its "Proposed" markers go when `/validate` accepts adr029.
 
 ### Success
-- [ ] `make check` passes (includes `db:check` and the schema/interface contract)
-- [ ] `make test` passes
-- [ ] `make db_migrate` applied `0026` on `local/<branch>` (`make db_branch_status` shows `*`)
-- [ ] An import of a fresh range on the branch DB makes no new Adopts, and each new `possible_duplicate` row has a `description_score`
+- [x] `make check` passes (includes `db:check` and the schema/interface contract)
+- [x] `make test` passes
+- [x] `make db_migrate` applied `0026` on `local/<branch>` (`make db_branch_status` shows `*`)
+- [x] An import of a fresh range on the branch DB makes no new Adopts, and each new `possible_duplicate` row has a `description_score`
 
 ## Phase 5: Meaning score from Bedrock, with a cache
 ### Changes

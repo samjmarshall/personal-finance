@@ -48,6 +48,7 @@ export interface PossibleDuplicate {
 	createdAt: Date;
 	date: Date;
 	description: string;
+	descriptionScore: number | null;
 	externalAccountId: string;
 	externalId: string;
 	provenance: SyncedTransaction["provenance"];

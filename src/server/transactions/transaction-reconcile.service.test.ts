@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type {
-	ReconcileCounts,
-	ReconcilePlan,
-	SyncedTransaction,
+import {
+	type MatchCandidate,
+	type ReconcileCounts,
+	type ReconcilePlan,
+	type SyncedTransaction,
+	scoreDescriptions,
+	wordWeights,
 } from "~/domain/transactions";
 import { Provenance } from "~/lib/constants";
 import { unstaged } from "~/test/fakes";
@@ -17,6 +20,7 @@ function serviceWith(staged: Partial<ReconcileRepository>) {
 		findKnownExternalIds: unstaged,
 		findReviews: unstaged,
 		findMatchCandidates: unstaged,
+		listDescriptions: unstaged,
 		applyReconcile: unstaged,
 		...staged,
 	};
@@ -40,6 +44,16 @@ describe("reconcileSynced", () => {
 		known: 0,
 	};
 	const LIVE = { liveAccountIds: ["acct_1"] };
+	// The same Sydney day as SYNCED.
+	const mine = (description: string, amount = 42.5): MatchCandidate => ({
+		id: 1,
+		date: new Date("2026-10-14T13:00:00.000Z"),
+		amount,
+		description,
+		externalId: null,
+		externalAccountId: null,
+		heldBy: null,
+	});
 
 	function reconciling(staged: Partial<ReconcileRepository> = {}) {
 		const reads: unknown[][] = [];
@@ -55,6 +69,10 @@ describe("reconcileSynced", () => {
 			},
 			findMatchCandidates: async (...args) => {
 				reads.push(["candidates", ...args]);
+				return [];
+			},
+			listDescriptions: async () => {
+				reads.push(["descriptions"]);
 				return [];
 			},
 			applyReconcile: async (plan) => {
@@ -104,33 +122,61 @@ describe("reconcileSynced", () => {
 		]);
 	});
 
-	it("adopts a household row on the same Sydney day and cent", async () => {
-		const { service, plans } = reconciling({
-			findMatchCandidates: async () => [
-				{
-					id: 1,
-					date: new Date("2026-10-14T13:00:00.000Z"),
-					amount: 42.5,
-					description: "Coffee",
-					externalId: null,
-					externalAccountId: null,
-					heldBy: null,
-				},
-			],
+	it("skips reading descriptions when no bank row pairs", async () => {
+		const { service, reads } = reconciling({
+			findMatchCandidates: async () => [mine("Woolworths", 42.6)],
 		});
 
-		await expect(service.reconcileSynced([SYNCED], LIVE)).resolves.toEqual(
-			COUNTS,
-		);
+		await service.reconcileSynced([SYNCED], LIVE);
+
+		expect(reads.map(([kind]) => kind)).not.toContain("descriptions");
+	});
+
+	// No meaning score yet, and an Adopt needs one (adr029).
+	it("flags, never adopts, a same-day row with the same words", async () => {
+		const { service, plans } = reconciling({
+			findMatchCandidates: async () => [mine("Woolworths")],
+		});
+
+		await service.reconcileSynced([SYNCED], LIVE);
+
 		expect(plans).toEqual([
 			{
 				refresh: [],
 				add: [],
-				adopt: [{ transactionId: 1, row: SYNCED, heldBy: null }],
-				flag: [],
+				adopt: [],
+				flag: [
+					{
+						transactionId: 1,
+						row: SYNCED,
+						reviewId: null,
+						descriptionScore: 1,
+					},
+				],
 				skipped: [],
 			},
 		]);
+	});
+
+	it("weighs words over every saved description plus the incoming ones", async () => {
+		const row = { ...SYNCED, description: "WOOLWORTHS METRO" };
+		const saved = ["Woolworths", "Coles"];
+		const { service, plans } = reconciling({
+			findMatchCandidates: async () => [mine("Woolworths")],
+			listDescriptions: async () => saved,
+		});
+
+		await service.reconcileSynced([row], LIVE);
+
+		const weights = wordWeights([...saved, row.description]);
+		expect(plans[0]?.flag[0]?.descriptionScore).toBe(
+			scoreDescriptions(row.description, "Woolworths", weights, null).merged,
+		);
+		// Without the incoming row, METRO is rarer and the score lower.
+		expect(plans[0]?.flag[0]?.descriptionScore).not.toBe(
+			scoreDescriptions(row.description, "Woolworths", wordWeights(saved), null)
+				.merged,
+		);
 	});
 
 	// Postgres refuses one upsert that hits the same row twice (SQLSTATE 21000).

@@ -1,7 +1,7 @@
 ---
 status: living
-last-updated: 2026-10-28
-related-adrs: [adr017, adr022]
+last-updated: 2026-11-02
+related-adrs: [adr017, adr022, adr029]
 related-design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 related-epic: none
 related-issues: []
@@ -39,6 +39,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `src/server/transactions/transaction-reconcile.service.ts` — `reconcileSynced`: reads known ids, reviews and candidates, plans, then applies (shared with `cdr-sync`).
 - `src/server/transactions/transactions.repository.ts` — `applyReconcile` (shared with `cdr-sync`) and the three resolve writes.
 - `src/domain/transactions/reconcile-synced.ts` — `planReconcile`: known, adopt, flag or add, per bank row.
+- `src/domain/transactions/description-score.ts` — cleans descriptions, scores words and meaning, holds the Adopt bars (adr029).
 
 **Choice made**: a background Inngest job split into one step per account per 90-day window. Each step reconciles its rows the same way the daily sync does. Counts add up on the `cdr_import` row, and the page polls that row.
 **Rejected alternatives**: fetching inside the request (7 years won't fit in a page load, and RedBark caps one read at 5,000 rows); one big step (a retry would redo the whole import).
@@ -47,6 +48,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `flagged` is the change in pending reviews, not the number made. Joining a bank row to your row can close a review an earlier step opened, so a run's total can go below 0. The page shows it as 0 at the lowest.
 - A queued or running row older than 24 hours counts as not active, so a run that died without reaching `onFailure` can't block the form forever.
 - The form and `startImport` share one range check, `importRangeError`, so they refuse the same ranges with the same words.
+- A chunk with any pair reads every distinct description once, to weigh words by how rare they are. A chunk with none skips that read.
 
 ### Operations
 
@@ -112,11 +114,11 @@ stateDiagram-v2
 
 **What each bank row becomes** (`planReconcile`):
 - **Already here** (`known`): the bank id is already in Ledger or waiting in a review, or a member already chose Keep mine on it. Ledger refreshes the row or review instead of doubling it.
-- **Matched to yours** (`adopted`): same household day and same amount as a row you made. Your row takes the bank's id, date and amount, but keeps your description and edits. If that row was waiting in a review, the review closes and Ledger adds its bank row.
-- **Flagged** (`flagged`): the same amount as a row you made, on another day within 7 days. A near amount is added, not flagged: a real copy keeps its amount. A `possible_duplicate` waits on the page.
+- **Matched to yours** (`adopted`): same household day and same amount as a row you made, and the descriptions match in both words and meaning. Your row takes the bank's id, date and amount, but keeps your description and edits. If that row was waiting in a review, the review closes and Ledger adds its bank row.
+- **Flagged** (`flagged`): the same amount as a row you made within 7 days, but not a match: another day, or the same day with descriptions that don't match closely enough. A near amount is added, not flagged: a real copy keeps its amount. A `possible_duplicate` waits on the page.
 - **Added**: no match. Added as a new bank row.
 
-When a bank row could pair with more than one of yours, the pair whose descriptions share the most words wins, then the nearest day. A word is any run of letters or digits, case-blind, counted once.
+When a bank row could pair with more than one of yours, the pair whose descriptions score highest wins, then the nearest day. The score mixes shared rare words with meaning (adr029). Each new review saves its score.
 
 **Review answers**:
 - **Keep mine**: drops the bank's copy.
@@ -124,7 +126,7 @@ When a bank row could pair with more than one of yours, the pair whose descripti
 - **Both are real**: adds the bank's row too.
 
 Reviews sit in two piles:
-- **Similar description**: 3 or more shared words. Its fill button picks **Use bank's**.
+- **Similar description**: 3 or more shared words. A word is any run of letters or digits, case-blind, counted once. Its fill button picks **Use bank's**.
 - **Different description**: the rest. Its fill button picks **Both are real**.
 
 A fill only answers rows with no answer yet. **Apply** sends every answer at once, and a toast confirms it.

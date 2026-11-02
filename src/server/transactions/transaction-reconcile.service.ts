@@ -1,8 +1,10 @@
 import {
 	MATCH_DAYS,
+	matchPairs,
 	planReconcile,
 	type ReconcileCounts,
 	type SyncedTransaction,
+	wordWeights,
 } from "~/domain/transactions";
 import { HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import type { TransactionsRepository } from "./transactions.repository";
@@ -25,12 +27,14 @@ const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
 	flagged: a.flagged + b.flagged,
 	known: a.known + b.known,
 });
+const NO_WEIGHTS = wordWeights([]);
 
 type ReconcileRepository = Pick<
 	TransactionsRepository,
 	| "findKnownExternalIds"
 	| "findReviews"
 	| "findMatchCandidates"
+	| "listDescriptions"
 	| "applyReconcile"
 >;
 
@@ -90,15 +94,23 @@ export class TransactionReconcileService {
 				liveAccountIds,
 			}),
 		]);
+		const match = {
+			incoming,
+			knownIds,
+			reviews,
+			candidates,
+			liveAccountIds,
+			timeZone: HOUSEHOLD_TIME_ZONE,
+		};
+		// Every description is a big read, wasted when nothing pairs.
+		const weights = matchPairs(match).length
+			? wordWeights([
+					...(await this.repository.listDescriptions()),
+					...incoming.map((row) => row.description),
+				])
+			: NO_WEIGHTS;
 		return this.repository.applyReconcile(
-			planReconcile({
-				incoming,
-				knownIds,
-				reviews,
-				candidates,
-				liveAccountIds,
-				timeZone: HOUSEHOLD_TIME_ZONE,
-			}),
+			planReconcile({ ...match, weights, vectors: null }),
 		);
 	}
 }

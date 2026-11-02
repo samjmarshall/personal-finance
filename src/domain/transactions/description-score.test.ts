@@ -3,6 +3,7 @@ import {
 	cleanDescription,
 	meaningScore,
 	mergedScore,
+	scoreDescriptions,
 	wordScore,
 	wordWeights,
 } from "./description-score";
@@ -119,5 +120,40 @@ describe("mergedScore", () => {
 
 	it("is the mean of both scores otherwise", () => {
 		expect(mergedScore(0.4, 0.8)).toBeCloseTo(0.6);
+	});
+});
+
+describe("scoreDescriptions", () => {
+	const weights = wordWeights(["NETFLIX.COM SYDNEY AUS", "Netflix", "Woolies"]);
+	const vectors = new Map([
+		["NETFLIX COM SYDNEY", [1, 0]],
+		["NETFLIX", [1, 1]],
+	]);
+
+	it("scores the cleaned texts, meaning from their vectors", () => {
+		const score = scoreDescriptions(
+			"NETFLIX.COM SYDNEY AUS",
+			"Netflix",
+			weights,
+			vectors,
+		);
+		const word = wordScore("NETFLIX COM SYDNEY", "NETFLIX", weights);
+		expect(score).toEqual({
+			word,
+			meaning: meaningScore([1, 0], [1, 1]),
+			merged: mergedScore(word, meaningScore([1, 0], [1, 1])),
+		});
+	});
+
+	it("has no meaning when either side has no vector", () => {
+		const score = scoreDescriptions("Woolies", "Netflix", weights, vectors);
+		expect(score).toEqual({ word: 0, meaning: null, merged: 0 });
+	});
+
+	it("has no meaning when there are no vectors at all", () => {
+		const score = scoreDescriptions("Netflix", "NETFLIX", weights, null);
+		expect(score.meaning).toBeNull();
+		expect(score.merged).toBe(score.word);
+		expect(score.word).toBeCloseTo(1);
 	});
 });
