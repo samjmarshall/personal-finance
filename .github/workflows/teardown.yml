@@ -110,7 +110,7 @@ jobs:
       # writes under preview/<branch>/ or local/<branch>/ (adr028). Last, so no
       # preview is left to upload after the cleanup. !cancelled(): a failed step
       # above must not strand the files; the script is safe to re-run.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: ${{ !cancelled() && steps.skip.outputs.skip != 'true' }}
 
       - uses: pnpm/action-setup@v4

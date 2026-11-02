@@ -123,7 +123,7 @@ jobs:
           PR: ${{ github.event.pull_request.number || inputs.pr }}
         run: echo "sha=$(gh pr view "$PR" --json headRefOid -q .headRefOid)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pr) || '' }}
           fetch-depth: 0
@@ -231,7 +231,7 @@ jobs:
             echo "body<<$delim"; cat "$RUNNER_TEMP/review.md"; echo; echo "$delim"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.review.outputs.found == 'true'
         with:
           ref: ${{ github.event.pull_request.head.ref }}
@@ -365,7 +365,7 @@ jobs:
             echo "sha=$HEAD_SHA"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.guard.outputs.skip == 'false'
         with:
           ref: ${{ steps.guard.outputs.branch }}

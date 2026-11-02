@@ -63,7 +63,7 @@ jobs:
     outputs:
       app_url: ${{ steps.apply.outputs.app_url }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # The default wrapper echoes stdout, which corrupts `$(terraform output -raw)`.
       - uses: hashicorp/setup-terraform@v4
@@ -115,7 +115,7 @@ jobs:
       # Actions log masking doesn't reach PR comments.
       TFCMT_MASKS: env:TF_VAR_posthog_key
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Push events carry no PR number. No open PR: the plan still runs but posts
       # nothing. PR opened after the last push? Re-run this job.
@@ -170,7 +170,7 @@ jobs:
     outputs:
       deployment_url: ${{ steps.deploy.outputs.deployment_url }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
@@ -216,7 +216,7 @@ jobs:
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
@@ -295,7 +295,7 @@ jobs:
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       AWS_REGION: ${{ vars.AWS_REGION }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: hashicorp/setup-terraform@v4
         with:
@@ -363,7 +363,7 @@ jobs:
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
