@@ -90,7 +90,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
 			{error && (
 				<p
-					className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-sm"
+					className="rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-sm text-[var(--badge-spend-fg)]"
 					role="alert"
 				>
 					{error}
@@ -101,7 +101,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 				{isSignUp ? "Create account" : "Sign in"}
 			</Button>
 
-			<p className="text-center text-muted-foreground text-sm">
+			<p className="text-center text-sm text-muted-foreground">
 				{isSignUp ? "Already have an account? " : "Need an account? "}
 				<Link
 					className="font-medium text-primary hover:underline"

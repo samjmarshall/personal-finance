@@ -57,16 +57,16 @@ export function OneTimeSection<T extends { id: number }>({
 	const pastId = `${idPrefix}-onetime-past`;
 	return (
 		<Card className="[--card-spacing:0px]">
-			<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3">
+			<div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3">
 				<span className="flex items-center gap-2">
-					<span className="font-semibold text-foreground text-sm">
+					<span className="text-sm font-semibold text-foreground">
 						One-time
 					</span>
-					<span className="text-muted-foreground text-xs">
+					<span className="text-xs text-muted-foreground">
 						({items.length})
 					</span>
 				</span>
-				<span className="text-muted-foreground text-xs">
+				<span className="text-xs text-muted-foreground">
 					<Money className="font-medium" tone={totalTone} value={total} /> total
 				</span>
 			</div>
@@ -78,7 +78,7 @@ export function OneTimeSection<T extends { id: number }>({
 						<button
 							aria-controls={pastId}
 							aria-expanded={pastOpen}
-							className="flex w-full items-center gap-2 rounded-sm px-4 py-2 text-left text-muted-foreground text-xs transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+							className="flex w-full items-center gap-2 rounded-sm px-4 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
 							onClick={() => setPastOpen((v) => !v)}
 							type="button"
 						>
@@ -91,7 +91,7 @@ export function OneTimeSection<T extends { id: number }>({
 							Past ({past.length})
 						</button>
 						<div
-							className="divide-y divide-border border-border border-t"
+							className="divide-y divide-border border-t border-border"
 							hidden={!pastOpen}
 							id={pastId}
 						>

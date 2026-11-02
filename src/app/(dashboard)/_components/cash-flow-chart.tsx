@@ -96,8 +96,8 @@ function CashFlowHeader({ children }: { children: ReactNode }) {
 	return (
 		<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
 			<div>
-				<h2 className="font-semibold text-foreground text-sm">Cash flow</h2>
-				<p className="text-muted-foreground text-xs">
+				<h2 className="text-sm font-semibold text-foreground">Cash flow</h2>
+				<p className="text-xs text-muted-foreground">
 					Recorded flow, then a forward projection of commitments
 				</p>
 			</div>
@@ -117,7 +117,7 @@ function CashFlowChartBody({ periodKind }: { periodKind: PeriodKind }) {
 	const hasFlow = data.buckets.some((b) => b.spend > 0 || b.inflow > 0);
 	if (!hasFlow && !data.hasBalanceAnchor) {
 		return (
-			<p className="py-8 text-center text-muted-foreground text-sm">
+			<p className="py-8 text-center text-sm text-muted-foreground">
 				No cash flow to project yet.
 			</p>
 		);
@@ -137,7 +137,7 @@ function CashFlowChartBody({ periodKind }: { periodKind: PeriodKind }) {
 
 	return (
 		<div>
-			<div className="mb-2 flex flex-wrap items-center gap-3 text-muted-foreground text-xs">
+			<div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
 				<span className="flex items-center gap-1.5">
 					<span className="h-2 w-2 rounded-[2px] bg-positive" />
 					Inflow
@@ -287,7 +287,7 @@ function CashFlowTooltip({
 					</div>
 				)}
 				{row.balance != null && (
-					<div className="flex justify-between gap-4 border-border/50 border-t pt-1">
+					<div className="flex justify-between gap-4 border-t border-border/50 pt-1">
 						<span className="text-muted-foreground">Balance</span>
 						<span className="tabular font-medium text-foreground">
 							{formatCurrency(row.balance)}
@@ -296,8 +296,8 @@ function CashFlowTooltip({
 				)}
 			</div>
 			{items.length > 0 && (
-				<div className="mt-2 border-border/50 border-t pt-1.5">
-					<p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+				<div className="mt-2 border-t border-border/50 pt-1.5">
+					<p className="mb-1 text-[10px] tracking-wide text-muted-foreground uppercase">
 						Projected
 					</p>
 					{/* Cap height + scroll: a busy bucket (many projected items) would

@@ -21,14 +21,14 @@ export async function SpendCharts() {
 					<CardContent>
 						<div className="mb-4 flex items-center justify-between">
 							<div>
-								<h2 className="font-semibold text-foreground text-sm">
+								<h2 className="text-sm font-semibold text-foreground">
 									Monthly spend
 								</h2>
-								<p className="text-muted-foreground text-xs">
+								<p className="text-xs text-muted-foreground">
 									Recorded outgoings by month
 								</p>
 							</div>
-							<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+							<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
 								<ArrowDownRight className="h-3.5 w-3.5 text-spend" />
 								Net <Money className="font-medium" value={summary.totals.net} />
 							</div>
@@ -39,10 +39,10 @@ export async function SpendCharts() {
 
 				<Card>
 					<CardContent>
-						<h2 className="font-semibold text-foreground text-sm">
+						<h2 className="text-sm font-semibold text-foreground">
 							Spend by priority
 						</h2>
-						<p className="mb-4 text-muted-foreground text-xs">
+						<p className="mb-4 text-xs text-muted-foreground">
 							Where the money goes
 						</p>
 						<PriorityBreakdown
@@ -56,10 +56,10 @@ export async function SpendCharts() {
 			<div className="mt-4">
 				<Card>
 					<CardContent>
-						<h2 className="font-semibold text-foreground text-sm">
+						<h2 className="text-sm font-semibold text-foreground">
 							Top groups
 						</h2>
-						<p className="mb-4 text-muted-foreground text-xs">
+						<p className="mb-4 text-xs text-muted-foreground">
 							Largest recorded spend across all transactions
 						</p>
 						<TopGroups data={summary.topGroups} />

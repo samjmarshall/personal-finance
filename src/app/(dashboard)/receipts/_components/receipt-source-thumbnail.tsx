@@ -67,7 +67,7 @@ export function ReceiptSourceThumbnail({
 			}
 			className={cn(
 				FRAME,
-				"group relative block outline-none transition-colors hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+				"group relative block transition-colors outline-none hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
 			)}
 			onClick={onOpen}
 			type="button"

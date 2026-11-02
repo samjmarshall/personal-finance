@@ -110,7 +110,7 @@ export function BankAccountRow({
 						</Button>
 					</form>
 				) : (
-					<p className="wrap-anywhere font-medium text-foreground text-sm">
+					<p className="text-sm font-medium wrap-anywhere text-foreground">
 						<span id={labelId}>{label}</span>
 						<button
 							aria-label={`Rename ${name}`}
@@ -124,7 +124,7 @@ export function BankAccountRow({
 						</button>
 					</p>
 				)}
-				<p className="flex flex-wrap gap-x-2 text-muted-foreground text-xs">
+				<p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
 					{account.accountNumber && (
 						<span className="font-mono" id={numberId}>
 							<span aria-hidden="true">{account.accountNumber}</span>
@@ -159,7 +159,7 @@ export function BankAccountRow({
 			{/* Only the balance greys: a switched-off account still syncs. */}
 			<p
 				className={cn(
-					"shrink-0 whitespace-nowrap text-sm tabular-nums",
+					"shrink-0 text-sm whitespace-nowrap tabular-nums",
 					account.inBalance ? "text-foreground" : "text-muted-foreground",
 					account.inBalance === false && "line-through",
 				)}

@@ -20,12 +20,12 @@ export function SettingsSection({
 	return (
 		<section aria-labelledby={headingId}>
 			<h2
-				className="font-semibold text-base text-foreground tracking-tight"
+				className="text-base font-semibold tracking-tight text-foreground"
 				id={headingId}
 			>
 				{title}
 			</h2>
-			<p className="mt-1 text-muted-foreground text-sm">{description}</p>
+			<p className="mt-1 text-sm text-muted-foreground">{description}</p>
 			{children}
 		</section>
 	);

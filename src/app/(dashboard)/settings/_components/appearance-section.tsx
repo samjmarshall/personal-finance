@@ -77,7 +77,7 @@ export function AppearanceSection() {
 						<button
 							aria-pressed={active}
 							className={cn(
-								"rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+								"rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
 								active
 									? "border-primary bg-accent/40"
 									: "border-border hover:border-foreground/30",
@@ -87,7 +87,7 @@ export function AppearanceSection() {
 							type="button"
 						>
 							<ThemePreview tone={tone} />
-							<span className="mt-3 flex items-center gap-2 font-medium text-foreground text-sm">
+							<span className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
 								<Icon className="h-4 w-4" />
 								{label}
 							</span>

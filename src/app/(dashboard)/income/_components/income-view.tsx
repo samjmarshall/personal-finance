@@ -94,7 +94,7 @@ export function IncomeView() {
 				<span className="hidden text-right text-muted-foreground sm:block">
 					{formatDate(item.expectedDate)}
 				</span>
-				<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+				<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
 					<button
 						aria-label={`Edit ${item.source}`}
 						className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -142,11 +142,11 @@ export function IncomeView() {
 				).map(([label, value]) => (
 					<Card key={label}>
 						<CardContent>
-							<p className="font-medium text-muted-foreground text-xs">
+							<p className="text-xs font-medium text-muted-foreground">
 								{label}
 							</p>
 							<Money
-								className="mt-1.5 block font-semibold text-lg sm:text-xl"
+								className="mt-1.5 block text-lg font-semibold sm:text-xl"
 								tone="income"
 								value={value}
 							/>
@@ -160,11 +160,11 @@ export function IncomeView() {
 					const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
 					return (
 						<Card className="[--card-spacing:0px]" key={person}>
-							<div className="flex items-center justify-between border-border border-b bg-muted/40 px-4 py-3">
-								<h2 className="font-semibold text-foreground text-sm">
+							<div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
+								<h2 className="text-sm font-semibold text-foreground">
 									{person}
 								</h2>
-								<span className="text-muted-foreground text-xs">
+								<span className="text-xs text-muted-foreground">
 									<Money
 										className="font-medium"
 										tone="income"
@@ -174,7 +174,7 @@ export function IncomeView() {
 								</span>
 							</div>
 							<div className="divide-y divide-border">
-								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+								<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
 									<span>Source</span>
 									<span className="text-right">Fortnight</span>
 									<span className="text-right">Month</span>
@@ -204,7 +204,7 @@ export function IncomeView() {
 											tone="income"
 											value={item.year}
 										/>
-										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
 											<button
 												aria-label={`Edit ${item.source}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -234,7 +234,7 @@ export function IncomeView() {
 
 				<OneTimeSection
 					columnHeader={
-						<div className="hidden grid-cols-[1fr_repeat(2,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+						<div className="hidden grid-cols-[1fr_repeat(2,7rem)_3rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
 							<span>Source</span>
 							<span className="text-right">Amount</span>
 							<span className="text-right">Expected</span>
@@ -252,7 +252,7 @@ export function IncomeView() {
 				{!groups.length && !oneTime.length && (
 					<Card className="text-center [--card-spacing:--spacing(10)]">
 						<CardContent>
-							<p className="text-muted-foreground text-sm">
+							<p className="text-sm text-muted-foreground">
 								No income sources yet. Add one to get started.
 							</p>
 							<Button className="mt-4" onClick={openAdd} size="sm">

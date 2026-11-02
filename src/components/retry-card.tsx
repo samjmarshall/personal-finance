@@ -31,7 +31,7 @@ export function RetryCard({
 	return (
 		<Card className={cn("text-center", className)} role="alert">
 			<CardContent className="flex flex-col items-center gap-3">
-				<p className="text-muted-foreground text-sm">Couldn't load {label}.</p>
+				<p className="text-sm text-muted-foreground">Couldn't load {label}.</p>
 				<Button
 					// The card stays up through the server refresh; the skeleton covers
 					// the client fetch after.

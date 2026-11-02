@@ -107,7 +107,7 @@ function NavLinks({ current }: { current: string }) {
 								<Icon className="h-[18px] w-[18px]" />
 								{item.label}
 							</div>
-							<div className="ml-5 flex flex-col gap-1 border-sidebar-muted/30 border-l pl-2">
+							<div className="ml-5 flex flex-col gap-1 border-l border-sidebar-muted/30 pl-2">
 								{item.children.map((child) => (
 									<DesktopNavLink
 										active={child.href === current}
@@ -141,11 +141,11 @@ export function AppNav({ member }: { member: ReactNode }) {
 					<span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-accent">
 						<Wallet className="h-[18px] w-[18px] text-sidebar-foreground" />
 					</span>
-					<span className="font-semibold text-base tracking-tight">Ledger</span>
+					<span className="text-base font-semibold tracking-tight">Ledger</span>
 				</div>
 				<NavLinks current={current} />
 			</div>
-			<div className="flex flex-col gap-1 border-sidebar-muted/20 border-t pt-3">
+			<div className="flex flex-col gap-1 border-t border-sidebar-muted/20 pt-3">
 				{/* Its own landmark: it sits in the footer, outside the main nav, so
 				    without this the desktop Settings link is in no landmark at all. */}
 				<nav aria-label="Settings">
@@ -162,12 +162,12 @@ export function AppNav({ member }: { member: ReactNode }) {
 
 export function MobileNav() {
 	return (
-		<header className="sticky top-0 z-30 flex items-center justify-between border-border border-b bg-card/80 px-4 py-3 backdrop-blur lg:hidden">
+		<header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/80 px-4 py-3 backdrop-blur lg:hidden">
 			<div className="flex items-center gap-2">
 				<span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
 					<Wallet className="h-[18px] w-[18px] text-primary-foreground" />
 				</span>
-				<span className="font-semibold text-base tracking-tight">Ledger</span>
+				<span className="text-base font-semibold tracking-tight">Ledger</span>
 			</div>
 			<nav
 				aria-label="Main navigation"

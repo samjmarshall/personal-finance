@@ -69,7 +69,7 @@ export function UnplannedTable({
 					<CardContent>
 						{/* Accurate whether the window holds no Spend at all or every
 						    row is already linked — the query can't tell them apart. */}
-						<p className="text-muted-foreground text-sm">
+						<p className="text-sm text-muted-foreground">
 							No unplanned Spend in this period.
 						</p>
 					</CardContent>
@@ -81,17 +81,17 @@ export function UnplannedTable({
 					<Card className="[--card-spacing:0px]" key={key}>
 						{/* Same grid as rows: total sits under the amounts, picker
 						    column empty. */}
-						<div className="flex items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
+						<div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3 sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:gap-3">
 							<span className="flex min-w-0 items-center gap-2 sm:col-span-2">
-								<span className="truncate font-semibold text-foreground text-sm">
+								<span className="truncate text-sm font-semibold text-foreground">
 									{label}
 								</span>
-								<span className="shrink-0 text-muted-foreground text-xs">
+								<span className="shrink-0 text-xs text-muted-foreground">
 									({rowsInGroup.length})
 								</span>
 							</span>
 							<Money
-								className="shrink-0 whitespace-nowrap font-medium text-sm sm:text-right"
+								className="shrink-0 text-sm font-medium whitespace-nowrap sm:text-right"
 								signed
 								tone="ledger"
 								value={groupTotal}

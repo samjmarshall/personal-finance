@@ -123,7 +123,7 @@ function MatchBanner({
 
 	if (transactionId !== null) {
 		return (
-			<p className="flex items-center gap-2 rounded-lg border border-[color:var(--badge-positive-border)] bg-[var(--badge-positive-bg)] px-3 py-2 text-[var(--badge-positive-fg)] text-sm">
+			<p className="flex items-center gap-2 rounded-lg border border-[color:var(--badge-positive-border)] bg-[var(--badge-positive-bg)] px-3 py-2 text-sm text-[var(--badge-positive-fg)]">
 				<Check aria-hidden className="h-4 w-4 shrink-0" />
 				{/* min-w-0: without it a long bank description refuses to wrap and
 				    pushes past the dialog edge on a phone. */}
@@ -143,7 +143,7 @@ function MatchBanner({
 	if (isLoading)
 		return (
 			<p
-				className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-muted-foreground text-sm"
+				className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
 				role="status"
 			>
 				<Spinner className="shrink-0" />
@@ -153,7 +153,7 @@ function MatchBanner({
 
 	if (!candidates?.length)
 		return (
-			<p className="rounded-lg border border-border border-dashed bg-muted/20 px-3 py-2 text-muted-foreground text-sm">
+			<p className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
 				No transaction within 2% and 4 days of this receipt.
 			</p>
 		);
@@ -164,7 +164,7 @@ function MatchBanner({
 			className="rounded-lg border border-border bg-muted/20 p-3"
 		>
 			<h3
-				className="font-medium text-foreground text-sm"
+				className="text-sm font-medium text-foreground"
 				id={`match-heading-${receiptId}`}
 			>
 				Which transaction is this?
@@ -178,7 +178,7 @@ function MatchBanner({
 							<button
 								aria-busy={saving || undefined}
 								aria-label={`Match to ${c.description}, ${formatDate(c.date)}, ${gapParts(c).join(", ")}`}
-								className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2 text-left outline-none transition-colors hover:border-foreground/25 hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+								className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2 text-left transition-colors outline-none hover:border-foreground/25 hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
 								disabled={confirm.isPending}
 								onClick={() =>
 									confirm.mutate({ receiptId, transactionId: c.id })
@@ -186,10 +186,10 @@ function MatchBanner({
 								type="button"
 							>
 								<span className="min-w-0">
-									<span className="block truncate font-medium text-foreground text-sm">
+									<span className="block truncate text-sm font-medium text-foreground">
 										{c.description}
 									</span>
-									<span className="block text-muted-foreground text-xs">
+									<span className="block text-xs text-muted-foreground">
 										{formatDate(c.date)} · {gapParts(c).join(" · ")}
 									</span>
 								</span>
@@ -293,7 +293,7 @@ export function ReceiptDetail({
 						className="flex h-48 flex-col items-center justify-center gap-3"
 						role="alert"
 					>
-						<p className="text-muted-foreground text-sm">
+						<p className="text-sm text-muted-foreground">
 							Couldn't load this receipt.
 						</p>
 						<Button
@@ -349,7 +349,7 @@ export function ReceiptDetail({
 							<div className="flex min-w-0 flex-col gap-4">
 								<dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 									<div>
-										<dt className="text-muted-foreground text-xs">Total</dt>
+										<dt className="text-xs text-muted-foreground">Total</dt>
 										<dd className="font-medium">
 											{data.total != null ? (
 												<Money tone="spend" value={data.total} />
@@ -357,14 +357,14 @@ export function ReceiptDetail({
 												<span className="text-muted-foreground">—</span>
 											)}
 											{data.currency && (
-												<span className="ml-1 text-muted-foreground text-xs">
+												<span className="ml-1 text-xs text-muted-foreground">
 													{data.currency}
 												</span>
 											)}
 										</dd>
 									</div>
 									<div>
-										<dt className="text-muted-foreground text-xs">Items</dt>
+										<dt className="text-xs text-muted-foreground">Items</dt>
 										<dd className="tabular font-medium">{data.items.length}</dd>
 									</div>
 								</dl>
@@ -380,7 +380,7 @@ export function ReceiptDetail({
 									<div className="overflow-x-auto rounded-lg border border-border">
 										<table className="w-full border-collapse text-sm">
 											<thead>
-												<tr className="border-border border-b bg-muted/40 text-left text-muted-foreground text-xs">
+												<tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
 													<th className="px-3 py-2 font-medium" scope="col">
 														Item
 													</th>
@@ -416,7 +416,7 @@ export function ReceiptDetail({
 															{/* Once pickers are up they show the category; the
 															    read-only echo would just repeat them. */}
 															{!matched && item.categoryName && (
-																<span className="mt-0.5 block text-muted-foreground text-xs">
+																<span className="mt-0.5 block text-xs text-muted-foreground">
 																	{item.categoryName}
 																</span>
 															)}
@@ -475,7 +475,7 @@ export function ReceiptDetail({
 										</table>
 									</div>
 								) : (
-									<p className="text-muted-foreground text-sm">
+									<p className="text-sm text-muted-foreground">
 										No line items extracted.
 									</p>
 								)}
@@ -485,7 +485,7 @@ export function ReceiptDetail({
 								{!matched &&
 									data.items.length > 0 &&
 									data.status === ReceiptStatus.Processed && (
-										<p className="text-muted-foreground text-xs">
+										<p className="text-xs text-muted-foreground">
 											Confirm the matching transaction to attribute items to an
 											expense or category.
 										</p>
@@ -494,7 +494,7 @@ export function ReceiptDetail({
 								{/* Show the error only on a failed row — retry clears it, a done row never has one. */}
 								{data.status === ReceiptStatus.Failed && data.error && (
 									<p
-										className="flex items-start gap-2 rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-xs"
+										className="flex items-start gap-2 rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-xs text-[var(--badge-spend-fg)]"
 										role="alert"
 									>
 										<TriangleAlert

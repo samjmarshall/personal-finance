@@ -24,7 +24,7 @@ export function TableSkeleton({
 			{/* Fixed layout: the bars can't push the columns past a phone's width. */}
 			<table className="w-full table-fixed border-collapse text-sm">
 				<thead>
-					<tr className="border-border border-b bg-muted/40">
+					<tr className="border-b border-border bg-muted/40">
 						{indices(cols).map((col) => (
 							<th className="px-4 py-2.5" key={col}>
 								<Skeleton className="h-4 w-16" />

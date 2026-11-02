@@ -8,7 +8,7 @@ export function TopGroups({
 	const rows = data.filter((d) => d.total > 0);
 	if (!rows.length) {
 		return (
-			<p className="py-6 text-center text-muted-foreground text-sm">
+			<p className="py-6 text-center text-sm text-muted-foreground">
 				No groups to show yet.
 			</p>
 		);
@@ -24,7 +24,7 @@ export function TopGroups({
 							{row.group}
 						</span>
 						<Money
-							className="shrink-0 font-medium text-foreground text-sm"
+							className="shrink-0 text-sm font-medium text-foreground"
 							value={row.total}
 						/>
 					</div>

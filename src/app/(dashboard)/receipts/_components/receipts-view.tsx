@@ -210,7 +210,7 @@ function ReceiptsTable({
 					className="w-full min-w-[48rem] border-collapse text-sm"
 				>
 					<thead>
-						<tr className="border-border border-b bg-muted/40 text-left text-muted-foreground text-xs">
+						<tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
 							<th className="w-14 px-4 py-2.5 font-medium" />
 							<th className="px-4 py-2.5 font-medium">Vendor</th>
 							<th className="px-4 py-2.5 text-right font-medium">Total</th>
@@ -266,7 +266,7 @@ function ReceiptsTable({
 										</button>
 										{isDuplicate && r.duplicateOfId && (
 											<button
-												className="mt-0.5 block text-muted-foreground text-xs hover:underline"
+												className="mt-0.5 block text-xs text-muted-foreground hover:underline"
 												onClick={() => onOpen(r.duplicateOfId)}
 												type="button"
 											>
@@ -274,17 +274,17 @@ function ReceiptsTable({
 											</button>
 										)}
 									</td>
-									<td className="whitespace-nowrap px-4 py-3 text-right">
+									<td className="px-4 py-3 text-right whitespace-nowrap">
 										{r.total != null ? (
 											<Money tone="spend" value={r.total} />
 										) : (
 											<span className="text-muted-foreground">—</span>
 										)}
 									</td>
-									<td className="tabular whitespace-nowrap px-4 py-3 text-muted-foreground">
+									<td className="tabular px-4 py-3 whitespace-nowrap text-muted-foreground">
 										{r.receiptDate ? formatDate(r.receiptDate) : "—"}
 									</td>
-									<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+									<td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
 										{r.userName ?? "—"}
 									</td>
 									<td className="px-4 py-3">
@@ -298,7 +298,7 @@ function ReceiptsTable({
 									<td className="px-4 py-3">
 										<div
 											className={cn(
-												"flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100",
+												"flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100",
 												// Safari doesn't focus a clicked button, so without this the
 												// spinner vanishes when the pointer leaves the row.
 												retrying && "opacity-100",
@@ -335,7 +335,7 @@ function ReceiptsTable({
 			{/* Outside the horizontal-scroll wrapper so the copy wraps on a phone
 			    instead of being clipped by the table's min-width. */}
 			{!rows.length && (
-				<p className="px-4 py-16 text-center text-muted-foreground text-sm">
+				<p className="px-4 py-16 text-center text-sm text-muted-foreground">
 					{input.status || input.unmatchedOnly
 						? "No receipts match these filters."
 						: "No receipts yet. Upload one to get started."}

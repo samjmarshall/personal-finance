@@ -68,8 +68,8 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 			    placeholder address would be forwarded to and silently swallowed. */}
 			{inboundAddress ? (
 				<div className="mt-5 rounded-md border border-border bg-muted/40 px-3 py-2.5">
-					<p className="text-muted-foreground text-xs">Forward receipts to</p>
-					<p className="mt-0.5 break-all font-medium font-mono text-foreground text-sm">
+					<p className="text-xs text-muted-foreground">Forward receipts to</p>
+					<p className="mt-0.5 font-mono text-sm font-medium break-all text-foreground">
 						{inboundAddress}
 					</p>
 				</div>
@@ -124,12 +124,12 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 							key={sender.id}
 						>
 							<div className="min-w-0">
-								<p className="truncate font-medium text-foreground text-sm">
+								<p className="truncate text-sm font-medium text-foreground">
 									{sender.email}
 								</p>
 								{/* Whose receipts these become — the webhook attributes every
 								    ingested mail to this Member. */}
-								<p className="truncate text-muted-foreground text-xs">
+								<p className="truncate text-xs text-muted-foreground">
 									Files to {sender.userName ?? "an unnamed member"}
 								</p>
 							</div>
@@ -143,7 +143,7 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 								{sender.isOwn ? (
 									<button
 										aria-label={`Remove ${sender.email}`}
-										className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+										className="rounded-md p-1.5 text-muted-foreground hover:bg-spend/10 hover:text-spend focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 										onClick={() => {
 											setDeleteTarget(sender);
 											setConfirmOpen(true);
@@ -158,7 +158,7 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 					))}
 				</ul>
 			) : (
-				<p className="mt-6 rounded-md border border-border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
+				<p className="mt-6 rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
 					No addresses yet. Add the address you forward receipts from.
 				</p>
 			)}

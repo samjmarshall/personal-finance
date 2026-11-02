@@ -73,7 +73,7 @@ export function BankAccountsSection() {
 			{accounts.length ? (
 				<>
 					{pending && (
-						<p className="mt-4 rounded-md border border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] px-3 py-2 font-medium text-[var(--badge-warn-fg)] text-sm">
+						<p className="mt-4 rounded-md border border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] px-3 py-2 text-sm font-medium text-[var(--badge-warn-fg)]">
 							{pending}
 						</p>
 					)}
@@ -81,10 +81,10 @@ export function BankAccountsSection() {
 						{groupByBank(accounts).map(({ bank, accounts: rows, counted }) => (
 							<section aria-label={bank} key={bank}>
 								<div className="flex items-baseline justify-between gap-3 px-1 pb-2">
-									<h3 className="font-semibold text-foreground text-sm">
+									<h3 className="text-sm font-semibold text-foreground">
 										{bank}
 									</h3>
-									<span className="shrink-0 text-muted-foreground text-xs">
+									<span className="shrink-0 text-xs text-muted-foreground">
 										{counted} of {rows.length} counted
 									</span>
 								</div>
@@ -117,12 +117,12 @@ export function BankAccountsSection() {
 					</div>
 					<div className="mt-4 flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
 						<div className="min-w-0 flex-1">
-							<p className="font-semibold text-foreground text-sm">Total</p>
-							<p className="text-muted-foreground text-xs">
+							<p className="text-sm font-semibold text-foreground">Total</p>
+							<p className="text-xs text-muted-foreground">
 								{totalNote(accounts)}
 							</p>
 						</div>
-						<p className="shrink-0 whitespace-nowrap font-semibold text-foreground text-sm tabular-nums">
+						<p className="shrink-0 text-sm font-semibold whitespace-nowrap text-foreground tabular-nums">
 							{total === null ? (
 								<>
 									<span aria-hidden="true">—</span>
@@ -137,12 +137,12 @@ export function BankAccountsSection() {
 					</div>
 					{/* The sync writes the balance, so a change waits for its next run. The
 					    Total above moves at once, so name the number that waits. */}
-					<p className="mt-3 text-muted-foreground text-xs">
+					<p className="mt-3 text-xs text-muted-foreground">
 						Your dashboard balance updates at the next bank sync.
 					</p>
 				</>
 			) : (
-				<p className="mt-5 rounded-md border border-border border-dashed px-3 py-6 text-center text-muted-foreground text-sm">
+				<p className="mt-5 rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
 					No bank accounts yet. They show here after the first bank sync.
 				</p>
 			)}
