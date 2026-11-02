@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, Sparkles } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Money } from "~/components/money";
 import { Button } from "~/components/ui/button";
 import {
@@ -247,6 +247,8 @@ function Row({
 	const dayGap = dayGapLabel(bank.date, mine.date);
 	const amountGap = amountGapLabel(bank.amount, mine.amount);
 	const gaps = [dayGap, amountGap].filter((gap) => gap !== null);
+	// Safari passes a label click on with detail 0, so mark the press instead.
+	const pressed = useRef(false);
 
 	return (
 		<li
@@ -296,6 +298,9 @@ function Row({
 						<label
 							className="relative flex-1 cursor-pointer rounded-md px-2 py-1 text-center text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors select-none hover:text-foreground has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-ring has-disabled:cursor-not-allowed has-disabled:opacity-60 motion-reduce:transition-none"
 							key={choice}
+							onPointerDown={() => {
+								pressed.current = true;
+							}}
 						>
 							<input
 								aria-describedby={`${legendId}-${choice}`}
@@ -305,10 +310,11 @@ function Row({
 								name={`answer-${id}`}
 								onChange={() => onPick(choice)}
 								// A second click on the picked answer clears it; from the keyboard, Delete.
-								// Space also fires a click, with detail 0, and must keep it.
-								onClick={(event) =>
-									event.detail > 0 && answer === choice && onPick(null)
-								}
+								// Not Space or a screen reader: a radio they pick stays picked.
+								onClick={() => {
+									if (pressed.current && answer === choice) onPick(null);
+									pressed.current = false;
+								}}
 								onKeyDown={(event) => {
 									if (
 										answer === choice &&
