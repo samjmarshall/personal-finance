@@ -5,7 +5,7 @@ related-adrs: [adr017, adr022, adr029]
 related-design: thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md
 related-epic: none
 related-issues: [108]
-related-prs: [120]
+related-prs: [120, 126]
 ---
 
 # History import
@@ -168,7 +168,7 @@ A fill only answers rows with no answer yet. **Apply** sends every answer at onc
 - Design: [Expense linking, receipts and cash flow](../../thoughts/designs/2026-08-16-expense-linking-receipts-cashflow.md) (build stage 7)
 - Related plans: [Stage 7: CDR via RedBark](../../thoughts/plans/2026-09-15-expense-linking-stage-7-cdr-redbark.md) (Phases 7–8), [adr029 description scores](../../thoughts/plans/2026-11-02-adr029-description-scores.md)
 - GitHub issues: #108 (open follow-up: animate an answered review leaving To review)
-- PRs: #120 (import page, job and duplicate review)
+- PRs: #120 (import page, job and duplicate review), #126 (adr029 description scores)
 - Shipping commits: `e7c5107` (import page and job), `a9a8cd6` (net released reviews out of `flagged`), `8457e0f` + `ffd464e` (clean descriptions, word score), `1b1fbef` (score pairs, gate Adopts), `21876ed` (meaning score, embedding cache), `01afbf5` (pile by saved score), `4fc1d29` (strip `FRGN AMT`)
 
 ---
