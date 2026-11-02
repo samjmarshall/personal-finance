@@ -408,8 +408,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				}
 				adopted++;
 				if (heldBy === null) continue;
-				// The household row is now the exact bank row, so each close one its
-				// reviews held is another purchase.
+				// Row is now the exact bank row, so its other reviews were different purchases: release them.
 				const taken = await this.takeReviewsOn(tx, transactionId);
 				released += taken.length;
 				for (const { id, ...bank } of taken) {
@@ -672,10 +671,11 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		return rows.map((row) => row.description);
 	}
 
-	findEmbeddings(
+	async findEmbeddings(
 		model: string,
 		descriptions: string[],
 	): Promise<CachedEmbedding[]> {
+		if (!descriptions.length) return [];
 		return this.db
 			.select({
 				description: descriptionEmbeddings.description,

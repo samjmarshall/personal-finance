@@ -1307,6 +1307,13 @@ describe("findEmbeddings", () => {
 			]
 		`);
 	});
+
+	it("runs no statement for no descriptions", async () => {
+		const { repository, queries } = harness();
+
+		await expect(repository.findEmbeddings("titan", [])).resolves.toEqual([]);
+		expect(queries).toEqual([]);
+	});
 });
 
 describe("saveEmbeddings", () => {

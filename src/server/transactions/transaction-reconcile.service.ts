@@ -34,11 +34,13 @@ const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
 	known: a.known + b.known,
 });
 const NO_WEIGHTS = wordWeights([]);
-// Each Titan call embeds one text, so a big first import makes many.
+// One time budget for the whole batch: a big first import makes one model call per text.
 const EMBED_TIMEOUT_MS = 30_000;
 // The cache's unique index refuses a key over ~2.7 KB, and that failed save would
 // fail the sync. 500 characters is at most 1.5 KB.
 const MAX_EMBED_LENGTH = 500;
+// Saved as each lands, so a failed or slow call keeps the vectors before it.
+const EMBED_BATCH_SIZE = 32;
 
 type ReconcileRepository = Pick<
 	TransactionsRepository,
@@ -162,38 +164,42 @@ export class TransactionReconcileService {
 		const misses = [...texts].filter((text) => !vectors.has(text));
 		if (!misses.length) return vectors;
 
-		let embeddings: number[][];
-		try {
-			({ embeddings } = await embedMany({
-				model: this.embeddingModel,
-				values: misses,
-				dimensions: EMBEDDING_DIMENSIONS,
-				maxRetries: 2,
-				maxParallelCalls: 4,
-				abortSignal: AbortSignal.timeout(EMBED_TIMEOUT_MS),
-				// Titan reads `normalize`, Cohere `inputType`; each ignores the other.
-				providerOptions: {
-					bedrock: { normalize: true, inputType: "clustering" },
-				},
-				// The span processor would price an ai.* span as Claude tokens.
-				telemetry: { isEnabled: false },
+		const abortSignal = AbortSignal.timeout(EMBED_TIMEOUT_MS);
+		for (let start = 0; start < misses.length; start += EMBED_BATCH_SIZE) {
+			const batch = misses.slice(start, start + EMBED_BATCH_SIZE);
+			let embeddings: number[][];
+			try {
+				({ embeddings } = await embedMany({
+					model: this.embeddingModel,
+					values: batch,
+					dimensions: EMBEDDING_DIMENSIONS,
+					maxRetries: 2,
+					maxParallelCalls: 4,
+					abortSignal,
+					// Titan reads `normalize`, Cohere `inputType`; each ignores the other.
+					providerOptions: {
+						bedrock: { normalize: true, inputType: "clustering" },
+					},
+					// The span processor would price an ai.* span as Claude tokens.
+					telemetry: { isEnabled: false },
+				}));
+			} catch (error) {
+				// Words alone still score and flag. A pair flagged now stays a review: no later sync rescores it.
+				this.logger.warn("embedding unavailable", {
+					error,
+					descriptions: misses.length - start,
+				});
+				return vectors;
+			}
+			// embedMany keeps input order and length.
+			const fresh = batch.map((description, i) => ({
+				description,
+				embedding: embeddings[i] as number[],
 			}));
-		} catch (error) {
-			// Words alone still score and flag. A pair flagged now stays a review: no later sync rescores it.
-			this.logger.warn("embedding unavailable", {
-				error,
-				descriptions: misses.length,
-			});
-			return vectors;
+			await this.repository.saveEmbeddings(model, fresh);
+			for (const { description, embedding } of fresh)
+				vectors.set(description, embedding);
 		}
-		// embedMany keeps input order and length.
-		const fresh = misses.map((description, i) => ({
-			description,
-			embedding: embeddings[i] as number[],
-		}));
-		await this.repository.saveEmbeddings(model, fresh);
-		for (const { description, embedding } of fresh)
-			vectors.set(description, embedding);
 		return vectors;
 	}
 }

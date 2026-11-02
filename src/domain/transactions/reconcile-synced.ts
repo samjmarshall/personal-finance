@@ -138,7 +138,7 @@ const clearsAdoptBars = ({ word, meaning }: DescriptionScore) =>
 	meaning !== null &&
 	meaning >= ADOPT_MEANING_SCORE;
 
-/** Fills refresh, skipped and the pending-review flags; the rest are unmatched, by bank id. */
+/** Settles rows already saved or reviewed; the rest go on to pairing. Sorted by bank id so a retry plans the same. */
 function splitIncoming(input: MatchInput) {
 	const known = new Set(input.knownIds);
 	const reviews = new Map(input.reviews.map((r) => [r.externalId, r]));
@@ -240,7 +240,6 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 		return true;
 	};
 
-	// Score before days: two same-priced subscriptions a day apart must not cross.
 	const exact = pairs
 		.filter(
 			(p) =>
@@ -261,6 +260,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 			});
 	}
 
+	// Best description match beats nearest day: same-price subscriptions a day apart must not swap.
 	const close = pairs.sort(
 		(x, y) =>
 			y.score.merged - x.score.merged ||

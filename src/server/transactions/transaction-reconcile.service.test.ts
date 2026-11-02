@@ -309,6 +309,36 @@ describe("reconcileSynced", () => {
 		]);
 	});
 
+	// A big first import must still warm the cache when Bedrock gives out partway.
+	it("keeps the batches saved before a later one fails", async () => {
+		const shops = Array.from({ length: 40 }, (_, i) => ({
+			...mine(`Shop ${"x".repeat(i + 1)}`),
+			id: i + 1,
+		}));
+		const failing = new Set(
+			shops.slice(31).map(({ description }) => description.toUpperCase()),
+		);
+		const { service, saves, logs } = reconciling(
+			{ findMatchCandidates: async () => shops },
+			new MockEmbeddingModelV4({
+				modelId: MODEL_ID,
+				doEmbed: async ({ values }) => {
+					if (values.some((value) => failing.has(value)))
+						throw new Error("ThrottlingException");
+					return { embeddings: values.map(() => [1, 0]), warnings: [] };
+				},
+			}),
+		);
+
+		await service.reconcileSynced([SYNCED], LIVE);
+
+		expect(saves).toHaveLength(1);
+		expect(saves[0]?.[1]).toHaveLength(32);
+		expect(logs).toMatchObject([
+			{ msg: "embedding unavailable", attrs: { descriptions: 9 } },
+		]);
+	});
+
 	it("weighs words over every saved description plus the incoming ones", async () => {
 		const row = { ...SYNCED, description: "WOOLWORTHS METRO" };
 		const saved = ["Woolworths", "Coles"];
