@@ -58,7 +58,7 @@ The reconcile Adopts any same-day, same-amount pair and ignores the description.
 - Changing `MATCH_DAYS` or the same-cents rule.
 
 ## Approach
-Build on a new branch, `feat/adr029-description-scores`, cut from `feat/expense-linking-stage-7-cdr-redbark` (PR #120 is not merged).
+Build on a new branch, `feat/adr029-description-scores`.
 
 1. Pure domain code first: cleaning, the IDF word score, the cosine and the merge.
 2. A throwaway spike picks the model and cut-offs by a fixed rule, and records them in adr029.
