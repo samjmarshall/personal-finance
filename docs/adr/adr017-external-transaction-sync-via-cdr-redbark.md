@@ -46,7 +46,7 @@ Chosen option: **"1. App store-of-record; poll-first; provenance-keyed dedup"**,
 The facet decisions that make up this option:
 
 1. **Provenance model.** A Postgres `pgEnum` `transaction_provenance` (`manual | import | cdr | paypal`) plus `externalId` (text), `externalAccountId` (text, the bank's account id) and `accountName` (text) on `transaction` — matching the `pgEnum` pattern of `transaction_frequency`/`transaction_priority`, not a bare `text` column. Uniqueness is a **partial** index `(provenance, externalId) WHERE externalId IS NOT NULL`, so unlimited manual rows (NULL `externalId`) coexist with one row per `(cdr, txn.id)`.
-2. **One reconcile per account.** `TransactionsService.reconcileSynced` decides each bank row, in this order:
+2. **One reconcile per account.** `TransactionReconcileService.reconcileSynced` decides each bank row, in this order:
    - **Refresh.** A known `(cdr, redbark txn.id)` is `ON CONFLICT (provenance, externalId) DO UPDATE` scoped to **bank-owned columns only** — `amount`, `date`, `externalAccountId`, `accountName` — and never touches member-owned columns (`expenseId`, `categoryId`, `group`, `priority`, `frequency`, `notes`). `description` is **INSERT-only**: bank raw text lands once, the member owns it after.
    - **Adopt.** A household row (no `externalId`) on the same Sydney calendar day with the same amount to the cent takes the bank row's id, date, amount and account. It keeps every member edit.
    - **Possible duplicate.** A close match (the same amount to the cent, another day within 7 days) is held in `possible_duplicate`, not added, until a member keeps theirs, uses the bank's, or says both are real. A kept answer is remembered, so that bank row is never asked about again. Deleting the household row first adds the bank rows its reviews hold, since a review is that row's only copy.
@@ -70,7 +70,7 @@ This supersedes the design doc's stale `makeRun*(deps)` note, written before [ad
 
 Under [adr022](adr022-cross-domain-data-through-the-owning-service.md), `cdr.repository.ts` touches only `cdr_sync_state`. Each other write goes through the domain that owns it, as a `Pick` port:
 
-- The reconcile is `TransactionsService.reconcileSynced`.
+- The reconcile is `TransactionReconcileService.reconcileSynced`.
 - The anchor insert is `BalancesService.recordSynced`.
 
 So no `db.transaction()` spans both domains. Instead, **ordering keeps the invariant**: per account, the reconcile runs first, and the high-water mark advances only after it succeeds.
@@ -112,7 +112,7 @@ flowchart LR
   wh["webhook (later)<br/>transactions.synced"] -. same trigger .-> svc
   svc -->|"per account: GET /transactions<br/>from=hwm-14d, include_pending=false"| rb[("RedBark v2")]
   svc -->|"one GET /balances<br/>every live account"| rb
-  svc -->|"1. TransactionsService.reconcileSynced<br/>refresh, adopt, possible duplicate, add"| tx[("transaction<br/>+ possible_duplicate")]
+  svc -->|"1. TransactionReconcileService.reconcileSynced<br/>refresh, adopt, possible duplicate, add"| tx[("transaction<br/>+ possible_duplicate")]
   svc -->|"2. advance highWaterMark<br/>(monotonic)"| st[("cdr_sync_state")]
   svc -->|"latest balance per account"| st
   svc -->|"BalancesService.recordSynced<br/>sum current, if all fresh"| bal[("balance_snapshot")]

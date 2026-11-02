@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
 adrs: [adr029]
-status: Ready for Review - Phase 2 of 6
+status: Ready for Review - Phase 3 of 6
 ---
 # Pair bank rows by word and meaning scores (adr029) Implementation Plan
 
@@ -161,9 +161,9 @@ Build on a new branch, `feat/adr029-description-scores`.
 - `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md:49,73,115` and the file list in `docs/feature/history-import.md` (`:28-42`): rename to `TransactionReconcileService.reconcileSynced`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes, and the moved tests pass with only their construction changed
-- [ ] `grep -rn reconcileSynced src/server/transactions/transactions.service.ts` finds nothing
+- [x] `make check` passes
+- [x] `make test` passes, and the moved tests pass with only their construction changed
+- [x] `grep -rn reconcileSynced src/server/transactions/transactions.service.ts` finds nothing
 
 ## Phase 4: Score pairs; an Adopt needs both scores
 Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning: null`, so this phase makes **no Adopts**: every same-day pair goes to review. That's the planned fallback, not a bug.

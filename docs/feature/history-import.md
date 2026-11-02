@@ -36,6 +36,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - `src/server/cdr/cdr-sync.service.ts` — `claimImport`, `planImport`, `importChunk`, `finishImport`, `failImport`.
 - `src/server/cdr/cdr.inngest.controller.ts` — the `cdr-import` function and its `onFailure`.
 - `src/server/cdr/cdr.schema.ts` — the `cdr_import` table (migration `0024`).
+- `src/server/transactions/transaction-reconcile.service.ts` — `reconcileSynced`: reads known ids, reviews and candidates, plans, then applies (shared with `cdr-sync`).
 - `src/server/transactions/transactions.repository.ts` — `applyReconcile` (shared with `cdr-sync`) and the three resolve writes.
 - `src/domain/transactions/reconcile-synced.ts` — `planReconcile`: known, adopt, flag or add, per bank row.
 
