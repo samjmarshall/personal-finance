@@ -1,7 +1,7 @@
 // Post-publish ticket validator — the skill's hard publish gate.
 //
-//   yarn tsx .claude/skills/write-tickets/scripts/validate-ticket.ts <n> [--type <t>]
-//   yarn tsx .claude/skills/write-tickets/scripts/validate-ticket.ts --epic <P>
+//   node .claude/skills/write-tickets/scripts/validate-ticket.ts <n> [--type <t>]
+//   node .claude/skills/write-tickets/scripts/validate-ticket.ts --epic <P>
 //
 // Exit codes: 0 = clean (warnings allowed) · 1 = a ticket is non-compliant ·
 // 2 = operational failure (gh unavailable / API shape drift / board rename /
@@ -17,7 +17,7 @@ import {
 	fetchIssue,
 	fetchSubIssues,
 	GhError,
-} from "./gh";
+} from "./gh.ts";
 import {
 	detectType,
 	type NormalizedIssue,
@@ -25,7 +25,7 @@ import {
 	type TicketType,
 	type Violation,
 	validateTicket,
-} from "./rules";
+} from "./rules.ts";
 
 const TICKET_TYPES: TicketType[] = [
 	"story",

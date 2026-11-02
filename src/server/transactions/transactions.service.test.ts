@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type {
 	ExpenseConsumption,
+	PossibleDuplicateReview,
+	ReconcileCounts,
+	ReconcilePlan,
+	SyncedTransaction,
 	Transaction,
 	TransactionSummary,
 } from "~/domain/transactions";
-import { Frequency, Priority } from "~/lib/constants";
+import { Frequency, Priority, Provenance } from "~/lib/constants";
 import type { CategoriesService } from "~/server/categories/categories.service";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
 import {
 	expectPlainError,
@@ -32,6 +40,16 @@ function serviceWith(
 		list: unstaged,
 		summary: unstaged,
 		insert: unstaged,
+		findKnownExternalIds: unstaged,
+		findReviews: unstaged,
+		findMatchCandidates: unstaged,
+		applyReconcile: unstaged,
+		listPendingDuplicates: unstaged,
+		countPendingDuplicates: unstaged,
+		keepMine: unstaged,
+		useBanks: unstaged,
+		bothReal: unstaged,
+		findSyncedValues: unstaged,
 		update: unstaged,
 		findUnplanned: unstaged,
 		findDescriptions: unstaged,
@@ -63,6 +81,10 @@ const TRANSACTION: Transaction = {
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
+	provenance: Provenance.Manual,
+	externalId: null,
+	externalAccountId: null,
+	accountName: null,
 	createdAt: new Date("2026-09-01T01:00:00.000Z"),
 	updatedAt: null,
 };
@@ -71,6 +93,15 @@ const FIELDS = {
 	date: TRANSACTION.date,
 	description: TRANSACTION.description,
 	amount: TRANSACTION.amount,
+};
+
+// An edit reads the saved row first; a manual row may change amount and date.
+const MANUAL_ROW: Pick<TransactionsRepository, "findSyncedValues"> = {
+	findSyncedValues: async () => ({
+		provenance: Provenance.Manual,
+		amount: FIELDS.amount,
+		date: FIELDS.date,
+	}),
 };
 
 const FK_CONFLICT_MESSAGE =
@@ -86,6 +117,7 @@ function writing(
 	const written: unknown[][] = [];
 	const service = serviceWith(
 		{
+			...MANUAL_ROW,
 			findLink: async () => link,
 			update: async (id, values) => {
 				written.push([id, values]);
@@ -158,10 +190,251 @@ describe("create", () => {
 	});
 });
 
+describe("reconcileSynced", () => {
+	const SYNCED: SyncedTransaction = {
+		provenance: Provenance.Cdr,
+		externalId: "txn_1",
+		externalAccountId: "acct_1",
+		accountName: "Everyday",
+		date: new Date("2026-10-15T00:00:00.000Z"),
+		description: "WOOLWORTHS",
+		amount: 42.5,
+	};
+	const COUNTS: ReconcileCounts = {
+		added: 1,
+		adopted: 0,
+		flagged: 0,
+		known: 0,
+	};
+	const LIVE = { liveAccountIds: ["acct_1"] };
+
+	function reconciling(staged: Partial<TransactionsRepository> = {}) {
+		const reads: unknown[][] = [];
+		const plans: ReconcilePlan[] = [];
+		const service = serviceWith({
+			findKnownExternalIds: async (...args) => {
+				reads.push(["known", ...args]);
+				return [];
+			},
+			findReviews: async (...args) => {
+				reads.push(["reviews", ...args]);
+				return [];
+			},
+			findMatchCandidates: async (...args) => {
+				reads.push(["candidates", ...args]);
+				return [];
+			},
+			applyReconcile: async (plan) => {
+				plans.push(plan);
+				return COUNTS;
+			},
+			...staged,
+		});
+		return { service, reads, plans };
+	}
+
+	it("reads and writes nothing for no rows", async () => {
+		const { service, reads, plans } = reconciling();
+
+		await expect(service.reconcileSynced([], LIVE)).resolves.toEqual({
+			added: 0,
+			adopted: 0,
+			flagged: 0,
+			known: 0,
+		});
+		expect(reads).toEqual([]);
+		expect(plans).toEqual([]);
+	});
+
+	// A Sydney day starts the UTC day before, so each side gets a day of slack.
+	it("reads ids, reviews and candidates over the rows' dates plus 8 and 9 days", async () => {
+		const { service, reads } = reconciling();
+		const older = {
+			...SYNCED,
+			externalId: "txn_0",
+			date: new Date("2026-10-10T00:00:00.000Z"),
+		};
+
+		await service.reconcileSynced([SYNCED, older], LIVE);
+
+		expect(reads).toEqual([
+			["known", Provenance.Cdr, ["txn_1", "txn_0"]],
+			["reviews", Provenance.Cdr, ["txn_1", "txn_0"]],
+			[
+				"candidates",
+				{
+					from: new Date("2026-10-02T00:00:00.000Z"),
+					to: new Date("2026-10-24T00:00:00.000Z"),
+					liveAccountIds: ["acct_1"],
+				},
+			],
+		]);
+	});
+
+	it("adopts a household row on the same Sydney day and cent", async () => {
+		const { service, plans } = reconciling({
+			findMatchCandidates: async () => [
+				{
+					id: 1,
+					date: new Date("2026-10-14T13:00:00.000Z"),
+					amount: 42.5,
+					description: "Coffee",
+					externalId: null,
+					externalAccountId: null,
+					heldBy: null,
+				},
+			],
+		});
+
+		await expect(service.reconcileSynced([SYNCED], LIVE)).resolves.toEqual(
+			COUNTS,
+		);
+		expect(plans).toEqual([
+			{
+				refresh: [],
+				add: [],
+				adopt: [{ transactionId: 1, row: SYNCED, heldBy: null }],
+				flag: [],
+				skipped: [],
+			},
+		]);
+	});
+
+	// Postgres refuses one upsert that hits the same row twice (SQLSTATE 21000).
+	it("keeps only the later of two rows with the same externalId", async () => {
+		const { service, plans } = reconciling();
+		const later = { ...SYNCED, amount: 50 };
+
+		await service.reconcileSynced([SYNCED, later], LIVE);
+
+		expect(plans.map((plan) => plan.add)).toEqual([[later]]);
+	});
+
+	it("plans each provenance on its own and sums the counts", async () => {
+		const { service, reads, plans } = reconciling();
+		const paypal: SyncedTransaction = {
+			...SYNCED,
+			provenance: Provenance.Paypal,
+		};
+
+		await expect(
+			service.reconcileSynced([SYNCED, paypal], LIVE),
+		).resolves.toEqual({ added: 2, adopted: 0, flagged: 0, known: 0 });
+		expect(reads.filter(([kind]) => kind === "known")).toEqual([
+			["known", Provenance.Cdr, ["txn_1"]],
+			["known", Provenance.Paypal, ["txn_1"]],
+		]);
+		expect(plans.map((plan) => plan.add)).toEqual([[SYNCED], [paypal]]);
+	});
+});
+
+describe("possible duplicates", () => {
+	const REVIEW: PossibleDuplicateReview = {
+		id: 4,
+		bank: {
+			date: new Date("2026-10-15T00:00:00.000Z"),
+			amount: 41,
+			description: "WOOLIES",
+			accountName: "Everyday",
+		},
+		mine: {
+			id: 1,
+			date: new Date("2026-10-14T13:00:00.000Z"),
+			amount: 42.5,
+			description: "Groceries",
+			accountName: null,
+			provenance: Provenance.Manual,
+		},
+	};
+
+	it("lists and counts the pending reviews", async () => {
+		const service = serviceWith({
+			listPendingDuplicates: async () => [REVIEW],
+			countPendingDuplicates: async () => 1,
+		});
+
+		await expect(service.listPossibleDuplicates()).resolves.toEqual([REVIEW]);
+		await expect(service.possibleDuplicateCount()).resolves.toBe(1);
+	});
+
+	it.each([
+		["keep_mine", "keepMine"],
+		["use_bank", "useBanks"],
+		["both_real", "bothReal"],
+	] as const)("%s resolves through %s", async (choice, method) => {
+		const calls: number[] = [];
+		const service = serviceWith({
+			[method]: async (id: number) => {
+				calls.push(id);
+				return true;
+			},
+		});
+
+		await expect(
+			service.resolveDuplicates({ answers: [{ id: 4, choice }] }),
+		).resolves.toEqual({ resolved: 1, gone: 0, taken: 0 });
+		expect(calls).toEqual([4]);
+	});
+
+	it("answers each review in turn, in the order given", async () => {
+		const calls: unknown[][] = [];
+		const service = serviceWith({
+			keepMine: async (id) => {
+				calls.push(["keepMine", id]);
+				return true;
+			},
+			useBanks: async (id) => {
+				calls.push(["useBanks", id]);
+				return true;
+			},
+		});
+
+		await service.resolveDuplicates({
+			answers: [
+				{ id: 7, choice: "use_bank" },
+				{ id: 4, choice: "keep_mine" },
+			],
+		});
+
+		expect(calls).toEqual([
+			["useBanks", 7],
+			["keepMine", 4],
+		]);
+	});
+
+	it("counts a review that is gone and a bank row that is taken, and keeps going", async () => {
+		const service = serviceWith({
+			keepMine: async () => false,
+			useBanks: throwing(failedQuery("23505")),
+			bothReal: async () => true,
+		});
+
+		await expect(
+			service.resolveDuplicates({
+				answers: [
+					{ id: 1, choice: "keep_mine" },
+					{ id: 2, choice: "use_bank" },
+					{ id: 3, choice: "both_real" },
+				],
+			}),
+		).resolves.toEqual({ resolved: 1, gone: 1, taken: 1 });
+	});
+
+	it("lets any other driver error bubble", async () => {
+		const error = failedQuery("57014");
+		const service = serviceWith({ bothReal: throwing(error) });
+
+		await expect(
+			service.resolveDuplicates({ answers: [{ id: 4, choice: "both_real" }] }),
+		).rejects.toBe(error);
+	});
+});
+
 describe("update", () => {
 	it("updates the row by id with the other fields", async () => {
 		const updated: unknown[][] = [];
 		const service = serviceWith({
+			...MANUAL_ROW,
 			update: async (id, values) => {
 				updated.push([id, values]);
 				return TRANSACTION;
@@ -175,7 +448,10 @@ describe("update", () => {
 	});
 
 	it("throws NotFoundError when no row matches the id", async () => {
-		const service = serviceWith({ update: async () => undefined });
+		const service = serviceWith({
+			...MANUAL_ROW,
+			update: async () => undefined,
+		});
 
 		const thrown = await service
 			.update({ id: 1, ...FIELDS })
@@ -187,7 +463,7 @@ describe("update", () => {
 
 	it("turns a foreign-key violation into a ConflictError", async () => {
 		const error = failedQuery("23503");
-		const service = serviceWith({ update: throwing(error) });
+		const service = serviceWith({ ...MANUAL_ROW, update: throwing(error) });
 
 		const thrown = await service
 			.update({ id: 1, ...FIELDS })
@@ -202,7 +478,7 @@ describe("update", () => {
 
 	it("turns a check violation into a ConflictError", async () => {
 		const error = failedQuery("23514");
-		const service = serviceWith({ update: throwing(error) });
+		const service = serviceWith({ ...MANUAL_ROW, update: throwing(error) });
 
 		const thrown = await service
 			.update({ id: 1, ...FIELDS, categoryId: 3 })
@@ -236,7 +512,7 @@ describe("update", () => {
 		]);
 	});
 
-	// No stored link is set up, so any read before the write fails the test.
+	// No stored link is set up, so reading the old link before the write fails the test.
 	it("keeps the Category sent when unlinking", async () => {
 		const { service, written } = writing();
 
@@ -249,6 +525,7 @@ describe("update", () => {
 
 	it("passes the Category through when expenseId is left out", async () => {
 		const service = serviceWith({
+			...MANUAL_ROW,
 			update: async (_, values) => {
 				expect(values).toEqual({ ...FIELDS, categoryId: 4 });
 				return TRANSACTION;
@@ -290,6 +567,77 @@ describe("update", () => {
 		expect(thrown).toBeInstanceOf(NotFoundError);
 		expect(thrown).toMatchObject({ message: "Transaction not found." });
 		expect(written).toEqual([]);
+	});
+
+	it("throws NotFoundError and writes nothing when the read finds no row", async () => {
+		const service = serviceWith({ findSyncedValues: async () => undefined });
+
+		const thrown = await service
+			.update({ id: 1, ...FIELDS })
+			.catch((e: unknown) => e);
+
+		expect(thrown).toBeInstanceOf(NotFoundError);
+		expect(thrown).toMatchObject({ message: "Transaction not found." });
+	});
+
+	describe("a synced row", () => {
+		const SAVED = {
+			provenance: Provenance.Cdr,
+			amount: FIELDS.amount,
+			date: FIELDS.date,
+		};
+
+		function syncedRow() {
+			const written: unknown[] = [];
+			const service = serviceWith({
+				findSyncedValues: async () => SAVED,
+				update: async (id, values) => {
+					written.push([id, values]);
+					return TRANSACTION;
+				},
+			});
+			return { service, written };
+		}
+
+		it.each([
+			["amount", { amount: 99 }],
+			["date", { date: new Date("2026-09-02T00:00:00.000Z") }],
+		])("refuses a changed %s and writes nothing", async (_, change) => {
+			const { service, written } = syncedRow();
+
+			const thrown = await service
+				.update({ id: 1, ...FIELDS, ...change })
+				.catch((e: unknown) => e);
+
+			expect(thrown).toBeInstanceOf(InvalidInputError);
+			expect(thrown).toMatchObject({
+				message: "Amount and date come from the bank.",
+			});
+			expect(written).toEqual([]);
+		});
+
+		it("saves other edits when amount and date are unchanged", async () => {
+			const { service, written } = syncedRow();
+
+			await service.update({
+				id: 1,
+				...FIELDS,
+				date: new Date(FIELDS.date),
+				notes: "member note",
+			});
+
+			const { amount, date, ...rest } = FIELDS;
+			expect(written).toEqual([[1, { ...rest, notes: "member note" }]]);
+		});
+	});
+
+	it("lets a manual row change its amount and date", async () => {
+		const { service, written } = writing();
+		const change = { amount: 99, date: new Date("2026-09-02T00:00:00.000Z") };
+
+		await service.update({ id: 1, ...FIELDS, ...change });
+
+		expect(written).toEqual([[1, { ...FIELDS, ...change }]]);
 	});
 });
 

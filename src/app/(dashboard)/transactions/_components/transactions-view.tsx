@@ -5,12 +5,14 @@ import {
 	ArrowUp,
 	ChevronLeft,
 	ChevronRight,
+	Landmark,
 	Pencil,
 	Plus,
 	Search,
 	Trash2,
 	X,
 } from "lucide-react";
+import Link from "next/link";
 import { useDeferredValue, useLayoutEffect, useMemo, useState } from "react";
 
 import { AsyncBoundary } from "~/components/async-boundary";
@@ -25,11 +27,16 @@ import {
 	toOptions,
 } from "~/components/select-field";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { useHydrating } from "~/hooks/use-hydrating";
-import { Frequency, Priority, priorityStyle } from "~/lib/constants";
+import {
+	Frequency,
+	Priority,
+	Provenance,
+	priorityStyle,
+} from "~/lib/constants";
 import { cn, formatDate } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { TransactionForm } from "./transaction-form";
@@ -143,10 +150,13 @@ export function TransactionsView() {
 		<div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
 			<PageHeader
 				actions={
-					<Button onClick={openAdd} size="sm">
-						<Plus className="h-4 w-4" />
-						Add transaction
-					</Button>
+					<div className="flex flex-wrap gap-2">
+						<ImportLink />
+						<Button onClick={openAdd} size="sm">
+							<Plus className="h-4 w-4" />
+							Add transaction
+						</Button>
+					</div>
 				}
 				description={<TransactionCount input={deferredInput} />}
 				title="Transaction History"
@@ -246,6 +256,27 @@ export function TransactionsView() {
 	);
 }
 
+// The page prefetches the count, so the badge paints with the header; not
+// suspense, so a slow count never holds the header back.
+function ImportLink() {
+	const { data: toReview } = api.transaction.possibleDuplicateCount.useQuery();
+	return (
+		<Link
+			className={buttonVariants({ variant: "outline", size: "sm" })}
+			href="/transactions/import"
+		>
+			<Landmark aria-hidden className="h-4 w-4" />
+			Import from bank
+			{toReview ? (
+				<Badge className="tabular border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] text-[var(--badge-warn-fg)]">
+					{toReview}
+					<span className="sr-only"> to review</span>
+				</Badge>
+			) : null}
+		</Link>
+	);
+}
+
 // Same key as the table's query, so it shares that fetch and never suspends.
 function TransactionCount({ input }: { input: ListInput }) {
 	// The server can't know if the rows landed before this rendered. A bar until
@@ -332,7 +363,7 @@ function TransactionsTable({
 			<div className="overflow-x-auto">
 				<table className="w-full min-w-[52rem] border-collapse text-sm">
 					<thead>
-						<tr className="border-border border-b bg-muted/40 text-left text-xs">
+						<tr className="border-b border-border bg-muted/40 text-left text-xs">
 							<th className="px-4 py-2.5">
 								<SortHeader col="date" {...sortHeader}>
 									Date
@@ -377,32 +408,40 @@ function TransactionsTable({
 							const ps = priorityStyle(tx.priority);
 							return (
 								<tr className="group hover:bg-muted/30" key={tx.id}>
-									<td className="tabular whitespace-nowrap px-4 py-3 text-muted-foreground">
+									<td className="tabular px-4 py-3 whitespace-nowrap text-muted-foreground">
 										{formatDate(tx.date)}
 									</td>
 									<td className="px-4 py-3">
 										<span className="font-medium text-foreground">
 											{tx.description}
 										</span>
+										{/* Its date and amount are locked, so say so before Edit does. */}
+										{tx.provenance !== Provenance.Manual && (
+											<span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+												<Landmark aria-hidden className="size-3 shrink-0" />
+												<span className="sr-only">From the bank: </span>
+												{tx.accountName ?? "Bank"}
+											</span>
+										)}
 										{tx.notes && (
-											<span className="mt-0.5 block text-muted-foreground text-xs">
+											<span className="mt-0.5 block text-xs text-muted-foreground">
 												{tx.notes}
 											</span>
 										)}
 									</td>
-									<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+									<td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
 										{tx.group}
 										{tx.categoryName && (
-											<span className="mt-0.5 block text-muted-foreground text-xs">
+											<span className="mt-0.5 block text-xs text-muted-foreground">
 												<span className="sr-only">Category: </span>
 												{tx.categoryName}
 											</span>
 										)}
 									</td>
-									<td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+									<td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
 										{tx.expenseName ?? "—"}
 									</td>
-									<td className="whitespace-nowrap px-4 py-3">
+									<td className="px-4 py-3 whitespace-nowrap">
 										<Badge className={ps.badge}>
 											<span
 												className={cn("h-1.5 w-1.5 rounded-full", ps.dot)}
@@ -410,11 +449,11 @@ function TransactionsTable({
 											{ps.label}
 										</Badge>
 									</td>
-									<td className="whitespace-nowrap px-4 py-3 text-right">
+									<td className="px-4 py-3 text-right whitespace-nowrap">
 										<Money signed tone="ledger" value={tx.amount} />
 									</td>
 									<td className="px-4 py-3">
-										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+										<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
 											<button
 												aria-label={`Edit ${tx.description}`}
 												className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -439,7 +478,7 @@ function TransactionsTable({
 						{!items.length && (
 							<tr>
 								<td
-									className="px-4 py-16 text-center text-muted-foreground text-sm"
+									className="px-4 py-16 text-center text-sm text-muted-foreground"
 									colSpan={7}
 								>
 									{hasFilters
@@ -452,7 +491,7 @@ function TransactionsTable({
 				</table>
 			</div>
 
-			<div className="flex flex-col gap-3 border-border border-t px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+			<div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
 				<span className="text-muted-foreground">
 					Page total:{" "}
 					<Money className="font-medium" signed tone="ledger" value={pageSum} />

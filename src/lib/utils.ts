@@ -27,6 +27,17 @@ export function formatCompact(value: number | null | undefined) {
 	return compactFormatter.format(value ?? 0);
 }
 
+const countFormatter = new Intl.NumberFormat("en-AU");
+
+export function formatCount(value: number) {
+	return countFormatter.format(value);
+}
+
+// `amount` is a double, so 0.1 + 0.2 must still equal 0.3.
+export function toCents(amount: number) {
+	return Math.round(amount * 100);
+}
+
 const dateFormatter = new Intl.DateTimeFormat("en-AU", {
 	day: "2-digit",
 	month: "short",
@@ -83,7 +94,7 @@ export function fromDateInput(value: string): Date | null {
 
 // Intl rejects an unknown IANA zone by throwing, and a zone string can arrive from a
 // client — fall back to the runtime's own zone so a bad value degrades rather than 500s.
-// Cached because startOfDayInZone runs per row over a scan window.
+// Cached because the zoned-day helpers run per row over a scan window.
 const zonedDayFormatters = new Map<string, Intl.DateTimeFormat>();
 function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 	const cached = zonedDayFormatters.get(timeZone);
@@ -95,9 +106,9 @@ function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 	};
 	let formatter: Intl.DateTimeFormat;
 	try {
-		formatter = new Intl.DateTimeFormat("en-CA", { ...options, timeZone });
+		formatter = new Intl.DateTimeFormat("en-AU", { ...options, timeZone });
 	} catch {
-		formatter = new Intl.DateTimeFormat("en-CA", options);
+		formatter = new Intl.DateTimeFormat("en-AU", options);
 	}
 	zonedDayFormatters.set(timeZone, formatter);
 	return formatter;
@@ -108,10 +119,40 @@ function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 // runtime's own zone is UTC on the server. Returned at local midnight so it subtracts
 // cleanly against fromDateInput's parse of a YYYY-MM-DD calendar column.
 export function startOfDayInZone(value: Date, timeZone: string): Date {
+	const { year, month, day } = zonedDayParts(value, timeZone);
+	return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
+// `YYYY-MM-DD` of the calendar day `value` lands on in `timeZone` (IANA), so two
+// instants from either side of UTC midnight compare as one day.
+export function dayKeyInZone(value: Date, timeZone: string): string {
+	const { year, month, day } = zonedDayParts(value, timeZone);
+	return `${year}-${month}-${day}`;
+}
+
+// Read as parts, not one formatted string, so the locale's date order can't scramble the day.
+function zonedDayParts(value: Date, timeZone: string) {
 	const parts = zonedDayFormatter(timeZone).formatToParts(value);
 	const part = (type: Intl.DateTimeFormatPartTypes) =>
-		Number(parts.find((p) => p.type === type)?.value);
-	return new Date(part("year"), part("month") - 1, part("day"));
+		parts.find((p) => p.type === type)?.value;
+	return { year: part("year"), month: part("month"), day: part("day") };
+}
+
+// Days since 1970 of the day `value` lands on in `timeZone`. Two subtract to a
+// whole-day gap, with no stray DST hour.
+export function dayNumberInZone(value: Date, timeZone: string): number {
+	return Date.parse(`${dayKeyInZone(value, timeZone)}T00:00:00Z`) / 86_400_000;
+}
+
+// A bank day travels as UTC midnight. Read it back in UTC too: a local read shows
+// the day before anywhere west of UTC.
+export function utcDayKey(value: Date): string {
+	return value.toISOString().slice(0, 10);
+}
+
+/** Inverse of `utcDayKey`. */
+export function utcMidnight(day: string): Date {
+	return new Date(`${day}T00:00:00.000Z`);
 }
 
 // Compare by local calendar day, not instant: a one-time due today is upcoming,

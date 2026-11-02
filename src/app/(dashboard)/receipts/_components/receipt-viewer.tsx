@@ -218,13 +218,11 @@ function NewTabLink({
 }) {
 	return (
 		<a
-			// Class merge needed: the base transparent border would otherwise beat the
-			// outline variant's border.
-			className={cn(
+			className={
 				primary
 					? buttonVariants()
-					: buttonVariants({ variant: "outline", size: "sm" }),
-			)}
+					: buttonVariants({ variant: "outline", size: "sm" })
+			}
 			href={href}
 			rel="noreferrer"
 			target="_blank"
@@ -250,7 +248,7 @@ function LoadingOverlay() {
 function LoadError() {
 	return (
 		<p
-			className="flex items-start gap-2 rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-[var(--badge-spend-fg)] text-xs"
+			className="flex items-start gap-2 rounded-md border border-[color:var(--badge-spend-border)] bg-[var(--badge-spend-bg)] px-3 py-2 text-xs text-[var(--badge-spend-fg)]"
 			role="alert"
 		>
 			<TriangleAlert aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />

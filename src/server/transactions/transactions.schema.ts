@@ -1,6 +1,17 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgEnum, pgTable } from "drizzle-orm/pg-core";
-import { Frequency, Priority } from "~/lib/constants";
+import {
+	check,
+	index,
+	pgEnum,
+	pgTable,
+	uniqueIndex,
+} from "drizzle-orm/pg-core";
+import {
+	Frequency,
+	PossibleDuplicateStatus,
+	Priority,
+	Provenance,
+} from "~/lib/constants";
 import { categories } from "~/server/categories/categories.schema";
 import { expenses } from "~/server/expenses/expenses.schema";
 
@@ -11,6 +22,10 @@ export const transactionFrequency = pgEnum(
 export const transactionPriority = pgEnum(
 	"transaction_priority",
 	Object.values(Priority) as [Priority, ...Priority[]],
+);
+export const transactionProvenance = pgEnum(
+	"transaction_provenance",
+	Object.values(Provenance) as [Provenance, ...Provenance[]],
 );
 
 export const transactions = pgTable(
@@ -32,6 +47,11 @@ export const transactions = pgTable(
 		frequency: transactionFrequency().notNull().default(Frequency.OneOff),
 		priority: transactionPriority().notNull().default(Priority.NiceToHave),
 		notes: d.text(),
+		provenance: transactionProvenance().notNull().default(Provenance.Manual),
+		// The provider's own id; null on a manual row.
+		externalId: d.text(),
+		externalAccountId: d.text(),
+		accountName: d.text(),
 		createdAt: d
 			.timestamp({ withTimezone: true })
 			.$defaultFn(() => new Date())
@@ -43,10 +63,61 @@ export const transactions = pgTable(
 		index("transaction_priority_idx").on(t.priority),
 		index("transaction_expense_idx").on(t.expenseId),
 		index("transaction_category_idx").on(t.categoryId),
+		// adr017: re-sync updates its row, never duplicates. Partial, so manual
+		// rows (no provider id) can repeat.
+		uniqueIndex("transaction_provenance_external_idx")
+			.on(t.provenance, t.externalId)
+			.where(sql`${t.externalId} is not null`),
 		// adr025: a linked Transaction takes its Category from the Expense.
 		check(
 			"transaction_expense_or_category_check",
 			sql`${t.expenseId} IS NULL OR ${t.categoryId} IS NULL`,
 		),
+	],
+);
+
+export const possibleDuplicateStatus = pgEnum(
+	"possible_duplicate_status",
+	Object.values(PossibleDuplicateStatus) as [
+		PossibleDuplicateStatus,
+		...PossibleDuplicateStatus[],
+	],
+);
+
+// A bank row that looks like a household row but isn't exact, held until a
+// member answers. Nothing reaches `transaction` until then.
+export const possibleDuplicates = pgTable(
+	"possible_duplicate",
+	(d) => ({
+		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		// A backstop only: deleting the row first adds its held bank rows.
+		transactionId: d
+			.integer()
+			.notNull()
+			.references(() => transactions.id, { onDelete: "cascade" }),
+		provenance: transactionProvenance()
+			.$type<Exclude<Provenance, Provenance.Manual>>()
+			.notNull(),
+		externalId: d.text().notNull(),
+		externalAccountId: d.text().notNull(),
+		accountName: d.text().notNull(),
+		amount: d.doublePrecision().notNull(),
+		date: d.timestamp({ withTimezone: true }).notNull(),
+		description: d.text().notNull(),
+		status: possibleDuplicateStatus()
+			.notNull()
+			.default(PossibleDuplicateStatus.Pending),
+		createdAt: d
+			.timestamp({ withTimezone: true })
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+	}),
+	(t) => [
+		uniqueIndex("possible_duplicate_external_idx").on(
+			t.provenance,
+			t.externalId,
+		),
+		index("possible_duplicate_transaction_idx").on(t.transactionId),
 	],
 );

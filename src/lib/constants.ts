@@ -36,6 +36,59 @@ export enum ReceiptChannel {
 	Email = "email",
 }
 
+// Which system a Transaction lives in. PayPal is defined now so its sync adds
+// no migration.
+export enum Provenance {
+	Manual = "manual",
+	Import = "import",
+	Cdr = "cdr",
+	Paypal = "paypal",
+}
+
+// A RedBark bank connection's consent state, verbatim from its API. Expired,
+// invalidated and revoked are terminal: the member re-links in RedBark.
+export enum CdrConnectionStatus {
+	Pending = "pending",
+	Active = "active",
+	Expiring = "expiring",
+	Expired = "expired",
+	Invalidated = "invalidated",
+	Revoked = "revoked",
+}
+
+export enum CdrImportStatus {
+	Queued = "queued",
+	Running = "running",
+	Done = "done",
+	Failed = "failed",
+}
+
+export const UNFINISHED_IMPORT_STATUSES: readonly CdrImportStatus[] = [
+	CdrImportStatus.Queued,
+	CdrImportStatus.Running,
+];
+
+export function isUnfinishedImport(status: CdrImportStatus): boolean {
+	return UNFINISHED_IMPORT_STATUSES.includes(status);
+}
+
+// A bank row held for a member's answer. A kept one stays as the record of "Keep
+// mine", so the bank row is never asked about or added again.
+export enum PossibleDuplicateStatus {
+	Pending = "pending",
+	Kept = "kept",
+}
+
+// One household with AU banks only (CDR is AUD-only), so one fixed zone decides
+// which calendar day a row falls on. Becomes a setting with household scoping.
+export const HOUSEHOLD_TIME_ZONE = "Australia/Sydney";
+
+// Who recorded a balance snapshot. A label only: the latest asOf wins either way.
+export enum BalanceSource {
+	Manual = "manual",
+	Cdr = "cdr",
+}
+
 // Stored frequency/priority are free-text; coerce a read value to the managed
 // vocab, falling back to the default when it is outside the current set (e.g.
 // legacy/imported data) so a form seed can never hold an unknown value.

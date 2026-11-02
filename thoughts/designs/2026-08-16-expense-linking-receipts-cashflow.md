@@ -152,4 +152,4 @@ Flow shape: tRPC mutation (or webhook) writes canonical rows + outbox event in o
 - [adr011](../../docs/adr/adr011-one-time-budgets-as-expense-kind.md) — one-time budgets as `expense` rows behind a `kind` discriminator
 - [adr012](../../docs/adr/archived/adr012-defer-adr004-plain-routers-for-feature-work.md) — feature work stays plain-router; executing adr004 deferred
 - [adr002](../../docs/adr/adr002-canonical-postgres-store-transactional-outbox.md) — already covers outbox + Inngest; reaffirmed against Vercel Workflow here, no new ADR
-- [adr017](../../docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md) — stage 7 CDR (RedBark v2) sync: app store-of-record, provenance-keyed dedup, poll-first worker, balance auto-anchor (In Progress — sign spike + beta API pending)
+- [adr017](../../docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md) — stage 7 CDR (RedBark v2) sync: app store-of-record, provenance-keyed dedup, poll-first worker, balance auto-anchor (In Progress — sign confirmed 2026-10-16; beta API pending)

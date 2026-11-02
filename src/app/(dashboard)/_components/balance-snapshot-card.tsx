@@ -8,6 +8,7 @@ import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn, formatCurrency, formatDate } from "~/lib/utils";
 import { api } from "~/trpc/react";
+import { balanceSourceLabel } from "./balance-snapshot.display";
 
 export function BalanceSnapshotCard() {
 	const utils = api.useUtils();
@@ -54,6 +55,10 @@ export function BalanceSnapshotCard() {
 					</p>
 					<p className="mt-1 text-muted-foreground text-xs">
 						As of {formatDate(latest.asOf)}
+						{/* A screen reader says "bullet" for "·", so it hears a comma. */}
+						<span aria-hidden> · </span>
+						<span className="sr-only">, </span>
+						{balanceSourceLabel(latest.source)}
 					</p>
 				</div>
 			) : (
@@ -107,10 +112,14 @@ export function BalanceSnapshotCard() {
 /** Real heading, so it wraps like the loaded card. Sized for a saved balance. */
 export function BalanceSnapshotCardSkeleton() {
 	return (
-		<div aria-hidden>
+		<div aria-hidden className="@container">
 			<BalanceHeading />
 			<Skeleton className="h-8 w-36" />
-			<Skeleton className="mt-1 h-4 w-28" />
+			{/* "As of 31 Oct 2026 · Synced from bank" wraps below 13rem (lg's narrow column). */}
+			<div className="mt-1 flex flex-col">
+				<Skeleton className="my-0.5 h-3 w-52 max-w-full" />
+				<Skeleton className="my-0.5 h-3 w-20 @min-[13rem]:hidden" />
+			</div>
 			<div className="mt-4 flex flex-col gap-2">
 				<Skeleton className="h-5 w-28" />
 				<Skeleton className="h-8 w-full" />

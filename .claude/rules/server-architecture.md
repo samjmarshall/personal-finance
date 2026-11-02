@@ -30,7 +30,7 @@ its own change — never refactor a router toward 3-tier inside a feature diff.
 | `<domain>.service.ts`               | application  | Business rules. Small public methods, one job each; private helpers for the steps. Domain constants, size caps, member-facing error copy live here.                  | `repository` + adapter interfaces; `logger: Logger` |
 | `<domain>.repository.ts`            | data         | Drizzle only. Intent-named methods (`findUnsent`, `markDuplicate`, `saveExtraction`) with the status transition inside. Throws; no logging, no try/catch.           | `db`                               |
 | `<domain>.<adapter>.ts`             | adapter      | One external system behind an interface — `email.mailbox.ts` (Resend reads). Interface + impl in the same file. A provider adapter shared across domains lives in its own top-level infra folder instead (`src/server/blob-store/` for Vercel Blob, `src/server/aws/`), not under a domain. The AI model is not an adapter file: `ReceiptExtractionService` takes the AI SDK `LanguageModel` as its `languageModel` dep and calls `generateObject` itself (see `bedrock-invocation.md`). | the SDK it wraps                   |
-| `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. Each exports one instance: `outbox.module.ts`, `categories.module.ts`, `expenses.module.ts`, `transactions.module.ts`, `receipts.module.ts`, `auth/members.module.ts`, `allowed-senders/allowed-senders.module.ts`. | —                                  |
+| `<domain>.module.ts`                | composition  | Optional. Add only when a **second** consumer needs the same service instance; until then the composition root does the `new` calls. Each exports one instance: `outbox.module.ts`, `categories.module.ts`, `expenses.module.ts`, `transactions.module.ts`, `balances.module.ts`, `receipts.module.ts`, `auth/members.module.ts`, `allowed-senders/allowed-senders.module.ts`. | —                                  |
 | `src/server/observability/`         | shared adapter | Shared observability provider, split OTel API vs SDK. API side (tiers may import): `logging/` (`Logger` port + `OtelLogger`), `tracing/` (`withSpan`, baggage, trace id, trace carrier), `errors/` (`captureException`, `reportError`, thrown-value helpers). SDK side: `sdk/` (boot `otel.ts`, sampler, `SpanAttributeProcessor`, prompt redaction, flush) — imported only by `instrumentation.ts`, route roots (`withFlush`) and test harnesses, never a tier. Framework adapters live with their consumer (`TracingMiddleware` in `src/server/inngest/middleware.ts`). Like `blob-store/` — lives outside any domain. | OTel SDK + PostHog SDKs            |
 
 A domain with no tables, such as `cashflow/`, has no repository: its service
@@ -90,7 +90,10 @@ an id.
 - **Retry contract.** Inngest passes `attempt`; the controller maps it to
   `isFinalAttempt: attempt >= RETRIES`. The service rethrows a retryable error
   while attempts remain and parks the row (`markFailed`) on the final or a
-  deterministic one. `RETRIES` lives in the controller.
+  deterministic one. `RETRIES` lives in the controller. Exception: a whole-run
+  worker with no row to park (`cdr-sync`) records each failure as it happens and
+  throws one error saying whether it is retryable; the controller turns a
+  deterministic one into `NonRetriableError`, so it needs no `isFinalAttempt`.
 - **Error capture choke points only.** Services and repositories never call
   `captureException`. Exceptions are captured only at the four choke points:
   `onRequestError` (`src/instrumentation.ts`), the tRPC `observabilityMiddleware`,
@@ -165,7 +168,8 @@ Split on real pain, not in advance.
 - Compose the pre-built router objects in `src/server/api/root.ts`
   (`allowedSender` comes from `src/server/allowed-senders/`,
   `balance` from `src/server/balances/`, `cashflow` from
-  `src/server/cashflow/`, `category` from `src/server/categories/`, `expense`
+  `src/server/cashflow/`, `category` from `src/server/categories/`, `cdr` from
+  `src/server/cdr/`, `expense`
   from `src/server/expenses/`, `income` from `src/server/income/`, `receipt`
   from `src/server/receipts/`, `setting` from `src/server/settings/`, and
   `transaction` from `src/server/transactions/`).
@@ -235,10 +239,12 @@ repository that is `this.db.transaction(...)` (`saveExtraction`,
 
 ## FROZEN external identifiers
 
-`EVENT_REGISTRY` keys, the Inngest app id (the `package.json` `name`, via
-`env.PROJECT_NAME`), Inngest function ids (`outbox-sweep`, `outbox-prune`,
-`process-receipt`), their crons / event triggers, and concurrency keys are
-byte-stable wire strings: Inngest keys schedules and runs by them.
+`EVENT_REGISTRY` keys (incl. `cdr/import.requested`), the Inngest app id (the
+`package.json` `name`, via `env.PROJECT_NAME`), Inngest function ids (`outbox-sweep`,
+`outbox-prune`, `process-receipt`, `cdr-sync`, `cdr-import`, and `cdr-import-failure`,
+which Inngest derives for its `onFailure`), their crons / event triggers, and
+concurrency keys (`event.data.receiptId`, and `"cdr-sync"` shared by `cdr-sync` and
+`cdr-import`) are byte-stable wire strings: Inngest keys schedules and runs by them.
 `src/server/inngest/registry-golden.test.ts` pins them. Changing one requires
 updating the golden test **deliberately** and recording the rename in an ADR
 consequence note — never a drive-by.

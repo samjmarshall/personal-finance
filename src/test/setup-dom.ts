@@ -10,3 +10,10 @@ declare global {
 // Without the flag, React stays silent on updates made outside act.
 afterEach(cleanup);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom has no layout, so no ResizeObserver. This one never reports a size.
+globalThis.ResizeObserver ??= class {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+};

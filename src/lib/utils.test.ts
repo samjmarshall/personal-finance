@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
+	dayKeyInZone,
+	dayNumberInZone,
+	formatCount,
 	formatDate,
 	formatMonthKey,
 	fromDateInput,
 	isPast,
 	startOfDayInZone,
 	toDateInput,
+	utcDayKey,
+	utcMidnight,
 } from "~/lib/utils";
+
+describe("formatCount", () => {
+	it("groups thousands", () => {
+		expect(formatCount(12345)).toBe("12,345");
+	});
+});
 
 describe("formatDate", () => {
 	// A `date` column (receiptDate) arrives as a bare calendar day. `new Date()` reads
@@ -47,6 +58,56 @@ describe("startOfDayInZone", () => {
 		expect(toDateInput(startOfDayInZone(lateUtc, "Not/AZone"))).toBe(
 			toDateInput(lateUtc),
 		);
+	});
+});
+
+describe("dayKeyInZone", () => {
+	// A bank row is saved at UTC midnight; a typed row at Sydney local midnight,
+	// which is the day before in UTC. Both must land on the same day key.
+	it.each([
+		["AEST", "2026-06-10T00:00:00Z", "2026-06-09T14:00:00Z", "2026-06-10"],
+		["AEDT", "2026-12-10T00:00:00Z", "2026-12-09T13:00:00Z", "2026-12-10"],
+		// DST starts 2026-10-04 at 02:00 local: midnight is still +10.
+		["DST start", "2026-10-04T00:00:00Z", "2026-10-03T14:00:00Z", "2026-10-04"],
+		// DST ends 2026-04-05 at 03:00 local: midnight is still +11.
+		["DST end", "2026-04-05T00:00:00Z", "2026-04-04T13:00:00Z", "2026-04-05"],
+	])("gives UTC and Sydney midnight one key (%s)", (_, utc, sydney, key) => {
+		expect(dayKeyInZone(new Date(utc), "Australia/Sydney")).toBe(key);
+		expect(dayKeyInZone(new Date(sydney), "Australia/Sydney")).toBe(key);
+	});
+});
+
+describe("dayNumberInZone", () => {
+	it("gives UTC and Sydney midnight one number", () => {
+		expect(
+			dayNumberInZone(new Date("2026-06-09T14:00:00Z"), "Australia/Sydney"),
+		).toBe(
+			dayNumberInZone(new Date("2026-06-10T00:00:00Z"), "Australia/Sydney"),
+		);
+	});
+
+	// DST starts 2026-10-04 in Sydney: that day is 23 hours long, still one day.
+	it("steps by exactly one across a DST change", () => {
+		const before = new Date("2026-10-03T14:00:00Z");
+		const after = new Date("2026-10-04T13:00:00Z");
+		expect(
+			dayNumberInZone(after, "Australia/Sydney") -
+				dayNumberInZone(before, "Australia/Sydney"),
+		).toBe(1);
+	});
+});
+
+describe("utcDayKey and utcMidnight", () => {
+	it("round-trip a bare day through UTC midnight", () => {
+		expect(utcMidnight("2026-02-28").toISOString()).toBe(
+			"2026-02-28T00:00:00.000Z",
+		);
+		expect(utcDayKey(utcMidnight("2026-02-28"))).toBe("2026-02-28");
+	});
+
+	it("keys an instant by its UTC day, not the local one", () => {
+		expect(utcDayKey(new Date("2026-06-09T23:30:00+10:00"))).toBe("2026-06-09");
+		expect(utcDayKey(new Date("2026-06-10T00:30:00+10:00"))).toBe("2026-06-09");
 	});
 });
 

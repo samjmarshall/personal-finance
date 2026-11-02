@@ -76,3 +76,29 @@ export const linkExpenseDto = z.object({
 });
 
 export type LinkExpenseInput = z.infer<typeof linkExpenseDto>;
+
+export const resolveDuplicateDto = z.object({
+	id: z.number().int().positive(),
+	choice: z.enum(["keep_mine", "use_bank", "both_real"]),
+});
+
+export type ResolveDuplicateInput = z.infer<typeof resolveDuplicateDto>;
+
+// The most answers one apply sends; the page splits a bigger batch.
+export const RESOLVE_DUPLICATES_MAX = 200;
+
+// One answer per review: a repeat would count as already answered.
+export const resolveDuplicatesDto = z.object({
+	answers: z
+		.array(resolveDuplicateDto)
+		.min(1)
+		.max(RESOLVE_DUPLICATES_MAX)
+		.refine(
+			(answers) => new Set(answers.map((a) => a.id)).size === answers.length,
+			{
+				message: "Answer each review once.",
+			},
+		),
+});
+
+export type ResolveDuplicatesInput = z.infer<typeof resolveDuplicatesDto>;

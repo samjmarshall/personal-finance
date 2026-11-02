@@ -6,6 +6,7 @@ import * as allowedSendersSchema from "~/server/allowed-senders/allowed-senders.
 import * as authSchema from "~/server/auth/auth.schema";
 import * as balancesSchema from "~/server/balances/balances.schema";
 import * as categoriesSchema from "~/server/categories/categories.schema";
+import * as cdrSchema from "~/server/cdr/cdr.schema";
 import * as expensesSchema from "~/server/expenses/expenses.schema";
 import * as incomeSchema from "~/server/income/income.schema";
 import * as outboxSchema from "~/server/outbox/outbox.schema";
@@ -18,6 +19,7 @@ const schema = {
 	...allowedSendersSchema,
 	...balancesSchema,
 	...categoriesSchema,
+	...cdrSchema,
 	...expensesSchema,
 	...incomeSchema,
 	...outboxSchema,

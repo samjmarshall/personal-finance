@@ -104,10 +104,28 @@ One purchase can surface in several systems (a PayPal purchase also lands as a b
 transaction), so consolidation keys on Provenance.
 _Avoid_: source, origin
 
+**Adopt**:
+The bank sync takes a household Transaction as its own when a bank row has the same day, the
+same amount to the cent and a description that means the same purchase. The row keeps every
+Member edit; its date and amount then come from the bank. (Description test: adr029, Proposed.)
+_Avoid_: link (an Expense), match (a Receipt), merge
+
+**Possible duplicate**:
+A bank row with the same amount to the cent as a household Transaction within 7 days, but not
+an Adopt, held until a Member keeps theirs, uses the bank's, or says both are real. (Same-day
+pairs: adr029, Proposed.)
+_Avoid_: conflict, dupe
+
 **Channel**:
 How a Receipt arrived — upload or email. A Receipt lives only here, so it has a Channel,
 not a Provenance.
 _Avoid_: source
+
+**Balance source**:
+Who recorded a balance snapshot — the member, or the bank sync. A label only: the newest
+as-of time wins either way. The one place "source" is the term; a snapshot is not a
+Transaction, so it has no Provenance.
+_Avoid_: provenance (for a balance)
 
 ## Relationships
 
@@ -133,6 +151,8 @@ _Avoid_: source
   **Transaction**; a **Transaction** has at most one **Receipt**. The **Household**
   owns the Receipt; Member attribution is optional and detaches (to none) if that
   Member is removed, because a Receipt is kept as tax evidence.
+- A **Transaction** is adopted by at most one bank row; a **Possible duplicate** points at
+  exactly one **Transaction**
 
 ## Example dialogue
 

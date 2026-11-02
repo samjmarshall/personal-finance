@@ -4,6 +4,7 @@ import {
 	CashFlowSection,
 	CashFlowSectionSkeleton,
 } from "./_components/cash-flow-section";
+import { CdrConnectionBanner } from "./_components/cdr-connection-banner";
 import { SpendCharts, SpendChartsSkeleton } from "./_components/spend-charts";
 import { StatCards, StatCardsSkeleton } from "./_components/stat-cards";
 
@@ -36,6 +37,12 @@ export default function DashboardPage() {
 					<SpendCharts />
 				</AsyncBoundary>
 			</div>
+
+			{/* Invisible gate: a failed read hides the banner, no error card. Last,
+			    so arriving late moves nothing above it. */}
+			<AsyncBoundary label="bank connections" skeleton={null}>
+				<CdrConnectionBanner />
+			</AsyncBoundary>
 		</div>
 	);
 }

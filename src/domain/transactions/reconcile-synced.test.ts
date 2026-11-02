@@ -1,0 +1,360 @@
+import { describe, expect, it } from "vitest";
+import { PossibleDuplicateStatus, Provenance } from "~/lib/constants";
+import {
+	descriptionWords,
+	type MatchCandidate,
+	planReconcile,
+	type ReconcileInput,
+	type ReconcileReview,
+	sharedWords,
+} from "./reconcile-synced";
+import type { SyncedTransaction } from "./transaction.interface";
+
+const ZONE = "Australia/Sydney";
+
+// A bank row is saved at UTC midnight of its day.
+function bank(
+	externalId: string,
+	day: string,
+	amount: number,
+	externalAccountId = "acct_live",
+): SyncedTransaction {
+	return {
+		provenance: Provenance.Cdr,
+		externalId,
+		externalAccountId,
+		accountName: "Everyday",
+		amount,
+		date: new Date(`${day}T00:00:00.000Z`),
+		description: `BANK ${externalId}`,
+	};
+}
+
+// A typed row is saved at Sydney midnight: 13:00 UTC the day before (AEDT).
+function mine(
+	id: number,
+	day: string,
+	amount: number,
+	extra: Partial<MatchCandidate> = {},
+): MatchCandidate {
+	const date = new Date(`${day}T00:00:00.000Z`);
+	date.setUTCHours(-11);
+	return {
+		id,
+		date,
+		amount,
+		description: `Mine ${id}`,
+		externalId: null,
+		externalAccountId: null,
+		heldBy: null,
+		...extra,
+	};
+}
+
+function plan(input: Partial<ReconcileInput>) {
+	return planReconcile({
+		incoming: [],
+		knownIds: [],
+		reviews: [],
+		candidates: [],
+		liveAccountIds: ["acct_live"],
+		timeZone: ZONE,
+		...input,
+	});
+}
+
+function review(
+	externalId: string,
+	status: PossibleDuplicateStatus,
+	transactionId = 1,
+): ReconcileReview {
+	return { id: 90, externalId, status, transactionId };
+}
+
+const EMPTY = { refresh: [], add: [], adopt: [], flag: [], skipped: [] };
+
+describe("sharedWords", () => {
+	it("counts distinct words both share", () => {
+		expect(
+			sharedWords(
+				"PAYPAL *NETFLIX AUS AUS",
+				"PAYPAL *NETFLIX AUS 4029357733 AUS",
+			),
+		).toBe(3);
+	});
+
+	it("ignores case and splits on anything but letters and digits", () => {
+		expect([...descriptionWords("Transfer To Sam, *SPOTIFY*P3E65F")]).toEqual([
+			"TRANSFER",
+			"TO",
+			"SAM",
+			"SPOTIFY",
+			"P3E65F",
+		]);
+		expect(sharedWords("99 Bikes - Lawnton", "CommBank App 99 BIKES")).toBe(2);
+	});
+});
+
+// Two subscriptions at one price, yours a day after the bank's (as seen on import).
+const NETFLIX_BANK = {
+	...bank("a_netflix", "2026-01-13", 20.99),
+	description: "PAYPAL *NETFLIX AUS 4029357733 AUS",
+};
+const SPOTIFY_BANK = {
+	...bank("b_spotify", "2026-01-13", 20.99),
+	description: "PAYPAL *SPOTIFY*P3E65F 4029357733 AUS",
+};
+
+describe("planReconcile", () => {
+	it("refreshes a known bank id and never matches it", () => {
+		const row = bank("t1", "2026-11-10", 5);
+		expect(
+			plan({
+				incoming: [row],
+				knownIds: ["t1"],
+				candidates: [mine(1, "2026-11-10", 5)],
+			}),
+		).toEqual({ ...EMPTY, refresh: [row] });
+	});
+
+	it("adopts a household row with the same Sydney day and cent", () => {
+		const row = bank("t1", "2026-11-10", 12.3);
+		expect(
+			plan({ incoming: [row], candidates: [mine(1, "2026-11-10", 12.3)] }),
+		).toEqual({ ...EMPTY, adopt: [{ transactionId: 1, row, heldBy: null }] });
+	});
+
+	it("compares amounts as whole cents", () => {
+		const row = bank("t1", "2026-11-10", 0.3);
+		const result = plan({
+			incoming: [row],
+			candidates: [mine(1, "2026-11-10", 0.1 + 0.2)],
+		});
+		expect(result.adopt).toHaveLength(1);
+	});
+
+	it.each([
+		["3 days off", "2026-11-13", 100, "flag"],
+		["7 days off", "2026-11-17", 100, "flag"],
+		["8 days off", "2026-11-18", 100, "add"],
+		["1 cent off on the day", "2026-11-10", 100.01, "add"],
+		["1 cent off 3 days later", "2026-11-13", 99.99, "add"],
+		["the opposite sign", "2026-11-10", -100, "add"],
+	])("with %s it does a %s", (_, day, amount, outcome) => {
+		const row = bank("t1", day, amount);
+		const result = plan({
+			incoming: [row],
+			candidates: [mine(1, "2026-11-10", 100)],
+		});
+		if (outcome === "flag") {
+			expect(result).toEqual({
+				...EMPTY,
+				flag: [{ transactionId: 1, row, reviewId: null }],
+			});
+		} else {
+			expect(result).toEqual({ ...EMPTY, add: [row] });
+		}
+	});
+
+	it("never pairs a $0 bank row with a $0 one; it is added", () => {
+		const row = bank("t1", "2026-11-10", 0);
+		expect(
+			plan({ incoming: [row], candidates: [mine(1, "2026-11-10", 0)] }),
+		).toEqual({ ...EMPTY, add: [row] });
+	});
+
+	it("uses a candidate once; the other bank row is added", () => {
+		const first = bank("t1", "2026-11-10", 5);
+		const second = bank("t2", "2026-11-10", 5);
+		expect(
+			plan({
+				incoming: [first, second],
+				candidates: [mine(1, "2026-11-10", 5)],
+			}),
+		).toEqual({
+			...EMPTY,
+			adopt: [{ transactionId: 1, row: first, heldBy: null }],
+			add: [second],
+		});
+	});
+
+	it("pairs an exact bank row before a near one sorted ahead of it", () => {
+		const near = bank("a_near", "2026-11-10", 5.1);
+		const exact = bank("b_exact", "2026-11-10", 5);
+		expect(
+			plan({ incoming: [near, exact], candidates: [mine(1, "2026-11-10", 5)] }),
+		).toEqual({
+			...EMPTY,
+			adopt: [{ transactionId: 1, row: exact, heldBy: null }],
+			add: [near],
+		});
+	});
+
+	it("flags a same-amount row days off, never a near amount on the day", () => {
+		const row = bank("t1", "2026-11-10", 30);
+		const result = plan({
+			incoming: [row],
+			candidates: [mine(1, "2026-11-10", 29.5), mine(2, "2026-11-13", 30)],
+		});
+		expect(result.flag).toEqual([{ transactionId: 2, row, reviewId: null }]);
+	});
+
+	it("pairs the closest day first among same-amount pairs", () => {
+		const row = bank("t1", "2026-11-10", 100);
+		const result = plan({
+			incoming: [row],
+			candidates: [mine(1, "2026-11-14", 100), mine(2, "2026-11-11", 100)],
+		});
+		expect(result.flag).toEqual([{ transactionId: 2, row, reviewId: null }]);
+	});
+
+	it("pairs the most shared words first, so same-priced rows never cross", () => {
+		const result = plan({
+			incoming: [NETFLIX_BANK, SPOTIFY_BANK],
+			candidates: [
+				mine(1, "2026-01-14", 20.99, {
+					description: "PAYPAL *SPOTIFY*P3E65F AUS",
+				}),
+				mine(2, "2026-01-14", 20.99, {
+					description: "PAYPAL *NETFLIX AUS AUS",
+				}),
+			],
+		});
+		expect(result.flag).toEqual([
+			{ transactionId: 2, row: NETFLIX_BANK, reviewId: null },
+			{ transactionId: 1, row: SPOTIFY_BANK, reviewId: null },
+		]);
+	});
+
+	it("adopts by the most shared words on the same day", () => {
+		const result = plan({
+			incoming: [NETFLIX_BANK, SPOTIFY_BANK],
+			candidates: [
+				mine(1, "2026-01-13", 20.99, {
+					description: "PAYPAL *SPOTIFY*P3E65F AUS",
+				}),
+				mine(2, "2026-01-13", 20.99, {
+					description: "PAYPAL *NETFLIX AUS AUS",
+				}),
+			],
+		});
+		expect(result.adopt).toEqual([
+			{ transactionId: 2, row: NETFLIX_BANK, heldBy: null },
+			{ transactionId: 1, row: SPOTIFY_BANK, heldBy: null },
+		]);
+	});
+
+	it("puts more shared words before a nearer day", () => {
+		const result = plan({
+			incoming: [NETFLIX_BANK],
+			candidates: [
+				mine(1, "2026-01-14", 20.99, { description: "Groceries" }),
+				mine(2, "2026-01-19", 20.99, { description: "Netflix" }),
+			],
+		});
+		expect(result.flag).toEqual([
+			{ transactionId: 2, row: NETFLIX_BANK, reviewId: null },
+		]);
+	});
+
+	it("refreshes a pending review instead of matching its bank row again", () => {
+		const row = bank("t1", "2026-11-10", 5);
+		expect(
+			plan({
+				incoming: [row],
+				reviews: [review("t1", PossibleDuplicateStatus.Pending, 7)],
+				candidates: [mine(1, "2026-11-10", 5)],
+			}),
+		).toEqual({ ...EMPTY, flag: [{ transactionId: 7, row, reviewId: 90 }] });
+	});
+
+	it("skips a bank row the member kept theirs over", () => {
+		const row = bank("t1", "2026-11-10", 5);
+		expect(
+			plan({
+				incoming: [row],
+				reviews: [review("t1", PossibleDuplicateStatus.Kept)],
+				candidates: [mine(1, "2026-11-10", 5)],
+			}),
+		).toEqual({ ...EMPTY, skipped: [row] });
+	});
+
+	it("lets an exact bank row adopt a held row and release its review", () => {
+		const row = bank("t1", "2026-11-10", 5);
+		expect(
+			plan({
+				incoming: [row],
+				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90 })],
+			}),
+		).toEqual({ ...EMPTY, adopt: [{ transactionId: 1, row, heldBy: 90 }] });
+	});
+
+	it("never flags a held row a second time", () => {
+		const row = bank("t1", "2026-11-11", 5);
+		expect(
+			plan({
+				incoming: [row],
+				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90 })],
+			}),
+		).toEqual({ ...EMPTY, add: [row] });
+	});
+
+	it("flags, never adopts, an exact row from an account RedBark dropped", () => {
+		const row = bank("t_new", "2026-11-10", 5);
+		const retired = mine(1, "2026-11-10", 5, {
+			externalId: "t_old",
+			externalAccountId: "acct_gone",
+		});
+		expect(plan({ incoming: [row], candidates: [retired] })).toEqual({
+			...EMPTY,
+			flag: [{ transactionId: 1, row, reviewId: null }],
+		});
+	});
+
+	it("never matches a bank row from a listed account", () => {
+		const row = bank("t2", "2026-11-10", 5);
+		const listed = mine(1, "2026-11-10", 5, {
+			externalId: "t1",
+			externalAccountId: "acct_live",
+		});
+		expect(plan({ incoming: [row], candidates: [listed] })).toEqual({
+			...EMPTY,
+			add: [row],
+		});
+	});
+
+	it("adopts the lower id of two exact candidates", () => {
+		const row = bank("t1", "2026-11-10", 5);
+		const result = plan({
+			incoming: [row],
+			candidates: [mine(9, "2026-11-10", 5), mine(3, "2026-11-10", 5)],
+		});
+		expect(result.adopt).toEqual([{ transactionId: 3, row, heldBy: null }]);
+	});
+
+	it("gives the same plan for the same input, in any order", () => {
+		const rows = [
+			bank("t3", "2026-11-12", 20),
+			bank("t1", "2026-11-10", 5),
+			bank("t2", "2026-11-10", 5),
+			bank("t4", "2026-11-11", 40),
+		];
+		const candidates = [
+			mine(2, "2026-11-10", 5),
+			mine(1, "2026-11-10", 5),
+			mine(3, "2026-11-13", 20.5),
+		];
+		const once = plan({ incoming: rows, candidates });
+		expect(plan({ incoming: rows, candidates })).toEqual(once);
+		expect(
+			plan({
+				incoming: [...rows].reverse(),
+				candidates: [...candidates].reverse(),
+			}),
+		).toEqual(once);
+		expect(once.adopt.map((a) => [a.row.externalId, a.transactionId])).toEqual([
+			["t1", 1],
+			["t2", 2],
+		]);
+	});
+});

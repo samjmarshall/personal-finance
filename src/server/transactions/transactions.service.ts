@@ -1,17 +1,30 @@
-import type {
-	ExpenseConsumption,
-	LinkExpenseInput,
-	Transaction,
-	TransactionCreateInput,
-	TransactionListQuery,
-	TransactionListResult,
-	TransactionSummary,
-	TransactionUpdateInput,
-	UnplannedWindow,
+import {
+	type ExpenseConsumption,
+	type LinkExpenseInput,
+	MATCH_DAYS,
+	type PossibleDuplicateReview,
+	planReconcile,
+	type ReconcileCounts,
+	type ResolveDuplicateInput,
+	type ResolveDuplicatesInput,
+	type ResolveDuplicatesResult,
+	type SyncedTransaction,
+	type Transaction,
+	type TransactionCreateInput,
+	type TransactionListQuery,
+	type TransactionListResult,
+	type TransactionSummary,
+	type TransactionUpdateInput,
+	type UnplannedWindow,
 } from "~/domain/transactions";
+import { HOUSEHOLD_TIME_ZONE, Provenance } from "~/lib/constants";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { assertRow } from "~/server/errors/assert-row";
-import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import {
+	ConflictError,
+	InvalidInputError,
+	NotFoundError,
+} from "~/server/errors/domain-errors";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
@@ -32,6 +45,27 @@ const LINK_EXPENSE_CONFLICT_MESSAGE = "The selected expense no longer exists.";
 const LINKED_CATEGORY_MESSAGE =
 	"A Transaction linked to an Expense takes its Category from the Expense.";
 const NOT_FOUND_MESSAGE = "Transaction not found.";
+// Each re-sync rewrites a synced row's amount and date, so an edit would vanish.
+const BANK_OWNED_MESSAGE = "Amount and date come from the bank.";
+
+const MS_PER_DAY = 86_400_000;
+// A Sydney day starts the UTC day before: scan a day wider each side, +1 more
+// at the end because it is exclusive. The planner keeps the exact window.
+const SCAN_BEFORE_DAYS = MATCH_DAYS + 1;
+const SCAN_AFTER_DAYS = MATCH_DAYS + 2;
+
+const NO_COUNTS: ReconcileCounts = {
+	added: 0,
+	adopted: 0,
+	flagged: 0,
+	known: 0,
+};
+const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
+	added: a.added + b.added,
+	adopted: a.adopted + b.adopted,
+	flagged: a.flagged + b.flagged,
+	known: a.known + b.known,
+});
 
 const rethrowWriteConflict = (error: unknown, fkMessage: string): never => {
 	if (isPgViolation(error, PgViolation.CheckViolation)) {
@@ -102,14 +136,63 @@ export class TransactionsService {
 		return assertRow(row, "create transaction");
 	}
 
-	// A missing id matches no row, so the write itself 404s. Only an unlink
-	// reads first; a row deleted between that read and the write still 404s.
+	// A page that shifts mid-fetch can repeat a row, and Postgres refuses one
+	// upsert that hits the same row twice (SQLSTATE 21000). The later copy wins.
+	// A bank id is unique only within its provenance, so each is planned alone.
+	async reconcileSynced(
+		rows: SyncedTransaction[],
+		{ liveAccountIds }: { liveAccountIds: string[] },
+	): Promise<ReconcileCounts> {
+		const byProvenance = new Map<
+			SyncedTransaction["provenance"],
+			Map<string, SyncedTransaction>
+		>();
+		for (const row of rows) {
+			const group = byProvenance.get(row.provenance) ?? new Map();
+			byProvenance.set(row.provenance, group.set(row.externalId, row));
+		}
+		let counts = NO_COUNTS;
+		for (const [provenance, group] of byProvenance) {
+			const result = await this.reconcileGroup(
+				provenance,
+				[...group.values()],
+				liveAccountIds,
+			);
+			counts = sumCounts(counts, result);
+		}
+		return counts;
+	}
+
+	listPossibleDuplicates(): Promise<PossibleDuplicateReview[]> {
+		return this.repository.listPendingDuplicates();
+	}
+
+	possibleDuplicateCount(): Promise<number> {
+		return this.repository.countPendingDuplicates();
+	}
+
+	// One at a time, each on its own: a gone or taken review is counted, not
+	// thrown, so the rest still land.
+	async resolveDuplicates({
+		answers,
+	}: ResolveDuplicatesInput): Promise<ResolveDuplicatesResult> {
+		const result: ResolveDuplicatesResult = { resolved: 0, gone: 0, taken: 0 };
+		for (const answer of answers) result[await this.resolveOne(answer)] += 1;
+		return result;
+	}
+
+	// A missing id 404s at the first read; a row deleted between that read and
+	// the write still 404s.
 	async update({
 		id,
 		...values
 	}: TransactionUpdateInput): Promise<Transaction> {
+		const synced = await this.guardBankValues(id, values);
+		// Left out on a synced row, so a sync landing mid-edit isn't written over.
+		const { amount, date, ...rest } = values;
+		const patch = synced ? rest : values;
 		const row = await this.repository
-			.update(id, { ...values, ...(await this.categoryPatch(values, id)) })
+			.update(id, { ...patch, ...(await this.categoryPatch(values, id)) })
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, FK_CONFLICT_MESSAGE),
 			);
@@ -154,6 +237,68 @@ export class TransactionsService {
 
 	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]> {
 		return this.repository.datedAmounts();
+	}
+
+	/** `incoming`: all of `provenance`, unique by bank id, not empty. */
+	private async reconcileGroup(
+		provenance: SyncedTransaction["provenance"],
+		incoming: SyncedTransaction[],
+		liveAccountIds: string[],
+	): Promise<ReconcileCounts> {
+		const ids = incoming.map((row) => row.externalId);
+		const times = incoming.map((row) => row.date.getTime());
+		const [knownIds, reviews, candidates] = await Promise.all([
+			this.repository.findKnownExternalIds(provenance, ids),
+			this.repository.findReviews(provenance, ids),
+			this.repository.findMatchCandidates({
+				from: new Date(Math.min(...times) - SCAN_BEFORE_DAYS * MS_PER_DAY),
+				to: new Date(Math.max(...times) + SCAN_AFTER_DAYS * MS_PER_DAY),
+				liveAccountIds,
+			}),
+		]);
+		return this.repository.applyReconcile(
+			planReconcile({
+				incoming,
+				knownIds,
+				reviews,
+				candidates,
+				liveAccountIds,
+				timeZone: HOUSEHOLD_TIME_ZONE,
+			}),
+		);
+	}
+
+	// Missing or already answered counts as gone; a bank row held elsewhere counts as taken.
+	private async resolveOne({
+		id,
+		choice,
+	}: ResolveDuplicateInput): Promise<keyof ResolveDuplicatesResult> {
+		const resolve = {
+			keep_mine: () => this.repository.keepMine(id),
+			use_bank: () => this.repository.useBanks(id),
+			both_real: () => this.repository.bothReal(id),
+		}[choice];
+		try {
+			return (await resolve()) ? "resolved" : "gone";
+		} catch (error) {
+			// Use bank's moves the bank id onto the household row; another row may hold it.
+			if (isPgViolation(error, PgViolation.UniqueViolation)) return "taken";
+			throw error;
+		}
+	}
+
+	/** 404s a missing row; refuses a changed amount or date on a synced row. True when synced. */
+	private async guardBankValues(
+		id: number,
+		{ amount, date }: Pick<TransactionUpdateInput, "amount" | "date">,
+	): Promise<boolean> {
+		const saved = await this.repository.findSyncedValues(id);
+		if (!saved) throw new NotFoundError(NOT_FOUND_MESSAGE);
+		if (saved.provenance === Provenance.Manual) return false;
+		if (amount !== saved.amount || date.getTime() !== saved.date.getTime()) {
+			throw new InvalidInputError(BANK_OWNED_MESSAGE);
+		}
+		return true;
 	}
 
 	// A linked Transaction takes its Category from the Expense (adr025), so

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BalanceSnapshot } from "~/domain/balances";
+import { BalanceSource } from "~/lib/constants";
 import {
 	expectPlainError,
 	failedQuery,
@@ -23,6 +24,7 @@ const SNAPSHOT: BalanceSnapshot = {
 	amount: 12500.5,
 	asOf: new Date("2026-10-01T00:00:00.000Z"),
 	createdAt: new Date("2026-10-01T01:00:00.000Z"),
+	source: BalanceSource.Manual,
 };
 
 const INPUT = { amount: 12500.5, asOf: SNAPSHOT.asOf };
@@ -40,7 +42,7 @@ describe("BalancesService", () => {
 		await expect(service.latest()).resolves.toBeNull();
 	});
 
-	it("set inserts the input and returns the stored row", async () => {
+	it("set inserts the input labelled manual and returns the stored row", async () => {
 		const inserted: unknown[] = [];
 		const service = serviceWith({
 			insert: async (values) => {
@@ -50,7 +52,7 @@ describe("BalancesService", () => {
 		});
 
 		await expect(service.set(INPUT)).resolves.toBe(SNAPSHOT);
-		expect(inserted).toEqual([INPUT]);
+		expect(inserted).toEqual([{ ...INPUT, source: BalanceSource.Manual }]);
 	});
 
 	it("set throws a plain Error when the insert returns no row", async () => {
@@ -66,5 +68,27 @@ describe("BalancesService", () => {
 		const service = serviceWith({ insert: throwing(error) });
 
 		await expect(service.set(INPUT)).rejects.toBe(error);
+	});
+
+	it("recordSynced inserts the input labelled cdr and returns the stored row", async () => {
+		const synced = { ...SNAPSHOT, source: BalanceSource.Cdr };
+		const inserted: unknown[] = [];
+		const service = serviceWith({
+			insert: async (values) => {
+				inserted.push(values);
+				return synced;
+			},
+		});
+
+		await expect(service.recordSynced(INPUT)).resolves.toBe(synced);
+		expect(inserted).toEqual([{ ...INPUT, source: BalanceSource.Cdr }]);
+	});
+
+	it("recordSynced throws a plain Error when the insert returns no row", async () => {
+		const service = serviceWith({ insert: async () => undefined });
+
+		const thrown = await service.recordSynced(INPUT).catch((e: unknown) => e);
+
+		expectPlainError(thrown, "Failed to record synced balance.");
 	});
 });

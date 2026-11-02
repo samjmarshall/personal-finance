@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CdrInngestController } from "~/server/cdr/cdr.inngest.controller";
 import { OutboxInngestController } from "~/server/outbox/outbox.inngest.controller";
 import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
 import pkg from "../../../package.json" with { type: "json" };
@@ -11,6 +12,7 @@ import { EVENT_REGISTRY } from "./events";
 describe("event registry golden", () => {
 	it("pins the frozen event names", () => {
 		expect(Object.keys(EVENT_REGISTRY).sort()).toEqual([
+			"cdr/import.requested",
 			"receipt/email.received",
 			"receipt/retry",
 			"receipt/uploaded",
@@ -18,35 +20,46 @@ describe("event registry golden", () => {
 	});
 });
 
-// Function ids + triggers are also frozen: Inngest keys scheduled runs by id (a rename
-// silently drops the old schedule) and event triggers are the same wire strings as the
-// registry above. Drive the controllers with a spy client to read what they declare
-// — avoids importing the real db/client (env-free, like the block above).
+// Frozen: Inngest keys runs by id, so a rename drops the old schedule (a failure
+// handler's id comes from its function's); a renamed concurrency key splits a shared slot.
 describe("worker golden", () => {
-	it("pins the frozen function ids + triggers", () => {
-		const declared: { id: string; triggers: unknown[] }[] = [];
+	it("pins the frozen function ids, triggers and concurrency keys", () => {
+		type Opts = { id: string; triggers: unknown[]; concurrency?: unknown };
+		const declared: Opts[] = [];
 		const spy = {
 			send: async () => {},
-			createFunction: (opts: { id: string; triggers: unknown[] }) => {
-				declared.push({ id: opts.id, triggers: opts.triggers });
-				return { id: () => opts.id };
+			createFunction: ({ id, triggers, concurrency }: Opts) => {
+				declared.push({ id, triggers, concurrency });
+				return { id: () => id };
 			},
 			// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.
 		} as any;
 
 		new OutboxInngestController({ inngest: spy, service: {} as never });
 		new ReceiptsInngestController({ inngest: spy, service: {} as never });
+		new CdrInngestController({ inngest: spy, service: {} as never });
 
 		expect(declared).toEqual([
 			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },
 			{ id: "outbox-prune", triggers: [{ cron: "0 3 * * *" }] },
 			{
 				id: "process-receipt",
+				concurrency: { key: "event.data.receiptId", limit: 1 },
 				triggers: [
 					{ event: "receipt/uploaded" },
 					{ event: "receipt/retry" },
 					{ event: "receipt/email.received" },
 				],
+			},
+			{
+				id: "cdr-sync",
+				concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" },
+				triggers: [{ cron: "0 18 * * *" }],
+			},
+			{
+				id: "cdr-import",
+				concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" },
+				triggers: [{ event: "cdr/import.requested" }],
 			},
 		]);
 	});

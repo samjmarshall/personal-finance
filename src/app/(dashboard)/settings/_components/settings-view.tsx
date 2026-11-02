@@ -1,14 +1,22 @@
 "use client";
 
-import { AtSign, CalendarClock, type LucideIcon, Palette } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+	AtSign,
+	CalendarClock,
+	Landmark,
+	type LucideIcon,
+	Palette,
+} from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { AsyncBoundary } from "~/components/async-boundary";
 import { PageHeader } from "~/components/page-header";
 import { cn } from "~/lib/utils";
 import { AllowedSendersSection } from "./allowed-senders-section";
 import { AppearanceSection } from "./appearance-section";
+import { BankAccountsSection } from "./bank-accounts-section";
 import { PayCycleSection } from "./pay-cycle-section";
 import {
+	BankAccountsSkeleton,
 	ForwardingSkeleton,
 	PayCycleSkeleton,
 } from "./settings-panel-skeleton";
@@ -18,7 +26,7 @@ export type SettingsViewProps = {
 	inboundAddress?: string;
 };
 
-type SectionId = "appearance" | "pay-cycle" | "forwarding";
+type SectionId = "appearance" | "pay-cycle" | "forwarding" | "bank-accounts";
 
 // `render` rather than a bare component: this file is a client boundary, so a
 // server-only value like the inbound address can only arrive as a prop from the
@@ -61,44 +69,35 @@ const sections: Section[] = [
 			</AsyncBoundary>
 		),
 	},
+	{
+		id: "bank-accounts",
+		label: "Bank accounts",
+		icon: Landmark,
+		render: () => (
+			<AsyncBoundary label="bank accounts" skeleton={<BankAccountsSkeleton />}>
+				<BankAccountsSection />
+			</AsyncBoundary>
+		),
+	},
 ];
 
 export function SettingsView({ inboundAddress }: SettingsViewProps) {
 	const [active, setActive] = useState<SectionId>("appearance");
-	const navRef = useRef<HTMLElement | null>(null);
-
-	// The rail is a horizontally scrolling strip on narrow screens, wide enough to
-	// overflow once there are three tabs, so the active tab can sit past the edge
-	// and render half-clipped — which reads as broken.
-	//
-	// Explicit maths rather than scrollIntoView: `inline: "nearest"` leaves a tab
-	// that overhangs the right edge unscrolled in Chromium, and "start"/"end"/
-	// "center" all move the rail even when the tab is already fully visible.
-	useEffect(() => {
-		const nav = navRef.current;
-		const tab = nav?.querySelector<HTMLElement>(`[data-section="${active}"]`);
-		if (!nav || !tab) return;
-
-		const overhang =
-			tab.offsetLeft + tab.offsetWidth - (nav.scrollLeft + nav.clientWidth);
-		if (overhang > 0) nav.scrollLeft += overhang;
-		else if (tab.offsetLeft < nav.scrollLeft) nav.scrollLeft = tab.offsetLeft;
-	}, [active]);
 
 	return (
 		<div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
 			<PageHeader
-				description="How Ledger looks, how your pay cycle is counted, and where receipts can arrive from."
+				description="How Ledger looks, how your pay cycle is counted, where receipts can arrive from, and which bank accounts count."
 				title="Settings"
 			/>
 
 			<div className="mt-8 grid gap-6 lg:grid-cols-[184px_1fr] lg:gap-10">
 				{/* One rail, two shapes: an underlined strip on narrow screens, a sticky
-				    vertical index once there's a column to spare. */}
+				    vertical index once there's a column to spare. The strip wraps on a
+				    phone, so no tab hides past the edge. */}
 				<nav
 					aria-label="Settings sections"
-					className="flex gap-1 overflow-x-auto border-border border-b lg:sticky lg:top-8 lg:h-fit lg:flex-col lg:border-b-0 lg:border-l"
-					ref={navRef}
+					className="flex flex-wrap gap-1 border-border border-b lg:sticky lg:top-8 lg:h-fit lg:flex-col lg:border-b-0 lg:border-l"
 				>
 					{sections.map(({ id, label, icon: Icon }) => (
 						<button
@@ -109,7 +108,6 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 									? "border-primary text-foreground"
 									: "border-transparent text-muted-foreground hover:text-foreground",
 							)}
-							data-section={id}
 							key={id}
 							onClick={() => setActive(id)}
 							type="button"

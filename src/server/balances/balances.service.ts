@@ -1,4 +1,5 @@
 import type { BalanceSetInput, BalanceSnapshot } from "~/domain/balances";
+import { BalanceSource } from "~/lib/constants";
 import { assertRow } from "~/server/errors/assert-row";
 import type { BalancesRepository } from "./balances.repository";
 
@@ -19,6 +20,17 @@ export class BalancesService {
 
 	// Records a new snapshot — history is kept, latest wins. Never an in-place edit.
 	async set(input: BalanceSetInput): Promise<BalanceSnapshot> {
-		return assertRow(await this.repository.insert(input), "set balance");
+		return assertRow(
+			await this.repository.insert({ ...input, source: BalanceSource.Manual }),
+			"set balance",
+		);
+	}
+
+	// The bank sync's anchor. Same latest-wins rule as a typed balance (adr017 facet 6).
+	async recordSynced(input: BalanceSetInput): Promise<BalanceSnapshot> {
+		return assertRow(
+			await this.repository.insert({ ...input, source: BalanceSource.Cdr }),
+			"record synced balance",
+		);
 	}
 }

@@ -1,5 +1,6 @@
 import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { BalanceSource } from "~/lib/constants";
 
 import { balanceSnapshots } from "./balances.schema";
 
@@ -9,6 +10,11 @@ describe("balance_snapshot columns", () => {
 	it("requires amount and asOf", () => {
 		expect(cols.amount.notNull).toBe(true);
 		expect(cols.asOf.notNull).toBe(true);
+	});
+
+	it("labels a snapshot as typed by the member unless told otherwise", () => {
+		expect(cols.source.notNull).toBe(true);
+		expect(cols.source.default).toBe(BalanceSource.Manual);
 	});
 
 	it("stamps createdAt with the current date", () => {

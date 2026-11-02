@@ -11,6 +11,8 @@ type PageSkeletonProps = {
 	description?: string;
 	/** Reserves room for a header button of this size, so the title doesn't shift. */
 	action?: "sm" | "default";
+	/** One width per header button; they wrap like the view's. */
+	actionWidths?: string[];
 	/** Match the view's container width. */
 	className?: string;
 	/** Gap under the header. Must equal the view's, or the swap jumps. */
@@ -23,6 +25,7 @@ export function PageSkeleton({
 	title,
 	description,
 	action,
+	actionWidths = ["w-30"],
 	className,
 	contentClassName = "mt-6",
 	children = <TableSkeleton />,
@@ -35,9 +38,14 @@ export function PageSkeleton({
 				<PageHeader
 					actions={
 						action ? (
-							<Skeleton
-								className={cn("w-30", action === "sm" ? "h-7" : "h-8")}
-							/>
+							<div className="flex flex-wrap gap-2">
+								{actionWidths.map((width) => (
+									<Skeleton
+										className={cn(width, action === "sm" ? "h-7" : "h-8")}
+										key={width}
+									/>
+								))}
+							</div>
 						) : undefined
 					}
 					description={description ?? <BarSlot bar="h-4 w-72" height="h-5" />}

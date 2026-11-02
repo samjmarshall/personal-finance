@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	SelectField,
 	type SelectFieldOption,
@@ -24,11 +24,23 @@ import {
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { useRestoreFocus } from "~/hooks/use-restore-focus";
-import { Frequency, Priority, toFrequency, toPriority } from "~/lib/constants";
+import {
+	Frequency,
+	Priority,
+	Provenance,
+	toFrequency,
+	toPriority,
+} from "~/lib/constants";
 import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { submittedDate } from "./submitted-date";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
+
+// Locked reads muted, not faded, like a Category set by its Expense. Dark swaps
+// the fill for a dashed edge: an open field there is filled too, so a fill looks open.
+const BANK_OWNED_CLASS =
+	"read-only:cursor-default read-only:bg-muted read-only:text-muted-foreground dark:read-only:border-dashed dark:read-only:bg-transparent";
 
 const FREQUENCY_OPTIONS: SelectFieldOption<Frequency>[] = toOptions(
 	Object.values(Frequency),
@@ -91,6 +103,12 @@ export function TransactionForm({
 	const update = api.transaction.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
 	const rememberFocus = useRestoreFocus(pending);
+	const descriptionRef = useRef<HTMLInputElement>(null);
+	// A bank description runs long and leads with the merchant, so open at its start.
+	const focusDescriptionStart = () => {
+		descriptionRef.current?.setSelectionRange(0, 0);
+		return descriptionRef.current;
+	};
 
 	const expenseOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
@@ -104,6 +122,9 @@ export function TransactionForm({
 	const shownCategoryId =
 		linkedExpense?.categoryId ??
 		(categoryId === undefined ? savedExpense?.categoryId : categoryId);
+	// Each sync rewrites a synced row's date and amount, so the server refuses an edit.
+	const bankOwned =
+		!!transaction && transaction.provenance !== Provenance.Manual;
 	// One line in both states, so the swap never resizes the centred dialog.
 	const categoryHint =
 		expenseId === null
@@ -136,7 +157,7 @@ export function TransactionForm({
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
 		const payload = {
-			date: new Date(`${date}T00:00:00`),
+			date: submittedDate(date, transaction?.date),
 			description: description.trim(),
 			amount: Number(amount) || 0,
 			group: group.trim() || "Uncategorised",
@@ -159,7 +180,10 @@ export function TransactionForm({
 			}}
 			open={open}
 		>
-			<DialogContent>
+			{/* A synced row opens on its first field you can change. */}
+			<DialogContent
+				initialFocus={bankOwned ? focusDescriptionStart : undefined}
+			>
 				<DialogHeader>
 					<DialogTitle>
 						{transaction ? "Edit transaction" : "Add transaction"}
@@ -167,34 +191,52 @@ export function TransactionForm({
 				</DialogHeader>
 				<form className="flex min-w-0 flex-col gap-4" onSubmit={submit}>
 					<FieldSet disabled={pending}>
-						<div className="grid grid-cols-2 gap-4">
-							<Field>
-								<FieldLabel htmlFor="tx-date">Date</FieldLabel>
-								<Input
-									id="tx-date"
-									onChange={(e) => setDate(e.target.value)}
-									required
-									type="date"
-									value={date}
-								/>
-							</Field>
-							<Field>
-								<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
-								<Input
-									aria-describedby="tx-amount-hint"
-									id="tx-amount"
-									inputMode="decimal"
-									onChange={(e) => setAmount(e.target.value)}
-									placeholder="0.00"
-									required
-									step="0.01"
-									type="number"
-									value={amount}
-								/>
+						<div className="flex flex-col gap-2">
+							<div className="grid grid-cols-2 gap-4">
+								<Field>
+									<FieldLabel htmlFor="tx-date">Date</FieldLabel>
+									<Input
+										aria-describedby={bankOwned ? "tx-amount-hint" : undefined}
+										// Only when locked: a save disables every field, which :read-only matches too.
+										className={bankOwned ? BANK_OWNED_CLASS : undefined}
+										id="tx-date"
+										onChange={(e) => setDate(e.target.value)}
+										readOnly={bankOwned}
+										required
+										// Its 3 day/month/year stops do nothing when locked.
+										tabIndex={bankOwned ? -1 : undefined}
+										type="date"
+										value={date}
+									/>
+								</Field>
+								<Field>
+									<FieldLabel htmlFor="tx-amount">Amount</FieldLabel>
+									<Input
+										aria-describedby="tx-amount-hint"
+										className={bankOwned ? BANK_OWNED_CLASS : undefined}
+										id="tx-amount"
+										inputMode="decimal"
+										onChange={(e) => setAmount(e.target.value)}
+										placeholder="0.00"
+										readOnly={bankOwned}
+										required
+										step="0.01"
+										type="number"
+										value={amount}
+									/>
+									{!bankOwned && (
+										<FieldDescription id="tx-amount-hint">
+											Positive = spend, negative = refund
+										</FieldDescription>
+									)}
+								</Field>
+							</div>
+							{/* Under both fields, since it locks both. */}
+							{bankOwned && (
 								<FieldDescription id="tx-amount-hint">
-									Positive = spend, negative = refund
+									Date and amount come from your bank.
 								</FieldDescription>
-							</Field>
+							)}
 						</div>
 						<Field>
 							<FieldLabel htmlFor="tx-description">Description</FieldLabel>
@@ -202,6 +244,7 @@ export function TransactionForm({
 								id="tx-description"
 								onChange={(e) => setDescription(e.target.value)}
 								placeholder="e.g. Woolworths"
+								ref={descriptionRef}
 								required
 								value={description}
 							/>
@@ -240,7 +283,7 @@ export function TransactionForm({
 							{/* Locked reads muted, not faded: its value is still the answer. */}
 							<SelectField
 								aria-describedby="tx-category-hint"
-								className="w-full data-readonly:cursor-default data-readonly:bg-muted data-readonly:text-muted-foreground dark:data-readonly:bg-muted"
+								className="w-full data-readonly:cursor-default data-readonly:bg-muted data-readonly:text-muted-foreground dark:data-readonly:border-dashed dark:data-readonly:bg-transparent"
 								disabled={pending}
 								id="tx-category"
 								items={categoryOptions}

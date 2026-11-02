@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction, TransactionSummary } from "~/domain/transactions";
-import { Frequency, Priority } from "~/lib/constants";
+import { Frequency, Priority, Provenance } from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
 import { NotFoundError } from "~/server/errors/domain-errors";
@@ -29,6 +29,10 @@ const TRANSACTION: Transaction = {
 	frequency: Frequency.OneOff,
 	priority: Priority.MustHave,
 	notes: null,
+	provenance: Provenance.Manual,
+	externalId: null,
+	externalAccountId: null,
+	accountName: null,
 	createdAt: new Date("2026-09-01T01:00:00.000Z"),
 	updatedAt: null,
 };
@@ -129,6 +133,62 @@ describe("transaction router", () => {
 			callerWith({ delete: method }).transaction.delete({ id: 1 }),
 		).resolves.toEqual({ success: true });
 		expect(calls).toEqual([[1]]);
+	});
+
+	it("possibleDuplicates and possibleDuplicateCount read the pending reviews", async () => {
+		const list = recorder([]);
+		const count = recorder(2);
+		const caller = callerWith({
+			listPossibleDuplicates: list.method,
+			possibleDuplicateCount: count.method,
+		});
+
+		await expect(caller.transaction.possibleDuplicates()).resolves.toEqual([]);
+		await expect(caller.transaction.possibleDuplicateCount()).resolves.toBe(2);
+		expect([list.calls, count.calls]).toEqual([[[]], [[]]]);
+	});
+
+	it("resolveDuplicates hands the service the answers and returns its tally", async () => {
+		const tally = { resolved: 2, gone: 0, taken: 0 };
+		const { method, calls } = recorder(tally);
+		const answers = [
+			{ id: 4, choice: "use_bank" },
+			{ id: 5, choice: "keep_mine" },
+		] as const;
+
+		await expect(
+			callerWith({
+				resolveDuplicates: method,
+			}).transaction.resolveDuplicates({ answers: [...answers] }),
+		).resolves.toEqual(tally);
+		expect(calls).toEqual([[{ answers }]]);
+	});
+
+	it("resolveDuplicates refuses an unknown choice before reaching the service", async () => {
+		const { method, calls } = recorder({ resolved: 0, gone: 0, taken: 0 });
+
+		await expect(
+			callerWith({
+				resolveDuplicates: method,
+			}).transaction.resolveDuplicates({
+				answers: [{ id: 4, choice: "merge" as never }],
+			}),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+		expect(calls).toEqual([]);
+	});
+
+	it("rejects a signed-out resolveDuplicates before reaching the service", async () => {
+		const { method, calls } = recorder({ resolved: 0, gone: 0, taken: 0 });
+
+		await expect(
+			callerWith(
+				{ resolveDuplicates: method },
+				null,
+			).transaction.resolveDuplicates({
+				answers: [{ id: 4, choice: "keep_mine" }],
+			}),
+		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+		expect(calls).toEqual([]);
 	});
 
 	it("surfaces a NotFoundError as NOT_FOUND", async () => {

@@ -15,7 +15,7 @@ import {
 	RawProjectItemSchema,
 	type Violation,
 	validateTicket,
-} from "./rules";
+} from "./rules.ts";
 
 const FX = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 

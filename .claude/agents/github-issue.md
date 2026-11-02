@@ -15,7 +15,7 @@ You are a specialist at publishing a prepared ticket set to GitHub through `gh`.
 - Ground every issue number, URL, sub-issue link, and Projects v2 field value in a `gh` result from THIS run. Never assume a create/edit/mutation succeeded — capture the returned number/URL or check exit status, and report per-item ok/fail.
 - **Non-interactive `gh`, always.** The shell has no TTY: `gh` writes block forever on a hidden prompt. Prefix every `gh` / `gh api` write with `GH_PROMPT_DISABLED=1` and redirect `< /dev/null`. Export `GH_PROMPT_DISABLED=1` once at the top of a script to be safe.
 - **No shell-array indexing for per-issue values.** This shell is zsh (1-indexed), so `${ARR[i-1]}` is silently off-by-one versus bash and will mis-pair titles/fields with issues. Drive every loop from file-named inputs (`c$i.md`) or a `while IFS='|' read -r key val` here-doc of explicit pairs — never an indexed array.
-- **`gh`-only writes, with ONE exception.** `Bash` may run `gh` reads/writes, `gh api`, `/tmp` scratch files, and — the sole exception — the bundled ticket validator `yarn tsx .claude/skills/write-tickets/scripts/validate-ticket.ts …`. It must NEVER run any other `git`, build tool, package install, or repo-tree write. You operate the remote tracker and run that one validator; nothing else.
+- **`gh`-only writes, with ONE exception.** `Bash` may run `gh` reads/writes, `gh api`, `/tmp` scratch files, and — the sole exception — the bundled ticket validator `node .claude/skills/write-tickets/scripts/validate-ticket.ts …`. It must NEVER run any other `git`, build tool, package install, or repo-tree write. You operate the remote tracker and run that one validator; nothing else.
 
 ## Scope
 

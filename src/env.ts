@@ -111,6 +111,12 @@ export const env = createEnv({
 			.enum(["development", "test", "production"])
 			.default("development"),
 		/**
+		 * RedBark (CDR bank sync) account API key. Optional even in prod: unset makes
+		 * the daily sync a logged no-op (adr017).
+		 */
+		REDBARK_API_KEY: z.string().optional(),
+		REDBARK_API_URL: z.url().default("https://api.redbark.com"),
+		/**
 		 * Resend inbound credentials. The API key fetches the body and attachment
 		 * bytes the `email.received` webhook omits; the webhook secret is the Svix
 		 * signing key that decides whether a POST to the inbound route is Resend at
@@ -174,6 +180,8 @@ export const env = createEnv({
 		KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
 		KV_REST_API_URL: process.env.KV_REST_API_URL,
 		NODE_ENV: process.env.NODE_ENV,
+		REDBARK_API_KEY: process.env.REDBARK_API_KEY,
+		REDBARK_API_URL: process.env.REDBARK_API_URL,
 		RESEND_API_KEY: process.env.RESEND_API_KEY,
 		RESEND_INBOUND_ADDRESS: process.env.RESEND_INBOUND_ADDRESS,
 		RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,

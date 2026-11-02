@@ -3,6 +3,7 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { balanceRouter } from "~/server/balances/balances.trpc.controller";
 import { cashflowRouter } from "~/server/cashflow/cashflow.trpc.controller";
 import { categoryRouter } from "~/server/categories/categories.trpc.controller";
+import { cdrRouter } from "~/server/cdr/cdr.trpc.controller";
 import { expenseRouter } from "~/server/expenses/expenses.trpc.controller";
 import { incomeRouter } from "~/server/income/income.trpc.controller";
 import { receiptRouter } from "~/server/receipts/receipts.trpc.controller";
@@ -15,6 +16,7 @@ export const appRouter = createTRPCRouter({
 	balance: balanceRouter,
 	cashflow: cashflowRouter,
 	category: categoryRouter,
+	cdr: cdrRouter,
 	expense: expenseRouter,
 	income: incomeRouter,
 	receipt: receiptRouter,

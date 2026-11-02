@@ -14,6 +14,7 @@ export const EVENT_REGISTRY = {
 	"receipt/uploaded": z.object({ receiptId: z.number().int() }),
 	"receipt/email.received": z.object({ receiptId: z.number().int() }),
 	"receipt/retry": z.object({ receiptId: z.number().int() }),
+	"cdr/import.requested": z.object({ importId: z.number().int() }),
 } as const;
 
 export type EventName = keyof typeof EVENT_REGISTRY;

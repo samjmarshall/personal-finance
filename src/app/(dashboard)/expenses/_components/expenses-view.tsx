@@ -153,7 +153,7 @@ export function ExpensesView() {
 		const consumed = consumedById.get(item.id) ?? 0;
 		const remaining = (item.amount ?? 0) - consumed;
 		// Float subtraction can leave a sub-cent negative on an exactly-met budget;
-		// only treat it as over-consumed past half a cent so it never shows −$0.00.
+		// only treat it as over-consumed past half a cent so it never shows -$0.00.
 		const isOver = remaining < -0.005;
 		return (
 			<div
@@ -175,14 +175,14 @@ export function ExpensesView() {
 					className="hidden text-right text-muted-foreground sm:block"
 					value={consumed}
 				/>
-				{/* Balance, not a ledger figure: explicit − and warning tone when over-consumed. */}
+				{/* Balance, not a ledger figure: explicit minus and warning tone when over-consumed. */}
 				<span
 					className={cn(
 						"tabular text-right font-medium tracking-tight",
 						isOver ? "text-spend" : "text-foreground",
 					)}
 				>
-					{isOver && "−"}
+					{isOver && "-"}
 					{formatCurrency(Math.abs(remaining))}
 				</span>
 				{rowActions(item)}

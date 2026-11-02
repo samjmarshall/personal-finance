@@ -1,0 +1,120 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Button } from "~/components/ui/button";
+import { AttentionBanner } from "./attention-banner";
+
+describe("AttentionBanner", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("shows its content as a status", () => {
+		render(<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>);
+		expect(screen.getByRole("status")).toHaveTextContent(
+			"Bank sync is behind.",
+		);
+	});
+
+	it("hides when dismissed", async () => {
+		const user = userEvent.setup();
+		render(<AttentionBanner tone="alert">Reauthorize.</AttentionBanner>);
+		await user.click(screen.getByRole("button", { name: "Dismiss" }));
+		expect(screen.queryByRole("status")).toBeNull();
+	});
+
+	it("hands focus to the control before it when dismissed from the keyboard", async () => {
+		const user = userEvent.setup();
+		render(
+			<>
+				<button type="button">Chart period</button>
+				<AttentionBanner tone="alert">
+					Syncing has stopped. <a href="https://example.com">Open RedBark</a>
+				</AttentionBanner>
+			</>,
+		);
+		await user.tab();
+		await user.tab();
+		await user.tab();
+		expect(screen.getByRole("button", { name: "Dismiss" })).toHaveFocus();
+
+		await user.keyboard("{Enter}");
+		expect(screen.queryByRole("status")).toBeNull();
+		expect(screen.getByRole("button", { name: "Chart period" })).toHaveFocus();
+	});
+
+	it("skips a disabled button and a hidden input when handing focus back", async () => {
+		const user = userEvent.setup();
+		render(
+			<>
+				<button type="button">Chart period</button>
+				<Button disabled>Save</Button>
+				<input aria-hidden readOnly tabIndex={-1} />
+				<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>
+			</>,
+		);
+		screen.getByRole("button", { name: "Dismiss" }).focus();
+
+		await user.keyboard("{Enter}");
+		expect(screen.getByRole("button", { name: "Chart period" })).toHaveFocus();
+	});
+
+	it("doesn't let a held Enter click the control it hands focus to", async () => {
+		const user = userEvent.setup();
+		const save = vi.fn();
+		render(
+			<>
+				<button onClick={save} type="button">
+					Save
+				</button>
+				<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>
+			</>,
+		);
+		screen.getByRole("button", { name: "Dismiss" }).focus();
+
+		await user.keyboard("{Enter>3/}");
+		expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();
+		expect(save).not.toHaveBeenCalled();
+
+		await user.keyboard("{Enter}");
+		expect(save).toHaveBeenCalledOnce();
+	});
+
+	it("leaves focus alone when dismissed by mouse", async () => {
+		const user = userEvent.setup();
+		render(
+			<>
+				<button type="button">Chart period</button>
+				<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>
+			</>,
+		);
+		await user.click(screen.getByRole("button", { name: "Dismiss" }));
+		expect(
+			screen.getByRole("button", { name: "Chart period" }),
+		).not.toHaveFocus();
+	});
+
+	it("keeps focused fields clear of it, until dismissed", async () => {
+		vi.stubGlobal(
+			"ResizeObserver",
+			class {
+				constructor(private readonly report: ResizeObserverCallback) {}
+				observe() {
+					this.report(
+						[{ borderBoxSize: [{ blockSize: 120 }] } as never],
+						this as never,
+					);
+				}
+				disconnect() {}
+			},
+		);
+		const user = userEvent.setup();
+		render(<AttentionBanner tone="warn">Bank sync is behind.</AttentionBanner>);
+		const page = document.documentElement;
+		// 120 px tall, plus its 16 px float above the screen's edge and 8 px of air.
+		expect(page.style.scrollPaddingBottom).toBe("144px");
+
+		await user.click(screen.getByRole("button", { name: "Dismiss" }));
+		expect(page.style.scrollPaddingBottom).toBe("");
+	});
+});

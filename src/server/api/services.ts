@@ -1,20 +1,18 @@
 import { allowedSendersService } from "~/server/allowed-senders/allowed-senders.module";
-import { DrizzleBalancesRepository } from "~/server/balances/balances.repository";
-import { BalancesService } from "~/server/balances/balances.service";
+import { balancesService } from "~/server/balances/balances.module";
 import { CashflowService } from "~/server/cashflow/cashflow.service";
 import { categoriesService } from "~/server/categories/categories.module";
+import { DrizzleCdrRepository } from "~/server/cdr/cdr.repository";
+import { CdrService } from "~/server/cdr/cdr.service";
 import { db } from "~/server/db";
 import { expensesService } from "~/server/expenses/expenses.module";
 import { DrizzleIncomeRepository } from "~/server/income/income.repository";
 import { IncomeService } from "~/server/income/income.service";
+import { outboxService } from "~/server/outbox/outbox.module";
 import { receiptsService } from "~/server/receipts/receipts.module";
 import { DrizzleSettingsRepository } from "~/server/settings/settings.repository";
 import { SettingsService } from "~/server/settings/settings.service";
 import { transactionsService } from "~/server/transactions/transactions.module";
-
-const balances = new BalancesService({
-	repository: new DrizzleBalancesRepository({ db }),
-});
 
 const income = new IncomeService({
 	repository: new DrizzleIncomeRepository({ db }),
@@ -28,15 +26,18 @@ const settings = new SettingsService({
 // file, so no service may throw on a missing env var.
 export const services = {
 	allowedSenders: allowedSendersService,
-	balances,
+	balances: balancesService,
 	cashflow: new CashflowService({
 		transactions: transactionsService,
 		expenses: expensesService,
 		income,
 		settings,
-		balances,
+		balances: balancesService,
 	}),
 	categories: categoriesService,
+	cdr: new CdrService({
+		repository: new DrizzleCdrRepository({ db, outbox: outboxService }),
+	}),
 	expenses: expensesService,
 	income,
 	receipts: receiptsService,
