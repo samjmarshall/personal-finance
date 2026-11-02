@@ -23,6 +23,7 @@ describe("cleanDescription", () => {
 			"WESTFIELD CHERMSIDE CHERMSIDE AUS, Card xx6857, Value date: 03/07/2026",
 			"WESTFIELD CHERMSIDE",
 		],
+		["VERCEL COVINA USA FRGN AMT: 20.00  U. S. DOLLAR", "VERCEL COVINA USA"],
 	])("cleans %s to %s", (raw, cleaned) => {
 		expect(cleanDescription(raw)).toBe(cleaned);
 	});

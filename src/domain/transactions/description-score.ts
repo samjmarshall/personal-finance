@@ -45,6 +45,9 @@ const PROCESSOR = new RegExp(
 const NOISE = new Set(NOISE_WORDS);
 // Its day and month would survive the 3-digit code rule.
 const DATE = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g;
+// The bank ends an overseas charge with "FRGN AMT: 20.00  U. S. DOLLAR", which
+// sinks a same-purchase pair below the Adopt bars.
+const FOREIGN_AMOUNT = /\bFRGN AMT\b.*$/i;
 
 // Card numbers and reference codes (4029357733, P40603); "99 BIKES" keeps its 99.
 const isCode = (word: string) => (word.match(/\p{N}/gu)?.length ?? 0) >= 3;
@@ -53,6 +56,7 @@ const isCode = (word: string) => (word.match(/\p{N}/gu)?.length ?? 0) >= 3;
 export function cleanDescription(text: string): string {
 	const words = text
 		.replace(PROCESSOR, "")
+		.replace(FOREIGN_AMOUNT, "")
 		.replace(DATE, "")
 		.toUpperCase()
 		.split(/[^\p{L}\p{N}]+/u)

@@ -66,6 +66,7 @@ The decision in detail:
      - Noise words `AUS`, `AU`, `QL`, `QLD`, `CARD`, `VALUE`, `DATE`. The last three come from the bank's ", Card xx6857, Value date: 03/07/2026" suffix.
      - Dates like `03/07/2026`.
      - Any word with 3 or more digits.
+     - The bank's foreign-amount suffix, from `FRGN AMT` to the end ("FRGN AMT: 20.00  U. S. DOLLAR"). Added after the spike, once the first live import flagged Vercel pairs it should have adopted.
    - **Word weights:** document frequency over the distinct cleaned descriptions of every household Transaction plus the incoming batch, recomputed on each reconcile that has a pair. Nothing is stored.
    - **What it costs:** 10 of the 561 same-purchase pairs miss an Adopt and go to review. These are 8 Vercel charges whose bank text adds a foreign-amount suffix (cleaned: "FRGN AMT 20 00 U S DOLLAR"), a typed "Netflix" against "NETFLIX.COM SYDNEY AUS", and "Woolies" against "WOOLWORTHS SYDNEY". "Woolies" scores 0 on words, so it lands in "Different description". All 15 two-purchase pairs stay out of Adopt.
    - **Caveat:** most household rows on the branch DB were copies of bank text, so typed names were only the fixed cases.
