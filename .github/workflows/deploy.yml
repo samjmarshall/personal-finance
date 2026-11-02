@@ -74,6 +74,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
       - name: Terraform cache
         uses: actions/cache@v6
@@ -134,6 +135,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
       # Restore-only: terraform-apply, running alongside, is the cache writer.
       - name: Terraform cache
@@ -305,6 +307,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
       # Restore-only: terraform-apply is the cache writer, and it has already run.
       - name: Terraform cache
