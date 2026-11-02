@@ -70,10 +70,11 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
       - name: Terraform cache
         uses: actions/cache@v6
@@ -130,10 +131,11 @@ jobs:
 
       - uses: shmokmt/actions-setup-tfcmt@v2
 
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
       # Restore-only: terraform-apply, running alongside, is the cache writer.
       - name: Terraform cache
@@ -301,10 +303,11 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
       # Restore-only: terraform-apply is the cache writer, and it has already run.
       - name: Terraform cache
