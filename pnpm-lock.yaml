@@ -111,8 +111,8 @@ importers:
         specifier: 1.6.7
         version: 1.6.7
       inngest:
-        specifier: 4.26.1
-        version: 4.26.1(@opentelemetry/core@2.12.0(@opentelemetry/api@1.9.1))(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
+        specifier: 4.26.2
+        version: 4.26.2(@opentelemetry/core@2.12.0(@opentelemetry/api@1.9.1))(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7)
       lucide-react:
         specifier: 1.63.0
         version: 1.63.0(@types/react@19.3.0)(react@19.3.1)
@@ -3518,8 +3518,8 @@ packages:
     resolution: {integrity: sha512-NFzVcaGUkUjKdzrnOHl+sGRs51MfcWHFUADLV6KcmGa0IXwVumyL/82MAiGCBPrHQjFzlcdci97gQjdVerrItQ==}
     hasBin: true
 
-  inngest@4.26.1:
-    resolution: {integrity: sha512-zt4t3KfCnr0Bs3KyySn9RubjX5hS9pAtHtH/YwHWJqAG8drMbhwUgZJR9b+/F+sZ5VjQvKM1YAQwZD5kBsrNqQ==}
+  inngest@4.26.2:
+    resolution: {integrity: sha512-s2oq3TgKDg19RVD+Ef2puAWYQPpqTPcyTcddIJxdNTqDAqFDn6uRDdSaBN9IwXJ+UOghApKrmjhxBUySgX0Biw==}
     engines: {node: '>=20'}
     peerDependencies:
       '@sveltejs/kit': '>=1.27.3'
@@ -7836,7 +7836,7 @@ snapshots:
       - encoding
       - supports-color
 
-  inngest@4.26.1(@opentelemetry/core@2.12.0(@opentelemetry/api@1.9.1))(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7):
+  inngest@4.26.2(@opentelemetry/core@2.12.0(@opentelemetry/api@1.9.1))(next@16.4.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(zod@4.6.7):
     dependencies:
       '@bufbuild/protobuf': 2.16.0
       '@inngest/ai': 0.1.8
