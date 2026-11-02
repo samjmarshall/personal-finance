@@ -97,13 +97,13 @@ export function SettingsView({ inboundAddress }: SettingsViewProps) {
 				    phone, so no tab hides past the edge. */}
 				<nav
 					aria-label="Settings sections"
-					className="flex flex-wrap gap-1 border-border border-b lg:sticky lg:top-8 lg:h-fit lg:flex-col lg:border-b-0 lg:border-l"
+					className="flex flex-wrap gap-1 border-b border-border lg:sticky lg:top-8 lg:h-fit lg:flex-col lg:border-b-0 lg:border-l"
 				>
 					{sections.map(({ id, label, icon: Icon }) => (
 						<button
 							aria-pressed={active === id}
 							className={cn(
-								"-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 font-medium text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 lg:mb-0 lg:-ml-px lg:border-b-0 lg:border-l-2 lg:py-1.5 lg:pl-4",
+								"-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:mb-0 lg:-ml-px lg:border-b-0 lg:border-l-2 lg:py-1.5 lg:pl-4",
 								active === id
 									? "border-primary text-foreground"
 									: "border-transparent text-muted-foreground hover:text-foreground",

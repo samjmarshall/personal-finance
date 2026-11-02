@@ -35,7 +35,7 @@ export function AttentionBanner({
 			role="status"
 		>
 			<Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
-			<div className="wrap-anywhere min-w-0 flex-1">{children}</div>
+			<div className="min-w-0 flex-1 wrap-anywhere">{children}</div>
 			<Button
 				className="-my-1 hover:bg-current/10 hover:text-current focus-visible:border-current focus-visible:ring-current/50 dark:hover:bg-current/10"
 				onClick={(e) => {

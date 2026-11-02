@@ -14,7 +14,7 @@ export function PriorityBreakdown({
 
 	if (!rows.length) {
 		return (
-			<p className="py-6 text-center text-muted-foreground text-sm">
+			<p className="py-6 text-center text-sm text-muted-foreground">
 				No spend to break down yet.
 			</p>
 		);
@@ -33,7 +33,7 @@ export function PriorityBreakdown({
 								{style.label}
 							</span>
 							<Money
-								className="font-medium text-foreground text-sm"
+								className="text-sm font-medium text-foreground"
 								value={row.total}
 							/>
 						</div>
@@ -43,7 +43,7 @@ export function PriorityBreakdown({
 								style={{ width: `${Math.max(pct, 1)}%` }}
 							/>
 						</div>
-						<span className="text-muted-foreground text-xs">
+						<span className="text-xs text-muted-foreground">
 							{pct}% · {row.count} transactions
 						</span>
 					</div>

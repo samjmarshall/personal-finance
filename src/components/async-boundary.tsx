@@ -86,7 +86,7 @@ export function AsyncBoundary({
 						"outline-none",
 						fade &&
 							skeletonShown &&
-							"fade-in animate-in motion-reduce:animate-none",
+							"animate-in fade-in motion-reduce:animate-none",
 					)}
 					ref={focusRef}
 					tabIndex={-1}

@@ -142,7 +142,7 @@ export function CategoriesView() {
 										</SortableItemHandle>
 										<div className="min-w-0 flex-1">
 											<div className="flex items-center gap-2">
-												<span className="truncate font-semibold text-foreground text-sm">
+												<span className="truncate text-sm font-semibold text-foreground">
 													{category.name}
 												</span>
 												<Badge className="border-border bg-muted text-muted-foreground">
@@ -151,7 +151,7 @@ export function CategoriesView() {
 												</Badge>
 											</div>
 											{category.description && (
-												<p className="mt-1 truncate text-muted-foreground text-sm">
+												<p className="mt-1 truncate text-sm text-muted-foreground">
 													{category.description}
 												</p>
 											)}
@@ -187,7 +187,7 @@ export function CategoriesView() {
 				{!categories.length && (
 					<Card className="text-center [--card-spacing:--spacing(10)]">
 						<CardContent>
-							<p className="text-muted-foreground text-sm">
+							<p className="text-sm text-muted-foreground">
 								No categories yet. Add your first category to get started.
 							</p>
 							<Button className="mt-4" onClick={openAdd} size="sm">

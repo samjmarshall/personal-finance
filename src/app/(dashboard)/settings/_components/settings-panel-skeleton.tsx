@@ -16,10 +16,10 @@ function SettingsPanelSkeleton({
 		<div>
 			{/* Shows through if the panel fails; the error card lands under it. */}
 			<div className="visible">
-				<h2 className="font-semibold text-base text-foreground tracking-tight">
+				<h2 className="text-base font-semibold tracking-tight text-foreground">
 					{title}
 				</h2>
-				<p className="mt-1 text-muted-foreground text-sm">{description}</p>
+				<p className="mt-1 text-sm text-muted-foreground">{description}</p>
 			</div>
 			<ErrorSlot className="mt-5">{children}</ErrorSlot>
 		</div>

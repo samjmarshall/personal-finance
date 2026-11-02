@@ -104,7 +104,7 @@ export function UnplannedView() {
 					<span
 						aria-atomic="true"
 						aria-live="polite"
-						className="tabular min-w-44 text-center font-medium text-foreground text-sm"
+						className="tabular min-w-44 text-center text-sm font-medium text-foreground"
 					>
 						{range ? periodLabel(kind, range) : "…"}
 					</span>

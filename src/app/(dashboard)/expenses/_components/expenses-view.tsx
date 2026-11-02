@@ -128,7 +128,7 @@ export function ExpensesView() {
 
 	function rowActions(item: Expense) {
 		return (
-			<div className="flex justify-end gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+			<div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
 				<button
 					aria-label={`Edit ${item.name}`}
 					className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -197,12 +197,12 @@ export function ExpensesView() {
 		count: number,
 	) => (
 		<Tabs.Tab
-			className="flex items-center gap-2 rounded-full px-4 py-1.5 font-medium text-muted-foreground text-sm transition-colors hover:text-foreground data-active:bg-card data-active:text-foreground data-active:shadow-sm data-active:ring-1 data-active:ring-foreground/10"
+			className="flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground data-active:bg-card data-active:text-foreground data-active:shadow-sm data-active:ring-1 data-active:ring-foreground/10"
 			value={value}
 		>
 			{icon}
 			{label}
-			<span className="text-muted-foreground text-xs">({count})</span>
+			<span className="text-xs text-muted-foreground">({count})</span>
 		</Tabs.Tab>
 	);
 
@@ -246,11 +246,11 @@ export function ExpensesView() {
 						).map(([label, value]) => (
 							<Card key={label}>
 								<CardContent>
-									<p className="font-medium text-muted-foreground text-xs">
+									<p className="text-xs font-medium text-muted-foreground">
 										{label}
 									</p>
 									<Money
-										className="mt-1.5 block font-semibold text-foreground text-lg sm:text-xl"
+										className="mt-1.5 block text-lg font-semibold text-foreground sm:text-xl"
 										value={value}
 									/>
 								</CardContent>
@@ -269,7 +269,7 @@ export function ExpensesView() {
 									<button
 										aria-controls={panelId}
 										aria-expanded={!isCollapsed}
-										className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
+										className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
 										onClick={() => toggle(key)}
 										type="button"
 									>
@@ -280,14 +280,14 @@ export function ExpensesView() {
 													isCollapsed && "-rotate-90",
 												)}
 											/>
-											<span className="font-semibold text-foreground text-sm">
+											<span className="text-sm font-semibold text-foreground">
 												{label}
 											</span>
-											<span className="text-muted-foreground text-xs">
+											<span className="text-xs text-muted-foreground">
 												({items.length})
 											</span>
 										</span>
-										<span className="text-muted-foreground text-xs">
+										<span className="text-xs text-muted-foreground">
 											<Money className="font-medium" value={groupTotal} /> / mo
 										</span>
 									</button>
@@ -296,7 +296,7 @@ export function ExpensesView() {
 										hidden={isCollapsed}
 										id={panelId}
 									>
-										<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+										<div className="hidden grid-cols-[1fr_repeat(3,7rem)_3rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
 											<span>Item</span>
 											<span className="text-right">Fortnight</span>
 											<span className="text-right">Month</span>
@@ -334,7 +334,7 @@ export function ExpensesView() {
 						{!recurringGroups.length && (
 							<Card className="text-center [--card-spacing:--spacing(10)]">
 								<CardContent>
-									<p className="text-muted-foreground text-sm">
+									<p className="text-sm text-muted-foreground">
 										No recurring expenses yet. Add your first budgeted item to
 										get started.
 									</p>
@@ -369,7 +369,7 @@ export function ExpensesView() {
 									<button
 										aria-controls={panelId}
 										aria-expanded={!isCollapsed}
-										className="flex w-full items-center justify-between gap-3 border-border border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
+										className="flex w-full items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/70"
 										onClick={() => toggle(key)}
 										type="button"
 									>
@@ -380,14 +380,14 @@ export function ExpensesView() {
 													isCollapsed && "-rotate-90",
 												)}
 											/>
-											<span className="font-semibold text-foreground text-sm">
+											<span className="text-sm font-semibold text-foreground">
 												{label}
 											</span>
-											<span className="text-muted-foreground text-xs">
+											<span className="text-xs text-muted-foreground">
 												({items.length})
 											</span>
 										</span>
-										<span className="text-muted-foreground text-xs">
+										<span className="text-xs text-muted-foreground">
 											<Money className="font-medium" value={total} /> total
 										</span>
 									</button>
@@ -396,7 +396,7 @@ export function ExpensesView() {
 										hidden={isCollapsed}
 										id={panelId}
 									>
-										<div className="hidden grid-cols-[1fr_repeat(4,7rem)_3rem] items-center gap-2 px-4 py-2 font-medium text-muted-foreground text-xs sm:grid">
+										<div className="hidden grid-cols-[1fr_repeat(4,7rem)_3rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
 											<span>Item</span>
 											<span className="text-right">Amount</span>
 											<span className="text-right">Expected</span>
@@ -413,7 +413,7 @@ export function ExpensesView() {
 						{!oneTime.length && (
 							<Card className="text-center [--card-spacing:--spacing(10)]">
 								<CardContent>
-									<p className="text-muted-foreground text-sm">
+									<p className="text-sm text-muted-foreground">
 										No one-time expenses yet. Add a dated, one-off outgoing to
 										track it here.
 									</p>

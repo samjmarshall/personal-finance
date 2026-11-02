@@ -47,13 +47,13 @@ export function BalanceSnapshotCard() {
 				<div>
 					<p
 						className={cn(
-							"tabular font-semibold text-2xl tracking-tight",
+							"tabular text-2xl font-semibold tracking-tight",
 							latest.amount < 0 ? "text-spend" : "text-foreground",
 						)}
 					>
 						{formatCurrency(latest.amount)}
 					</p>
-					<p className="mt-1 text-muted-foreground text-xs">
+					<p className="mt-1 text-xs text-muted-foreground">
 						As of {formatDate(latest.asOf)}
 						{/* A screen reader says "bullet" for "·", so it hears a comma. */}
 						<span aria-hidden> · </span>
@@ -62,7 +62,7 @@ export function BalanceSnapshotCard() {
 					</p>
 				</div>
 			) : (
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Set your balance to anchor the projection.
 				</p>
 			)}
@@ -131,8 +131,8 @@ export function BalanceSnapshotCardSkeleton() {
 function BalanceHeading() {
 	return (
 		<>
-			<h2 className="font-semibold text-foreground text-sm">Balance</h2>
-			<p className="mb-4 text-muted-foreground text-xs">
+			<h2 className="text-sm font-semibold text-foreground">Balance</h2>
+			<p className="mb-4 text-xs text-muted-foreground">
 				Anchors the projected balance line
 			</p>
 		</>

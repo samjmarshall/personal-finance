@@ -52,7 +52,7 @@ function CopyButton({
 	const copied = clipboard.copiedKey === copyKey;
 	return (
 		<button
-			className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-medium text-muted-foreground text-xs outline-none transition-colors hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+			className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 			onClick={() => clipboard.copy(value, copyKey)}
 			type="button"
 		>
@@ -82,8 +82,8 @@ function TraceHeader({
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2">
 			<div className="min-w-0">
-				<div className="text-muted-foreground text-xs">Ingest trace ID</div>
-				<div className="truncate font-mono text-foreground text-sm">
+				<div className="text-xs text-muted-foreground">Ingest trace ID</div>
+				<div className="truncate font-mono text-sm text-foreground">
 					{traceId ?? "—"}
 				</div>
 			</div>
@@ -98,7 +98,7 @@ function TraceHeader({
 				)}
 				{traceUrl && (
 					<a
-						className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-medium text-muted-foreground text-xs outline-none transition-colors hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+						className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 						href={traceUrl}
 						rel="noreferrer"
 						target="_blank"
@@ -148,18 +148,18 @@ function Timeline({ data }: { data: ReceiptDetail }) {
 						</div>
 						<div className={cn("min-w-0", last ? "pb-0" : "pb-4")}>
 							<div className="flex items-baseline gap-2">
-								<span className="font-medium text-foreground text-sm">
+								<span className="text-sm font-medium text-foreground">
 									{s.label}
 								</span>
 								{s.at != null && (
-									<span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+									<span className="font-mono text-[11px] whitespace-nowrap text-muted-foreground">
 										{s.at}
 									</span>
 								)}
 							</div>
 							<p
 								className={cn(
-									"break-words text-xs",
+									"text-xs break-words",
 									s.state === "failed"
 										? "text-[var(--badge-spend-fg)]"
 										: "text-muted-foreground",
@@ -290,19 +290,19 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			<Collapsible onOpenChange={setOpen} open={open}>
 				<CollapsibleTrigger
 					className={cn(
-						"flex w-full rounded-lg border border-transparent outline-none transition-colors hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+						"flex w-full rounded-lg border border-transparent transition-colors outline-none hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
 						open && "rounded-b-none",
 					)}
 				>
 					<header
 						className={cn(
 							"flex flex-1 items-center gap-2 px-3 py-2",
-							open && "border-border border-b",
+							open && "border-b border-border",
 						)}
 					>
 						<Braces aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
 						<span
-							className="font-medium text-foreground text-xs"
+							className="text-xs font-medium text-foreground"
 							id={headingId}
 						>
 							Extraction pipeline details
@@ -327,7 +327,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 
 							<div
 								aria-label="Extraction pipeline details views"
-								className="flex gap-1 border-border border-b"
+								className="flex gap-1 border-b border-border"
 								onKeyDown={onTabKeyDown}
 								role="tablist"
 							>
@@ -336,7 +336,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 										aria-controls={panelId}
 										aria-selected={tab === key}
 										className={cn(
-											"-mb-px border-b-2 px-2.5 py-1.5 font-medium text-xs outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
+											"-mb-px border-b-2 px-2.5 py-1.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
 											tab === key
 												? "border-foreground text-foreground"
 												: "border-transparent text-muted-foreground hover:text-foreground",
@@ -377,12 +377,12 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 												{rows.map(([k, v]) => (
 													<tr key={k}>
 														<th
-															className="whitespace-nowrap py-1 pr-3 text-left align-top font-normal text-muted-foreground"
+															className="py-1 pr-3 text-left align-top font-normal whitespace-nowrap text-muted-foreground"
 															scope="row"
 														>
 															{k}
 														</th>
-														<td className="break-all py-1 text-foreground">
+														<td className="py-1 break-all text-foreground">
 															{v}
 														</td>
 													</tr>

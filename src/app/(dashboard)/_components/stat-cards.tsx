@@ -72,20 +72,20 @@ export async function StatCards() {
 					<Card key={stat.label}>
 						<CardContent>
 							<div className="flex items-center justify-between">
-								<span className="font-medium text-muted-foreground text-sm">
+								<span className="text-sm font-medium text-muted-foreground">
 									{stat.label}
 								</span>
 								<Icon className={cn("h-4 w-4", stat.accent)} />
 							</div>
 							<p
 								className={cn(
-									"tabular mt-3 font-semibold text-2xl tracking-tight",
+									"tabular mt-3 text-2xl font-semibold tracking-tight",
 									stat.accent,
 								)}
 							>
 								{stat.value}
 							</p>
-							<p className="mt-1 text-muted-foreground text-xs">{stat.hint}</p>
+							<p className="mt-1 text-xs text-muted-foreground">{stat.hint}</p>
 						</CardContent>
 					</Card>
 				);

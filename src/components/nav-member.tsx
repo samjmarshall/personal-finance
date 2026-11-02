@@ -17,8 +17,8 @@ export async function NavMember() {
 	return (
 		<div className="flex flex-col gap-1">
 			<div className="px-3 py-1.5">
-				<p className="text-sidebar-muted text-xs">Signed in as</p>
-				<p className="truncate font-medium text-sidebar-foreground text-sm">
+				<p className="text-xs text-sidebar-muted">Signed in as</p>
+				<p className="truncate text-sm font-medium text-sidebar-foreground">
 					{userName}
 				</p>
 			</div>
