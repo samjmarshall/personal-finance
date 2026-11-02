@@ -367,6 +367,42 @@ error tracking, baggage, outbox carrier: unchanged.
 Product analytics, feature flags, session replay, evaluations, Household
 groups, DB spans, Inngest `extendedTracesMiddleware`, Slack destination.
 
+### Note for the `posthog-js` front-end work (added 2026-11-02)
+
+posthog-node 5.58.0 added `PostHogContextSpanProcessor` (`posthog-node/otel`).
+It links server traces and errors to a browser session replay. Pick it up when
+`posthog-js` lands. It does nothing until then.
+
+- **What it does.** Copies `sessionId` and `posthogDistinctId` from
+  posthog-node's request context (`withContext` / `enterContext`) onto spans.
+  The context `sessionId` also lands as `$session_id` on `captureException`, so
+  Error Tracking issues link to the replay too.
+- **Browser side.** `posthog.init({ tracing_headers: ['<our host>'] })` adds
+  `X-POSTHOG-SESSION-ID` and `X-POSTHOG-DISTINCT-ID` to fetch and XHR
+  ([docs](https://posthog.com/docs/llm-analytics/link-session-replay)). Or
+  posthog-node 5.60.0's `readPostHogCookie` option reads the posthog-js cookie,
+  which our same-origin requests already carry. This would also cover
+  `<img src="/api/receipts/[id]/image">` and the Blob token call.
+- **Server side.** The built-in header and cookie readers only run in the
+  Express and NestJS integrations. In Next.js we call `posthog.withContext`
+  ourselves at each entry point, in the same places we set baggage: the tRPC
+  route, `api/receipts/upload` and the image route. Then we add the processor to
+  `spanProcessors` in `src/server/observability/sdk/otel.ts`. It needs the
+  `posthog-node` client, which today lives only in `errors/posthog.ts`.
+- **Add it next to baggage, not instead of it.** Baggage still carries
+  `receipt.id`, `outbox.event_id` and the Inngest ids, and it crosses the outbox
+  into Inngest. PostHog context lives in one process only, so worker traces get
+  no `sessionId`. If we want the replay link there too, add a session id key to
+  `BaggageKey`.
+- **Identity.** The browser sets the header distinct id, and PostHog says not to
+  trust it for auth. Keep the Member id from baggage as the distinct id. Take
+  only `sessionId` from the browser. Call `posthog.identify(memberId)` in the
+  browser so both sides use the same id.
+- **Check first.** The processor writes `posthogDistinctId`, but we write
+  `posthog.distinct_id`, which `@posthog/ai` reads
+  (`node_modules/@posthog/ai/dist/otel/index.mjs`). Before relying on either,
+  confirm which key PostHog Traces uses for person and replay links.
+
 ## Evidence
 
 - `node_modules/ai` 5.0.252 `dist/index.d.ts` (`TelemetrySettings`,

@@ -147,6 +147,7 @@ The vendor's default Next.js path: wrap the `LanguageModel` with `withTracing(mo
 - Does PostHog convert `@ai-sdk/otel` `LegacyOpenTelemetry`'s `ai.generateObject.doGenerate` spans to `$ai_generation` with tokens and cost? PostHog forwards the `ai.` prefix (`node_modules/@posthog/ai/dist/otel`), but its docs describe the `gen_ai.*` (recommended `OpenTelemetry`) path; confirm one receipt populates `$ai_generation` on a preview deploy. If not, switch the boot registration to the `OpenTelemetry` integration — which also requires moving redaction to the `gen_ai.*` keys in the same change (clause 6).
 - Do Next.js 16 builds need `serverExternalPackages` for any OTel package?
 - Does PostHog Logs surface the OTLP `event_name` field as filterable? If yes, drop the `event.name` attribute mirror.
+- When `posthog-js` lands (see Context), should we add posthog-node's `PostHogContextSpanProcessor` (`posthog-node/otel`, ≥ 5.58.0) and browser `tracing_headers`, to link traces and Error Tracking issues to session replay? It would sit next to clause 5's Baggage, not replace it: Baggage still carries the domain ids across the outbox. Wiring notes: [design, Out of scope](../../thoughts/designs/2026-09-15-posthog-observability.md#out-of-scope).
 
 ## Links
 
