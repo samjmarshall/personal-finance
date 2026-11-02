@@ -67,7 +67,7 @@ export interface ReconcileInput {
 	timeZone: string;
 	/** Over every saved description plus the incoming ones. */
 	weights: WordWeights;
-	/** Embeddings by cleaned description; null when none could be had. */
+	/** Embeddings by cleaned description; some may be missing. Null when nothing paired. */
 	vectors: ReadonlyMap<string, number[]> | null;
 }
 
@@ -196,8 +196,8 @@ function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
 }
 
 /**
- * Unscored pairs (same cent, within 7 days) for bank rows not yet saved or
- * reviewed. Lets the caller skip loading word weights when nothing pairs.
+ * Unscored pairs (same cent, inside the match window) for bank rows not yet
+ * saved or reviewed. Lets the caller skip weights and embeddings when nothing pairs.
  */
 export function matchPairs(input: MatchInput): MatchPair[] {
 	return pairUp(splitIncoming(input).unmatched, input);

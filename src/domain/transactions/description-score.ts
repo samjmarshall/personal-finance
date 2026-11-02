@@ -32,7 +32,7 @@ export interface WordWeights {
 
 export interface DescriptionScore {
 	word: number;
-	/** Null when no embedding was available for either side. */
+	/** Null unless both sides have an embedding. */
 	meaning: number | null;
 	merged: number;
 }
@@ -43,7 +43,7 @@ const PROCESSOR = new RegExp(
 	"i",
 );
 const NOISE = new Set(NOISE_WORDS);
-// Its day and month would survive the 3-digit code rule.
+// A date goes first: its day and month are under 3 digits, so the code rule would keep them.
 const DATE = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g;
 // The bank ends an overseas charge with "FRGN AMT: 20.00  U. S. DOLLAR", which
 // sinks a same-purchase pair below the Adopt bars.
