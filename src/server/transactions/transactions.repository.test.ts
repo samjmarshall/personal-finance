@@ -950,7 +950,7 @@ describe("listPendingDuplicates", () => {
 			    "params": [
 			      "pending",
 			    ],
-			    "sql": "select "possible_duplicate"."id", "possible_duplicate"."date", "possible_duplicate"."amount", "possible_duplicate"."description", "possible_duplicate"."accountName", "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."accountName", "transaction"."provenance" from "possible_duplicate" inner join "transaction" on "transaction"."id" = "possible_duplicate"."transactionId" where "possible_duplicate"."status" = $1 order by "possible_duplicate"."date" desc, "possible_duplicate"."id" desc",
+			    "sql": "select "possible_duplicate"."id", "possible_duplicate"."date", "possible_duplicate"."amount", "possible_duplicate"."description", "possible_duplicate"."accountName", "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."accountName", "transaction"."provenance", "possible_duplicate"."descriptionScore" from "possible_duplicate" inner join "transaction" on "transaction"."id" = "possible_duplicate"."transactionId" where "possible_duplicate"."status" = $1 order by "possible_duplicate"."date" desc, "possible_duplicate"."id" desc",
 			  },
 			]
 		`);

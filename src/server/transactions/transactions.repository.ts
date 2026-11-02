@@ -486,6 +486,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					accountName: transactions.accountName,
 					provenance: transactions.provenance,
 				},
+				descriptionScore: possibleDuplicates.descriptionScore,
 			})
 			.from(possibleDuplicates)
 			.innerJoin(

@@ -207,6 +207,7 @@ describe("possible duplicates", () => {
 			accountName: null,
 			provenance: Provenance.Manual,
 		},
+		descriptionScore: 0.2,
 	};
 
 	it("lists and counts the pending reviews", async () => {

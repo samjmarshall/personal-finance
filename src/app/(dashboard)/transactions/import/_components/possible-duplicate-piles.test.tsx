@@ -13,7 +13,12 @@ import { PossibleDuplicatePiles } from "./possible-duplicate-piles";
 function review(
 	id: number,
 	description: string,
-	{ bank, mine, days = 0 }: { bank: number; mine: number; days?: number },
+	{
+		bank,
+		mine,
+		days = 0,
+		score = null,
+	}: { bank: number; mine: number; days?: number; score?: number | null },
 ): PossibleDuplicateReview {
 	return {
 		id,
@@ -31,17 +36,24 @@ function review(
 			accountName: null,
 			provenance: Provenance.Manual,
 		},
+		descriptionScore: score,
 	};
 }
 
-// The bank's description is yours in capitals after "BANK": 3 words shared is similar, 1 is not.
-const COFFEE = review(1, "Coffee Club Brisbane", { bank: 5, mine: 5, days: 2 });
+// The bank's description is yours in capitals after "BANK"; the score picks the pile.
+const COFFEE = review(1, "Coffee Club Brisbane", {
+	bank: 5,
+	mine: 5,
+	days: 2,
+	score: 0.9,
+});
 const GROCERIES = review(2, "Coles Groceries Redcliffe", {
 	bank: 80,
 	mine: 80,
 	days: 1,
+	score: 0.8,
 });
-const VERCEL = review(3, "Vercel", { bank: 30, mine: 30 });
+const VERCEL = review(3, "Vercel", { bank: 30, mine: 30, score: 0.2 });
 const REVIEWS = [COFFEE, GROCERIES, VERCEL];
 
 function renderPiles({
@@ -78,6 +90,16 @@ describe("PossibleDuplicatePiles", () => {
 			"Similar description · , 2",
 			"Different description · , 1",
 		]);
+		expect(
+			screen.getByText(
+				"The descriptions match. Almost always the same purchase.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"The descriptions don't match. Most likely two purchases.",
+			),
+		).toBeInTheDocument();
 	});
 
 	it("says when only the wording differs", () => {

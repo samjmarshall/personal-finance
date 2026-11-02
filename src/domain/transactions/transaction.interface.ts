@@ -77,6 +77,8 @@ export interface PossibleDuplicateReview {
 		Transaction,
 		"id" | "date" | "amount" | "description" | "accountName" | "provenance"
 	>;
+	/** Null on a review flagged before adr029. */
+	descriptionScore: number | null;
 }
 
 // What one apply did. `gone`: already answered or no longer pending. `taken`: the

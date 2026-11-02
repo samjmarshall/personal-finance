@@ -133,7 +133,7 @@ When a bank row could pair with more than one of yours, the pair whose descripti
 - **Both are real**: adds the bank's row too.
 
 Reviews sit in two piles:
-- **Similar description**: 3 or more shared words. A word is any run of letters or digits, case-blind, counted once. Its fill button picks **Use bank's**.
+- **Similar description**: a saved description score of 0.59 (`SIMILAR_SCORE`) or more. A review flagged before adr029 has no score, so it needs 3 or more shared words instead: a word is any run of letters or digits, case-blind, counted once. Its fill button picks **Use bank's**.
 - **Different description**: the rest. Its fill button picks **Both are real**.
 
 A fill only answers rows with no answer yet. **Apply** sends every answer at once, and a toast confirms it.

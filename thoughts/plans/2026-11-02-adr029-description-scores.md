@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
 adrs: [adr029]
-status: Ready for Review - Phase 5 of 6
+status: Ready for Review - Phase 6 of 6
 ---
 # Pair bank rows by word and meaning scores (adr029) Implementation Plan
 
@@ -288,10 +288,10 @@ Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning
 - `docs/feature/history-import.md:125-127`: the piles go by description score, and reviews from before adr029 go by 3+ shared words.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `/design-review`
-- [ ] On `/transactions/import`:
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `/design-review`: no UI blockers; High = Vercel FRGN AMT row scores 0.585, a cleaning gap
+- [x] On `/transactions/import`:
   - a review with a high score sits under "Similar description" and a low one under "Different description"
   - an older review with no score keeps its pile from before this change
   - fill and Apply still work
