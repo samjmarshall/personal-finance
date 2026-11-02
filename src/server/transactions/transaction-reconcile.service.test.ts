@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { LegacyOpenTelemetry } from "@ai-sdk/otel";
+import { context, propagation, trace } from "@opentelemetry/api";
 import {
+	InMemorySpanExporter,
+	SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { registerTelemetry } from "ai";
+import { MockEmbeddingModelV4 } from "ai/test";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+	EMBEDDING_DIMENSIONS,
 	type MatchCandidate,
 	type ReconcileCounts,
 	type ReconcilePlan,
@@ -8,23 +18,64 @@ import {
 	wordWeights,
 } from "~/domain/transactions";
 import { Provenance } from "~/lib/constants";
+import type {
+	LogAttributes,
+	Logger,
+} from "~/server/observability/logging/logger";
 import { unstaged } from "~/test/fakes";
 import { TransactionReconcileService } from "./transaction-reconcile.service";
 
 type ReconcileRepository = ConstructorParameters<
 	typeof TransactionReconcileService
 >[0]["repository"];
+type LogEntry = { level: string; msg: string; attrs: LogAttributes };
 
-function serviceWith(staged: Partial<ReconcileRepository>) {
+const MODEL_ID = "amazon.titan-embed-text-v2:0";
+// One vector for every text, so every pair's meaning score is 1.
+const sameMeaning = () =>
+	new MockEmbeddingModelV4({
+		modelId: MODEL_ID,
+		doEmbed: async ({ values }) => ({
+			embeddings: values.map(() => [1, 0]),
+			warnings: [],
+		}),
+	});
+const unavailable = () =>
+	new MockEmbeddingModelV4({
+		modelId: MODEL_ID,
+		doEmbed: async () => {
+			throw new Error("Could not load credentials from any providers");
+		},
+	});
+
+function serviceWith(
+	staged: Partial<ReconcileRepository>,
+	embeddingModel: MockEmbeddingModelV4,
+) {
 	const repository: ReconcileRepository = {
 		findKnownExternalIds: unstaged,
 		findReviews: unstaged,
 		findMatchCandidates: unstaged,
 		listDescriptions: unstaged,
+		findEmbeddings: unstaged,
+		saveEmbeddings: unstaged,
 		applyReconcile: unstaged,
 		...staged,
 	};
-	return new TransactionReconcileService({ repository });
+	const logs: LogEntry[] = [];
+	const logger: Logger = {
+		debug: (msg, attrs = {}) => logs.push({ level: "debug", msg, attrs }),
+		info: (msg, attrs = {}) => logs.push({ level: "info", msg, attrs }),
+		warn: (msg, attrs = {}) => logs.push({ level: "warn", msg, attrs }),
+		error: (msg, attrs = {}) => logs.push({ level: "error", msg, attrs }),
+		with: () => logger,
+	};
+	const service = new TransactionReconcileService({
+		repository,
+		embeddingModel,
+		logger,
+	});
+	return { service, logs };
 }
 
 describe("reconcileSynced", () => {
@@ -55,33 +106,47 @@ describe("reconcileSynced", () => {
 		heldBy: null,
 	});
 
-	function reconciling(staged: Partial<ReconcileRepository> = {}) {
+	function reconciling(
+		staged: Partial<ReconcileRepository> = {},
+		model = sameMeaning(),
+	) {
 		const reads: unknown[][] = [];
 		const plans: ReconcilePlan[] = [];
-		const service = serviceWith({
-			findKnownExternalIds: async (...args) => {
-				reads.push(["known", ...args]);
-				return [];
+		const saves: unknown[][] = [];
+		const { service, logs } = serviceWith(
+			{
+				findKnownExternalIds: async (...args) => {
+					reads.push(["known", ...args]);
+					return [];
+				},
+				findReviews: async (...args) => {
+					reads.push(["reviews", ...args]);
+					return [];
+				},
+				findMatchCandidates: async (...args) => {
+					reads.push(["candidates", ...args]);
+					return [];
+				},
+				listDescriptions: async () => {
+					reads.push(["descriptions"]);
+					return [];
+				},
+				findEmbeddings: async (...args) => {
+					reads.push(["embeddings", ...args]);
+					return [];
+				},
+				saveEmbeddings: async (...args) => {
+					saves.push(args);
+				},
+				applyReconcile: async (plan) => {
+					plans.push(plan);
+					return COUNTS;
+				},
+				...staged,
 			},
-			findReviews: async (...args) => {
-				reads.push(["reviews", ...args]);
-				return [];
-			},
-			findMatchCandidates: async (...args) => {
-				reads.push(["candidates", ...args]);
-				return [];
-			},
-			listDescriptions: async () => {
-				reads.push(["descriptions"]);
-				return [];
-			},
-			applyReconcile: async (plan) => {
-				plans.push(plan);
-				return COUNTS;
-			},
-			...staged,
-		});
-		return { service, reads, plans };
+			model,
+		);
+		return { service, reads, plans, saves, logs, model };
 	}
 
 	it("reads and writes nothing for no rows", async () => {
@@ -122,24 +187,92 @@ describe("reconcileSynced", () => {
 		]);
 	});
 
-	it("skips reading descriptions when no bank row pairs", async () => {
-		const { service, reads } = reconciling({
+	it("skips reading descriptions and the model when no bank row pairs", async () => {
+		const { service, reads, model } = reconciling({
 			findMatchCandidates: async () => [mine("Woolworths", 42.6)],
 		});
 
 		await service.reconcileSynced([SYNCED], LIVE);
 
 		expect(reads.map(([kind]) => kind)).not.toContain("descriptions");
+		expect(reads.map(([kind]) => kind)).not.toContain("embeddings");
+		expect(model.doEmbedCalls).toEqual([]);
 	});
 
-	// No meaning score yet, and an Adopt needs one (adr029).
-	it("flags, never adopts, a same-day row with the same words", async () => {
+	it("adopts a same-day row whose words and meaning match", async () => {
 		const { service, plans } = reconciling({
 			findMatchCandidates: async () => [mine("Woolworths")],
 		});
 
 		await service.reconcileSynced([SYNCED], LIVE);
 
+		expect(plans[0]?.adopt).toEqual([
+			{ transactionId: 1, row: SYNCED, heldBy: null },
+		]);
+	});
+
+	it("embeds each cache miss once and saves it under the model id", async () => {
+		const { service, reads, saves, model } = reconciling({
+			findMatchCandidates: async () => [mine("Woolies")],
+			findEmbeddings: async (...args) => {
+				reads.push(["embeddings", ...args]);
+				return [{ description: "WOOLWORTHS", embedding: [1, 0] }];
+			},
+		});
+
+		await service.reconcileSynced([SYNCED], LIVE);
+
+		expect(reads).toContainEqual([
+			"embeddings",
+			MODEL_ID,
+			["WOOLWORTHS", "WOOLIES"],
+		]);
+		expect(model.doEmbedCalls).toMatchObject([
+			{
+				values: ["WOOLIES"],
+				dimensions: EMBEDDING_DIMENSIONS,
+				providerOptions: {
+					bedrock: { normalize: true, inputType: "clustering" },
+				},
+			},
+		]);
+		expect(saves).toEqual([
+			[MODEL_ID, [{ description: "WOOLIES", embedding: [1, 0] }]],
+		]);
+	});
+
+	it("calls no model when every description is cached", async () => {
+		const { service, plans, saves, model } = reconciling({
+			findMatchCandidates: async () => [mine("Woolworths")],
+			findEmbeddings: async () => [
+				{ description: "WOOLWORTHS", embedding: [1, 0] },
+			],
+		});
+
+		await service.reconcileSynced([SYNCED], LIVE);
+
+		expect(model.doEmbedCalls).toEqual([]);
+		expect(saves).toEqual([]);
+		expect(plans[0]?.adopt).toHaveLength(1);
+	});
+
+	// No meaning score, and an Adopt needs one (adr029).
+	it("warns and flags, never adopts, when the model fails", async () => {
+		const { service, plans, saves, logs } = reconciling(
+			{ findMatchCandidates: async () => [mine("Woolworths")] },
+			unavailable(),
+		);
+
+		await service.reconcileSynced([SYNCED], LIVE);
+
+		expect(logs).toMatchObject([
+			{
+				level: "warn",
+				msg: "embedding unavailable",
+				attrs: { error: expect.any(Error), descriptions: 1 },
+			},
+		]);
+		expect(saves).toEqual([]);
 		expect(plans).toEqual([
 			{
 				refresh: [],
@@ -161,10 +294,14 @@ describe("reconcileSynced", () => {
 	it("weighs words over every saved description plus the incoming ones", async () => {
 		const row = { ...SYNCED, description: "WOOLWORTHS METRO" };
 		const saved = ["Woolworths", "Coles"];
-		const { service, plans } = reconciling({
-			findMatchCandidates: async () => [mine("Woolworths")],
-			listDescriptions: async () => saved,
-		});
+		// No meaning, so the saved score is the word score alone.
+		const { service, plans } = reconciling(
+			{
+				findMatchCandidates: async () => [mine("Woolworths")],
+				listDescriptions: async () => saved,
+			},
+			unavailable(),
+		);
 
 		await service.reconcileSynced([row], LIVE);
 
@@ -204,5 +341,39 @@ describe("reconcileSynced", () => {
 			["known", Provenance.Paypal, ["txn_1"]],
 		]);
 		expect(plans.map((plan) => plan.add)).toEqual([[SYNCED], [paypal]]);
+	});
+
+	describe("telemetry", () => {
+		// Registered as in prod, so an ai.* span would land if one were made.
+		const exporter = new InMemorySpanExporter();
+		const provider = new NodeTracerProvider({
+			spanProcessors: [new SimpleSpanProcessor(exporter)],
+		});
+		beforeAll(() => {
+			provider.register();
+			registerTelemetry(new LegacyOpenTelemetry());
+		});
+		afterAll(async () => {
+			await provider.shutdown();
+			trace.disable();
+			context.disable();
+			propagation.disable();
+		});
+
+		// The span processor would price an ai.* span as Claude tokens.
+		it("records no ai.* span for an embedding", async () => {
+			const { service, model } = reconciling({
+				findMatchCandidates: async () => [mine("Woolworths")],
+			});
+
+			await service.reconcileSynced([SYNCED], LIVE);
+
+			expect(model.doEmbedCalls).toHaveLength(1);
+			expect(
+				exporter
+					.getFinishedSpans()
+					.filter(({ name }) => name.startsWith("ai.")),
+			).toEqual([]);
+		});
 	});
 });

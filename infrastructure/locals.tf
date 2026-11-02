@@ -21,6 +21,12 @@ locals {
   # List keys on it, not the profile id, so edit it with the two above.
   bedrock_pricing_model_name = "Claude Sonnet 4.6"
 
+  # Bedrock embedding model the bank reconcile scores description meaning with
+  # (adr029). Titan has no inference profile, so this is the bare in-region
+  # foundation-model id, invoked and granted as is. Changing it re-embeds every
+  # description: the cache is keyed by model.
+  bedrock_embedding_model = "amazon.titan-embed-text-v2:0"
+
   # PostHog user ids, not emails: the alert API subscribes users by id. The owner.
   posthog_alert_user_ids = [432149]
 

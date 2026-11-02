@@ -1194,6 +1194,53 @@ describe("listDescriptions", () => {
 	});
 });
 
+describe("findEmbeddings", () => {
+	it("reads the cached vectors of these descriptions under one model", async () => {
+		const { repository, queries } = harness(() => [["NETFLIX", "[0.6,0.8]"]]);
+
+		await expect(
+			repository.findEmbeddings("titan", ["NETFLIX", "COLES"]),
+		).resolves.toEqual([{ description: "NETFLIX", embedding: [0.6, 0.8] }]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "titan",
+			      "NETFLIX",
+			      "COLES",
+			    ],
+			    "sql": "select "description", "embedding" from "description_embedding" where ("description_embedding"."model" = $1 and "description_embedding"."description" in ($2, $3))",
+			  },
+			]
+		`);
+	});
+});
+
+describe("saveEmbeddings", () => {
+	it("inserts each vector under the model, skipping one already cached", async () => {
+		const { repository, queries } = harness();
+
+		await repository.saveEmbeddings("titan", [
+			{ description: "NETFLIX", embedding: [0.6, 0.8] },
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [
+			      "titan",
+			      "NETFLIX",
+			      "[0.6,0.8]",
+			      "2026-09-29T00:00:00.000Z",
+			    ],
+			    "sql": "insert into "description_embedding" ("id", "model", "description", "embedding", "createdAt") values (default, $1, $2, $3, $4) on conflict ("model","description") do nothing",
+			  },
+			]
+		`);
+	});
+});
+
 describe("findInDateWindow", () => {
 	it("selects the match fields of every row in the half-open window", async () => {
 		const { repository, queries } = harness(() => [

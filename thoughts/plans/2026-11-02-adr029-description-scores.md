@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
 adrs: [adr029]
-status: Ready for Review - Phase 4 of 6
+status: Ready for Review - Phase 5 of 6
 ---
 # Pair bank rows by word and meaning scores (adr029) Implementation Plan
 
@@ -261,13 +261,13 @@ Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning
   - `docs/feature/history-import.md`: the job sequence (`:91`) gains the embedding step before `applyReconcile`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make db_migrate` applied `0027` and `0028` on `local/<branch>`
-- [ ] `/security-review` (touches `src/env.ts`)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make db_migrate` applied `0027` and `0028` on `local/<branch>`
+- [x] `/security-review` (touches `src/env.ts`): no findings
 - [ ] `terraform -chdir=infrastructure fmt -check` passes. The `deploy.yml` plan for the branch shows exactly one new IAM statement and one new Vercel env var
-- [ ] Without AWS creds, an import on the branch DB logs `embedding unavailable` and finishes with its rows landed
-- [ ] With `assume <profile>`, an import fills `description_embedding` with 1024-length vectors under the model id. A same-day pair whose descriptions match Adopts; a same-day Netflix/Spotify-style pair goes to review
+- [x] Without AWS creds, an import on the branch DB logs `embedding unavailable` and finishes with its rows landed
+- [x] With `assume <profile>`, an import fills `description_embedding` with 1024-length vectors under the model id. A same-day pair whose descriptions match Adopts; a same-day Netflix/Spotify-style pair goes to review
 
 ## Phase 6: Pile reviews by the saved score
 ### Changes

@@ -64,6 +64,10 @@ locals {
       value     = aws_iam_role.this.arn
       sensitive = false
     }
+    BEDROCK_EMBEDDING_MODEL = {
+      value     = local.bedrock_embedding_model
+      sensitive = false
+    }
     BEDROCK_RECEIPT_MODEL = {
       value     = local.bedrock_receipt_model
       sensitive = false

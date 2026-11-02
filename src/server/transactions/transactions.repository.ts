@@ -20,6 +20,7 @@ import {
 import { alias, type PgColumn } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type {
+	DescriptionEmbedding,
 	ExpenseConsumption,
 	MatchCandidate,
 	PossibleDuplicateReview,
@@ -37,7 +38,11 @@ import type {
 } from "~/domain/transactions";
 import { PossibleDuplicateStatus } from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
-import { possibleDuplicates, transactions } from "./transactions.schema";
+import {
+	descriptionEmbeddings,
+	possibleDuplicates,
+	transactions,
+} from "./transactions.schema";
 
 export type TransactionLink = Pick<Transaction, "expenseId" | "categoryId">;
 /** A row's bank-owned values, plus provenance to tell if it is synced. */
@@ -49,6 +54,10 @@ export type TransactionPatch = Omit<
 > &
 	Partial<Pick<TransactionUpdateInput, "amount" | "date">>;
 export type TransactionDescription = Pick<Transaction, "id" | "description">;
+export type CachedEmbedding = Pick<
+	DescriptionEmbedding,
+	"description" | "embedding"
+>;
 /** Half-open `[from, to)`. */
 export interface DateWindow {
 	from: Date;
@@ -116,6 +125,13 @@ export interface TransactionsRepository {
 	findDescriptions(ids: number[]): Promise<TransactionDescription[]>;
 	/** Every distinct description: the word-weight corpus (adr029). */
 	listDescriptions(): Promise<string[]>;
+	/** The cached ones among these cleaned descriptions; a miss is just absent. */
+	findEmbeddings(
+		model: string,
+		descriptions: string[],
+	): Promise<CachedEmbedding[]>;
+	/** Skips a description `model` already has a vector for. */
+	saveEmbeddings(model: string, rows: CachedEmbedding[]): Promise<void>;
 	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]>;
 	/** `undefined` when no row has the id. */
 	findLink(id: number): Promise<TransactionLink | undefined>;
@@ -630,6 +646,36 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.selectDistinct({ description: transactions.description })
 			.from(transactions);
 		return rows.map((row) => row.description);
+	}
+
+	findEmbeddings(
+		model: string,
+		descriptions: string[],
+	): Promise<CachedEmbedding[]> {
+		return this.db
+			.select({
+				description: descriptionEmbeddings.description,
+				embedding: descriptionEmbeddings.embedding,
+			})
+			.from(descriptionEmbeddings)
+			.where(
+				and(
+					eq(descriptionEmbeddings.model, model),
+					inArray(descriptionEmbeddings.description, descriptions),
+				),
+			);
+	}
+
+	async saveEmbeddings(model: string, rows: CachedEmbedding[]): Promise<void> {
+		await this.db
+			.insert(descriptionEmbeddings)
+			.values(rows.map((row) => ({ model, ...row })))
+			.onConflictDoNothing({
+				target: [
+					descriptionEmbeddings.model,
+					descriptionEmbeddings.description,
+				],
+			});
 	}
 
 	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]> {

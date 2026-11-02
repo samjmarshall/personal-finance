@@ -52,7 +52,7 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 
 ### Operations
 
-**Health signals**: the Latest import card (status, counts, reason), the `cdr_import` row, and these log lines: `cdr import already claimed`, `cdr import skipped an account`, plus the RedBark errors from the shared sync code.
+**Health signals**: the Latest import card (status, counts, reason), the `cdr_import` row, and these log lines: `cdr import already claimed`, `cdr import skipped an account`, `embedding unavailable`, plus the RedBark errors from the shared sync code.
 **Alerts**: *None yet. A failed run only shows on the page and in the logs. There's a `TODO(observability)` in `import-form.tsx`.*
 **Failure modes & fallback**:
 - `REDBARK_API_KEY` unset → the row reads Failed: "Bank sync isn't set up".
@@ -61,8 +61,9 @@ The daily bank sync only reaches back about 14 days. Anything older stays missin
 - More than 997 chunks → fails with "This import is too big for one run. Try a shorter range."
 - Run lost (cancelled in Inngest, or `failImport` hit a DB blip) → the card reads "Didn't finish" after 24 hours, and the form opens again.
 - An account RedBark can't sync right now → the job skips and logs it, then imports the rest.
+- Bedrock down or no AWS creds → logs `embedding unavailable`. A pair with an uncached description scores on words alone, so it is flagged, never adopted. The next run tries those again.
 
-**Flags / env vars**: `REDBARK_API_KEY` (optional; see `docs/README.md`).
+**Flags / env vars**: `REDBARK_API_KEY`, `BEDROCK_EMBEDDING_MODEL` (both optional; see `docs/README.md`).
 
 ## Flow
 
@@ -80,6 +81,7 @@ sequenceDiagram
     participant DB as Neon
     participant Job as Inngest cdr-import
     participant RB as RedBark
+    participant Bedrock as Bedrock (Titan)
 
     M->>App: cdr.startImport({ from, to })
     App->>App: range checks, no active run
@@ -91,6 +93,11 @@ sequenceDiagram
     loop each account × 90-day window
         Job->>RB: listTransactions(account, from, to)
         RB-->>Job: bank rows
+        opt a bank row pairs with one of yours
+            Job->>DB: read descriptions + cached embeddings
+            Job->>Bedrock: embedMany(cache misses)
+            Job->>DB: save new embeddings
+        end
         Job->>DB: applyReconcile (add / adopt / flag / known)
         Job->>DB: add counts to cdr_import
     end

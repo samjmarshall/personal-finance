@@ -46,6 +46,7 @@ import {
 	unplannedDto,
 } from "./transaction.dto";
 import type {
+	DescriptionEmbedding,
 	ExpenseConsumption,
 	PossibleDuplicate,
 	PossibleDuplicateReview,
@@ -60,6 +61,7 @@ import type {
 
 export type {
 	Adoption,
+	DescriptionEmbedding,
 	DescriptionScore,
 	ExpenseConsumption,
 	Flag,

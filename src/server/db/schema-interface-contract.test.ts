@@ -9,6 +9,7 @@ import type { Expense } from "~/domain/expenses/expense.interface";
 import type { Income } from "~/domain/income/income.interface";
 import type { Receipt, ReceiptItem } from "~/domain/receipts/receipt.interface";
 import type {
+	DescriptionEmbedding,
 	PossibleDuplicate,
 	Transaction,
 } from "~/domain/transactions/transaction.interface";
@@ -20,6 +21,7 @@ import type { expenses } from "~/server/expenses/expenses.schema";
 import type { income } from "~/server/income/income.schema";
 import type { receiptItems, receipts } from "~/server/receipts/receipts.schema";
 import type {
+	descriptionEmbeddings,
 	possibleDuplicates,
 	transactions,
 } from "~/server/transactions/transactions.schema";
@@ -40,13 +42,16 @@ type Contracts = [
 	Expect<Equal<typeof cdrSyncState.$inferSelect, CdrSyncState>>,
 ];
 
-// receipt_item, possible_duplicate and cdr_import share their parent's interface file, so they
+// receipt_item, possible_duplicate, description_embedding and cdr_import share their parent's interface file, so they
 // can't get their own COVERED slug; these standalone aliases still error on drift.
 type _ReceiptItemContract = Expect<
 	Equal<typeof receiptItems.$inferSelect, ReceiptItem>
 >;
 type _PossibleDuplicateContract = Expect<
 	Equal<typeof possibleDuplicates.$inferSelect, PossibleDuplicate>
+>;
+type _DescriptionEmbeddingContract = Expect<
+	Equal<typeof descriptionEmbeddings.$inferSelect, DescriptionEmbedding>
 >;
 type _CdrImportContract = Expect<
 	Equal<typeof cdrImport.$inferSelect, CdrImport>

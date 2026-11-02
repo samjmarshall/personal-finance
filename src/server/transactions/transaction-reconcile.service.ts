@@ -1,12 +1,18 @@
+import { type EmbeddingModel, embedMany } from "ai";
 import {
+	cleanDescription,
+	EMBEDDING_DIMENSIONS,
 	MATCH_DAYS,
+	type MatchPair,
 	matchPairs,
 	planReconcile,
 	type ReconcileCounts,
 	type SyncedTransaction,
+	type WordWeights,
 	wordWeights,
 } from "~/domain/transactions";
 import { HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
+import type { Logger } from "~/server/observability/logging/logger";
 import type { TransactionsRepository } from "./transactions.repository";
 
 const MS_PER_DAY = 86_400_000;
@@ -28,6 +34,8 @@ const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
 	known: a.known + b.known,
 });
 const NO_WEIGHTS = wordWeights([]);
+// Each Titan call embeds one text, so a big first import makes many.
+const EMBED_TIMEOUT_MS = 30_000;
 
 type ReconcileRepository = Pick<
 	TransactionsRepository,
@@ -35,19 +43,32 @@ type ReconcileRepository = Pick<
 	| "findReviews"
 	| "findMatchCandidates"
 	| "listDescriptions"
+	| "findEmbeddings"
+	| "saveEmbeddings"
 	| "applyReconcile"
 >;
 
 // Its own service because only the bank sync worker reconciles (service split rule).
 interface TransactionReconcileServiceDeps {
 	repository: ReconcileRepository;
+	/** Its `modelId` keys the embedding cache. */
+	embeddingModel: Exclude<EmbeddingModel, string>;
+	logger: Logger;
 }
 
 export class TransactionReconcileService {
 	private readonly repository: ReconcileRepository;
+	private readonly embeddingModel: Exclude<EmbeddingModel, string>;
+	private readonly logger: Logger;
 
-	constructor({ repository }: TransactionReconcileServiceDeps) {
+	constructor({
+		repository,
+		embeddingModel,
+		logger,
+	}: TransactionReconcileServiceDeps) {
 		this.repository = repository;
+		this.embeddingModel = embeddingModel;
+		this.logger = logger;
 	}
 
 	// A page that shifts mid-fetch can repeat a row, and Postgres refuses one
@@ -102,15 +123,73 @@ export class TransactionReconcileService {
 			liveAccountIds,
 			timeZone: HOUSEHOLD_TIME_ZONE,
 		};
-		// Every description is a big read, wasted when nothing pairs.
-		const weights = matchPairs(match).length
-			? wordWeights([
-					...(await this.repository.listDescriptions()),
-					...incoming.map((row) => row.description),
-				])
-			: NO_WEIGHTS;
+		// Every description is a big read and each embedding a model call, both
+		// wasted when nothing pairs.
+		const pairs = matchPairs(match);
+		const [weights, vectors] = pairs.length
+			? await Promise.all([this.weightsFor(incoming), this.vectorsFor(pairs)])
+			: [NO_WEIGHTS, null];
 		return this.repository.applyReconcile(
-			planReconcile({ ...match, weights, vectors: null }),
+			planReconcile({ ...match, weights, vectors }),
 		);
+	}
+
+	private async weightsFor(
+		incoming: SyncedTransaction[],
+	): Promise<WordWeights> {
+		const saved = await this.repository.listDescriptions();
+		return wordWeights([...saved, ...incoming.map((row) => row.description)]);
+	}
+
+	/** Keyed by cleaned text. A failed model call leaves its misses out, so they never Adopt. */
+	private async vectorsFor(pairs: MatchPair[]): Promise<Map<string, number[]>> {
+		const texts = new Set(
+			pairs.flatMap(({ bank, candidate }) => [
+				cleanDescription(bank.description),
+				cleanDescription(candidate.description),
+			]),
+		);
+		texts.delete("");
+		const model = this.embeddingModel.modelId;
+		const cached = await this.repository.findEmbeddings(model, [...texts]);
+		const vectors = new Map(
+			cached.map(({ description, embedding }) => [description, embedding]),
+		);
+		const misses = [...texts].filter((text) => !vectors.has(text));
+		if (!misses.length) return vectors;
+
+		let embeddings: number[][];
+		try {
+			({ embeddings } = await embedMany({
+				model: this.embeddingModel,
+				values: misses,
+				dimensions: EMBEDDING_DIMENSIONS,
+				maxRetries: 2,
+				maxParallelCalls: 4,
+				abortSignal: AbortSignal.timeout(EMBED_TIMEOUT_MS),
+				// Titan reads `normalize`, Cohere `inputType`; each ignores the other.
+				providerOptions: {
+					bedrock: { normalize: true, inputType: "clustering" },
+				},
+				// The span processor would price an ai.* span as Claude tokens.
+				telemetry: { isEnabled: false },
+			}));
+		} catch (error) {
+			// Words alone still score and flag; the next sync embeds these again.
+			this.logger.warn("embedding unavailable", {
+				error,
+				descriptions: misses.length,
+			});
+			return vectors;
+		}
+		// embedMany keeps input order and length.
+		const fresh = misses.map((description, i) => ({
+			description,
+			embedding: embeddings[i] as number[],
+		}));
+		await this.repository.saveEmbeddings(model, fresh);
+		for (const { description, embedding } of fresh)
+			vectors.set(description, embedding);
+		return vectors;
 	}
 }

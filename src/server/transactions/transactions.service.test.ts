@@ -51,6 +51,8 @@ function serviceWith(
 		findUnplanned: unstaged,
 		findDescriptions: unstaged,
 		listDescriptions: unstaged,
+		findEmbeddings: unstaged,
+		saveEmbeddings: unstaged,
 		findInDateWindow: unstaged,
 		findLink: unstaged,
 		setLink: unstaged,

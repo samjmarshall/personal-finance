@@ -56,6 +56,11 @@ const cdrSyncService = new CdrSyncService({
 		: null,
 	transactions: new TransactionReconcileService({
 		repository: new DrizzleTransactionsRepository({ db }),
+		embeddingModel: bedrock.embedding(env.BEDROCK_EMBEDDING_MODEL),
+		logger: createRootLogger().with({
+			domain: "transactions",
+			component: "reconcile",
+		}),
 	}),
 	balances: balancesService,
 	logger: createRootLogger().with({ domain: "cdr", component: "sync" }),

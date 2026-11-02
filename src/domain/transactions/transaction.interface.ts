@@ -57,6 +57,15 @@ export interface PossibleDuplicate {
 	updatedAt: Date | null;
 }
 
+// A cleaned description's meaning vector from one embedding model (adr029).
+export interface DescriptionEmbedding {
+	id: number;
+	createdAt: Date;
+	description: string;
+	embedding: number[];
+	model: string;
+}
+
 // One pending question: the bank's row beside the member's.
 export interface PossibleDuplicateReview {
 	id: number;

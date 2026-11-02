@@ -190,6 +190,20 @@
 			"when": 1793602762249,
 			"tag": "0026_wakeful_morph",
 			"breakpoints": true
+		},
+		{
+			"idx": 27,
+			"version": "7",
+			"when": 1793603253821,
+			"tag": "0027_enable_pgvector",
+			"breakpoints": true
+		},
+		{
+			"idx": 28,
+			"version": "7",
+			"when": 1793603281584,
+			"tag": "0028_old_abomination",
+			"breakpoints": true
 		}
 	]
 }

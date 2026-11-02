@@ -25,6 +25,7 @@ Validated in `src/env.ts`. Pull them locally with `vercel env pull`; set them pe
 | `BLOB_PATH_PREFIX` | preview | Blob pathname prefix naming the same Neon branch as `DATABASE_URL`: `local/<branch>/` (written by `scripts/neon-branch.sh`) or `preview/<branch>/` (set by `deploy.yml`). Writes go under it and deletes skip files outside it, so a branch never deletes production's files. Empty and forced empty on production. See [adr028](adr/adr028-blob-files-branch-by-pathname-prefix.md). |
 | `AWS_REGION` | optional | Bedrock region, default `ap-southeast-2`. Terraform sets it on Vercel; `assume` exports it locally. |
 | `AWS_ROLE_ARN` | Vercel only | IAM role the deployment's OIDC token is exchanged for (`src/server/aws/credentials.ts`). Set by Terraform per environment; leave unset locally. |
+| `BEDROCK_EMBEDDING_MODEL` | optional | Bedrock foundation-model id the bank reconcile embeds descriptions with, default `amazon.titan-embed-text-v2:0` ([adr029](adr/adr029-pair-bank-rows-by-word-and-meaning-scores.md)). A bare in-region id: Titan has no inference profile. Set by Terraform from `infrastructure/locals.tf`. |
 | `BEDROCK_RECEIPT_MODEL` | optional | Bedrock inference-profile id the `process-receipt` worker calls, default `au.anthropic.claude-sonnet-4-6`. Set by Terraform from `infrastructure/locals.tf`. |
 | `REDBARK_API_KEY` | optional | RedBark account key for the daily CDR bank sync ([adr017](adr/adr017-external-transaction-sync-via-cdr-redbark.md)). Unset: the sync is a logged no-op and a history import fails with a reason. Vercel dashboard secret; don't set it in production until RedBark v2 is GA. |
 | `REDBARK_API_URL` | optional | RedBark API origin, default `https://api.redbark.com` (the client adds `/v2`). |
@@ -43,7 +44,7 @@ Validated in `src/env.ts`. Pull them locally with `vercel env pull`; set them pe
 
 ### Claude on Bedrock
 
-Receipt extraction calls Claude through Amazon Bedrock (`src/server/aws/bedrock.ts`), never the Anthropic API. `@ai-sdk/amazon-bedrock` has **no default credential chain**: on Vercel the deployment's OIDC token is exchanged for `AWS_ROLE_ARN`; locally you must `assume <profile>` first (it exports `AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN`) — `AWS_PROFILE` alone does nothing. Model switching and IAM live in Terraform; see [infrastructure](infrastructure.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md) and `.claude/rules/bedrock-invocation.md`.
+Receipt extraction calls Claude through Amazon Bedrock (`src/server/aws/bedrock.ts`), never the Anthropic API. The bank reconcile embeds descriptions through the same provider (Titan Text Embeddings V2) and caches each vector in `description_embedding`. Without credentials it logs `embedding unavailable`; a pair with an uncached description then scores on words alone and never adopts. `@ai-sdk/amazon-bedrock` has **no default credential chain**: on Vercel the deployment's OIDC token is exchanged for `AWS_ROLE_ARN`; locally you must `assume <profile>` first (it exports `AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN`) — `AWS_PROFILE` alone does nothing. Model switching and IAM live in Terraform; see [infrastructure](infrastructure.md), [adr014](adr/adr014-bedrock-via-vercel-oidc.md) and `.claude/rules/bedrock-invocation.md`.
 
 ### Upstash Redis
 
