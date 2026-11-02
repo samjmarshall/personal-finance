@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
 	SelectField,
 	type SelectFieldOption,
@@ -33,11 +33,17 @@ import {
 } from "~/lib/constants";
 import { toDateInput } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
+import {
+	type CategoryLink,
+	expensesInCategory,
+	pickCategory,
+	pickExpense,
+} from "./category-expense-link";
 import { submittedDate } from "./submitted-date";
 
 type Transaction = RouterOutputs["transaction"]["list"]["items"][number];
 
-// Locked reads muted, not faded, like a Category set by its Expense. Dark swaps
+// Locked reads muted, not faded: its value is still the answer. Dark swaps
 // the fill for a dashed edge: an open field there is filled too, so a fill looks open.
 const BANK_OWNED_CLASS =
 	"read-only:cursor-default read-only:bg-muted read-only:text-muted-foreground dark:read-only:border-dashed dark:read-only:bg-transparent";
@@ -70,10 +76,20 @@ export function TransactionForm({
 	const [frequency, setFrequency] = useState<Frequency>(Frequency.OneOff);
 	const [priority, setPriority] = useState<Priority>(Priority.NiceToHave);
 	const [notes, setNotes] = useState("");
-	// Empty string is the "— None —" option; converted to null on submit.
-	const [expenseId, setExpenseId] = useState<number | null>(null);
-	// undefined: unlinked from the saved Expense, no Category picked since.
-	const [categoryId, setCategoryId] = useState<number | null | undefined>(null);
+	// The Category shown, which for a linked row is its Expense's (adr025).
+	const [link, setLink] = useState<CategoryLink>({
+		categoryId: null,
+		expenseId: null,
+	});
+	const { categoryId, expenseId } = link;
+
+	// Read at open only: a refetched Expense list must not reset a half-done edit.
+	const savedCategoryId = useEffectEvent(
+		(t: Transaction | null) =>
+			expenses.find((e) => e.id === t?.expenseId)?.categoryId ??
+			t?.categoryId ??
+			null,
+	);
 
 	useEffect(() => {
 		if (!open) return;
@@ -84,8 +100,10 @@ export function TransactionForm({
 		setFrequency(toFrequency(transaction?.frequency));
 		setPriority(toPriority(transaction?.priority));
 		setNotes(transaction?.notes ?? "");
-		setExpenseId(transaction?.expenseId ?? null);
-		setCategoryId(transaction?.categoryId ?? null);
+		setLink({
+			categoryId: savedCategoryId(transaction),
+			expenseId: transaction?.expenseId ?? null,
+		});
 	}, [open, transaction]);
 
 	const onSuccess = async () => {
@@ -110,41 +128,6 @@ export function TransactionForm({
 		return descriptionRef.current;
 	};
 
-	const expenseOptions: SelectFieldOption<string>[] = [
-		{ value: "", label: "— None —" },
-		...expenses.map((e) => ({ value: String(e.id), label: e.name })),
-	];
-
-	// adr025: a linked Expense sets the Category, so the picker shows the
-	// Expense's and locks.
-	const linkedExpense = expenses.find((e) => e.id === expenseId);
-	const savedExpense = expenses.find((e) => e.id === transaction?.expenseId);
-	const shownCategoryId =
-		linkedExpense?.categoryId ??
-		(categoryId === undefined ? savedExpense?.categoryId : categoryId);
-	// Each sync rewrites a synced row's date and amount, so the server refuses an edit.
-	const bankOwned =
-		!!transaction && transaction.provenance !== Provenance.Manual;
-	// One line in both states, so the swap never resizes the centred dialog.
-	const categoryHint =
-		expenseId === null
-			? "Linking an Expense sets this."
-			: "Set by the Expense. Choose None to edit.";
-
-	// Clearing the Expense keeps its Category, still editable before saving. For
-	// the saved Expense the server copies it, so a stale Expense list can't lose it.
-	function pickExpense(value: string | null) {
-		const next = value ? Number(value) : null;
-		if (next === null && expenseId !== null) {
-			setCategoryId(
-				expenseId === transaction?.expenseId
-					? undefined
-					: (linkedExpense?.categoryId ?? null),
-			);
-		}
-		setExpenseId(next);
-	}
-
 	// Categories are chosen from the managed list, never invented mid-entry.
 	const categoryOptions: SelectFieldOption<string>[] = [
 		{ value: "", label: "— None —" },
@@ -153,6 +136,29 @@ export function TransactionForm({
 			label: c.name,
 		})),
 	];
+
+	// A Category narrows the Expenses to the ones filed under it.
+	const shownExpenses = expensesInCategory(expenses, categoryId);
+	const expenseOptions: SelectFieldOption<string>[] = [
+		{ value: "", label: "— None —" },
+		...shownExpenses.map((e) => ({ value: String(e.id), label: e.name })),
+	];
+	// One line in every state, so the swap never resizes the centred dialog.
+	const expenseHint =
+		categoryId === null
+			? "Pick a Category to narrow this list."
+			: shownExpenses.length === 0
+				? "No planned expenses in this Category."
+				: "Showing expenses in this Category.";
+
+	// Each sync rewrites a synced row's date and amount, so the server refuses an edit.
+	const bankOwned =
+		!!transaction && transaction.provenance !== Provenance.Manual;
+
+	// The saved Expense is missing from a stale list, so its Category is unknown here.
+	const savedCategoryUnknown =
+		transaction?.expenseId != null &&
+		!expenses.some((e) => e.id === transaction.expenseId);
 
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
@@ -165,7 +171,13 @@ export function TransactionForm({
 			priority,
 			notes: notes.trim() || null,
 			expenseId,
-			categoryId: expenseId === null ? categoryId : null,
+			// Unknown Category on unlink: undefined lets the server copy it back.
+			categoryId:
+				expenseId !== null
+					? null
+					: categoryId === null && savedCategoryUnknown
+						? undefined
+						: categoryId,
 		};
 		rememberFocus();
 		if (transaction) update.mutate({ id: transaction.id, ...payload });
@@ -262,37 +274,39 @@ export function TransactionForm({
 							/>
 						</Field>
 						<Field>
-							<FieldLabel htmlFor="tx-expense">
-								Expense
+							<FieldLabel htmlFor="tx-category">
+								Category
 								<FieldOptional />
 							</FieldLabel>
 							<SelectField
 								className="w-full"
 								disabled={pending}
-								id="tx-expense"
-								items={expenseOptions}
-								onValueChange={pickExpense}
-								value={expenseId ? String(expenseId) : ""}
+								id="tx-category"
+								items={categoryOptions}
+								onValueChange={(v) =>
+									setLink(pickCategory(link, v ? Number(v) : null, expenses))
+								}
+								value={categoryId ? String(categoryId) : ""}
 							/>
 						</Field>
 						<Field>
-							<FieldLabel htmlFor="tx-category">
-								Category
+							<FieldLabel htmlFor="tx-expense">
+								Expense
 								<FieldOptional />
 							</FieldLabel>
-							{/* Locked reads muted, not faded: its value is still the answer. */}
 							<SelectField
-								aria-describedby="tx-category-hint"
-								className="w-full data-readonly:cursor-default data-readonly:bg-muted data-readonly:text-muted-foreground dark:data-readonly:border-dashed dark:data-readonly:bg-transparent"
+								aria-describedby="tx-expense-hint"
+								className="w-full"
 								disabled={pending}
-								id="tx-category"
-								items={categoryOptions}
-								onValueChange={(v) => setCategoryId(v ? Number(v) : null)}
-								readOnly={expenseId !== null}
-								value={shownCategoryId ? String(shownCategoryId) : ""}
+								id="tx-expense"
+								items={expenseOptions}
+								onValueChange={(v) =>
+									setLink(pickExpense(link, v ? Number(v) : null, expenses))
+								}
+								value={expenseId ? String(expenseId) : ""}
 							/>
-							<FieldDescription aria-live="polite" id="tx-category-hint">
-								{categoryHint}
+							<FieldDescription aria-live="polite" id="tx-expense-hint">
+								{expenseHint}
 							</FieldDescription>
 						</Field>
 						<div className="grid grid-cols-2 gap-4">
