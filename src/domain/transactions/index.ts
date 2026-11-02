@@ -1,4 +1,14 @@
 import {
+	cleanDescription,
+	type DescriptionScore,
+	EMBEDDING_DIMENSIONS,
+	meaningScore,
+	mergedScore,
+	type WordWeights,
+	wordScore,
+	wordWeights,
+} from "./description-score";
+import {
 	type Adoption,
 	type Flag,
 	MATCH_DAYS,
@@ -43,6 +53,7 @@ import type {
 
 export type {
 	Adoption,
+	DescriptionScore,
 	ExpenseConsumption,
 	Flag,
 	LinkExpenseInput,
@@ -66,10 +77,15 @@ export type {
 	TransactionUpdateInput,
 	transactionSortBy,
 	UnplannedWindow,
+	WordWeights,
 };
 export {
+	cleanDescription,
+	EMBEDDING_DIMENSIONS,
 	linkExpenseDto,
 	MATCH_DAYS,
+	meaningScore,
+	mergedScore,
 	planReconcile,
 	RESOLVE_DUPLICATES_MAX,
 	resolveDuplicateDto,
@@ -80,4 +96,6 @@ export {
 	transactionListQueryDto,
 	transactionUpdateDto,
 	unplannedDto,
+	wordScore,
+	wordWeights,
 };

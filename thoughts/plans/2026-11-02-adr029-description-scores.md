@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
 adrs: [adr029]
-status: Ready to implement
+status: Ready for Review - Phase 1 of 6
 ---
 # Pair bank rows by word and meaning scores (adr029) Implementation Plan
 
@@ -96,9 +96,9 @@ Build on a new branch, `feat/adr029-description-scores`.
   - merge: null meaning gives the word score, otherwise the mean
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] The crossed pair cleans to "NETFLIX" and "SPOTIFY", with word score 0 (unit test)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] The crossed pair cleans to "NETFLIX" and "SPOTIFY", with word score 0 (unit test)
 
 ## Phase 2: Spike to pick the model and cut-offs
 ### Changes
