@@ -570,7 +570,7 @@ describe("findMatchCandidates", () => {
 			      "acct_2",
 			      "kept",
 			    ],
-			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."externalId", "transaction"."externalAccountId", "possible_duplicate"."id" from "transaction" left join "possible_duplicate" on ("possible_duplicate"."transactionId" = "transaction"."id" and "possible_duplicate"."status" = $1) where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
+			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."externalId", "transaction"."externalAccountId", "heldBy" from "transaction" left join (select "transactionId", min("id") as "heldBy" from "possible_duplicate" where "possible_duplicate"."status" = $1 group by "possible_duplicate"."transactionId") "held" on "held"."transactionId" = "transaction"."id" where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
 			  },
 			]
 		`);
@@ -697,7 +697,7 @@ describe("applyReconcile", () => {
 						41,
 						"2026-10-13T00:00:00.000Z",
 						"WOOLIES",
-						1,
+						9,
 					],
 				];
 			return [];
@@ -715,10 +715,10 @@ describe("applyReconcile", () => {
 			  {
 			    "method": "all",
 			    "params": [
-			      9,
+			      1,
 			      "pending",
 			    ],
-			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."id" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "transactionId"",
+			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."transactionId" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "id"",
 			  },
 			  {
 			    "method": "execute",
@@ -745,6 +745,39 @@ describe("applyReconcile", () => {
 		`);
 	});
 
+	// A same-day copy that fell short joins a close one's review on the row.
+	it("releases every review a held row had, not just the first", async () => {
+		const review = (externalId: string, id: number) => [
+			"cdr",
+			externalId,
+			"acct_1",
+			"Everyday",
+			41,
+			"2026-10-13T00:00:00.000Z",
+			"WOOLIES",
+			id,
+		];
+		const { repository, queries } = harness(({ sql }) => {
+			if (sql.startsWith('update "transaction"')) return [[1]];
+			if (sql.startsWith('delete from "possible_duplicate"'))
+				return [review("txn_close", 9), review("txn_same_day", 10)];
+			return [];
+		});
+
+		const counts = await repository.applyReconcile({
+			...EMPTY_PLAN,
+			adopt: [{ transactionId: 1, row: SYNCED, heldBy: 9 }],
+		});
+
+		expect(counts).toEqual({ added: 2, adopted: 1, flagged: -2, known: 0 });
+		const upsert = queries.find((q) =>
+			q.sql.startsWith('insert into "transaction"'),
+		);
+		expect(upsert?.params).toEqual(
+			expect.arrayContaining(["txn_close", "txn_same_day"]),
+		);
+	});
+
 	// The overlap re-fetches the held review's bank row in the same batch as the exact one.
 	it("adds a released review's bank row once, from this batch's copy", async () => {
 		const { repository, queries } = harness(({ sql }) => {
@@ -759,7 +792,7 @@ describe("applyReconcile", () => {
 						41,
 						"2026-10-13T00:00:00.000Z",
 						"WOOLIES",
-						1,
+						9,
 					],
 				];
 			return [];
@@ -994,8 +1027,10 @@ describe("resolving a review", () => {
 		"WOOLIES",
 		1,
 	];
+	const takeById =
+		'delete from "possible_duplicate" where ("possible_duplicate"."id"';
 	const taking = ({ sql }: { sql: string }) =>
-		sql.startsWith('delete from "possible_duplicate"') ? [TAKEN] : [];
+		sql.startsWith(takeById) ? [TAKEN] : [];
 
 	it("keep mine marks only a pending review kept", async () => {
 		const { repository, queries } = harness(() => [[4]]);
@@ -1051,9 +1086,66 @@ describe("resolving a review", () => {
 			    "sql": "update "transaction" set "date" = $1, "amount" = $2, "provenance" = $3, "externalId" = $4, "externalAccountId" = $5, "accountName" = $6, "updatedAt" = $7 where "transaction"."id" = $8",
 			  },
 			  {
+			    "method": "all",
+			    "params": [
+			      1,
+			      "pending",
+			    ],
+			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."transactionId" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "id"",
+			  },
+			  {
 			    "method": "execute",
 			    "params": [],
 			    "sql": "commit",
+			  },
+			]
+		`);
+	});
+
+	it("use bank's releases the row's other review as its own row", async () => {
+		const sameDay = [
+			"cdr",
+			"txn_same_day",
+			"acct_1",
+			"Everyday",
+			41,
+			"2026-10-10T00:00:00.000Z",
+			"WOOLWORTHS SYDNEY",
+			12,
+		];
+		const { repository, queries } = harness(({ sql }) =>
+			sql.startsWith(takeById)
+				? [TAKEN]
+				: sql.startsWith('delete from "possible_duplicate"')
+					? [sameDay]
+					: [],
+		);
+
+		await expect(repository.useBanks(4)).resolves.toBe(true);
+		expect(queries.slice(3, -1)).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      1,
+			      "pending",
+			    ],
+			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."transactionId" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "id"",
+			  },
+			  {
+			    "method": "execute",
+			    "params": [
+			      "2026-10-10T00:00:00.000Z",
+			      "WOOLWORTHS SYDNEY",
+			      41,
+			      "cdr",
+			      "txn_same_day",
+			      "acct_1",
+			      "Everyday",
+			      "2026-09-29T00:00:00.000Z",
+			      "2026-09-29T00:00:00.000Z",
+			    ],
+			    "sql": "insert into "transaction" ("id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "externalAccountId", "accountName", "createdAt", "updatedAt") values (default, default, default, $1, $2, default, $3, default, default, default, default, $4, $5, $6, $7, $8, $9) on conflict do nothing",
 			  },
 			]
 		`);

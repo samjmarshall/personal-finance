@@ -335,14 +335,14 @@ describe("planReconcile", () => {
 			expect(result).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
 		});
 
-		it("adds the bank row when a held row's pair falls short", () => {
+		it("flags a held row's same-day pair that falls short", () => {
 			const held = mine(1, "2026-11-10", 5, {
 				heldBy: 90,
 				description: "Groceries",
 			});
 			expect(plan({ incoming: [row], candidates: [held] })).toEqual({
 				...EMPTY,
-				add: [row],
+				flag: [newFlag(1, row)],
 			});
 		});
 	});
@@ -502,5 +502,21 @@ describe("matchPairs", () => {
 				timeZone: ZONE,
 			}),
 		).toEqual([{ bank: fresh, candidate, dayGap: 2 }]);
+	});
+
+	// Each pair costs an embedding, and a held row a day off can be neither adopted nor flagged.
+	it("skips a held row unless the bank row is on its day", () => {
+		const held = mine(1, "2026-11-10", 5, { heldBy: 90 });
+		const sameDay = bank("t1", "2026-11-10", 5);
+		expect(
+			matchPairs({
+				incoming: [sameDay, bank("t2", "2026-11-11", 5)],
+				knownIds: [],
+				reviews: [],
+				candidates: [held],
+				liveAccountIds: ["acct_live"],
+				timeZone: ZONE,
+			}),
+		).toEqual([{ bank: sameDay, candidate: held, dayGap: 0 }]);
 	});
 });

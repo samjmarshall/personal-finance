@@ -11,6 +11,7 @@ import {
 	isNull,
 	lt,
 	lte,
+	min,
 	notExists,
 	notInArray,
 	or,
@@ -341,6 +342,16 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		liveAccountIds,
 	}: DateWindow & { liveAccountIds: string[] }): Promise<MatchCandidate[]> {
 		const kept = alias(possibleDuplicates, "kept");
+		// A row can hold two reviews (a same-day copy joins a close one); one row each here.
+		const held = this.db
+			.select({
+				transactionId: possibleDuplicates.transactionId,
+				id: min(possibleDuplicates.id).as("heldBy"),
+			})
+			.from(possibleDuplicates)
+			.where(isPending)
+			.groupBy(possibleDuplicates.transactionId)
+			.as("held");
 		return this.db
 			.select({
 				id: transactions.id,
@@ -349,13 +360,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				description: transactions.description,
 				externalId: transactions.externalId,
 				externalAccountId: transactions.externalAccountId,
-				heldBy: possibleDuplicates.id,
+				heldBy: held.id,
 			})
 			.from(transactions)
-			.leftJoin(
-				possibleDuplicates,
-				and(eq(possibleDuplicates.transactionId, transactions.id), isPending),
-			)
+			.leftJoin(held, eq(held.transactionId, transactions.id))
 			.where(
 				and(
 					gte(transactions.date, from),
@@ -400,16 +408,14 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				}
 				adopted++;
 				if (heldBy === null) continue;
-				// The household row is now the exact bank row, so the close one the
-				// review held is another purchase.
-				const taken = await this.takeReview(tx, heldBy);
+				// The household row is now the exact bank row, so each close one its
+				// reviews held is another purchase.
+				const taken = await this.takeReviewsOn(tx, transactionId);
 				released += taken.length;
-				if (taken.length) releasedIds.add(heldBy);
-				alsoAdd.push(
-					...taken.map(
-						({ transactionId: _, ...bank }) => newerCopy.get(heldBy) ?? bank,
-					),
-				);
+				for (const { id, ...bank } of taken) {
+					releasedIds.add(id);
+					alsoAdd.push(newerCopy.get(id) ?? bank);
+				}
 			}
 
 			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...alsoAdd]);
@@ -523,6 +529,13 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				.update(transactions)
 				.set(bank)
 				.where(eq(transactions.id, transactionId));
+			// The row is now that bank row, so any other review it held is another purchase.
+			const others = await this.takeReviewsOn(tx, transactionId);
+			if (others.length)
+				await tx
+					.insert(transactions)
+					.values(others.map(({ id: _, ...bank }) => bank))
+					.onConflictDoNothing();
 			return true;
 		});
 	}
@@ -583,6 +596,16 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				...reviewBankRow,
 				transactionId: possibleDuplicates.transactionId,
 			});
+	}
+
+	/** Every pending review on the row, each as its bank row and review id. */
+	private takeReviewsOn(tx: Executor, transactionId: number) {
+		return tx
+			.delete(possibleDuplicates)
+			.where(
+				and(eq(possibleDuplicates.transactionId, transactionId), isPending),
+			)
+			.returning({ ...reviewBankRow, id: possibleDuplicates.id });
 	}
 
 	async findSyncedValues(id: number): Promise<SyncedValues | undefined> {

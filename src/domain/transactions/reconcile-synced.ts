@@ -79,7 +79,7 @@ export interface MatchPair {
 	dayGap: number;
 }
 
-/** `heldBy` is the review to release into a row once the adoption lands. */
+/** `heldBy` set: each review on the row is released into a row once the adoption lands. */
 export interface Adoption {
 	transactionId: number;
 	row: SyncedTransaction;
@@ -109,22 +109,29 @@ interface Side {
 	cents: number;
 }
 
-interface Pair extends MatchPair {
+interface ScoredPair extends MatchPair {
 	score: DescriptionScore;
 }
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-// A household row can be adopted or flagged; a held one only adopted (the
-// exact row wins, the close one is another purchase); a retired account's
-// bank row only flagged. A listed account's bank row is never a candidate.
+// A household row can be adopted or flagged; a held one only adopted, or
+// flagged again by a same-day copy (it may be the row's own, so a Member is
+// asked); a retired account's bank row only flagged. A listed account's bank
+// row is never a candidate.
 const canAdopt = (c: MatchCandidate) => c.externalId === null;
 const isRetired = (c: MatchCandidate, live: ReadonlySet<string>) =>
 	c.externalId !== null &&
 	c.externalAccountId !== null &&
 	!live.has(c.externalAccountId);
-const canFlag = (c: MatchCandidate, live: ReadonlySet<string>) =>
-	c.heldBy === null && (canAdopt(c) || isRetired(c, live));
+const canFlag = (
+	c: MatchCandidate,
+	live: ReadonlySet<string>,
+	dayGap: number,
+) =>
+	canAdopt(c)
+		? c.heldBy === null || dayGap === 0
+		: c.heldBy === null && isRetired(c, live);
 
 const clearsAdoptBars = ({ word, meaning }: DescriptionScore) =>
 	word >= ADOPT_WORD_SCORE &&
@@ -183,12 +190,13 @@ function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
 		// A $0 row is a note (a waived fee, a loan notice), not a Spend: pairing two is noise.
 		if (b.cents === 0) continue;
 		for (const candidate of input.candidates) {
-			if (!canAdopt(candidate) && !canFlag(candidate, live)) continue;
 			const c = side(candidate);
 			// A real copy keeps its amount; a near one was always another purchase in review.
 			if (b.cents !== c.cents) continue;
 			const dayGap = Math.abs(b.day - c.day);
 			if (dayGap > MATCH_DAYS) continue;
+			// Every Adopt can also flag, so this drops only pairs that could do neither.
+			if (!canFlag(candidate, live, dayGap)) continue;
 			pairs.push({ bank, candidate, dayGap });
 		}
 	}
@@ -211,9 +219,8 @@ export function matchPairs(input: MatchInput): MatchPair[] {
  * by the data alone, so a retry gives the same plan.
  */
 export function planReconcile(input: ReconcileInput): ReconcilePlan {
-	const live = new Set(input.liveAccountIds);
 	const { result, unmatched } = splitIncoming(input);
-	const pairs: Pair[] = pairUp(unmatched, input).map((pair) => ({
+	const pairs: ScoredPair[] = pairUp(unmatched, input).map((pair) => ({
 		...pair,
 		score: scoreDescriptions(
 			pair.bank.description,
@@ -225,7 +232,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 
 	const usedBanks = new Set<SyncedTransaction>();
 	const usedCandidates = new Set<MatchCandidate>();
-	const take = (pair: Pair) => {
+	const take = (pair: ScoredPair) => {
 		if (usedBanks.has(pair.bank) || usedCandidates.has(pair.candidate))
 			return false;
 		usedBanks.add(pair.bank);
@@ -254,15 +261,13 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 			});
 	}
 
-	const close = pairs
-		.filter((p) => canFlag(p.candidate, live))
-		.sort(
-			(x, y) =>
-				y.score.merged - x.score.merged ||
-				x.dayGap - y.dayGap ||
-				byId(x.bank.externalId, y.bank.externalId) ||
-				x.candidate.id - y.candidate.id,
-		);
+	const close = pairs.sort(
+		(x, y) =>
+			y.score.merged - x.score.merged ||
+			x.dayGap - y.dayGap ||
+			byId(x.bank.externalId, y.bank.externalId) ||
+			x.candidate.id - y.candidate.id,
+	);
 	for (const pair of close) {
 		if (take(pair))
 			result.flag.push({
