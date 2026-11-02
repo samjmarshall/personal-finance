@@ -28,6 +28,12 @@ data "aws_iam_policy_document" "bedrock" {
       values   = [local.bedrock_receipt_profile_arn]
     }
   }
+
+  # In-region and called by its own id, so no profile and no condition.
+  statement {
+    actions   = ["bedrock:InvokeModel"]
+    resources = ["arn:aws:bedrock:${data.aws_region.current.region}::foundation-model/${local.bedrock_embedding_model}"]
+  }
 }
 
 data "aws_iam_policy_document" "vercel_trust" {

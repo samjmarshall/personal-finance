@@ -1,23 +1,19 @@
-import {
-	type ExpenseConsumption,
-	type LinkExpenseInput,
-	MATCH_DAYS,
-	type PossibleDuplicateReview,
-	planReconcile,
-	type ReconcileCounts,
-	type ResolveDuplicateInput,
-	type ResolveDuplicatesInput,
-	type ResolveDuplicatesResult,
-	type SyncedTransaction,
-	type Transaction,
-	type TransactionCreateInput,
-	type TransactionListQuery,
-	type TransactionListResult,
-	type TransactionSummary,
-	type TransactionUpdateInput,
-	type UnplannedWindow,
+import type {
+	ExpenseConsumption,
+	LinkExpenseInput,
+	PossibleDuplicateReview,
+	ResolveDuplicateInput,
+	ResolveDuplicatesInput,
+	ResolveDuplicatesResult,
+	Transaction,
+	TransactionCreateInput,
+	TransactionListQuery,
+	TransactionListResult,
+	TransactionSummary,
+	TransactionUpdateInput,
+	UnplannedWindow,
 } from "~/domain/transactions";
-import { HOUSEHOLD_TIME_ZONE, Provenance } from "~/lib/constants";
+import { Provenance } from "~/lib/constants";
 import type { CategoriesService } from "~/server/categories/categories.service";
 import { assertRow } from "~/server/errors/assert-row";
 import {
@@ -47,25 +43,6 @@ const LINKED_CATEGORY_MESSAGE =
 const NOT_FOUND_MESSAGE = "Transaction not found.";
 // Each re-sync rewrites a synced row's amount and date, so an edit would vanish.
 const BANK_OWNED_MESSAGE = "Amount and date come from the bank.";
-
-const MS_PER_DAY = 86_400_000;
-// A Sydney day starts the UTC day before: scan a day wider each side, +1 more
-// at the end because it is exclusive. The planner keeps the exact window.
-const SCAN_BEFORE_DAYS = MATCH_DAYS + 1;
-const SCAN_AFTER_DAYS = MATCH_DAYS + 2;
-
-const NO_COUNTS: ReconcileCounts = {
-	added: 0,
-	adopted: 0,
-	flagged: 0,
-	known: 0,
-};
-const sumCounts = (a: ReconcileCounts, b: ReconcileCounts) => ({
-	added: a.added + b.added,
-	adopted: a.adopted + b.adopted,
-	flagged: a.flagged + b.flagged,
-	known: a.known + b.known,
-});
 
 const rethrowWriteConflict = (error: unknown, fkMessage: string): never => {
 	if (isPgViolation(error, PgViolation.CheckViolation)) {
@@ -134,33 +111,6 @@ export class TransactionsService {
 				rethrowWriteConflict(error, FK_CONFLICT_MESSAGE),
 			);
 		return assertRow(row, "create transaction");
-	}
-
-	// A page that shifts mid-fetch can repeat a row, and Postgres refuses one
-	// upsert that hits the same row twice (SQLSTATE 21000). The later copy wins.
-	// A bank id is unique only within its provenance, so each is planned alone.
-	async reconcileSynced(
-		rows: SyncedTransaction[],
-		{ liveAccountIds }: { liveAccountIds: string[] },
-	): Promise<ReconcileCounts> {
-		const byProvenance = new Map<
-			SyncedTransaction["provenance"],
-			Map<string, SyncedTransaction>
-		>();
-		for (const row of rows) {
-			const group = byProvenance.get(row.provenance) ?? new Map();
-			byProvenance.set(row.provenance, group.set(row.externalId, row));
-		}
-		let counts = NO_COUNTS;
-		for (const [provenance, group] of byProvenance) {
-			const result = await this.reconcileGroup(
-				provenance,
-				[...group.values()],
-				liveAccountIds,
-			);
-			counts = sumCounts(counts, result);
-		}
-		return counts;
 	}
 
 	listPossibleDuplicates(): Promise<PossibleDuplicateReview[]> {
@@ -237,35 +187,6 @@ export class TransactionsService {
 
 	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]> {
 		return this.repository.datedAmounts();
-	}
-
-	/** `incoming`: all of `provenance`, unique by bank id, not empty. */
-	private async reconcileGroup(
-		provenance: SyncedTransaction["provenance"],
-		incoming: SyncedTransaction[],
-		liveAccountIds: string[],
-	): Promise<ReconcileCounts> {
-		const ids = incoming.map((row) => row.externalId);
-		const times = incoming.map((row) => row.date.getTime());
-		const [knownIds, reviews, candidates] = await Promise.all([
-			this.repository.findKnownExternalIds(provenance, ids),
-			this.repository.findReviews(provenance, ids),
-			this.repository.findMatchCandidates({
-				from: new Date(Math.min(...times) - SCAN_BEFORE_DAYS * MS_PER_DAY),
-				to: new Date(Math.max(...times) + SCAN_AFTER_DAYS * MS_PER_DAY),
-				liveAccountIds,
-			}),
-		]);
-		return this.repository.applyReconcile(
-			planReconcile({
-				incoming,
-				knownIds,
-				reviews,
-				candidates,
-				liveAccountIds,
-				timeZone: HOUSEHOLD_TIME_ZONE,
-			}),
-		);
 	}
 
 	// Missing or already answered counts as gone; a bank row held elsewhere counts as taken.

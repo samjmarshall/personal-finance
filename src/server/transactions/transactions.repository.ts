@@ -11,6 +11,7 @@ import {
 	isNull,
 	lt,
 	lte,
+	min,
 	notExists,
 	notInArray,
 	or,
@@ -20,6 +21,7 @@ import {
 import { alias, type PgColumn } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type {
+	DescriptionEmbedding,
 	ExpenseConsumption,
 	MatchCandidate,
 	PossibleDuplicateReview,
@@ -37,7 +39,11 @@ import type {
 } from "~/domain/transactions";
 import { PossibleDuplicateStatus } from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
-import { possibleDuplicates, transactions } from "./transactions.schema";
+import {
+	descriptionEmbeddings,
+	possibleDuplicates,
+	transactions,
+} from "./transactions.schema";
 
 export type TransactionLink = Pick<Transaction, "expenseId" | "categoryId">;
 /** A row's bank-owned values, plus provenance to tell if it is synced. */
@@ -49,6 +55,10 @@ export type TransactionPatch = Omit<
 > &
 	Partial<Pick<TransactionUpdateInput, "amount" | "date">>;
 export type TransactionDescription = Pick<Transaction, "id" | "description">;
+export type CachedEmbedding = Pick<
+	DescriptionEmbedding,
+	"description" | "embedding"
+>;
 /** Half-open `[from, to)`. */
 export interface DateWindow {
 	from: Date;
@@ -114,6 +124,15 @@ export interface TransactionsRepository {
 	/** Unlinked Spend in the half-open `[from, to)` window. */
 	findUnplanned(window: UnplannedWindow): Promise<Transaction[]>;
 	findDescriptions(ids: number[]): Promise<TransactionDescription[]>;
+	/** Every distinct description: the word-weight corpus (adr029). */
+	listDescriptions(): Promise<string[]>;
+	/** The cached ones among these cleaned descriptions; a miss is just absent. */
+	findEmbeddings(
+		model: string,
+		descriptions: string[],
+	): Promise<CachedEmbedding[]>;
+	/** Skips a description `model` already has a vector for. */
+	saveEmbeddings(model: string, rows: CachedEmbedding[]): Promise<void>;
 	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]>;
 	/** `undefined` when no row has the id. */
 	findLink(id: number): Promise<TransactionLink | undefined>;
@@ -323,6 +342,16 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		liveAccountIds,
 	}: DateWindow & { liveAccountIds: string[] }): Promise<MatchCandidate[]> {
 		const kept = alias(possibleDuplicates, "kept");
+		// A row can hold two reviews (a same-day copy joins a close one); one row each here.
+		const held = this.db
+			.select({
+				transactionId: possibleDuplicates.transactionId,
+				id: min(possibleDuplicates.id).as("heldBy"),
+			})
+			.from(possibleDuplicates)
+			.where(isPending)
+			.groupBy(possibleDuplicates.transactionId)
+			.as("held");
 		return this.db
 			.select({
 				id: transactions.id,
@@ -331,13 +360,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				description: transactions.description,
 				externalId: transactions.externalId,
 				externalAccountId: transactions.externalAccountId,
-				heldBy: possibleDuplicates.id,
+				heldBy: held.id,
 			})
 			.from(transactions)
-			.leftJoin(
-				possibleDuplicates,
-				and(eq(possibleDuplicates.transactionId, transactions.id), isPending),
-			)
+			.leftJoin(held, eq(held.transactionId, transactions.id))
 			.where(
 				and(
 					gte(transactions.date, from),
@@ -382,16 +408,13 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				}
 				adopted++;
 				if (heldBy === null) continue;
-				// The household row is now the exact bank row, so the close one the
-				// review held is another purchase.
-				const taken = await this.takeReview(tx, heldBy);
+				// Row is now the exact bank row, so its other reviews were different purchases: release them.
+				const taken = await this.takeReviewsOn(tx, transactionId);
 				released += taken.length;
-				if (taken.length) releasedIds.add(heldBy);
-				alsoAdd.push(
-					...taken.map(
-						({ transactionId: _, ...bank }) => newerCopy.get(heldBy) ?? bank,
-					),
-				);
+				for (const { id, ...bank } of taken) {
+					releasedIds.add(id);
+					alsoAdd.push(newerCopy.get(id) ?? bank);
+				}
 			}
 
 			await this.upsertSynced(tx, [...plan.refresh, ...plan.add, ...alsoAdd]);
@@ -401,9 +424,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				? await tx
 						.insert(possibleDuplicates)
 						.values(
-							newFlags.map(({ transactionId, row }) => ({
+							newFlags.map(({ transactionId, row, descriptionScore }) => ({
 								transactionId,
 								...row,
+								descriptionScore,
 							})),
 						)
 						.onConflictDoNothing({
@@ -467,6 +491,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					accountName: transactions.accountName,
 					provenance: transactions.provenance,
 				},
+				descriptionScore: possibleDuplicates.descriptionScore,
 			})
 			.from(possibleDuplicates)
 			.innerJoin(
@@ -503,6 +528,13 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				.update(transactions)
 				.set(bank)
 				.where(eq(transactions.id, transactionId));
+			// The row is now that bank row, so any other review it held is another purchase.
+			const others = await this.takeReviewsOn(tx, transactionId);
+			if (others.length)
+				await tx
+					.insert(transactions)
+					.values(others.map(({ id: _, ...bank }) => bank))
+					.onConflictDoNothing();
 			return true;
 		});
 	}
@@ -565,6 +597,16 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			});
 	}
 
+	/** Every pending review on the row, each as its bank row and review id. */
+	private takeReviewsOn(tx: Executor, transactionId: number) {
+		return tx
+			.delete(possibleDuplicates)
+			.where(
+				and(eq(possibleDuplicates.transactionId, transactionId), isPending),
+			)
+			.returning({ ...reviewBankRow, id: possibleDuplicates.id });
+	}
+
 	async findSyncedValues(id: number): Promise<SyncedValues | undefined> {
 		const [row] = await this.db
 			.select({
@@ -620,6 +662,44 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.select({ id: transactions.id, description: transactions.description })
 			.from(transactions)
 			.where(inArray(transactions.id, ids));
+	}
+
+	async listDescriptions(): Promise<string[]> {
+		const rows = await this.db
+			.selectDistinct({ description: transactions.description })
+			.from(transactions);
+		return rows.map((row) => row.description);
+	}
+
+	async findEmbeddings(
+		model: string,
+		descriptions: string[],
+	): Promise<CachedEmbedding[]> {
+		if (!descriptions.length) return [];
+		return this.db
+			.select({
+				description: descriptionEmbeddings.description,
+				embedding: descriptionEmbeddings.embedding,
+			})
+			.from(descriptionEmbeddings)
+			.where(
+				and(
+					eq(descriptionEmbeddings.model, model),
+					inArray(descriptionEmbeddings.description, descriptions),
+				),
+			);
+	}
+
+	async saveEmbeddings(model: string, rows: CachedEmbedding[]): Promise<void> {
+		await this.db
+			.insert(descriptionEmbeddings)
+			.values(rows.map((row) => ({ model, ...row })))
+			.onConflictDoNothing({
+				target: [
+					descriptionEmbeddings.model,
+					descriptionEmbeddings.description,
+				],
+			});
 	}
 
 	findInDateWindow(window: DateWindow): Promise<DatedTransaction[]> {

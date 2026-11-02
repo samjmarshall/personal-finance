@@ -16,7 +16,7 @@ import { CdrConnectionStatus } from "~/lib/constants";
 import { utcDayKey, utcMidnight } from "~/lib/utils";
 import type { BalancesService } from "~/server/balances/balances.service";
 import type { Logger } from "~/server/observability/logging/logger";
-import type { TransactionsService } from "~/server/transactions/transactions.service";
+import type { TransactionReconcileService } from "~/server/transactions/transaction-reconcile.service";
 import { CdrSyncError } from "./cdr.errors";
 import { type RedbarkClient, RedbarkRetryableError } from "./cdr.redbark";
 import type { CdrRepository } from "./cdr.repository";
@@ -51,7 +51,7 @@ interface CdrSyncServiceDeps {
 	repository: CdrRepository;
 	/** Null when `REDBARK_API_KEY` is unset. */
 	redbark: RedbarkClient | null;
-	transactions: Pick<TransactionsService, "reconcileSynced">;
+	transactions: Pick<TransactionReconcileService, "reconcileSynced">;
 	balances: Pick<BalancesService, "recordSynced">;
 	logger: Logger;
 }
@@ -63,7 +63,10 @@ interface CdrSyncServiceDeps {
 export class CdrSyncService {
 	private readonly repository: CdrRepository;
 	private readonly redbark: RedbarkClient | null;
-	private readonly transactions: Pick<TransactionsService, "reconcileSynced">;
+	private readonly transactions: Pick<
+		TransactionReconcileService,
+		"reconcileSynced"
+	>;
 	private readonly balances: Pick<BalancesService, "recordSynced">;
 	private readonly logger: Logger;
 

@@ -48,12 +48,22 @@ export interface PossibleDuplicate {
 	createdAt: Date;
 	date: Date;
 	description: string;
+	descriptionScore: number | null;
 	externalAccountId: string;
 	externalId: string;
 	provenance: SyncedTransaction["provenance"];
 	status: PossibleDuplicateStatus;
 	transactionId: number;
 	updatedAt: Date | null;
+}
+
+// A cleaned description's meaning vector from one embedding model (adr029).
+export interface DescriptionEmbedding {
+	id: number;
+	createdAt: Date;
+	description: string;
+	embedding: number[];
+	model: string;
 }
 
 // One pending question: the bank's row beside the member's.
@@ -67,6 +77,8 @@ export interface PossibleDuplicateReview {
 		Transaction,
 		"id" | "date" | "amount" | "description" | "accountName" | "provenance"
 	>;
+	/** Null on a review flagged before adr029. */
+	descriptionScore: number | null;
 }
 
 // What one apply did. `gone`: already answered or no longer pending. `taken`: the

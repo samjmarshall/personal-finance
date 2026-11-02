@@ -15,14 +15,15 @@ import { outboxService } from "~/server/outbox/outbox.module";
 import { DrizzleReceiptExtractionRepository } from "~/server/receipts/receipt-extraction.repository";
 import { ReceiptExtractionService } from "~/server/receipts/receipt-extraction.service";
 import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
-import { transactionsService } from "~/server/transactions/transactions.module";
+import { TransactionReconcileService } from "~/server/transactions/transaction-reconcile.service";
+import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
 
 import { inngest } from "./client";
 
 // Composition root: every tier built once with the real db + client. The route
 // handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
-// function's cron/event triggers from it. The outbox, categories, transactions and
-// balances services are shared with other roots, so they come from their *.module.ts files
+// function's cron/event triggers from it. The outbox, categories and balances
+// services are shared with other roots, so they come from their *.module.ts files
 // rather than being built here.
 const outboxController = new OutboxInngestController({
 	inngest,
@@ -53,7 +54,14 @@ const cdrSyncService = new CdrSyncService({
 				baseUrl: env.REDBARK_API_URL,
 			})
 		: null,
-	transactions: transactionsService,
+	transactions: new TransactionReconcileService({
+		repository: new DrizzleTransactionsRepository({ db }),
+		embeddingModel: bedrock.embedding(env.BEDROCK_EMBEDDING_MODEL),
+		logger: createRootLogger().with({
+			domain: "transactions",
+			component: "reconcile",
+		}),
+	}),
 	balances: balancesService,
 	logger: createRootLogger().with({ domain: "cdr", component: "sync" }),
 });

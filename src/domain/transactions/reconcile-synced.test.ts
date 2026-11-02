@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { PossibleDuplicateStatus, Provenance } from "~/lib/constants";
 import {
+	cleanDescription,
+	scoreDescriptions,
+	wordWeights,
+} from "./description-score";
+import {
 	descriptionWords,
 	type MatchCandidate,
+	matchPairs,
 	planReconcile,
 	type ReconcileInput,
 	type ReconcileReview,
@@ -11,6 +17,10 @@ import {
 import type { SyncedTransaction } from "./transaction.interface";
 
 const ZONE = "Australia/Sydney";
+
+// One merchant on both sides, so a pair clears the Adopt bars unless a test
+// gives it other words or meaning.
+const CAFE = "BEAN THERE CAFE";
 
 // A bank row is saved at UTC midnight of its day.
 function bank(
@@ -26,7 +36,7 @@ function bank(
 		accountName: "Everyday",
 		amount,
 		date: new Date(`${day}T00:00:00.000Z`),
-		description: `BANK ${externalId}`,
+		description: CAFE,
 	};
 }
 
@@ -43,7 +53,7 @@ function mine(
 		id,
 		date,
 		amount,
-		description: `Mine ${id}`,
+		description: CAFE,
 		externalId: null,
 		externalAccountId: null,
 		heldBy: null,
@@ -51,7 +61,14 @@ function mine(
 	};
 }
 
+// Every text means the same, so only the words tell pairs apart.
+const sameMeaning = (texts: string[]) =>
+	new Map(texts.map((text) => [cleanDescription(text), [1]]));
+
 function plan(input: Partial<ReconcileInput>) {
+	const texts = [...(input.incoming ?? []), ...(input.candidates ?? [])].map(
+		(row) => row.description,
+	);
 	return planReconcile({
 		incoming: [],
 		knownIds: [],
@@ -59,9 +76,19 @@ function plan(input: Partial<ReconcileInput>) {
 		candidates: [],
 		liveAccountIds: ["acct_live"],
 		timeZone: ZONE,
+		weights: wordWeights(texts),
+		vectors: sameMeaning(texts),
 		...input,
 	});
 }
+
+// Its exact score is pinned once, by "gives a new flag its merged score".
+const newFlag = (transactionId: number, row: SyncedTransaction) => ({
+	transactionId,
+	row,
+	reviewId: null,
+	descriptionScore: expect.any(Number),
+});
 
 function review(
 	externalId: string,
@@ -117,7 +144,7 @@ describe("planReconcile", () => {
 		).toEqual({ ...EMPTY, refresh: [row] });
 	});
 
-	it("adopts a household row with the same Sydney day and cent", () => {
+	it("adopts a household row with the same Sydney day, cent and description", () => {
 		const row = bank("t1", "2026-11-10", 12.3);
 		expect(
 			plan({ incoming: [row], candidates: [mine(1, "2026-11-10", 12.3)] }),
@@ -147,10 +174,7 @@ describe("planReconcile", () => {
 			candidates: [mine(1, "2026-11-10", 100)],
 		});
 		if (outcome === "flag") {
-			expect(result).toEqual({
-				...EMPTY,
-				flag: [{ transactionId: 1, row, reviewId: null }],
-			});
+			expect(result).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
 		} else {
 			expect(result).toEqual({ ...EMPTY, add: [row] });
 		}
@@ -196,7 +220,7 @@ describe("planReconcile", () => {
 			incoming: [row],
 			candidates: [mine(1, "2026-11-10", 29.5), mine(2, "2026-11-13", 30)],
 		});
-		expect(result.flag).toEqual([{ transactionId: 2, row, reviewId: null }]);
+		expect(result.flag).toEqual([newFlag(2, row)]);
 	});
 
 	it("pairs the closest day first among same-amount pairs", () => {
@@ -205,10 +229,10 @@ describe("planReconcile", () => {
 			incoming: [row],
 			candidates: [mine(1, "2026-11-14", 100), mine(2, "2026-11-11", 100)],
 		});
-		expect(result.flag).toEqual([{ transactionId: 2, row, reviewId: null }]);
+		expect(result.flag).toEqual([newFlag(2, row)]);
 	});
 
-	it("pairs the most shared words first, so same-priced rows never cross", () => {
+	it("pairs the highest merged score first, so same-priced rows never cross", () => {
 		const result = plan({
 			incoming: [NETFLIX_BANK, SPOTIFY_BANK],
 			candidates: [
@@ -221,12 +245,12 @@ describe("planReconcile", () => {
 			],
 		});
 		expect(result.flag).toEqual([
-			{ transactionId: 2, row: NETFLIX_BANK, reviewId: null },
-			{ transactionId: 1, row: SPOTIFY_BANK, reviewId: null },
+			newFlag(2, NETFLIX_BANK),
+			newFlag(1, SPOTIFY_BANK),
 		]);
 	});
 
-	it("adopts by the most shared words on the same day", () => {
+	it("adopts each bank row into the same-day row it matches", () => {
 		const result = plan({
 			incoming: [NETFLIX_BANK, SPOTIFY_BANK],
 			candidates: [
@@ -244,16 +268,113 @@ describe("planReconcile", () => {
 		]);
 	});
 
-	it("puts more shared words before a nearer day", () => {
+	it("flags, never adopts, the crossed Netflix and Spotify on one day", () => {
 		const result = plan({
 			incoming: [NETFLIX_BANK],
+			candidates: [
+				mine(1, "2026-01-13", 20.99, {
+					description: "PAYPAL *SPOTIFY*P40603 AUS",
+				}),
+			],
+			vectors: new Map([
+				["NETFLIX", [1, 0]],
+				["SPOTIFY", [0, 1]],
+			]),
+		});
+		expect(result).toEqual({ ...EMPTY, flag: [newFlag(1, NETFLIX_BANK)] });
+	});
+
+	it("puts a typed name before a nearer-day stranger", () => {
+		const row = { ...NETFLIX_BANK, description: "NETFLIX.COM SYDNEY AUS" };
+		const result = plan({
+			incoming: [row],
 			candidates: [
 				mine(1, "2026-01-14", 20.99, { description: "Groceries" }),
 				mine(2, "2026-01-19", 20.99, { description: "Netflix" }),
 			],
 		});
+		expect(result.flag).toEqual([newFlag(2, row)]);
+	});
+
+	describe("on the same day", () => {
+		const row = {
+			...bank("t1", "2026-11-10", 5),
+			description: "SQ *BEAN THERE CAFE",
+		};
+		const typed = (description: string) =>
+			mine(1, "2026-11-10", 5, { description });
+		const vectors = (typedVector: number[]) =>
+			new Map([
+				["BEAN THERE CAFE", [1, 0]],
+				["BEAN THERE CAFE BRISBANE", typedVector],
+				["COFFEE", typedVector],
+			]);
+
+		it("adopts when both the words and the meaning match", () => {
+			const result = plan({
+				incoming: [row],
+				candidates: [typed("Bean There Cafe Brisbane")],
+				vectors: vectors([1, 0.1]),
+			});
+			expect(result).toEqual({
+				...EMPTY,
+				adopt: [{ transactionId: 1, row, heldBy: null }],
+			});
+		});
+
+		it.each([
+			["the meaning falls short", "Bean There Cafe Brisbane", vectors([0, 1])],
+			["the words fall short", "Coffee", vectors([1, 0])],
+			["there is no meaning score", "Bean There Cafe", null],
+		])("flags when %s", (_, description, vectorMap) => {
+			const result = plan({
+				incoming: [row],
+				candidates: [typed(description)],
+				vectors: vectorMap,
+			});
+			expect(result).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
+		});
+
+		it("flags a held row's same-day pair that falls short", () => {
+			const held = mine(1, "2026-11-10", 5, {
+				heldBy: 90,
+				description: "Groceries",
+			});
+			expect(plan({ incoming: [row], candidates: [held] })).toEqual({
+				...EMPTY,
+				flag: [newFlag(1, row)],
+			});
+		});
+	});
+
+	it("gives a new flag its merged score", () => {
+		const row = {
+			...bank("t1", "2026-11-10", 5),
+			description: "NETFLIX.COM SYDNEY AUS",
+		};
+		const weights = wordWeights([row.description, "Netflix", "COLES SYDNEY"]);
+		const vectors = new Map([
+			["NETFLIX COM SYDNEY", [1, 0]],
+			["NETFLIX", [1, 1]],
+		]);
+		const result = plan({
+			incoming: [row],
+			candidates: [mine(1, "2026-11-12", 5, { description: "Netflix" })],
+			weights,
+			vectors,
+		});
 		expect(result.flag).toEqual([
-			{ transactionId: 2, row: NETFLIX_BANK, reviewId: null },
+			{
+				transactionId: 1,
+				row,
+				reviewId: null,
+				descriptionScore: scoreDescriptions(
+					row.description,
+					"Netflix",
+					weights,
+					vectors,
+				).merged,
+			},
 		]);
 	});
 
@@ -265,7 +386,10 @@ describe("planReconcile", () => {
 				reviews: [review("t1", PossibleDuplicateStatus.Pending, 7)],
 				candidates: [mine(1, "2026-11-10", 5)],
 			}),
-		).toEqual({ ...EMPTY, flag: [{ transactionId: 7, row, reviewId: 90 }] });
+		).toEqual({
+			...EMPTY,
+			flag: [{ transactionId: 7, row, reviewId: 90, descriptionScore: null }],
+		});
 	});
 
 	it("skips a bank row the member kept theirs over", () => {
@@ -307,7 +431,7 @@ describe("planReconcile", () => {
 		});
 		expect(plan({ incoming: [row], candidates: [retired] })).toEqual({
 			...EMPTY,
-			flag: [{ transactionId: 1, row, reviewId: null }],
+			flag: [newFlag(1, row)],
 		});
 	});
 
@@ -356,5 +480,43 @@ describe("planReconcile", () => {
 			["t1", 1],
 			["t2", 2],
 		]);
+	});
+});
+
+describe("matchPairs", () => {
+	it("pairs only unsaved, unreviewed bank rows, by cent within 7 days", () => {
+		const fresh = bank("t1", "2026-11-10", 5);
+		const candidate = mine(1, "2026-11-12", 5);
+		expect(
+			matchPairs({
+				incoming: [
+					fresh,
+					bank("t_known", "2026-11-10", 5),
+					bank("t_reviewed", "2026-11-10", 5),
+					bank("t_far", "2026-11-20", 5),
+				],
+				knownIds: ["t_known"],
+				reviews: [review("t_reviewed", PossibleDuplicateStatus.Pending)],
+				candidates: [candidate],
+				liveAccountIds: ["acct_live"],
+				timeZone: ZONE,
+			}),
+		).toEqual([{ bank: fresh, candidate, dayGap: 2 }]);
+	});
+
+	// Each pair costs an embedding, and a held row a day off can be neither adopted nor flagged.
+	it("skips a held row unless the bank row is on its day", () => {
+		const held = mine(1, "2026-11-10", 5, { heldBy: 90 });
+		const sameDay = bank("t1", "2026-11-10", 5);
+		expect(
+			matchPairs({
+				incoming: [sameDay, bank("t2", "2026-11-11", 5)],
+				knownIds: [],
+				reviews: [],
+				candidates: [held],
+				liveAccountIds: ["acct_live"],
+				timeZone: ZONE,
+			}),
+		).toEqual([{ bank: sameDay, candidate: held, dayGap: 0 }]);
 	});
 });

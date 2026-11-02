@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { PossibleDuplicateReview } from "~/domain/transactions";
+import {
+	type PossibleDuplicateReview,
+	SIMILAR_SCORE,
+} from "~/domain/transactions";
 import { CdrImportStatus, Provenance } from "~/lib/constants";
 import {
 	amountGapLabel,
@@ -109,7 +112,14 @@ function review(
 		mineDay,
 		bank = "BANK",
 		mine = "Mine",
-	}: { bankDay: string; mineDay: string; bank?: string; mine?: string },
+		score = null,
+	}: {
+		bankDay: string;
+		mineDay: string;
+		bank?: string;
+		mine?: string;
+		score?: number | null;
+	},
 ): PossibleDuplicateReview {
 	const mineDate = new Date(`${mineDay}T00:00:00.000Z`);
 	mineDate.setUTCHours(-11);
@@ -129,6 +139,7 @@ function review(
 			accountName: null,
 			provenance: Provenance.Manual,
 		},
+		descriptionScore: score,
 	};
 }
 
@@ -136,7 +147,40 @@ const ids = (piles: ReturnType<typeof duplicatePiles>) =>
 	piles.map((pile) => [pile.key, pile.reviews.map((r) => r.id)]);
 
 describe("duplicatePiles", () => {
-	it("puts 3 shared words in Similar and 2 in Different", () => {
+	it("piles by the saved score, from SIMILAR_SCORE up as Similar", () => {
+		const day = { bankDay: "2026-01-13", mineDay: "2026-01-13" };
+		const above = review(1, { ...day, score: SIMILAR_SCORE + 0.01 });
+		const at = review(2, { ...day, score: SIMILAR_SCORE });
+		const below = review(3, { ...day, score: SIMILAR_SCORE - 0.01 });
+
+		expect(ids(duplicatePiles([above, at, below]))).toEqual([
+			["similar_description", [2, 1]],
+			["different_description", [3]],
+		]);
+	});
+
+	it("trusts the score over shared words", () => {
+		const day = { bankDay: "2026-01-13", mineDay: "2026-01-13" };
+		const manyWords = review(1, {
+			...day,
+			bank: "PAYPAL *SPOTIFY AUS 4029357733 AUS",
+			mine: "PAYPAL *NETFLIX AUS 4029357733",
+			score: 0.1,
+		});
+		const noWords = review(2, {
+			...day,
+			bank: "WOOLWORTHS 1234",
+			mine: "Groceries",
+			score: 0.9,
+		});
+
+		expect(ids(duplicatePiles([manyWords, noWords]))).toEqual([
+			["similar_description", [2]],
+			["different_description", [1]],
+		]);
+	});
+
+	it("falls back to 3 shared words for a review with no score", () => {
 		const netflix = review(1, {
 			bankDay: "2026-01-13",
 			mineDay: "2026-01-14",

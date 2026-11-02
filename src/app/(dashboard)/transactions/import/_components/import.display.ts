@@ -4,6 +4,7 @@ import {
 	type ReconcileCounts,
 	type ResolveDuplicateInput,
 	type ResolveDuplicatesResult,
+	SIMILAR_SCORE,
 	SIMILAR_WORDS,
 	sharedWords,
 } from "~/domain/transactions";
@@ -99,7 +100,8 @@ export const CHOICES: {
 	{
 		choice: "use_bank",
 		label: "Use bank's",
-		effect: "gives yours its date and amount.",
+		effect:
+			"gives yours its date and amount, and keeps your description, category, expense and receipt.",
 	},
 	{
 		choice: "both_real",
@@ -117,18 +119,18 @@ export interface DuplicatePile {
 	reviews: PossibleDuplicateReview[];
 }
 
-// Every pair shares its amount to the cent, so the words are what tell a copy from a twin.
+// Every pair shares its amount to the cent, so the descriptions are what tell a copy from a twin.
 const PILES: Omit<DuplicatePile, "reviews">[] = [
 	{
 		key: "similar_description",
 		title: "Similar description",
-		why: "Most of the words match. Almost always the same purchase.",
+		why: "The descriptions match. Almost always the same purchase.",
 		suggestion: "use_bank",
 	},
 	{
 		key: "different_description",
 		title: "Different description",
-		why: "The words don't match. Most likely two purchases.",
+		why: "The descriptions don't match. Most likely two purchases.",
 		suggestion: "both_real",
 	},
 ];
@@ -146,8 +148,14 @@ export function duplicatePiles(
 				y.review.id - x.review.id,
 		)
 		.map(({ review }) => review);
-	const isSimilar = ({ bank, mine }: PossibleDuplicateReview) =>
-		sharedWords(bank.description, mine.description) >= SIMILAR_WORDS;
+	const isSimilar = ({
+		bank,
+		mine,
+		descriptionScore,
+	}: PossibleDuplicateReview) =>
+		descriptionScore === null
+			? sharedWords(bank.description, mine.description) >= SIMILAR_WORDS
+			: descriptionScore >= SIMILAR_SCORE;
 	const byPile: Record<DuplicatePile["key"], PossibleDuplicateReview[]> = {
 		similar_description: sorted.filter(isSimilar),
 		different_description: sorted.filter((review) => !isSimilar(review)),

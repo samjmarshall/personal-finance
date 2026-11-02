@@ -570,7 +570,7 @@ describe("findMatchCandidates", () => {
 			      "acct_2",
 			      "kept",
 			    ],
-			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."externalId", "transaction"."externalAccountId", "possible_duplicate"."id" from "transaction" left join "possible_duplicate" on ("possible_duplicate"."transactionId" = "transaction"."id" and "possible_duplicate"."status" = $1) where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
+			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."externalId", "transaction"."externalAccountId", "heldBy" from "transaction" left join (select "transactionId", min("id") as "heldBy" from "possible_duplicate" where "possible_duplicate"."status" = $1 group by "possible_duplicate"."transactionId") "held" on "held"."transactionId" = "transaction"."id" where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
 			  },
 			]
 		`);
@@ -697,7 +697,7 @@ describe("applyReconcile", () => {
 						41,
 						"2026-10-13T00:00:00.000Z",
 						"WOOLIES",
-						1,
+						9,
 					],
 				];
 			return [];
@@ -715,10 +715,10 @@ describe("applyReconcile", () => {
 			  {
 			    "method": "all",
 			    "params": [
-			      9,
+			      1,
 			      "pending",
 			    ],
-			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."id" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "transactionId"",
+			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."transactionId" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "id"",
 			  },
 			  {
 			    "method": "execute",
@@ -745,6 +745,39 @@ describe("applyReconcile", () => {
 		`);
 	});
 
+	// A same-day copy that fell short joins a close one's review on the row.
+	it("releases every review a held row had, not just the first", async () => {
+		const review = (externalId: string, id: number) => [
+			"cdr",
+			externalId,
+			"acct_1",
+			"Everyday",
+			41,
+			"2026-10-13T00:00:00.000Z",
+			"WOOLIES",
+			id,
+		];
+		const { repository, queries } = harness(({ sql }) => {
+			if (sql.startsWith('update "transaction"')) return [[1]];
+			if (sql.startsWith('delete from "possible_duplicate"'))
+				return [review("txn_close", 9), review("txn_same_day", 10)];
+			return [];
+		});
+
+		const counts = await repository.applyReconcile({
+			...EMPTY_PLAN,
+			adopt: [{ transactionId: 1, row: SYNCED, heldBy: 9 }],
+		});
+
+		expect(counts).toEqual({ added: 2, adopted: 1, flagged: -2, known: 0 });
+		const upsert = queries.find((q) =>
+			q.sql.startsWith('insert into "transaction"'),
+		);
+		expect(upsert?.params).toEqual(
+			expect.arrayContaining(["txn_close", "txn_same_day"]),
+		);
+	});
+
 	// The overlap re-fetches the held review's bank row in the same batch as the exact one.
 	it("adds a released review's bank row once, from this batch's copy", async () => {
 		const { repository, queries } = harness(({ sql }) => {
@@ -759,7 +792,7 @@ describe("applyReconcile", () => {
 						41,
 						"2026-10-13T00:00:00.000Z",
 						"WOOLIES",
-						1,
+						9,
 					],
 				];
 			return [];
@@ -774,7 +807,14 @@ describe("applyReconcile", () => {
 		const counts = await repository.applyReconcile({
 			...EMPTY_PLAN,
 			adopt: [{ transactionId: 1, row: SYNCED, heldBy: 9 }],
-			flag: [{ transactionId: 1, row: refetched, reviewId: 9 }],
+			flag: [
+				{
+					transactionId: 1,
+					row: refetched,
+					reviewId: 9,
+					descriptionScore: null,
+				},
+			],
 		});
 
 		expect(counts).toEqual({ added: 1, adopted: 1, flagged: -1, known: 0 });
@@ -790,7 +830,7 @@ describe("applyReconcile", () => {
 		);
 	});
 
-	it("inserts a new review once and refreshes only a pending one", async () => {
+	it("inserts a new review with its score, and refreshes a pending one's bank columns only", async () => {
 		const { repository, queries } = harness(({ sql }) =>
 			sql.startsWith('insert into "possible_duplicate"') ? [[5]] : [],
 		);
@@ -798,11 +838,17 @@ describe("applyReconcile", () => {
 		const counts = await repository.applyReconcile({
 			...EMPTY_PLAN,
 			flag: [
-				{ transactionId: 1, row: SYNCED, reviewId: null },
+				{
+					transactionId: 1,
+					row: SYNCED,
+					reviewId: null,
+					descriptionScore: 0.81,
+				},
 				{
 					transactionId: 2,
 					row: { ...SYNCED, externalId: "txn_2" },
 					reviewId: 4,
+					descriptionScore: null,
 				},
 			],
 		});
@@ -826,10 +872,11 @@ describe("applyReconcile", () => {
 			      42.5,
 			      "2026-10-15T00:00:00.000Z",
 			      "WOOLWORTHS",
+			      0.81,
 			      "2026-09-29T00:00:00.000Z",
 			      "2026-09-29T00:00:00.000Z",
 			    ],
-			    "sql": "insert into "possible_duplicate" ("id", "transactionId", "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "status", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5, $6, $7, $8, default, $9, $10) on conflict ("provenance","externalId") do nothing returning "id"",
+			    "sql": "insert into "possible_duplicate" ("id", "transactionId", "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "descriptionScore", "status", "createdAt", "updatedAt") values (default, $1, $2, $3, $4, $5, $6, $7, $8, $9, default, $10, $11) on conflict ("provenance","externalId") do nothing returning "id"",
 			  },
 			  {
 			    "method": "execute",
@@ -859,7 +906,14 @@ describe("applyReconcile", () => {
 
 		const counts = await repository.applyReconcile({
 			...EMPTY_PLAN,
-			flag: [{ transactionId: 1, row: SYNCED, reviewId: null }],
+			flag: [
+				{
+					transactionId: 1,
+					row: SYNCED,
+					reviewId: null,
+					descriptionScore: 0.81,
+				},
+			],
 		});
 
 		expect(counts).toEqual({ added: 0, adopted: 0, flagged: 0, known: 1 });
@@ -929,7 +983,7 @@ describe("listPendingDuplicates", () => {
 			    "params": [
 			      "pending",
 			    ],
-			    "sql": "select "possible_duplicate"."id", "possible_duplicate"."date", "possible_duplicate"."amount", "possible_duplicate"."description", "possible_duplicate"."accountName", "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."accountName", "transaction"."provenance" from "possible_duplicate" inner join "transaction" on "transaction"."id" = "possible_duplicate"."transactionId" where "possible_duplicate"."status" = $1 order by "possible_duplicate"."date" desc, "possible_duplicate"."id" desc",
+			    "sql": "select "possible_duplicate"."id", "possible_duplicate"."date", "possible_duplicate"."amount", "possible_duplicate"."description", "possible_duplicate"."accountName", "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."accountName", "transaction"."provenance", "possible_duplicate"."descriptionScore" from "possible_duplicate" inner join "transaction" on "transaction"."id" = "possible_duplicate"."transactionId" where "possible_duplicate"."status" = $1 order by "possible_duplicate"."date" desc, "possible_duplicate"."id" desc",
 			  },
 			]
 		`);
@@ -973,8 +1027,10 @@ describe("resolving a review", () => {
 		"WOOLIES",
 		1,
 	];
+	const takeById =
+		'delete from "possible_duplicate" where ("possible_duplicate"."id"';
 	const taking = ({ sql }: { sql: string }) =>
-		sql.startsWith('delete from "possible_duplicate"') ? [TAKEN] : [];
+		sql.startsWith(takeById) ? [TAKEN] : [];
 
 	it("keep mine marks only a pending review kept", async () => {
 		const { repository, queries } = harness(() => [[4]]);
@@ -1030,9 +1086,66 @@ describe("resolving a review", () => {
 			    "sql": "update "transaction" set "date" = $1, "amount" = $2, "provenance" = $3, "externalId" = $4, "externalAccountId" = $5, "accountName" = $6, "updatedAt" = $7 where "transaction"."id" = $8",
 			  },
 			  {
+			    "method": "all",
+			    "params": [
+			      1,
+			      "pending",
+			    ],
+			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."transactionId" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "id"",
+			  },
+			  {
 			    "method": "execute",
 			    "params": [],
 			    "sql": "commit",
+			  },
+			]
+		`);
+	});
+
+	it("use bank's releases the row's other review as its own row", async () => {
+		const sameDay = [
+			"cdr",
+			"txn_same_day",
+			"acct_1",
+			"Everyday",
+			41,
+			"2026-10-10T00:00:00.000Z",
+			"WOOLWORTHS SYDNEY",
+			12,
+		];
+		const { repository, queries } = harness(({ sql }) =>
+			sql.startsWith(takeById)
+				? [TAKEN]
+				: sql.startsWith('delete from "possible_duplicate"')
+					? [sameDay]
+					: [],
+		);
+
+		await expect(repository.useBanks(4)).resolves.toBe(true);
+		expect(queries.slice(3, -1)).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      1,
+			      "pending",
+			    ],
+			    "sql": "delete from "possible_duplicate" where ("possible_duplicate"."transactionId" = $1 and "possible_duplicate"."status" = $2) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "id"",
+			  },
+			  {
+			    "method": "execute",
+			    "params": [
+			      "2026-10-10T00:00:00.000Z",
+			      "WOOLWORTHS SYDNEY",
+			      41,
+			      "cdr",
+			      "txn_same_day",
+			      "acct_1",
+			      "Everyday",
+			      "2026-09-29T00:00:00.000Z",
+			      "2026-09-29T00:00:00.000Z",
+			    ],
+			    "sql": "insert into "transaction" ("id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "externalAccountId", "accountName", "createdAt", "updatedAt") values (default, default, default, $1, $2, default, $3, default, default, default, default, $4, $5, $6, $7, $8, $9) on conflict do nothing",
 			  },
 			]
 		`);
@@ -1144,6 +1257,83 @@ describe("findDescriptions", () => {
 			      2,
 			    ],
 			    "sql": "select "id", "description" from "transaction" where "transaction"."id" in ($1, $2)",
+			  },
+			]
+		`);
+	});
+});
+
+describe("listDescriptions", () => {
+	it("selects each distinct description once", async () => {
+		const { repository, queries } = harness(() => [
+			["Groceries"],
+			["NETFLIX.COM"],
+		]);
+
+		await expect(repository.listDescriptions()).resolves.toEqual([
+			"Groceries",
+			"NETFLIX.COM",
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [],
+			    "sql": "select distinct "description" from "transaction"",
+			  },
+			]
+		`);
+	});
+});
+
+describe("findEmbeddings", () => {
+	it("reads the cached vectors of these descriptions under one model", async () => {
+		const { repository, queries } = harness(() => [["NETFLIX", "[0.6,0.8]"]]);
+
+		await expect(
+			repository.findEmbeddings("titan", ["NETFLIX", "COLES"]),
+		).resolves.toEqual([{ description: "NETFLIX", embedding: [0.6, 0.8] }]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "all",
+			    "params": [
+			      "titan",
+			      "NETFLIX",
+			      "COLES",
+			    ],
+			    "sql": "select "description", "embedding" from "description_embedding" where ("description_embedding"."model" = $1 and "description_embedding"."description" in ($2, $3))",
+			  },
+			]
+		`);
+	});
+
+	it("runs no statement for no descriptions", async () => {
+		const { repository, queries } = harness();
+
+		await expect(repository.findEmbeddings("titan", [])).resolves.toEqual([]);
+		expect(queries).toEqual([]);
+	});
+});
+
+describe("saveEmbeddings", () => {
+	it("inserts each vector under the model, skipping one already cached", async () => {
+		const { repository, queries } = harness();
+
+		await repository.saveEmbeddings("titan", [
+			{ description: "NETFLIX", embedding: [0.6, 0.8] },
+		]);
+		expect(queries).toMatchInlineSnapshot(`
+			[
+			  {
+			    "method": "execute",
+			    "params": [
+			      "titan",
+			      "NETFLIX",
+			      "[0.6,0.8]",
+			      "2026-09-29T00:00:00.000Z",
+			    ],
+			    "sql": "insert into "description_embedding" ("id", "model", "description", "embedding", "createdAt") values (default, $1, $2, $3, $4) on conflict ("model","description") do nothing",
 			  },
 			]
 		`);

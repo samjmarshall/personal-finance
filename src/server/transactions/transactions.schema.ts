@@ -6,6 +6,7 @@ import {
 	pgTable,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { EMBEDDING_DIMENSIONS } from "~/domain/transactions";
 import {
 	Frequency,
 	PossibleDuplicateStatus,
@@ -104,6 +105,8 @@ export const possibleDuplicates = pgTable(
 		amount: d.doublePrecision().notNull(),
 		date: d.timestamp({ withTimezone: true }).notNull(),
 		description: d.text().notNull(),
+		// Merged score at flag time (adr029); null on reviews flagged before it.
+		descriptionScore: d.doublePrecision(),
 		status: possibleDuplicateStatus()
 			.notNull()
 			.default(PossibleDuplicateStatus.Pending),
@@ -119,5 +122,27 @@ export const possibleDuplicates = pgTable(
 			t.externalId,
 		),
 		index("possible_duplicate_transaction_idx").on(t.transactionId),
+	],
+);
+
+// One meaning vector per cleaned description per model (adr029), so a description
+// is embedded once, ever. Only looked up by exact text, so no vector index.
+export const descriptionEmbeddings = pgTable(
+	"description_embedding",
+	(d) => ({
+		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		model: d.text().notNull(),
+		description: d.text().notNull(),
+		embedding: d.vector({ dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+		createdAt: d
+			.timestamp({ withTimezone: true })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	}),
+	(t) => [
+		uniqueIndex("description_embedding_model_description_idx").on(
+			t.model,
+			t.description,
+		),
 	],
 );

@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
 adrs: [adr029]
-status: Ready to implement
+status: Done
 ---
 # Pair bank rows by word and meaning scores (adr029) Implementation Plan
 
@@ -96,9 +96,9 @@ Build on a new branch, `feat/adr029-description-scores`.
   - merge: null meaning gives the word score, otherwise the mean
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] The crossed pair cleans to "NETFLIX" and "SPOTIFY", with word score 0 (unit test)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] The crossed pair cleans to "NETFLIX" and "SPOTIFY", with word score 0 (unit test)
 
 ## Phase 2: Spike to pick the model and cut-offs
 ### Changes
@@ -139,11 +139,11 @@ Build on a new branch, `feat/adr029-description-scores`.
 - `src/domain/transactions/description-score.ts` and its test: add any tokens the spike promoted to the lists, with one test case each.
 
 ### Success
-- [ ] The user confirmed the labelled pair list
-- [ ] The script ran against `local/<branch>` with both models, or with Titan V2 alone and the reason recorded
-- [ ] adr029 names the model, the three thresholds, the cleaning list and the IDF corpus, and has no open questions left
-- [ ] `make check` passes
-- [ ] `make test` passes
+- [x] The user confirmed the labelled pair list
+- [x] The script ran against `local/<branch>` with both models, or with Titan V2 alone and the reason recorded
+- [x] adr029 names the model, the three thresholds, the cleaning list and the IDF corpus, and has no open questions left
+- [x] `make check` passes
+- [x] `make test` passes
 
 ## Phase 3: Move the reconcile into its own service
 ### Changes
@@ -161,9 +161,9 @@ Build on a new branch, `feat/adr029-description-scores`.
 - `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md:49,73,115` and the file list in `docs/feature/history-import.md` (`:28-42`): rename to `TransactionReconcileService.reconcileSynced`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes, and the moved tests pass with only their construction changed
-- [ ] `grep -rn reconcileSynced src/server/transactions/transactions.service.ts` finds nothing
+- [x] `make check` passes
+- [x] `make test` passes, and the moved tests pass with only their construction changed
+- [x] `grep -rn reconcileSynced src/server/transactions/transactions.service.ts` finds nothing
 
 ## Phase 4: Score pairs; an Adopt needs both scores
 Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning: null`, so this phase makes **no Adopts**: every same-day pair goes to review. That's the planned fallback, not a bug.
@@ -215,10 +215,10 @@ Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning
 - `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md:51,52,55,103`: Adopt needs the description test, Possible duplicate includes same-day pairs that fall short, pairing goes by merged score, and :103 notes the fix (adr029). The same changes go in `docs/feature/history-import.md:114,116,120`. `CONTEXT.md` already has the wording; its "Proposed" markers go when `/validate` accepts adr029.
 
 ### Success
-- [ ] `make check` passes (includes `db:check` and the schema/interface contract)
-- [ ] `make test` passes
-- [ ] `make db_migrate` applied `0026` on `local/<branch>` (`make db_branch_status` shows `*`)
-- [ ] An import of a fresh range on the branch DB makes no new Adopts, and each new `possible_duplicate` row has a `description_score`
+- [x] `make check` passes (includes `db:check` and the schema/interface contract)
+- [x] `make test` passes
+- [x] `make db_migrate` applied `0026` on `local/<branch>` (`make db_branch_status` shows `*`)
+- [x] An import of a fresh range on the branch DB makes no new Adopts, and each new `possible_duplicate` row has a `description_score`
 
 ## Phase 5: Meaning score from Bedrock, with a cache
 ### Changes
@@ -261,13 +261,13 @@ Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning
   - `docs/feature/history-import.md`: the job sequence (`:91`) gains the embedding step before `applyReconcile`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `make db_migrate` applied `0027` and `0028` on `local/<branch>`
-- [ ] `/security-review` (touches `src/env.ts`)
-- [ ] `terraform -chdir=infrastructure fmt -check` passes. The `deploy.yml` plan for the branch shows exactly one new IAM statement and one new Vercel env var
-- [ ] Without AWS creds, an import on the branch DB logs `embedding unavailable` and finishes with its rows landed
-- [ ] With `assume <profile>`, an import fills `description_embedding` with 1024-length vectors under the model id. A same-day pair whose descriptions match Adopts; a same-day Netflix/Spotify-style pair goes to review
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `make db_migrate` applied `0027` and `0028` on `local/<branch>`
+- [x] `/security-review` (touches `src/env.ts`): no findings
+- [x] `terraform -chdir=infrastructure fmt -check` passes. The `deploy.yml` plan for the branch shows exactly one new IAM statement and one new Vercel env var (run 41449884007: 1 to add, 1 to change, 0 to destroy)
+- [x] Without AWS creds, an import on the branch DB logs `embedding unavailable` and finishes with its rows landed
+- [x] With `assume <profile>`, an import fills `description_embedding` with 1024-length vectors under the model id. A same-day pair whose descriptions match Adopts; a same-day Netflix/Spotify-style pair goes to review
 
 ## Phase 6: Pile reviews by the saved score
 ### Changes
@@ -288,10 +288,10 @@ Meaning scores aren't wired up until Phase 5. Until then every pair has `meaning
 - `docs/feature/history-import.md:125-127`: the piles go by description score, and reviews from before adr029 go by 3+ shared words.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `/design-review`
-- [ ] On `/transactions/import`:
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `/design-review`: no UI blockers; High = Vercel FRGN AMT row scores 0.585, a cleaning gap
+- [x] On `/transactions/import`:
   - a review with a high score sits under "Similar description" and a low one under "Different description"
   - an older review with no score keeps its pile from before this change
   - fill and Apply still work

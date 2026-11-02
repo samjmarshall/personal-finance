@@ -1,8 +1,18 @@
 import {
+	cleanDescription,
+	EMBEDDING_DIMENSIONS,
+	SIMILAR_SCORE,
+	scoreDescriptions,
+	type WordWeights,
+	wordWeights,
+} from "./description-score";
+import {
 	type Adoption,
 	type Flag,
 	MATCH_DAYS,
 	type MatchCandidate,
+	type MatchPair,
+	matchPairs,
 	planReconcile,
 	type ReconcileInput,
 	type ReconcilePlan,
@@ -29,6 +39,7 @@ import {
 	unplannedDto,
 } from "./transaction.dto";
 import type {
+	DescriptionEmbedding,
 	ExpenseConsumption,
 	PossibleDuplicate,
 	PossibleDuplicateReview,
@@ -43,10 +54,12 @@ import type {
 
 export type {
 	Adoption,
+	DescriptionEmbedding,
 	ExpenseConsumption,
 	Flag,
 	LinkExpenseInput,
 	MatchCandidate,
+	MatchPair,
 	PossibleDuplicate,
 	PossibleDuplicateReview,
 	ReconcileCounts,
@@ -66,18 +79,25 @@ export type {
 	TransactionUpdateInput,
 	transactionSortBy,
 	UnplannedWindow,
+	WordWeights,
 };
 export {
+	cleanDescription,
+	EMBEDDING_DIMENSIONS,
 	linkExpenseDto,
 	MATCH_DAYS,
+	matchPairs,
 	planReconcile,
 	RESOLVE_DUPLICATES_MAX,
 	resolveDuplicateDto,
 	resolveDuplicatesDto,
+	SIMILAR_SCORE,
 	SIMILAR_WORDS,
+	scoreDescriptions,
 	sharedWords,
 	transactionCreateDto,
 	transactionListQueryDto,
 	transactionUpdateDto,
 	unplannedDto,
+	wordWeights,
 };

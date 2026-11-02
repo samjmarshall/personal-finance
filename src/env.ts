@@ -36,6 +36,11 @@ export const env = createEnv({
 		 */
 		AWS_ROLE_ARN: z.string().optional(),
 		/**
+		 * Bedrock embedding model for description meaning (adr029). A bare foundation-model
+		 * id: Titan has no inference profile. Switch models in infrastructure/locals.tf.
+		 */
+		BEDROCK_EMBEDDING_MODEL: z.string().default("amazon.titan-embed-text-v2:0"),
+		/**
 		 * Bedrock inference profile for receipt extraction. Bare `anthropic.*` ids are not
 		 * invocable. Switch models in infrastructure/locals.tf, not here.
 		 */
@@ -167,6 +172,7 @@ export const env = createEnv({
 	runtimeEnv: {
 		AWS_REGION: process.env.AWS_REGION,
 		AWS_ROLE_ARN: process.env.AWS_ROLE_ARN,
+		BEDROCK_EMBEDDING_MODEL: process.env.BEDROCK_EMBEDDING_MODEL,
 		BEDROCK_RECEIPT_MODEL: process.env.BEDROCK_RECEIPT_MODEL,
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
