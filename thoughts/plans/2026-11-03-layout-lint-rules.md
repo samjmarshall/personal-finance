@@ -2,7 +2,7 @@
 date: 2026-11-03
 design: thoughts/designs/2026-11-03-layout-lint-rules.md
 adrs: []
-status: Ready for Review - Phase 3 of 3
+status: Done
 ---
 # Layout Lint Rules Implementation Plan
 
@@ -163,7 +163,7 @@ Work on branch `chore/layout-lint` off `main`. Build the brace rules first (Phas
 - [x] `git diff -w --ignore-blank-lines HEAD~2 HEAD~1` (commit 2) shows only added braces
 - [x] Running `make fix` again changes nothing (`git status` is clean)
 - [x] `.git-blame-ignore-revs` holds commit 2's hash, and `git blame` with `--ignore-revs-file .git-blame-ignore-revs` skips it
-- [ ] PR opened from `chore/layout-lint`, with the merge-commit note and the local blame command
+- [x] PR opened from `chore/layout-lint`, with the merge-commit note and the local blame command
 
 ## References
 - Design doc: `thoughts/designs/2026-11-03-layout-lint-rules.md` (no `## Related ADRs`, no ADR candidates)
