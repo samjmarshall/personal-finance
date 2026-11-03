@@ -34,25 +34,26 @@ Add a thin `ComboboxField<T>` wrapper over the shadcn primitives, with props sha
 
 ## Phase 1: ComboboxField + form swap
 ### Changes
-- `src/app/(dashboard)/transactions/_components/combobox-field.tsx` — new `ComboboxField<T>` (`:16`) + `ComboboxFieldOption<T>` (`:13`). It maps `value` to the matching item (`:42`) and memoizes it so a parent re-render keeps half-typed text (`:44`). It emits `item?.value ?? null`, sets `autoHighlight` (`:51`) and `isItemEqualToValue` by `.value` (`:53`), and shows the clear button only when filled (`:95`). It renders `ComboboxEmpty` + `ComboboxList` of `ComboboxItem`. It controls `open` (`:40`, `:68`) for these guards, which keep a pick from being lost by accident:
-  - Emptied text opens the list and keeps the pick; only the X clears (`:62`).
-  - Enter with the list open never submits the form (`:79`).
-  - Escape with the list shut goes to the dialog, pick kept (`:81`).
-  - Tab (and Shift+Tab) on typed text takes the highlighted match, or an exact name over it. Empty or untouched text picks nothing (`:41`, `:55`, `:86`, `:88`). A click-away still reverts.
+- `src/app/(dashboard)/transactions/_components/combobox-field.tsx` — new `ComboboxField<T>` (`:16`) + `ComboboxFieldOption<T>` (`:13`). It maps `value` to the matching item (`:44`) and memoizes it so a parent re-render keeps half-typed text (`:46`). It emits `item?.value ?? null`, sets `autoHighlight` (`:53`) and `isItemEqualToValue` by `.value` (`:55`), and shows the clear button only when filled (`:107`). It renders `ComboboxEmpty` + `ComboboxList` of `ComboboxItem`. It controls `open` (`:40`, `:71`) for these guards, which keep a pick from being lost by accident:
+  - Emptied text opens the list and keeps the pick; only the X clears (`:65`).
+  - Enter with the list open never submits the form (`:87`).
+  - Escape with the list shut goes to the dialog, pick kept (`:89`).
+  - Tab (and Shift+Tab) on typed text takes the highlighted match, or an exact name over an automatic highlight. A row the arrow keys picked always wins, as with Enter (`:42`, `:57`, `:97`). The pick is sent on blur, so the X it shows doesn't take the Tab (`:43`, `:80`). Empty or untouched text picks nothing (`:93`). A click-away still reverts.
 - `src/app/(dashboard)/transactions/_components/transaction-form.tsx` — `categoryOptions` (`:133`) and `expenseOptions` (`:139`) become `ComboboxFieldOption<number>[]`. Both fields use `ComboboxField` (`:277`, `:294`), call `pickCategory` / `pickExpense` with the numeric id (`:284`, `:302`), and pass `placeholder="None"`, `emptyText` and `clearLabel`.
 - `src/components/ui/combobox.tsx` — `ComboboxInput` takes `clearLabel` for the X (`:58`, `:89`). The X is a Tab stop, so the keyboard can clear (`:92`). The chevron gets `aria-label="Show options"` and `tabIndex={-1}` (`:76`, `:83`). A long label ends in "…" (`:69`). Re-adding the shadcn component would drop these.
-- `src/app/(dashboard)/transactions/_components/combobox-field.test.tsx` — 19 tests: shows the picked label (`:33`), typing filters (`:39`), a pick emits the value (`:50`), clear emits `null` (`:59`), no match shows the empty text (`:261`). Validate fixes added: keyboard reaches the X (`:67`), emptied text keeps the pick, list open or shut (`:78`, `:89`), Enter pick / no-submit (`:102`, `:171`), Tab pick / exact name / reopened / arrowed / no match (`:112`, `:123`, `:136`, `:147`, `:159`), Escape on a shut list (`:194`), re-render keeps typed text (`:209`), Tab skips the chevron (`:237`), named X (`:247`).
+- `src/app/(dashboard)/transactions/_components/combobox-field.test.tsx` — 22 tests: shows the picked label (`:52`), typing filters (`:58`), a pick emits the value (`:69`), clear emits `null` (`:78`), no match shows the empty text (`:321`). Validate fixes added: keyboard reaches the X (`:86`), emptied text keeps the pick, list open or shut (`:97`, `:108`), Enter pick / no-submit (`:121`, `:231`), Tab pick / live field skips the new X / exact name / arrowed row over exact name / arrowed same-name row / reopened / arrowed reopened / no match (`:131`, `:142`, `:154`, `:167`, `:181`, `:196`, `:207`, `:219`), Escape on a shut list (`:254`), re-render keeps typed text (`:269`), Tab skips the chevron (`:297`), named X (`:307`).
 
 ### Success
 - [x] `make check` passes (in the cloud container `db:check` needs a dummy `DATABASE_URL`; no schema change)
-- [x] `make test` passes (146 files, 1768 tests on 2026-11-03 resolve-findings, 2nd pass)
+- [x] `make test` passes (146 files, 1771 tests on 2026-11-03 resolve-findings, 3rd pass)
 - [x] Typing in Category / Expense filters the list. Arrow keys + Enter, or Tab, pick a match.
-- [x] X clears the field; it is the only clear, and Tab reaches it. Unmatched or emptied text reverts on blur (`combobox-field.tsx:62`). Escape on a shut list keeps the pick (`:81`).
+- [x] X clears the field; it is the only clear, and Tab reaches it. Unmatched or emptied text reverts on blur (`combobox-field.tsx:65`). Escape on a shut list keeps the pick (`:89`).
 - [x] Picking a Category narrows the Expenses. Picking an Expense sets the Category. The hint updates.
 - [x] The popup paints above the dialog and is not clipped. It works in light and dark mode and on a phone-width screen.
 - [ ] A synced (bank-owned) transaction still opens focused on Description. Not run: all 645 local rows are manual, and only a bank sync makes synced ones. Low risk: the diff leaves the focus code alone (`transaction-form.tsx:193`). Needs one open of a synced row on a preview.
 - [x] `/design-review` — no blockers; 1 high a11y issue in `combobox.tsx` trigger, fixed in `f8a244a`
 - [x] `/design-review` re-run on `1d0eb01` — no blockers; 1 high: no keyboard way to clear (Base UI skips the X on Tab). Fixed by giving the X a Tab stop (`combobox.tsx:92`).
+- [x] `/design-review` re-run on `4cd7e63` — no blockers, no high. 1 medium: a Tab pick shows the X mid-Tab and focus stops on it, not the next field. Fixed by sending the Tab pick on blur (`combobox-field.tsx:80`).
 
 ## References
 - PR: samjmarshall/personal-finance#125 (commit `f812a3f`)
