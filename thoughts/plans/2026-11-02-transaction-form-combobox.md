@@ -1,7 +1,7 @@
 ---
 date: 2026-11-02
-adrs: []
-status: Ready for Review - Phase 1 of 1
+adrs: [adr008, adr025]
+status: Done
 ---
 # Transaction Form Type-to-Search Category + Expense Implementation Plan
 
@@ -27,10 +27,10 @@ The transaction form's Category and Expense fields are click-to-scroll selects. 
 - Making a new Category or Expense from typed text.
 - Frequency and Priority fields (short fixed enums, stay `SelectField`, `transaction-form.tsx:311`, `:322`).
 - Other forms (`expenses/_components/expense-form.tsx`, `expenses/categories/_components/category-form.tsx`).
-- Moving `ComboboxField` to `src/components/`. Do that when a 2nd page imports it (`.claude/rules/ui-components.md`).
+- Moving `ComboboxField` to `src/components/`. Move it up when another page imports it: same parent → `transactions/_components/` stays, 2+ parents → `src/components/` (`.claude/rules/ui-components.md`).
 
 ## Approach
-Add a thin `ComboboxField<T>` wrapper over the shadcn primitives, with the same props as `SelectField`, so the form swap is drop-in. Options become `{ value: number; label: string }`, which drops the `String()`/`Number()` round-trip. The existing link helpers handle `null` as-is.
+Add a thin `ComboboxField<T>` wrapper over the shadcn primitives, with props shaped like `SelectField`'s, so the form swap is small. Not drop-in: it has no `readOnly`, `loading`, `aria-label` or option `title`, and adds `emptyText` (and `clearLabel`). Options become `{ value: number; label: string }`, which drops the `String()`/`Number()` round-trip. The existing link helpers handle `null` as-is.
 
 ## Phase 1: ComboboxField + form swap
 ### Changes
@@ -40,16 +40,16 @@ Add a thin `ComboboxField<T>` wrapper over the shadcn primitives, with the same 
 
 ### Success
 - [x] `make check` passes (in the cloud container `db:check` needs a dummy `DATABASE_URL`; no schema change)
-- [x] `make test` passes (144 files, 1700 tests)
-- [ ] Typing in Category / Expense filters the list. Arrow keys + Enter pick a match.
-- [ ] X clears the field. Unmatched text reverts on blur.
-- [ ] Picking a Category narrows the Expenses. Picking an Expense sets the Category. The hint updates.
-- [ ] The popup paints above the dialog and is not clipped. It works in light and dark mode and on a phone-width screen.
-- [ ] A synced (bank-owned) transaction still opens focused on Description.
-- [ ] `/design-review`
+- [x] `make test` passes (146 files, 1754 tests on 2026-11-03 validate)
+- [x] Typing in Category / Expense filters the list. Arrow keys + Enter pick a match.
+- [x] X clears the field. Unmatched text reverts on blur. (Emptied text or Escape on a closed list clears instead — see validate findings.)
+- [x] Picking a Category narrows the Expenses. Picking an Expense sets the Category. The hint updates.
+- [x] The popup paints above the dialog and is not clipped. It works in light and dark mode and on a phone-width screen.
+- [x] A synced (bank-owned) transaction still opens focused on Description. (Simulated: local branch has no synced rows.)
+- [x] `/design-review` — no blockers; 1 high a11y issue in `combobox.tsx` trigger
 
 ## References
-- PR: samjmarshall/personal-finance#125 (commit `ef53fa3`)
-- ADRs: `docs/adr/adr025-linked-expense-sets-the-category.md` (Accepted) — rules kept unchanged; `docs/adr/adr008-shadcn-on-base-ui-for-shared-primitives.md` (Accepted) — why a shadcn/Base UI primitive
+- PR: samjmarshall/personal-finance#125 (commit `f812a3f`)
+- ADRs: `docs/adr/adr025-linked-expense-sets-the-category.md` (Accepted 2026-11-03) — rules kept unchanged; `docs/adr/adr008-shadcn-on-base-ui-for-shared-primitives.md` (Accepted) — why a shadcn/Base UI primitive
 - Prior plan: commit `802f1f8` (pick Category before Expense, filter Expenses by Category)
 - Related: `src/components/select-field.tsx:34`, `src/components/select-field.test.tsx` (test pattern), `src/components/ui/combobox.tsx:52`, `category-expense-link.ts:21`
