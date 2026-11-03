@@ -276,6 +276,7 @@ export function TransactionForm({
 							</FieldLabel>
 							<ComboboxField
 								className="w-full"
+								clearLabel="Clear Category"
 								disabled={pending}
 								emptyText="No categories found."
 								id="tx-category"
@@ -293,6 +294,7 @@ export function TransactionForm({
 							<ComboboxField
 								aria-describedby="tx-expense-hint"
 								className="w-full"
+								clearLabel="Clear Expense"
 								disabled={pending}
 								emptyText="No expenses found."
 								id="tx-expense"

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
 	Combobox,
 	ComboboxContent,
@@ -11,11 +12,7 @@ import {
 
 export type ComboboxFieldOption<T> = { value: T; label: string };
 
-/**
- * Single pick from `{ value, label }` options; typing filters the list.
- * Picks only existing options: unmatched text reverts to the picked label on blur.
- * The clear button emits `null`.
- */
+/** Only listed options can be picked; stray text snaps back on blur. Clear gives `null`. */
 export function ComboboxField<T>({
 	items,
 	value,
@@ -25,6 +22,7 @@ export function ComboboxField<T>({
 	disabled,
 	placeholder,
 	emptyText,
+	clearLabel,
 	"aria-describedby": ariaDescribedBy,
 }: {
 	items: readonly ComboboxFieldOption<T>[];
@@ -35,9 +33,17 @@ export function ComboboxField<T>({
 	disabled?: boolean;
 	placeholder?: string;
 	emptyText: string;
+	/** Names the X; two fields in one form need different names. */
+	clearLabel?: string;
 	"aria-describedby"?: string;
 }) {
-	const selected = items.find((item) => Object.is(item.value, value)) ?? null;
+	const [open, setOpen] = useState(false);
+	const label = items.find((item) => Object.is(item.value, value))?.label;
+	// A new object each render resets half-typed text, so rebuild only on a real change.
+	const selected = useMemo(
+		() => (value === null || label === undefined ? null : { value, label }),
+		[value, label],
+	);
 
 	return (
 		<Combobox
@@ -45,14 +51,27 @@ export function ComboboxField<T>({
 			disabled={disabled}
 			isItemEqualToValue={(a, b) => Object.is(a.value, b.value)}
 			items={items}
-			onValueChange={(item) => onValueChange(item?.value ?? null)}
+			onOpenChange={(next) => setOpen(next)}
+			onValueChange={(item, details) => {
+				// Emptied mid-search is a new search: the pick stays, its label returns on close.
+				// Shut, no close will bring it back, so empty means cleared.
+				if (item === null && details.reason === "input-clear" && open) return;
+				onValueChange(item?.value ?? null);
+			}}
 			value={selected}
 		>
 			<ComboboxInput
 				aria-describedby={ariaDescribedBy}
 				className={className}
+				clearLabel={clearLabel}
 				disabled={disabled}
 				id={id}
+				onKeyDown={(e) => {
+					// With the list open, Enter picks or closes; it never saves the form on a typo.
+					if (e.key === "Enter" && open) e.preventDefault();
+					// With it shut, Escape belongs to the dialog; it must not wipe the pick.
+					if (e.key === "Escape" && !open) e.preventBaseUIHandler();
+				}}
 				placeholder={placeholder}
 				showClear={selected !== null}
 			/>
