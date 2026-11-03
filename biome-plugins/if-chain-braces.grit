@@ -1,0 +1,12 @@
+// The formatter always splits an if/else over lines, so every branch of a chain needs braces.
+language js
+
+or {
+	JsIfStatement(consequent=$body, else_clause=JsElseClause()),
+	JsElseClause(alternate=JsIfStatement(consequent=$body)),
+	JsElseClause(alternate=$body) where { $body <: not JsIfStatement() }
+} where {
+	$body <: not JsBlockStatement(),
+	register_diagnostic(span=$body, message="An if with an else needs braces on every branch.", severity="error", fix_kind="safe"),
+	$body => `{ $body }`
+}

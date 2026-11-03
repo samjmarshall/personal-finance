@@ -13,8 +13,8 @@
 Prefer Makefile targets with `pnpm` as a fallback — never use `npm`, `npx`, or `yarn` directly:
 
 - `make build` — clean build (`rm -rf .next` + `pnpm run build`)
-- `make check` — lint + typecheck + db schema check (`pnpm run check` + `pnpm run typecheck` + `pnpm run db:check`)
-- `make fix` - fix lint issues (`pnpm run check:write`)
+- `make check` — lint + typecheck + db schema check (`pnpm run check` = Biome + Oxlint, + `pnpm run typecheck` + `pnpm run db:check`)
+- `make fix` - fix lint and layout issues (`pnpm run check:write` = Biome twice, then `oxlint --fix`)
 - `make test` — run Vitest unit tests (`pnpm run test`)
 - `make start` — local dev server (`pnpm run dev`)
 - `make install` — install dependencies (`pnpm install`)

@@ -1,0 +1,14 @@
+// Loop bodies always get braces, even on one line; only a lone if may skip them.
+language js
+
+or {
+	JsForStatement(body=$body),
+	JsForInStatement(body=$body),
+	JsForOfStatement(body=$body),
+	JsWhileStatement(body=$body),
+	JsDoWhileStatement(body=$body)
+} where {
+	$body <: not JsBlockStatement(),
+	register_diagnostic(span=$body, message="Loops need braces.", severity="error", fix_kind="safe"),
+	$body => `{ $body }`
+}
