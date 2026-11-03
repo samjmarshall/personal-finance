@@ -38,13 +38,24 @@ export function ComboboxField<T>({
 	"aria-describedby"?: string;
 }) {
 	const [open, setOpen] = useState(false);
-	const highlighted = useRef<ComboboxFieldOption<T> | undefined>(undefined);
-	const highlightedByKeys = useRef(false);
-	const tabPick = useRef<ComboboxFieldOption<T> | null>(null);
+	const [text, setText] = useState("");
+	const highlightedItem = useRef<ComboboxFieldOption<T> | undefined>(undefined);
+	const pendingTabPick = useRef<ComboboxFieldOption<T> | null>(null);
 	const label = items.find((item) => Object.is(item.value, value))?.label;
+	// Empty or untouched text is no search.
+	const searching = text.trim() !== "" && text !== label;
+	// A typed full name lists first, so it is the row lit up and the one Enter
+	// or Tab takes ("Fees" over "Bank fees").
+	const query = text.trim().toLowerCase();
+	const isTypedName = (item: ComboboxFieldOption<T>) =>
+		item.label.toLowerCase() === query;
+	const listed = searching
+		? [...items].sort((a, b) => Number(isTypedName(b)) - Number(isTypedName(a)))
+		: items;
 	// A new object each render resets half-typed text, so rebuild only on a real change.
+	// A saved value missing from a stale list stays picked, nameless, so the X can unlink it.
 	const selected = useMemo(
-		() => (value === null || label === undefined ? null : { value, label }),
+		() => (value === null ? null : { value, label: label ?? "" }),
 		[value, label],
 	);
 
@@ -53,12 +64,12 @@ export function ComboboxField<T>({
 			autoHighlight
 			disabled={disabled}
 			isItemEqualToValue={(a, b) => Object.is(a.value, b.value)}
-			items={items}
-			onItemHighlighted={(item, details) => {
-				highlighted.current = item;
-				highlightedByKeys.current = details.reason === "keyboard";
+			items={listed}
+			onInputValueChange={setText}
+			onItemHighlighted={(item) => {
+				highlightedItem.current = item;
 			}}
-			onOpenChange={(next) => setOpen(next)}
+			onOpenChange={setOpen}
 			onValueChange={(item, details) => {
 				// Emptied text is a new search, not a clear: the pick stays and its
 				// label returns when the list closes. Only the X clears.
@@ -78,9 +89,10 @@ export function ComboboxField<T>({
 				disabled={disabled}
 				id={id}
 				onBlur={() => {
-					// Picked on Tab but sent only now: sent sooner, the X it shows grabs the Tab.
-					if (tabPick.current) onValueChange(tabPick.current.value);
-					tabPick.current = null;
+					// Send the Tab pick on blur: sent on keypress, the X it shows would catch the Tab.
+					if (pendingTabPick.current)
+						onValueChange(pendingTabPick.current.value);
+					pendingTabPick.current = null;
 				}}
 				onKeyDown={(e) => {
 					// With the list open, Enter picks or closes; it never saves the form on a typo.
@@ -88,23 +100,14 @@ export function ComboboxField<T>({
 					// With it shut, Escape belongs to the dialog; it must not wipe the pick.
 					if (e.key === "Escape" && !open) e.preventBaseUIHandler();
 					// Tab takes the highlighted match of a typed search, then moves on.
-					// Empty or untouched text is no search, so a stray highlight must not pick.
-					const text = e.currentTarget.value;
-					const searching = text.trim() !== "" && text !== label;
-					if (e.key === "Tab" && open && searching && highlighted.current) {
-						// A typed full name beats a longer match listed above it ("Fees" vs
-						// "Bank fees"), but not a row the arrow keys picked, as Enter would take it.
-						const exact = highlightedByKeys.current
-							? undefined
-							: items.find(
-									(item) =>
-										item.label.toLowerCase() === text.trim().toLowerCase(),
-								);
-						tabPick.current = exact ?? highlighted.current;
+					// With no search, a stray highlight must not pick.
+					if (e.key === "Tab" && open && searching && highlightedItem.current) {
+						pendingTabPick.current = highlightedItem.current;
 					}
 				}}
 				placeholder={placeholder}
-				showClear={selected !== null}
+				// Hidden mid-search, so a Tab pick moves past it, not onto an X that would undo it.
+				showClear={selected !== null && !searching}
 			/>
 			<ComboboxContent>
 				<ComboboxEmpty>{emptyText}</ComboboxEmpty>

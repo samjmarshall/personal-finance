@@ -9,43 +9,44 @@ const items = [
 	{ value: 2, label: "Banana" },
 ];
 
-function renderField(value: number | null = null, options = items) {
-	const onValueChange = vi.fn();
-	render(
-		<>
-			<label htmlFor="fruit">Fruit</label>
-			<ComboboxField
-				emptyText="No fruit found."
-				id="fruit"
-				items={options}
-				onValueChange={onValueChange}
-				value={value}
-			/>
-			<button type="button">Next</button>
-		</>,
-	);
-	return {
-		input: screen.getByRole("combobox", { name: "Fruit" }),
-		onValueChange,
-	};
-}
-
 // Feeds each pick back like the real form, so the X shows up.
-function LiveField() {
-	const [value, setValue] = useState<number | null>(null);
+function Field({
+	initial,
+	options,
+	onValueChange,
+}: {
+	initial: number | null;
+	options: typeof items;
+	onValueChange: (value: number | null) => void;
+}) {
+	const [value, setValue] = useState(initial);
 	return (
 		<>
 			<label htmlFor="fruit">Fruit</label>
 			<ComboboxField
 				emptyText="No fruit found."
 				id="fruit"
-				items={items}
-				onValueChange={setValue}
+				items={options}
+				onValueChange={(next) => {
+					setValue(next);
+					onValueChange(next);
+				}}
 				value={value}
 			/>
 			<button type="button">Next</button>
 		</>
 	);
+}
+
+function renderField(value: number | null = null, options = items) {
+	const onValueChange = vi.fn();
+	render(
+		<Field initial={value} onValueChange={onValueChange} options={options} />,
+	);
+	return {
+		input: screen.getByRole("combobox", { name: "Fruit" }),
+		onValueChange,
+	};
 }
 
 describe("ComboboxField", () => {
@@ -80,6 +81,16 @@ describe("ComboboxField", () => {
 		const { onValueChange } = renderField(1);
 		await user.click(screen.getByRole("button", { name: "Clear" }));
 
+		expect(onValueChange).toHaveBeenCalledWith(null);
+	});
+
+	it("a saved value missing from the list can still be cleared", async () => {
+		const user = userEvent.setup();
+		// A stale list can lack the saved row; the old select's None row could unlink it.
+		const { input, onValueChange } = renderField(99);
+		await user.click(screen.getByRole("button", { name: "Clear" }));
+
+		expect(input).toHaveValue("");
 		expect(onValueChange).toHaveBeenCalledWith(null);
 	});
 
@@ -135,20 +146,43 @@ describe("ComboboxField", () => {
 		await screen.findByRole("option", { name: "Banana" });
 		await user.tab();
 
-		expect(onValueChange).toHaveBeenCalledWith(2);
+		expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
 		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
+	});
+
+	it("Shift+Tab picks the highlighted match too", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField();
+		await user.type(input, "ban");
+		await screen.findByRole("option", { name: "Banana" });
+		await user.tab({ shift: true });
+
+		expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+		expect(input).not.toHaveFocus();
 	});
 
 	it("Tab pick on a live field moves past the X that appears", async () => {
 		const user = userEvent.setup();
-		render(<LiveField />);
-		const input = screen.getByRole("combobox", { name: "Fruit" });
+		const { input } = renderField();
 		await user.type(input, "ban");
 		await screen.findByRole("option", { name: "Banana" });
 		await user.tab();
 
 		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
 		await waitFor(() => expect(input).toHaveValue("Banana"));
+	});
+
+	it("Tab pick on a filled live field moves past its X", async () => {
+		const user = userEvent.setup();
+		const { input } = renderField(1);
+		await user.clear(input);
+		await user.type(input, "ban");
+		await screen.findByRole("option", { name: "Banana" });
+		await user.tab();
+
+		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
+		expect(screen.getByRole("button", { name: "Clear" })).toBeVisible();
 	});
 
 	it("Tab takes a typed full name over a longer match above it", async () => {
@@ -161,7 +195,35 @@ describe("ComboboxField", () => {
 		await screen.findByRole("option", { name: "Bank fees" });
 		await user.tab();
 
+		expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
+	});
+
+	it("a typed full name lists first, lit up, and Enter takes it", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(null, [
+			{ value: 1, label: "Bank fees" },
+			{ value: 2, label: "Fees" },
+		]);
+		await user.type(input, "fees");
+		const [first] = await screen.findAllByRole("option");
+
+		expect(first).toHaveAccessibleName("Fees");
+		expect(first).toHaveAttribute("data-highlighted");
+		await user.keyboard("{Enter}");
 		expect(onValueChange).toHaveBeenCalledWith(2);
+	});
+
+	it("Tab takes a hovered row over a typed full name", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(null, [
+			{ value: 1, label: "Bank fees" },
+			{ value: 2, label: "Fees" },
+		]);
+		await user.type(input, "fees");
+		await user.hover(await screen.findByRole("option", { name: "Bank fees" }));
+		await user.tab();
+
+		expect(onValueChange).toHaveBeenCalledExactlyOnceWith(1);
 	});
 
 	it("Tab takes an arrowed-to row over a typed full name", async () => {
@@ -175,7 +237,7 @@ describe("ComboboxField", () => {
 		await user.keyboard("{ArrowDown}");
 		await user.tab();
 
-		expect(onValueChange).toHaveBeenCalledWith(2);
+		expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
 	});
 
 	it("Tab takes the arrowed-to row of two with the same name", async () => {
@@ -190,7 +252,7 @@ describe("ComboboxField", () => {
 		await user.keyboard("{ArrowDown}");
 		await user.tab();
 
-		expect(onValueChange).toHaveBeenCalledWith(2);
+		expect(onValueChange).toHaveBeenCalledExactlyOnceWith(2);
 	});
 
 	it("Tab on a reopened filled field keeps the pick", async () => {
@@ -223,6 +285,18 @@ describe("ComboboxField", () => {
 		await user.type(input, "kiwi");
 		await screen.findByText("No fruit found.");
 		await user.tab();
+
+		expect(onValueChange).not.toHaveBeenCalled();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
+	});
+
+	it("click-away mid-search keeps the pick", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(2);
+		await user.clear(input);
+		await user.type(input, "app");
+		await screen.findByRole("option", { name: "Apple" });
+		await user.click(document.body);
 
 		expect(onValueChange).not.toHaveBeenCalled();
 		await waitFor(() => expect(input).toHaveValue("Banana"));
