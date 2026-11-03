@@ -12,7 +12,7 @@ import {
 
 export type ComboboxFieldOption<T> = { value: T; label: string };
 
-/** Only listed options can be picked; stray text snaps back on blur. Clear gives `null`. */
+/** Only listed options can be picked (click, Enter, or Tab on typed text). Other or emptied text snaps back on blur; only the X gives `null`. */
 export function ComboboxField<T>({
 	items,
 	value,
@@ -80,10 +80,15 @@ export function ComboboxField<T>({
 					// With it shut, Escape belongs to the dialog; it must not wipe the pick.
 					if (e.key === "Escape" && !open) e.preventBaseUIHandler();
 					// Tab takes the highlighted match of a typed search, then moves on.
-					// Empty text highlights row one too; leaving then must not pick it.
-					const typed = e.currentTarget.value.trim() !== "";
+					// Empty or untouched text is no search, so a stray highlight must not pick.
+					const text = e.currentTarget.value;
+					const typed = text.trim() !== "" && text !== label;
 					if (e.key === "Tab" && open && typed && highlighted.current) {
-						onValueChange(highlighted.current.value);
+						// A typed full name beats a longer match listed above it ("Fees" vs "Bank fees").
+						const exact = items.find(
+							(item) => item.label.toLowerCase() === text.trim().toLowerCase(),
+						);
+						onValueChange((exact ?? highlighted.current).value);
 					}
 				}}
 				placeholder={placeholder}

@@ -85,7 +85,12 @@ function ComboboxInput({
 					/>
 				)}
 				{showClear && (
-					<ComboboxClear aria-label={clearLabel} disabled={disabled} />
+					<ComboboxClear
+						aria-label={clearLabel}
+						disabled={disabled}
+						// Keyboard users need a way to clear too, so the X gets a Tab stop.
+						tabIndex={0}
+					/>
 				)}
 			</InputGroupAddon>
 			{children}

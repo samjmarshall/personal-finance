@@ -8,7 +8,7 @@ const items = [
 	{ value: 2, label: "Banana" },
 ];
 
-function renderField(value: number | null = null) {
+function renderField(value: number | null = null, options = items) {
 	const onValueChange = vi.fn();
 	render(
 		<>
@@ -16,7 +16,7 @@ function renderField(value: number | null = null) {
 			<ComboboxField
 				emptyText="No fruit found."
 				id="fruit"
-				items={items}
+				items={options}
 				onValueChange={onValueChange}
 				value={value}
 			/>
@@ -64,6 +64,17 @@ describe("ComboboxField", () => {
 		expect(onValueChange).toHaveBeenCalledWith(null);
 	});
 
+	it("keyboard can reach the X and clear", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(1);
+		input.focus();
+		await user.tab();
+
+		expect(screen.getByRole("button", { name: "Clear" })).toHaveFocus();
+		await user.keyboard("{Enter}");
+		expect(onValueChange).toHaveBeenCalledWith(null);
+	});
+
 	it("emptying the text mid-search keeps the pick and restores its label on blur", async () => {
 		const user = userEvent.setup();
 		const { input, onValueChange } = renderField(2);
@@ -78,7 +89,7 @@ describe("ComboboxField", () => {
 	it("emptying the text with the list shut keeps the pick and restores its label on blur", async () => {
 		const user = userEvent.setup();
 		const { input, onValueChange } = renderField(2);
-		// Tab in, select all, Backspace: the keyboard path, list never opened.
+		// Real keyboard path: Backspace on a shut list, not a programmatic clear.
 		input.focus();
 		(input as HTMLInputElement).select();
 		await user.keyboard("{Backspace}");
@@ -109,6 +120,19 @@ describe("ComboboxField", () => {
 		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
 	});
 
+	it("Tab takes a typed full name over a longer match above it", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(null, [
+			{ value: 1, label: "Bank fees" },
+			{ value: 2, label: "Fees" },
+		]);
+		await user.type(input, "fees");
+		await screen.findByRole("option", { name: "Bank fees" });
+		await user.tab();
+
+		expect(onValueChange).toHaveBeenCalledWith(2);
+	});
+
 	it("Tab on a reopened filled field keeps the pick", async () => {
 		const user = userEvent.setup();
 		const { input, onValueChange } = renderField(2);
@@ -116,7 +140,19 @@ describe("ComboboxField", () => {
 		await screen.findByRole("option", { name: "Apple" });
 		await user.tab();
 
-		expect(onValueChange).not.toHaveBeenCalledWith(1);
+		expect(onValueChange).not.toHaveBeenCalled();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
+	});
+
+	it("Tab after arrowing on a reopened filled field keeps the pick", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(2);
+		await user.click(input);
+		await screen.findByRole("option", { name: "Apple" });
+		await user.keyboard("{ArrowUp}");
+		await user.tab();
+
+		expect(onValueChange).not.toHaveBeenCalled();
 		await waitFor(() => expect(input).toHaveValue("Banana"));
 	});
 
