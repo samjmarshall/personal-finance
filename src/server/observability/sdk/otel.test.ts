@@ -24,6 +24,7 @@ function bootedFetchConfig() {
 	env.POSTHOG_KEY = "phc_test";
 	registerObservability();
 	const [opts] = vi.mocked(registerOTel).mock.calls[0] as [Configuration];
+
 	return opts.instrumentationConfig?.fetch ?? {};
 }
 

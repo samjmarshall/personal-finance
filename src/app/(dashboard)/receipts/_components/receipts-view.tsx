@@ -162,11 +162,12 @@ export function ReceiptsView({ uploadPrefix }: { uploadPrefix: string }) {
 			<DeleteConfirmDialog
 				label={deleteTarget?.vendor ?? "this receipt"}
 				onConfirm={() => {
-					if (deleteTarget)
+					if (deleteTarget) {
 						remove.mutate(
 							{ id: deleteTarget.id },
 							{ onSuccess: () => setConfirmOpen(false) },
 						);
+					}
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
@@ -232,6 +233,7 @@ function ReceiptsTable({
 							const isDuplicate = r.status === ReceiptStatus.Duplicate;
 							const PreviewIcon = previewIcon(r.contentType);
 							const retrying = retry.isPending && retry.variables?.id === r.id;
+
 							return (
 								<tr className="group hover:bg-muted/30" key={r.id}>
 									<td className="px-4 py-2.5">

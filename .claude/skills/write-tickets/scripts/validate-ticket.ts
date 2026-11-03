@@ -44,22 +44,33 @@ interface Args {
 
 function parseArgs(argv: string[]): Args | { error: string } {
 	const args: Args = {};
+
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
+
 		if (a === "--epic") {
 			const n = Number(argv[++i]);
-			if (!Number.isInteger(n))
+
+			if (!Number.isInteger(n)) {
 				return { error: "--epic needs an issue number" };
+			}
+
 			args.epic = n;
 		} else if (a === "--issue") {
 			const n = Number(argv[++i]);
-			if (!Number.isInteger(n))
+
+			if (!Number.isInteger(n)) {
 				return { error: "--issue needs an issue number" };
+			}
+
 			args.issue = n;
 		} else if (a === "--type") {
 			const t = argv[++i];
-			if (t === undefined || !TICKET_TYPES.includes(t as TicketType))
+
+			if (t === undefined || !TICKET_TYPES.includes(t as TicketType)) {
 				return { error: `--type must be one of ${TICKET_TYPES.join("|")}` };
+			}
+
 			args.type = t as TicketType;
 		} else if (a !== undefined && /^\d+$/.test(a)) {
 			args.issue = Number(a);
@@ -67,8 +78,11 @@ function parseArgs(argv: string[]): Args | { error: string } {
 			return { error: `unrecognised argument: ${a}` };
 		}
 	}
-	if (args.epic === undefined && args.issue === undefined)
+
+	if (args.epic === undefined && args.issue === undefined) {
 		return { error: "pass an issue number, or --epic <P>" };
+	}
+
 	return args;
 }
 
@@ -79,12 +93,15 @@ interface Target {
 
 function formatReport(targets: Target[], violations: Violation[]): string {
 	const byIssue = new Map<number, Violation[]>();
+
 	for (const v of violations) {
 		const list = byIssue.get(v.issue) ?? [];
 		list.push(v);
 		byIssue.set(v.issue, list);
 	}
+
 	const lines: string[] = [];
+
 	for (const { issue, type } of targets) {
 		const vs = byIssue.get(issue.number) ?? [];
 		const errs = vs.filter((v) => v.severity === "ERROR").length;
@@ -93,11 +110,14 @@ function formatReport(targets: Target[], violations: Violation[]): string {
 		lines.push(
 			`${mark} #${issue.number}  ${type.padEnd(6)}  ${errs} error(s), ${warns} warning(s)  ${issue.title}`,
 		);
-		for (const v of vs)
+
+		for (const v of vs) {
 			lines.push(
 				`    ${v.severity.padEnd(5)} ${v.code.padEnd(22)} ${v.message}`,
 			);
+		}
 	}
+
 	const totalErr = violations.filter((v) => v.severity === "ERROR").length;
 	const totalWarn = violations.filter((v) => v.severity === "WARN").length;
 	lines.push("");
@@ -106,6 +126,7 @@ function formatReport(targets: Target[], violations: Violation[]): string {
 			? `FAIL — ${totalErr} error(s), ${totalWarn} warning(s) across ${targets.length} issue(s). Publish gate blocked.`
 			: `PASS — 0 errors, ${totalWarn} warning(s) across ${targets.length} issue(s).`,
 	);
+
 	return `${lines.join("\n")}\n`;
 }
 
@@ -121,6 +142,7 @@ function resolveTargets(args: Args): { targets: Target[]; extra: Violation[] } {
 			fetchSubIssues(args.epic),
 		);
 		targets.push({ issue: epic, type: "epic" });
+
 		for (const childNum of epic.subIssues) {
 			const child = normalize(
 				fetchIssue(childNum),
@@ -128,8 +150,9 @@ function resolveTargets(args: Args): { targets: Target[]; extra: Violation[] } {
 				[],
 			);
 			targets.push({ issue: child, type: "child" });
+
 			// In epic mode we know the parent — enforce the back-reference points at it.
-			if (!new RegExp(`Part of #${args.epic}\\b`).test(child.body))
+			if (!new RegExp(`Part of #${args.epic}\\b`).test(child.body)) {
 				extra.push({
 					issue: child.number,
 					severity: "ERROR",
@@ -137,7 +160,9 @@ function resolveTargets(args: Args): { targets: Target[]; extra: Violation[] } {
 					message: `child does not reference its epic ("Part of #${args.epic}")`,
 					field: "Part of",
 				});
+			}
 		}
+
 		return { targets, extra };
 	}
 
@@ -146,11 +171,14 @@ function resolveTargets(args: Args): { targets: Target[]; extra: Violation[] } {
 	const norm = normalize(fetchIssue(issueNum), board.get(issueNum) ?? null, []);
 	const detected = detectType(norm.body, norm.labels);
 	const type = args.type ?? detected;
-	if (type === null)
+
+	if (type === null) {
 		throw new GhError(
 			`cannot determine the type of #${issueNum} from its body — pass --type <${TICKET_TYPES.join("|")}>`,
 		);
-	if (args.type !== undefined && detected !== null && detected !== args.type)
+	}
+
+	if (args.type !== undefined && detected !== null && detected !== args.type) {
 		extra.push({
 			issue: norm.number,
 			severity: "WARN",
@@ -158,16 +186,22 @@ function resolveTargets(args: Args): { targets: Target[]; extra: Violation[] } {
 			message: `--type ${args.type} but the body looks like a ${detected}`,
 			field: "type",
 		});
+	}
+
 	targets.push({ issue: norm, type });
+
 	return { targets, extra };
 }
 
 function run(argv: string[]): number {
 	const args = parseArgs(argv);
+
 	if ("error" in args) {
 		console.error(`[validate-ticket] ${args.error}`);
+
 		return 2;
 	}
+
 	assertExpectedFields(); // rename guard — throws GhError (→ exit 2) if a field is gone
 	const { targets, extra } = resolveTargets(args);
 	const violations = [
@@ -175,6 +209,7 @@ function run(argv: string[]): number {
 		...targets.flatMap((t) => validateTicket(t.issue, t.type)),
 	];
 	process.stdout.write(formatReport(targets, violations));
+
 	return violations.some((v) => v.severity === "ERROR") ? 1 : 0;
 }
 
@@ -185,5 +220,6 @@ try {
 		console.error(`[validate-ticket] ${err.message}`);
 		process.exit(2);
 	}
+
 	throw err;
 }

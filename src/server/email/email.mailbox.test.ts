@@ -5,6 +5,7 @@ function harness() {
 	const get = vi.fn();
 	const list = vi.fn();
 	const resend = { emails: { receiving: { get, attachments: { list } } } };
+
 	return {
 		// biome-ignore lint/suspicious/noExplicitAny: narrow stand-in for the Resend client.
 		mailbox: new ResendInboundMailbox({ resend: resend as any }),

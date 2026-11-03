@@ -34,7 +34,9 @@ export function ImportForm({ locked }: { locked: boolean }) {
 	function onSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		const rangeError = importRangeError(from, to, today);
+
 		if (rangeError) return setError(rangeError);
+
 		// TODO(observability): capture an import-started event, and alert when a run
 		// ends Failed. Today a failure only shows on this page and in the logs.
 		// Enter in a date field submits too, and the fields lock once the run starts:

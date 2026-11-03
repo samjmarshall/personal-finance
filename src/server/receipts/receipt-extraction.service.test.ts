@@ -211,6 +211,7 @@ function harness(
 				)
 				.mockImplementation(async () => {
 					log.push("extract");
+
 					return opts.extract ? opts.extract() : extraction;
 				});
 

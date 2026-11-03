@@ -23,6 +23,7 @@ async function CategoriesData() {
 	await io();
 	void api.category.list.prefetch();
 	void api.expense.countsByCategory.prefetch();
+
 	return (
 		<HydrateClient>
 			<CategoriesView />

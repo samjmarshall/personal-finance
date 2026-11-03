@@ -41,6 +41,7 @@ export class DrizzleAllowedSendersRepository
 			.insert(allowedSenders)
 			.values({ email, userId: memberId })
 			.returning();
+
 		return row;
 	}
 
@@ -56,6 +57,7 @@ export class DrizzleAllowedSendersRepository
 				and(eq(allowedSenders.id, id), eq(allowedSenders.userId, memberId)),
 			)
 			.returning({ id: allowedSenders.id });
+
 		return row;
 	}
 
@@ -65,6 +67,7 @@ export class DrizzleAllowedSendersRepository
 			.from(allowedSenders)
 			.where(eq(allowedSenders.email, email))
 			.limit(1);
+
 		return sender?.userId;
 	}
 }

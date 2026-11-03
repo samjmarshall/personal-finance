@@ -12,6 +12,7 @@ import { categories } from "./categories.schema";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleCategoriesRepository({ db: db as never }),
 		queries,

@@ -36,6 +36,7 @@ export class ExpensesService {
 
 	async create(input: ExpenseCreateInput): Promise<Expense> {
 		const row = await this.repository.insert(input).catch(rethrowCategoryGone);
+
 		return assertRow(row, "create expense");
 	}
 
@@ -44,6 +45,7 @@ export class ExpensesService {
 		const row = await this.repository
 			.update(id, values)
 			.catch(rethrowCategoryGone);
+
 		return assertRow(row, "update expense");
 	}
 
@@ -60,6 +62,7 @@ export class ExpensesService {
 	// Expense's Category, so a linked record can show it (adr025).
 	async namesByIds(ids: number[]): Promise<ReadonlyMap<number, ExpenseName>> {
 		const rows = ids.length ? await this.repository.findNames(ids) : [];
+
 		return new Map(
 			rows.map(({ id, name, categoryId }) => [id, { name, categoryId }]),
 		);

@@ -33,10 +33,13 @@ export async function prepReceipt(file: File): Promise<File> {
 	// Some browsers (Windows/Linux) report no MIME for local PDFs; sniff extension too,
 	// and stamp the type so the upload allowlist, worker and viewer all see a real PDF.
 	if (receiptMediaKind(file.type) === "pdf") return file;
-	if (/\.pdf$/i.test(file.name))
+
+	if (/\.pdf$/i.test(file.name)) {
 		return new File([file], file.name, { type: "application/pdf" });
+	}
 
 	let image = file;
+
 	if (isHeic(file)) {
 		const { heicTo } = await import("heic-to");
 		const jpeg = await heicTo({ blob: file, type: "image/jpeg", quality: 0.9 });
@@ -45,6 +48,7 @@ export async function prepReceipt(file: File): Promise<File> {
 
 	const { default: compress } = await import("browser-image-compression");
 	const out = await compress(image, COMPRESS);
+
 	return new File([out], toJpegName(file.name), { type: "image/jpeg" });
 }
 

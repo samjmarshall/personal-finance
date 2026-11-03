@@ -46,6 +46,7 @@ export function CategoryForm({
 		]);
 		onClose();
 	};
+
 	// Server/mutation failures surface via the global MutationCache toast
 	// (query-client.ts); `error` here is client-side validation only.
 	const create = api.category.create.useMutation({ onSuccess });
@@ -56,6 +57,7 @@ export function CategoryForm({
 	function onSubmit(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
+
 		if (!name.trim()) return setError("Please enter a name.");
 
 		const payload = {
@@ -64,15 +66,22 @@ export function CategoryForm({
 		};
 
 		rememberFocus();
-		if (category) update.mutate({ id: category.id, ...payload });
-		else create.mutate(payload);
+
+		if (category) {
+			update.mutate({ id: category.id, ...payload });
+		} else {
+			create.mutate(payload);
+		}
 	}
 
 	return (
 		<Dialog
 			onOpenChange={(next, eventDetails) => {
-				if (isSaving) eventDetails.cancel();
-				else if (!next) onClose();
+				if (isSaving) {
+					eventDetails.cancel();
+				} else if (!next) {
+					onClose();
+				}
 			}}
 			open={open}
 		>

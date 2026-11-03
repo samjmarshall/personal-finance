@@ -8,6 +8,7 @@ import { authClient } from "~/server/auth/client";
 export function SignOutButton() {
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
+
 	return (
 		<>
 			<Button
@@ -21,11 +22,14 @@ export function SignOutButton() {
 					// Sign-out fails closed while Redis is down (adr007), so the session stays live.
 					// Don't route on: /sign-in would bounce it back here and hide the failure.
 					const { error } = await authClient.signOut();
+
 					if (error) {
 						setError(error.message ?? "Could not sign out. Please try again.");
 						setLoading(false);
+
 						return;
 					}
+
 					// Full page load: kept routes and cached queries still hold the member's
 					// data, and Back would show it.
 					// Safari can still restore this page from its back-forward cache. Reload

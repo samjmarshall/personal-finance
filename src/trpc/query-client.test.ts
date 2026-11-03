@@ -15,6 +15,7 @@ function thrownBy(fn: () => void): unknown {
 	} catch (error) {
 		return error;
 	}
+
 	return undefined;
 }
 

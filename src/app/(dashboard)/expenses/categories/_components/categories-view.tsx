@@ -96,6 +96,7 @@ export function CategoriesView() {
 		setFormKey((key) => key + 1);
 		setFormOpen(true);
 	}
+
 	function openEdit(category: Category) {
 		setEditing(category);
 		setFormKey((key) => key + 1);
@@ -126,6 +127,7 @@ export function CategoriesView() {
 				>
 					{categories.map((category) => {
 						const expenseCount = countOf.get(category.id) ?? 0;
+
 						return (
 							<SortableItem
 								disabled={reorder.isPending}
@@ -209,11 +211,12 @@ export function CategoriesView() {
 			<DeleteConfirmDialog
 				label={deleteTarget?.name}
 				onConfirm={() => {
-					if (deleteTarget)
+					if (deleteTarget) {
 						remove.mutate(
 							{ id: deleteTarget.id },
 							{ onSuccess: () => setConfirmOpen(false) },
 						);
+					}
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}

@@ -22,6 +22,7 @@ function harness() {
 	const inngest = {
 		createFunction: (opts: Declared["opts"], handler: Declared["handler"]) => {
 			declared.push({ opts, handler });
+
 			return { id: () => opts.id };
 		},
 	};

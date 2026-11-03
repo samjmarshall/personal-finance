@@ -25,6 +25,7 @@ function serviceWith(
 		findMemberId: unstaged,
 		...staged,
 	};
+
 	return new AllowedSendersService({
 		repository,
 		members: { namesByIds: unstaged, ...members },

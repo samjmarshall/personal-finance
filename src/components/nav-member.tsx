@@ -10,6 +10,7 @@ const sidebarSkeleton = "bg-sidebar-muted/20";
 /** Proxy only checks the cookie is there; this is the session check behind it (adr026). */
 export async function NavMember() {
 	const session = await getSession();
+
 	if (!session) redirect("/sign-in");
 
 	const userName = session.user?.name || session.user?.email || "Member";

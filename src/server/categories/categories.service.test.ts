@@ -22,6 +22,7 @@ function serviceWith(staged: Partial<CategoriesRepository>) {
 		findNames: unstaged,
 		...staged,
 	};
+
 	return new CategoriesService({ repository });
 }
 
@@ -52,10 +53,12 @@ describe("create", () => {
 			nextSortOrder: async () => 4,
 			insert: async (values) => {
 				inserted.push(values);
+
 				return CATEGORY;
 			},
 			...staged,
 		});
+
 		return { service, inserted };
 	}
 
@@ -120,10 +123,12 @@ describe("update", () => {
 		const service = serviceWith({
 			update: async (...args) => {
 				updated.push(args);
+
 				return CATEGORY;
 			},
 			...staged,
 		});
+
 		return { service, updated };
 	}
 
@@ -195,6 +200,7 @@ describe("delete", () => {
 			},
 			...staged,
 		});
+
 		return { service, deleted };
 	}
 
@@ -243,6 +249,7 @@ describe("namesByIds", () => {
 		const service = serviceWith({
 			findNames: async (ids) => {
 				asked.push(ids);
+
 				return [{ id: 3, name: "Food" }];
 			},
 		});

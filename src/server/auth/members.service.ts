@@ -18,6 +18,7 @@ export class MembersService {
 		const rows = memberIds.length
 			? await this.repository.findNames(memberIds)
 			: [];
+
 		return new Map(rows.map(({ id, name }) => [id, name]));
 	}
 }

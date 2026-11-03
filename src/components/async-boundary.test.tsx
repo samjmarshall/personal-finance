@@ -40,16 +40,19 @@ function Flaky({
 	children: React.ReactNode;
 }) {
 	if (fails()) throw new Error("offline");
+
 	return children;
 }
 
 function Query({ queryFn }: { queryFn: () => Promise<string> }) {
 	const { data } = useSuspenseQuery({ queryKey: ["chart"], queryFn });
+
 	return <p>{data}</p>;
 }
 
 function Rows({ filter }: { filter: string }) {
 	if (filter === "broken") throw new Error("offline");
+
 	return <p>Rows for {filter}</p>;
 }
 
@@ -64,6 +67,7 @@ function QueryRows({
 		queryKey: ["rows", filter],
 		queryFn: filter === "broken" ? fetchBroken : async () => filter,
 	});
+
 	return <p>Rows for {data}</p>;
 }
 
@@ -79,7 +83,9 @@ function Page({
 }) {
 	const [refreshing, setRefreshing] = useState(false);
 	exposeRefresh(() => setRefreshing(true));
+
 	if (refreshing) use(promise);
+
 	return children;
 }
 
@@ -94,6 +100,7 @@ async function renderBoundary(children: React.ReactNode) {
 			{ wrapper: AppRouter },
 		),
 	);
+
 	return { ...view, router };
 }
 
@@ -436,7 +443,9 @@ describe("AsyncBoundary", () => {
 			const user = userEvent.setup();
 			const { router, AppRouter } = createAppRouter();
 			const { promise, resolve } = deferred<string>();
+
 			let startRefresh = () => {};
+
 			router.refresh.mockImplementation(() => startRefresh());
 			let fail = true;
 			await act(async () =>

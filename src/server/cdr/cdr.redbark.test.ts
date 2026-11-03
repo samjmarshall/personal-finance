@@ -221,6 +221,7 @@ describe("HttpRedbarkClient failures", () => {
 		const error = await client()
 			.listConnections()
 			.catch((e: unknown) => e);
+
 		return error as Error;
 	};
 

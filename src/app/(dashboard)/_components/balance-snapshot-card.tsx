@@ -34,8 +34,10 @@ export function BalanceSnapshotCard() {
 		e.preventDefault();
 		setError(null);
 		const value = Number.parseFloat(amount);
+
 		// No lower bound: a household balance can be overdrawn (negative).
 		if (Number.isNaN(value)) return setError("Please enter a valid amount.");
+
 		set.mutate({ amount: value, asOf: new Date() });
 	}
 
@@ -80,6 +82,7 @@ export function BalanceSnapshotCard() {
 							inputMode="decimal"
 							onChange={(e) => {
 								setAmount(e.target.value);
+
 								// Clear a prior validation error once they start correcting —
 								// stale error text + aria-invalid would mislead a screen reader.
 								if (error) setError(null);

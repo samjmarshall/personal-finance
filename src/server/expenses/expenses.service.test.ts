@@ -21,6 +21,7 @@ function serviceWith(staged: Partial<ExpensesRepository>) {
 		countsByCategory: unstaged,
 		...staged,
 	};
+
 	return new ExpensesService({ repository });
 }
 
@@ -57,6 +58,7 @@ describe("expenses", () => {
 		const service = serviceWith({
 			insert: async (values) => {
 				inserted.push(values);
+
 				return EXPENSE;
 			},
 		});
@@ -79,6 +81,7 @@ describe("expenses", () => {
 		const service = serviceWith({
 			update: async (id, values) => {
 				updated.push([id, values]);
+
 				return EXPENSE;
 			},
 		});
@@ -170,6 +173,7 @@ describe("namesByIds", () => {
 		const service = serviceWith({
 			findNames: async (ids) => {
 				asked.push(ids);
+
 				return [{ id: 7, name: "Weekly shop", categoryId: 3 }];
 			},
 		});

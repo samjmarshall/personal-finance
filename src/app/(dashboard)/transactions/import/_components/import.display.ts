@@ -33,6 +33,7 @@ export function importPhase({
 	if (status === CdrImportStatus.Done) return "done";
 	if (status === CdrImportStatus.Failed) return "failed";
 	if (!active) return "stalled";
+
 	return status === CdrImportStatus.Running ? "importing" : "waiting";
 }
 
@@ -76,15 +77,20 @@ export function importRangeLabel({
 /** The bank's day against the member's, in household days, as the reconcile counts them. Null on the same day. */
 export function dayGapLabel(bank: Date, mine: Date): string | null {
 	const gap = householdDays(bank, mine);
+
 	if (gap === 0) return null;
+
 	const days = Math.abs(gap) === 1 ? "1 day" : `${Math.abs(gap)} days`;
+
 	return `${days} ${gap > 0 ? "later" : "earlier"} than yours`;
 }
 
 /** The bank's amount against the member's, by size, so a refund reads the same way. Null when equal to the cent; only an edit to yours after the flag splits them. */
 export function amountGapLabel(bank: number, mine: number): string | null {
 	const cents = Math.abs(toCents(bank)) - Math.abs(toCents(mine));
+
 	if (cents === 0) return null;
+
 	return `${formatCurrency(Math.abs(cents) / 100)} ${cents > 0 ? "more" : "less"} than yours`;
 }
 
@@ -160,6 +166,7 @@ export function duplicatePiles(
 		similar_description: sorted.filter(isSimilar),
 		different_description: sorted.filter((review) => !isSimilar(review)),
 	};
+
 	return PILES.map((pile) => ({ ...pile, reviews: byPile[pile.key] })).filter(
 		(pile) => pile.reviews.length > 0,
 	);
@@ -185,10 +192,13 @@ export function fillLabel(
 	total: number,
 ): string {
 	if (unanswered === 0) return "All answered";
-	if (unanswered === total)
+
+	if (unanswered === total) {
 		return total === 1
 			? `${label} for this one`
 			: `${label} for all ${formatCount(total)}`;
+	}
+
 	return unanswered === 1
 		? `${label} for the last one`
 		: `${label} for the other ${formatCount(unanswered)}`;
@@ -201,17 +211,24 @@ export function appliedLabel({
 	taken,
 }: ResolveDuplicatesResult): string {
 	const parts: string[] = [];
-	if (resolved > 0)
+
+	if (resolved > 0) {
 		parts.push(
 			`Applied ${formatCount(resolved)} ${resolved === 1 ? "answer" : "answers"}.`,
 		);
-	if (gone > 0)
+	}
+
+	if (gone > 0) {
 		parts.push(
 			`${formatCount(gone)} ${gone === 1 ? "was" : "were"} already answered.`,
 		);
-	if (taken > 0)
+	}
+
+	if (taken > 0) {
 		parts.push(
 			`${formatCount(taken)} still ${taken === 1 ? "needs" : "need"} an answer: the bank's row is already in your transactions.`,
 		);
+	}
+
 	return parts.join(" ");
 }

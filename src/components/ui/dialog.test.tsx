@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 function View() {
 	const [open, setOpen] = useState(true);
 	useLayoutEffect(() => () => setOpen(false), []);
+
 	return (
 		<Dialog onOpenChange={setOpen} open={open}>
 			<DialogContent>

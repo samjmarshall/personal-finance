@@ -24,6 +24,7 @@ export function captureTraceCarrier(ctx = context.active()): TraceCarrier {
 	// never ride into the persisted pocket (adr016 clause 2). traceparent/tracestate
 	// come from the span context, which scrubBaggage leaves untouched.
 	propagation.inject(scrubBaggage(ctx), carrier);
+
 	return carrier;
 }
 
@@ -43,6 +44,7 @@ export function restoreTraceCarrier(carrier: unknown): Context | null {
 
 	const obj = carrier as Record<string, unknown>;
 	const clean: Record<string, string> = {};
+
 	for (const key of ["traceparent", "tracestate", "baggage"] as const) {
 		if (typeof obj[key] === "string") {
 			clean[key] = obj[key] as string;
@@ -51,6 +53,7 @@ export function restoreTraceCarrier(carrier: unknown): Context | null {
 
 	const restored = propagation.extract(ROOT_CONTEXT, clean);
 	const spanCtx = trace.getSpanContext(restored);
+
 	if (!spanCtx || !isSpanContextValid(spanCtx)) {
 		return null;
 	}

@@ -13,6 +13,7 @@ import { balanceSnapshots } from "./balances.schema";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleBalancesRepository({ db: db as never }),
 		queries,

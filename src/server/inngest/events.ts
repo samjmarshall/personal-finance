@@ -36,6 +36,7 @@ export function buildOutboxEvent<K extends EventName>(
 	// The `_trace` pocket is appended after parse so `z.object` stripping never
 	// removes it (adr016 clause 1). Nothing else writes this key.
 	const data = EVENT_REGISTRY[name].parse(payload);
+
 	return {
 		id: crypto.randomUUID(),
 		name,

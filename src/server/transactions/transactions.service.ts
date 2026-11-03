@@ -48,6 +48,7 @@ const rethrowWriteConflict = (error: unknown, fkMessage: string): never => {
 	if (isPgViolation(error, PgViolation.CheckViolation)) {
 		throw new ConflictError(LINKED_CATEGORY_MESSAGE, { cause: error });
 	}
+
 	return rethrowFkConflict(error, fkMessage);
 };
 
@@ -90,6 +91,7 @@ export class TransactionsService {
 		const categoryNames = await this.categories.namesByIds(
 			distinctLinks(items.map(effectiveCategoryId)),
 		);
+
 		return {
 			items: items.map((row) => ({
 				...row,
@@ -110,6 +112,7 @@ export class TransactionsService {
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, FK_CONFLICT_MESSAGE),
 			);
+
 		return assertRow(row, "create transaction");
 	}
 
@@ -127,7 +130,11 @@ export class TransactionsService {
 		answers,
 	}: ResolveDuplicatesInput): Promise<ResolveDuplicatesResult> {
 		const result: ResolveDuplicatesResult = { resolved: 0, gone: 0, taken: 0 };
-		for (const answer of answers) result[await this.resolveOne(answer)] += 1;
+
+		for (const answer of answers) {
+			result[await this.resolveOne(answer)] += 1;
+		}
+
 		return result;
 	}
 
@@ -146,7 +153,9 @@ export class TransactionsService {
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, FK_CONFLICT_MESSAGE),
 			);
+
 		if (!row) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		return row;
 	}
 
@@ -162,6 +171,7 @@ export class TransactionsService {
 	// request, never per row. An id with no row has no entry.
 	async descriptionsByIds(ids: number[]): Promise<ReadonlyMap<number, string>> {
 		const rows = ids.length ? await this.repository.findDescriptions(ids) : [];
+
 		return new Map(rows.map(({ id, description }) => [id, description]));
 	}
 
@@ -173,7 +183,9 @@ export class TransactionsService {
 			.catch((error: unknown) =>
 				rethrowWriteConflict(error, LINK_EXPENSE_CONFLICT_MESSAGE),
 			);
+
 		if (!row) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		return row;
 	}
 
@@ -199,11 +211,13 @@ export class TransactionsService {
 			use_bank: () => this.repository.useBanks(id),
 			both_real: () => this.repository.bothReal(id),
 		}[choice];
+
 		try {
 			return (await resolve()) ? "resolved" : "gone";
 		} catch (error) {
 			// Use bank's moves the bank id onto the household row; another row may hold it.
 			if (isPgViolation(error, PgViolation.UniqueViolation)) return "taken";
+
 			throw error;
 		}
 	}
@@ -214,11 +228,14 @@ export class TransactionsService {
 		{ amount, date }: Pick<TransactionUpdateInput, "amount" | "date">,
 	): Promise<boolean> {
 		const saved = await this.repository.findSyncedValues(id);
+
 		if (!saved) throw new NotFoundError(NOT_FOUND_MESSAGE);
 		if (saved.provenance === Provenance.Manual) return false;
+
 		if (amount !== saved.amount || date.getTime() !== saved.date.getTime()) {
 			throw new InvalidInputError(BANK_OWNED_MESSAGE);
 		}
+
 		return true;
 	}
 
@@ -229,10 +246,12 @@ export class TransactionsService {
 		id?: number,
 	): Promise<Pick<Partial<TransactionLink>, "categoryId">> {
 		if (typeof expenseId === "number") return { categoryId: null };
+
 		// Unlinked with no Category picked: keep showing the one it had.
 		if (expenseId === null && categoryId === undefined && id !== undefined) {
 			return { categoryId: await this.categoryBeforeUnlink(id) };
 		}
+
 		return {};
 	}
 
@@ -240,9 +259,12 @@ export class TransactionsService {
 	// Null if the Expense is gone.
 	private async categoryBeforeUnlink(id: number): Promise<number | null> {
 		const link = await this.repository.findLink(id);
+
 		if (!link) throw new NotFoundError(NOT_FOUND_MESSAGE);
 		if (link.expenseId === null) return link.categoryId;
+
 		const expenses = await this.expenses.namesByIds([link.expenseId]);
+
 		return expenses.get(link.expenseId)?.categoryId ?? null;
 	}
 }

@@ -209,6 +209,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 			.spyOn(process.stdout, "write")
 			.mockImplementation((chunk) => {
 				if (typeof chunk === "string") lines.push(chunk);
+
 				return true;
 			});
 
@@ -224,6 +225,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		const warnLine = lines.find((l) => {
 			try {
 				const p = JSON.parse(l);
+
 				return (
 					p.level === "warn" && p["event.name"] === "trace.carrier.missing"
 				);
@@ -259,6 +261,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 			.spyOn(process.stdout, "write")
 			.mockImplementation((chunk) => {
 				if (typeof chunk === "string") lines.push(chunk);
+
 				return true;
 			});
 
@@ -272,6 +275,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 		const warnLine = lines.find((l) => {
 			try {
 				const p = JSON.parse(l);
+
 				return (
 					p.level === "warn" && p["event.name"] === "trace.carrier.missing"
 				);
@@ -288,6 +292,7 @@ describe("TracingMiddleware.wrapFunctionHandler", () => {
 			.spyOn(process.stdout, "write")
 			.mockImplementation((chunk) => {
 				if (typeof chunk === "string") lines.push(chunk);
+
 				return true;
 			});
 
@@ -359,6 +364,7 @@ describe("TracingMiddleware.onRunError", () => {
 			.spyOn(process.stdout, "write")
 			.mockImplementation((chunk) => {
 				if (typeof chunk === "string") lines.push(chunk);
+
 				return true;
 			});
 
@@ -382,6 +388,7 @@ describe("TracingMiddleware.onRunError", () => {
 		const errorLine = lines.find((l) => {
 			try {
 				const p = JSON.parse(l);
+
 				return p.level === "error" && p.msg === "inngest run failed";
 			} catch {
 				return false;
@@ -401,6 +408,7 @@ describe("TracingMiddleware.onRunError", () => {
 		const lines: string[] = [];
 		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
 			if (typeof chunk === "string") lines.push(chunk);
+
 			return true;
 		});
 
@@ -466,6 +474,7 @@ describe("TracingMiddleware.onRunError", () => {
 		const lines: string[] = [];
 		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
 			if (typeof chunk === "string") lines.push(chunk);
+
 			return true;
 		});
 
@@ -482,6 +491,7 @@ describe("TracingMiddleware.onRunError", () => {
 		const errorLine = lines.find((l) => {
 			try {
 				const p = JSON.parse(l);
+
 				return p.level === "error" && p.msg === "inngest run failed";
 			} catch {
 				return false;
@@ -497,6 +507,7 @@ describe("TracingMiddleware.onRunError", () => {
 		const lines: string[] = [];
 		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
 			if (typeof chunk === "string") lines.push(chunk);
+
 			return true;
 		});
 

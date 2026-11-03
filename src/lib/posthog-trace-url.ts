@@ -14,10 +14,12 @@ export function posthogTraceUrl(
 	traceId: string | null,
 ): string | null {
 	if (!config.projectId || !traceId) return null;
+
 	const url = new URL(
 		`/project/${encodeURIComponent(config.projectId)}/tracing`,
 		config.uiHost,
 	);
 	url.searchParams.set("trace", traceId);
+
 	return url.toString();
 }

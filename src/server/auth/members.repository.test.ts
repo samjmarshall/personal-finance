@@ -8,6 +8,7 @@ import { DrizzleMembersRepository } from "./members.repository";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleMembersRepository({ db: db as never }),
 		queries,

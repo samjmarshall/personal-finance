@@ -8,7 +8,9 @@ export function proxy(request: NextRequest) {
 		request.nextUrl.pathname,
 		getSessionCookie(request) !== null,
 	);
+
 	if (to) return NextResponse.redirect(new URL(to, request.url));
+
 	return NextResponse.next();
 }
 

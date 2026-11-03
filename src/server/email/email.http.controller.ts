@@ -42,9 +42,11 @@ export class EmailHttpController {
 		const id = request.headers.get("svix-id");
 		const timestamp = request.headers.get("svix-timestamp");
 		const signature = request.headers.get("svix-signature");
+
 		if (!id || !timestamp || !signature) return unauthorized();
 
 		let verified: unknown;
+
 		try {
 			verified = this.resend.webhooks.verify({
 				payload,
@@ -61,14 +63,17 @@ export class EmailHttpController {
 		// unauthenticated caller leaves no span, and none of the rejection noise does.
 		return withSpan("email.inbound", {}, async (span) => {
 			const parsed = inboundEmailEventDto.safeParse(verified);
+
 			// Signed but unreadable. Retrying will not change the shape, so it is a 200.
 			if (!parsed.success) return json({ status: "ignored" });
 
 			span.setAttribute("email.event_type", parsed.data.type);
+
 			// Resend delivers every subscribed event to one endpoint; the others are not
 			// this route's business, and a non-200 would make Svix retry them forever.
-			if (parsed.data.type !== "email.received")
+			if (parsed.data.type !== "email.received") {
 				return json({ status: "ignored" });
+			}
 
 			const emailId = parsed.data.data.email_id;
 			span.setAttribute("email.id", emailId);
@@ -78,14 +83,18 @@ export class EmailHttpController {
 			// failure — 200 so it is never redelivered.
 			try {
 				const result = await this.service.ingest(parsed.data);
-				if (result.status === "ingested")
+
+				if (result.status === "ingested") {
 					span.setAttribute("receipt.ids", result.receiptIds);
+				}
+
 				return json(result);
 			} catch (error) {
 				this.logger.error("inbound email failed", {
 					error,
 					"email.id": emailId,
 				});
+
 				throw error;
 			}
 		});

@@ -43,14 +43,20 @@ export function PossibleDuplicatePiles({
 	// A pick for a row that has since gone (another tab, a re-import) is dropped here.
 	const answers = reviews.flatMap(({ id }) => {
 		const choice = staged[id];
+
 		return choice ? [{ id, choice }] : [];
 	});
 
 	function pick(id: number, choice: DuplicateChoice | null) {
 		setStaged((current) => {
 			const next = { ...current };
-			if (choice) next[id] = choice;
-			else delete next[id];
+
+			if (choice) {
+				next[id] = choice;
+			} else {
+				delete next[id];
+			}
+
 			return next;
 		});
 	}
@@ -58,18 +64,28 @@ export function PossibleDuplicatePiles({
 	function fill({ reviews: rows, suggestion }: DuplicatePile) {
 		setStaged((current) => {
 			const next = { ...current };
-			for (const { id } of rows) next[id] ??= suggestion;
+
+			for (const { id } of rows) {
+				next[id] ??= suggestion;
+			}
+
 			return next;
 		});
 	}
 
 	async function apply() {
 		const sent = answers;
+
 		if (!(await onApply(sent))) return;
+
 		// A taken row stays to review; its pick failed, so it starts blank again.
 		setStaged((current) => {
 			const next = { ...current };
-			for (const { id } of sent) delete next[id];
+
+			for (const { id } of sent) {
+				delete next[id];
+			}
+
 			return next;
 		});
 	}
@@ -313,6 +329,7 @@ function Row({
 								// Not Space or a screen reader: a radio they pick stays picked.
 								onClick={() => {
 									if (pressed.current && answer === choice) onPick(null);
+
 									pressed.current = false;
 								}}
 								onKeyDown={(event) => {
@@ -351,6 +368,7 @@ function Side({
 	amountDiffers?: boolean;
 }) {
 	const differs = "font-medium text-[var(--badge-warn-fg)]";
+
 	return (
 		<div className="min-w-0">
 			{/* The column header says this on wide screens. */}

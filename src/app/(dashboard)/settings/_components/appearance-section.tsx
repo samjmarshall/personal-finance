@@ -45,6 +45,7 @@ export function AppearanceSection() {
 	const mounted = useMounted();
 
 	let summary = "Choose how Ledger looks";
+
 	if (mounted) {
 		summary =
 			theme === "system"
@@ -73,6 +74,7 @@ export function AppearanceSection() {
 								? "dark"
 								: "light"
 							: value;
+
 					return (
 						<button
 							aria-pressed={active}

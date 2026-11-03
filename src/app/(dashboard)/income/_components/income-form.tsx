@@ -36,10 +36,12 @@ const KIND_OPTIONS = [
 // Seed the amount field: one-time reads its own amount, recurring the per-fortnight figure.
 function seedAmount(income: Income | null) {
 	if (!income) return "";
+
 	const value =
 		income.kind === CommitmentKind.OneTime
 			? (income.amount ?? 0)
 			: income.fortnight;
+
 	return value ? String(Number(value.toFixed(2))) : "";
 }
 
@@ -70,6 +72,7 @@ export function IncomeForm({
 	// otherwise show the previous entry's values.
 	useEffect(() => {
 		if (!open) return;
+
 		setPerson(income?.person ?? "");
 		setSource(income?.source ?? "");
 		setKind(toCommitmentKind(income?.kind));
@@ -84,6 +87,7 @@ export function IncomeForm({
 		await utils.income.list.invalidate();
 		onClose();
 	};
+
 	const create = api.income.create.useMutation({ onSuccess });
 	const update = api.income.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
@@ -93,22 +97,30 @@ export function IncomeForm({
 		e.preventDefault();
 		setError(null);
 		const value = Number.parseFloat(amount);
+
 		if (!person.trim()) return setError("Please enter a person.");
 		if (!source.trim()) return setError("Please enter a source.");
-		if (Number.isNaN(value) || value < 0)
+
+		if (Number.isNaN(value) || value < 0) {
 			return setError("Please enter a valid amount.");
+		}
 
 		const date = isOneTime ? fromDateInput(expectedDate) : null;
+
 		if (isOneTime && !date) return setError("Please enter a valid date.");
 
 		// Empty Timing fields stay null (row smears); submitting null on update
 		// clears a stored value, so a cleared field genuinely reverts to a smear.
 		const day = dueDay ? Number.parseInt(dueDay, 10) : null;
 		const month = dueMonth ? Number.parseInt(dueMonth, 10) : null;
-		if (!isOneTime && day != null && (day < 1 || day > 31))
+
+		if (!isOneTime && day != null && (day < 1 || day > 31)) {
 			return setError("Payday must be between 1 and 31.");
-		if (!isOneTime && month != null && (month < 1 || month > 12))
+		}
+
+		if (!isOneTime && month != null && (month < 1 || month > 12)) {
 			return setError("Pay month must be between 1 and 12.");
+		}
 
 		// One-time carries amount + expectedDate; its three cadence figures are
 		// unused (zeroed). Recurring is the inverse: derived cadence, no one-time pair.
@@ -137,15 +149,22 @@ export function IncomeForm({
 				};
 
 		rememberFocus();
-		if (income) update.mutate({ id: income.id, ...payload });
-		else create.mutate(payload);
+
+		if (income) {
+			update.mutate({ id: income.id, ...payload });
+		} else {
+			create.mutate(payload);
+		}
 	}
 
 	return (
 		<Dialog
 			onOpenChange={(next, eventDetails) => {
-				if (pending) eventDetails.cancel();
-				else if (!next) onClose();
+				if (pending) {
+					eventDetails.cancel();
+				} else if (!next) {
+					onClose();
+				}
 			}}
 			open={open}
 		>

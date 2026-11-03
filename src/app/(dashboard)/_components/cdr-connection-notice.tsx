@@ -16,6 +16,7 @@ const REDBARK_DASHBOARD = "https://app.redbark.com";
 // before. Nothing renders until mounted, so the date is the member's own day.
 export function ClientConnectionNotice({ states }: { states: CdrSyncState[] }) {
 	const notice = useHydrating() ? null : connectionNotice(states);
+
 	return notice ? <CdrConnectionNotice notice={notice} /> : null;
 }
 
@@ -23,6 +24,7 @@ export function CdrConnectionNotice({ notice }: { notice: ConnectionNotice }) {
 	// The link follows the lines it fixes; behind lines get their own paragraph
 	// so it never reads as their fix.
 	const firstLine = notice.reauthorize ?? notice.behind;
+
 	return (
 		<AttentionBanner tone={notice.tone}>
 			<div className="space-y-1">

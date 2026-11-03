@@ -15,8 +15,10 @@ export async function GET(): Promise<Response> {
 	// It must reach the db per request, never prerender `select 1` at `next build`
 	// (no db there). Outside the try: a catch would swallow the prerender bail-out.
 	await connection();
+
 	try {
 		await db.execute(sql`select 1`);
+
 		return Response.json({ status: "ok" }, { status: 200 });
 	} catch (error) {
 		// Name only, never the error itself (adr007): a driver error's message/stack can
@@ -25,6 +27,7 @@ export async function GET(): Promise<Response> {
 			"error.name": errorName(error),
 			"event.name": "health.readiness.failed",
 		});
+
 		return Response.json({ status: "error" }, { status: 503 });
 	}
 }

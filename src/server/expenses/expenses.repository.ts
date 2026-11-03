@@ -53,6 +53,7 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 
 	async insert(values: ExpenseCreateInput): Promise<Expense | undefined> {
 		const [row] = await this.db.insert(expenses).values(values).returning();
+
 		return row;
 	}
 
@@ -65,6 +66,7 @@ export class DrizzleExpensesRepository implements ExpensesRepository {
 			.set(values)
 			.where(eq(expenses.id, id))
 			.returning();
+
 		return row;
 	}
 

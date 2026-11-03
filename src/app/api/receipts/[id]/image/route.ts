@@ -16,6 +16,7 @@ function compose(): ReceiptsHttpController {
 			component: "image-route",
 		}),
 	});
+
 	return controller;
 }
 

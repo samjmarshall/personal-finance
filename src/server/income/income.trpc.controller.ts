@@ -17,6 +17,7 @@ export const incomeRouter = createTRPCRouter({
 		.input(z.object({ id: z.number() }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.services.income.delete(input.id);
+
 			return { success: true };
 		}),
 });

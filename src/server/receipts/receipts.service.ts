@@ -147,6 +147,7 @@ export class ReceiptsService {
 			],
 			"receipt/uploaded",
 		);
+
 		return assertRow(row, "create receipt");
 	}
 
@@ -169,6 +170,7 @@ export class ReceiptsService {
 			})),
 			"receipt/email.received",
 		);
+
 		return rows.map((row) => row.id);
 	}
 
@@ -182,6 +184,7 @@ export class ReceiptsService {
 				distinctIds(rows.map((row) => row.transactionId)),
 			),
 		]);
+
 		return rows.map((row) => ({
 			...row,
 			userName: entryOf(memberNames, row.userId) ?? null,
@@ -192,7 +195,9 @@ export class ReceiptsService {
 	// An item's Category is its own pick, never its Expense's.
 	async get(id: number): Promise<ReceiptDetail> {
 		const receipt = await this.repository.findById(id);
+
 		if (!receipt) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		const items = await this.repository.findItems(id);
 		const [descriptions, expenses, categoryNames] = await Promise.all([
 			this.transactions.descriptionsByIds(distinctIds([receipt.transactionId])),
@@ -203,6 +208,7 @@ export class ReceiptsService {
 				distinctIds(items.map((item) => item.categoryId)),
 			),
 		]);
+
 		return {
 			...receipt,
 			transactionDescription:
@@ -218,9 +224,11 @@ export class ReceiptsService {
 
 	async retry(id: number): Promise<Receipt> {
 		const row = await this.repository.requeueFailed(id, currentTraceId());
+
 		if (!row) {
 			throw new NotFoundError("Receipt not found or not in a failed state.");
 		}
+
 		return row;
 	}
 
@@ -228,12 +236,15 @@ export class ReceiptsService {
 	// another receipt. The file goes after, so cleanup never fails the delete.
 	async delete(id: number): Promise<void> {
 		const deletion = await this.repository.deleteUnlessDuplicated(id);
+
 		if (deletion === "missing") throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		if (deletion === "has-duplicates") {
 			throw new ConflictError(
 				"Delete the duplicate copies of this receipt first.",
 			);
 		}
+
 		try {
 			await this.blobStore.delete(deletion.blobPathname);
 		} catch {
@@ -243,6 +254,7 @@ export class ReceiptsService {
 
 	async openImage(id: number): Promise<ReceiptImage> {
 		const blob = await this.streamBlob(id, "Receipt image not found.");
+
 		return {
 			stream: blob.stream,
 			contentType: RENDERABLE_TYPES.has(blob.contentType)
@@ -255,10 +267,13 @@ export class ReceiptsService {
 	// out through the sandboxed route (adr019). Bodies are UTF-8, so force charset.
 	async openHtml(id: number): Promise<ReceiptHtml> {
 		const blob = await this.streamBlob(id, BODY_NOT_FOUND_MESSAGE);
+
 		if (receiptMediaKind(blob.contentType) !== "text") {
 			await blob.stream.cancel();
+
 			throw new NotFoundError(BODY_NOT_FOUND_MESSAGE);
 		}
+
 		return {
 			stream: blob.stream,
 			contentType: `${bareMediaType(blob.contentType)}; charset=utf-8`,
@@ -272,9 +287,13 @@ export class ReceiptsService {
 		missingMessage: string,
 	): Promise<StreamedBlob> {
 		const pathname = await this.repository.findBlobPathname(id);
+
 		if (pathname === undefined) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		const blob = await this.blobStore.stream(pathname);
+
 		if (!blob) throw new NotFoundError(missingMessage);
+
 		return blob;
 	}
 
@@ -289,7 +308,9 @@ export class ReceiptsService {
 	): Promise<unknown> {
 		return this.uploads.answer(request, event, async (pathname) => {
 			if (memberId === undefined) throw new UploadUnauthorizedError();
+
 			this.assertUploadPath(pathname);
+
 			return {
 				allowedContentTypes: [...RECEIPT_FILE_TYPES],
 				maximumSizeInBytes: MAX_UPLOAD_BYTES,
@@ -306,18 +327,23 @@ export class ReceiptsService {
 		timeZone: string,
 	): Promise<MatchCandidate[]> {
 		const receipt = await this.repository.findMatchInput(receiptId);
+
 		if (!receipt) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		// Nothing extracted to match on yet: skip a scan we'd discard.
 		const window = receipt.receiptDate
 			? matchScanWindow(receipt.receiptDate)
 			: null;
+
 		if (receipt.total === null || !window) return [];
+
 		const rows = await this.transactions.inDateWindow(window);
 		const matched = new Set(
 			await this.repository.findMatchedTransactionIds(
 				rows.map((row) => row.id),
 			),
 		);
+
 		return matchCandidates(
 			receipt,
 			rows.map((row) => ({ ...row, hasReceipt: matched.has(row.id) })),
@@ -341,9 +367,12 @@ export class ReceiptsService {
 						cause: error,
 					});
 				}
+
 				return rethrowFkConflict(error, "That transaction no longer exists.");
 			});
+
 		if (!row) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		return row;
 	}
 
@@ -357,7 +386,9 @@ export class ReceiptsService {
 			.catch((error: unknown) =>
 				rethrowFkConflict(error, ITEM_FK_CONFLICT_MESSAGE),
 			);
+
 		if (!row) throw new NotFoundError(ITEM_NOT_FOUND_MESSAGE);
+
 		return row;
 	}
 
@@ -371,7 +402,9 @@ export class ReceiptsService {
 			.catch((error: unknown) =>
 				rethrowFkConflict(error, ITEM_FK_CONFLICT_MESSAGE),
 			);
+
 		if (!row) throw new NotFoundError(ITEM_NOT_FOUND_MESSAGE);
+
 		return row;
 	}
 

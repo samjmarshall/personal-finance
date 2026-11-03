@@ -13,6 +13,7 @@ function Dialog({ ...props }: DialogPrimitive.Root.Props) {
 	// Remounting on hide drops it at once.
 	const [hides, setHides] = useState(0);
 	useLayoutEffect(() => () => setHides((n) => n + 1), []);
+
 	return <DialogPrimitive.Root data-slot="dialog" key={hides} {...props} />;
 }
 

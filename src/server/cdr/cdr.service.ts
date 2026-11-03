@@ -46,7 +46,9 @@ export class CdrService {
 		inBalance,
 	}: CdrSetInBalanceInput): Promise<CdrSyncState> {
 		const row = await this.repository.setInBalance(accountId, inBalance);
+
 		if (!row) throw new NotFoundError(UNKNOWN_ACCOUNT_MESSAGE);
+
 		return row;
 	}
 
@@ -56,7 +58,9 @@ export class CdrService {
 		nickname,
 	}: CdrSetNicknameInput): Promise<CdrSyncState> {
 		const row = await this.repository.setNickname(accountId, nickname);
+
 		if (!row) throw new NotFoundError(UNKNOWN_ACCOUNT_MESSAGE);
+
 		return row;
 	}
 
@@ -64,9 +68,13 @@ export class CdrService {
 	async startImport({ from, to }: CdrImportStartInput): Promise<CdrImport> {
 		const today = dayKeyInZone(new Date(), HOUSEHOLD_TIME_ZONE);
 		const rangeError = importRangeError(from, to, today);
+
 		if (rangeError) throw new InvalidInputError(rangeError);
-		if (await this.repository.findActiveImport(activeSince()))
+
+		if (await this.repository.findActiveImport(activeSince())) {
 			throw new ConflictError("An import is already running.");
+		}
+
 		return this.repository.insertImport({
 			fromDate: utcMidnight(from),
 			toDate: utcMidnight(to),
@@ -76,7 +84,9 @@ export class CdrService {
 	/** Null before the first import. */
 	async latestImport(): Promise<LatestImport | null> {
 		const row = await this.repository.latestImport();
+
 		if (!row) return null;
+
 		return {
 			...row,
 			active: isUnfinishedImport(row.status) && row.createdAt > activeSince(),

@@ -8,6 +8,7 @@ function serviceWith(staged: Partial<MembersRepository>) {
 		findNames: unstaged,
 		...staged,
 	};
+
 	return new MembersService({ repository });
 }
 
@@ -43,6 +44,7 @@ describe("MembersService", () => {
 		const service = serviceWith({
 			findNames: async (memberIds) => {
 				calls.push(memberIds);
+
 				return [];
 			},
 		});

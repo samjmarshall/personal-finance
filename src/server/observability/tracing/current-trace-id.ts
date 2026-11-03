@@ -9,6 +9,7 @@ import {
 // still counts: logs and issues from one run can join on it even if no trace ships.
 export function currentSpanContext(): SpanContext | null {
 	const ctx = trace.getActiveSpan()?.spanContext();
+
 	return ctx && isSpanContextValid(ctx) ? ctx : null;
 }
 
@@ -17,6 +18,7 @@ export function currentSpanContext(): SpanContext | null {
 export function currentTraceId(): string | null {
 	const ctx = currentSpanContext();
 	const sampled = ctx && (ctx.traceFlags & TraceFlags.SAMPLED) !== 0;
+
 	return sampled ? ctx.traceId : null;
 }
 
@@ -24,5 +26,6 @@ export function currentTraceId(): string | null {
 // when nothing records, so keyless local runs send no header.
 export function traceIdHeaders(): Record<string, string> {
 	const traceId = currentTraceId();
+
 	return traceId ? { "x-trace-id": traceId } : {};
 }

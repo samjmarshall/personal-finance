@@ -75,6 +75,7 @@ function serviceWith(
 		embeddingModel,
 		logger,
 	});
+
 	return { service, logs };
 }
 
@@ -117,22 +118,27 @@ describe("reconcileSynced", () => {
 			{
 				findKnownExternalIds: async (...args) => {
 					reads.push(["known", ...args]);
+
 					return [];
 				},
 				findReviews: async (...args) => {
 					reads.push(["reviews", ...args]);
+
 					return [];
 				},
 				findMatchCandidates: async (...args) => {
 					reads.push(["candidates", ...args]);
+
 					return [];
 				},
 				listDescriptions: async () => {
 					reads.push(["descriptions"]);
+
 					return [];
 				},
 				findEmbeddings: async (...args) => {
 					reads.push(["embeddings", ...args]);
+
 					return [];
 				},
 				saveEmbeddings: async (...args) => {
@@ -140,12 +146,14 @@ describe("reconcileSynced", () => {
 				},
 				applyReconcile: async (plan) => {
 					plans.push(plan);
+
 					return COUNTS;
 				},
 				...staged,
 			},
 			model,
 		);
+
 		return { service, reads, plans, saves, logs, model };
 	}
 
@@ -216,6 +224,7 @@ describe("reconcileSynced", () => {
 			findMatchCandidates: async () => [mine("Woolies")],
 			findEmbeddings: async (...args) => {
 				reads.push(["embeddings", ...args]);
+
 				return [{ description: "WOOLWORTHS", embedding: [1, 0] }];
 			},
 		});
@@ -323,8 +332,10 @@ describe("reconcileSynced", () => {
 			new MockEmbeddingModelV4({
 				modelId: MODEL_ID,
 				doEmbed: async ({ values }) => {
-					if (values.some((value) => failing.has(value)))
+					if (values.some((value) => failing.has(value))) {
 						throw new Error("ThrottlingException");
+					}
+
 					return { embeddings: values.map(() => [1, 0]), warnings: [] };
 				},
 			}),

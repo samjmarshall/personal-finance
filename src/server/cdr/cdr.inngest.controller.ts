@@ -60,16 +60,21 @@ export class CdrInngestController {
 				const range = await step.run("claim", () =>
 					this.translateErrors(() => this.service.claimImport(importId)),
 				);
+
 				if (!range) return;
+
 				const plan = await step.run("plan", () =>
 					this.translateErrors(() => this.service.planImport(importId, range)),
 				);
-				for (const chunk of plan.chunks)
+
+				for (const chunk of plan.chunks) {
 					await step.run(`chunk-${chunk.accountId}-${chunk.from}`, () =>
 						this.translateErrors(() =>
 							this.service.importChunk(importId, chunk, plan.liveAccountIds),
 						),
 					);
+				}
+
 				await step.run("finish", () =>
 					this.translateErrors(() => this.service.finishImport(importId)),
 				);
@@ -94,11 +99,17 @@ export class CdrInngestController {
 
 function toInngestError(error: unknown): unknown {
 	if (!(error instanceof CdrSyncError)) return error;
-	if (!error.retryable)
+
+	if (!error.retryable) {
 		return new NonRetriableError(error.message, { cause: error });
+	}
+
 	if (error.retryAfterMs === null) return error;
-	if (error.retryAfterMs > MAX_RETRY_AFTER_MS)
+
+	if (error.retryAfterMs > MAX_RETRY_AFTER_MS) {
 		return new NonRetriableError(error.message, { cause: error });
+	}
+
 	return new RetryAfterError(error.message, error.retryAfterMs, {
 		cause: error,
 	});

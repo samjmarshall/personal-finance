@@ -68,6 +68,7 @@ export async function StatCards() {
 		<div className={GRID}>
 			{stats.map((stat) => {
 				const Icon = stat.icon;
+
 				return (
 					<Card key={stat.label}>
 						<CardContent>

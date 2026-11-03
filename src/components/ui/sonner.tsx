@@ -17,6 +17,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
 	// theme is the SSR default until mount; gate it so the first client render
 	// matches server HTML and sonner's container doesn't hydration-mismatch.
 	const mounted = useMounted();
+
 	return (
 		<Sonner
 			className="toaster group"

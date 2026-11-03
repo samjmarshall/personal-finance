@@ -52,6 +52,7 @@ export const transactionRouter = createTRPCRouter({
 		.input(z.object({ id: z.number() }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.services.transactions.delete(input.id);
+
 			return { success: true };
 		}),
 });

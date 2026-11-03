@@ -49,6 +49,7 @@ function mine(
 ): MatchCandidate {
 	const date = new Date(`${day}T00:00:00.000Z`);
 	date.setUTCHours(-11);
+
 	return {
 		id,
 		date,
@@ -69,6 +70,7 @@ function plan(input: Partial<ReconcileInput>) {
 	const texts = [...(input.incoming ?? []), ...(input.candidates ?? [])].map(
 		(row) => row.description,
 	);
+
 	return planReconcile({
 		incoming: [],
 		knownIds: [],
@@ -173,6 +175,7 @@ describe("planReconcile", () => {
 			incoming: [row],
 			candidates: [mine(1, "2026-11-10", 100)],
 		});
+
 		if (outcome === "flag") {
 			expect(result).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
 		} else {

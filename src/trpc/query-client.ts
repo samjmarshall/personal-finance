@@ -27,8 +27,10 @@ function toToastMessage(error: unknown): string {
 		const first =
 			zodError?.formErrors[0] ??
 			Object.values(zodError?.fieldErrors ?? {}).flat()[0];
+
 		if (first) return first;
 	}
+
 	return error instanceof Error ? error.message : "Something went wrong.";
 }
 
@@ -36,7 +38,9 @@ function toToastMessage(error: unknown): string {
 // streamed one without throwing, so a stale session goes to /sign-in here (adr026).
 function redirectIfUnauthorized(error: unknown): boolean {
 	if (environmentManager.isServer() || !isAuthError(error)) return false;
+
 	window.location.assign("/sign-in");
+
 	return true;
 }
 
@@ -46,11 +50,14 @@ export function isTransientError(error: unknown): boolean {
 		// A failed server prefetch arrives as a plain error with no status. Retry
 		// it with a real fetch, which tells 4xx from 5xx. Never retry a redirect.
 		const digest = (error as { digest?: unknown } | null)?.digest;
+
 		return !(typeof digest === "string" && digest.startsWith("NEXT_"));
 	}
+
 	// A network failure never got a response, so it carries no data.
 	const status = (error.data as { httpStatus?: number } | undefined)
 		?.httpStatus;
+
 	return status === undefined || status >= 500;
 }
 

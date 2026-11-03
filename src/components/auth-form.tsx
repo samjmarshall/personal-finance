@@ -26,6 +26,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 		setError(null);
 		rememberFocus();
 		setLoading(true);
+
 		try {
 			if (isSignUp) {
 				const { error } = await authClient.signUp.email({
@@ -33,11 +34,14 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 					password,
 					name: name || email.split("@")[0] || "Member",
 				});
+
 				if (error) throw new Error(error.message ?? "Could not sign up");
 			} else {
 				const { error } = await authClient.signIn.email({ email, password });
+
 				if (error) throw new Error(error.message ?? "Could not sign in");
 			}
+
 			router.push("/");
 			router.refresh();
 		} catch (err) {

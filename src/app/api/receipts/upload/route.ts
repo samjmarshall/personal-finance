@@ -17,6 +17,7 @@ function compose(): ReceiptsHttpController {
 			component: "upload-route",
 		}),
 	});
+
 	return controller;
 }
 

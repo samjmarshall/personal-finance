@@ -7,12 +7,15 @@ import config from "../../../../../../next.config";
 // what the browser really gets once every matching entry applies.
 async function configHeadersFor(pathname: string) {
 	const merged: Record<string, string> = {};
+
 	for (const entry of (await config.headers?.()) ?? []) {
 		if (!getPathMatch(entry.source)(pathname)) continue;
+
 		for (const { key, value } of entry.headers) {
 			merged[key.toLowerCase()] = value;
 		}
 	}
+
 	return merged;
 }
 

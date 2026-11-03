@@ -63,7 +63,11 @@ export class OutboxService implements OutboxWriteDoor {
 			writes,
 			events,
 		);
-		for (const event of enqueued) await this.deliver(event, "send");
+
+		for (const event of enqueued) {
+			await this.deliver(event, "send");
+		}
+
 		return result;
 	}
 
@@ -90,6 +94,7 @@ export class OutboxService implements OutboxWriteDoor {
 
 		let delivered = 0;
 		let failed = 0;
+
 		for (const row of rows) {
 			const ageS = Math.round((Date.now() - row.createdAt.getTime()) / 1000);
 			const acked = await withSpan(
@@ -112,6 +117,7 @@ export class OutboxService implements OutboxWriteDoor {
 					const ok = await this.deliver(event, "sweep");
 					// Judge stuck after this try, so a row that just went through never alerts.
 					const attempts = row.attempts + 1;
+
 					if (!ok && attempts >= STUCK_AFTER_ATTEMPTS) {
 						this.logger.warn("outbox row stuck", {
 							"event.name": "outbox.sweep.stuck",
@@ -121,11 +127,16 @@ export class OutboxService implements OutboxWriteDoor {
 							"outbox.age_s": ageS,
 						});
 					}
+
 					return ok;
 				},
 			);
-			if (acked) delivered++;
-			else failed++;
+
+			if (acked) {
+				delivered++;
+			} else {
+				failed++;
+			}
 		}
 
 		return { delivered, failed };
@@ -134,6 +145,7 @@ export class OutboxService implements OutboxWriteDoor {
 	/** Drop acked rows past retention. Unacked and stuck rows are never touched (adr002). */
 	async prune(): Promise<{ deleted: number }> {
 		const deleted = await this.repository.deleteProcessed();
+
 		return { deleted };
 	}
 
@@ -153,6 +165,7 @@ export class OutboxService implements OutboxWriteDoor {
 			"outbox.delivery_context": deliveryContext,
 		};
 		const log = this.logger.with(attrs);
+
 		return withSpan(
 			"outbox.deliver",
 			{
@@ -165,9 +178,12 @@ export class OutboxService implements OutboxWriteDoor {
 				} catch (error) {
 					failSpan(span, error);
 					await this.recordFailure(event.id, error, log);
+
 					return false;
 				}
+
 				const acked = await this.ack(event.id, log);
+
 				if (acked) {
 					log.info("outbox delivered");
 				} else {
@@ -179,6 +195,7 @@ export class OutboxService implements OutboxWriteDoor {
 						message: "ack failed",
 					});
 				}
+
 				return acked;
 			},
 		);
@@ -190,9 +207,11 @@ export class OutboxService implements OutboxWriteDoor {
 	private async ack(id: string, log: Logger): Promise<boolean> {
 		try {
 			await this.repository.markProcessed(id);
+
 			return true;
 		} catch (error) {
 			log.error("outbox ack failed", { error });
+
 			// Count it as a failed try too, or a row that never acks is never stuck.
 			try {
 				await this.repository.markFailed(
@@ -202,6 +221,7 @@ export class OutboxService implements OutboxWriteDoor {
 			} catch {
 				// Same db that just failed the ack; the error above already says so.
 			}
+
 			return false;
 		}
 	}
@@ -212,6 +232,7 @@ export class OutboxService implements OutboxWriteDoor {
 		log: Logger,
 	): Promise<void> {
 		log.error("outbox delivery failed", { error });
+
 		try {
 			await this.repository.markFailed(id, errorMessage(error));
 		} catch (recordError) {

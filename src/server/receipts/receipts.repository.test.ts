@@ -24,10 +24,12 @@ function harness(respond?: Respond) {
 			db.transaction(async (tx) => {
 				const result = await writes(tx as never);
 				events.push(...toEvents(result));
+
 				return result;
 			}),
 		publish: unstaged,
 	};
+
 	return {
 		repository: new DrizzleReceiptsRepository({ db: db as never, outbox }),
 		queries,
@@ -347,6 +349,7 @@ describe("deleteUnlessDuplicated", () => {
 		({ sql }) => {
 			if (sql.includes('"duplicateOfId" =')) return copies ? [[9]] : [];
 			if (sql.startsWith("select")) return found ? [["receipt-abc.jpg"]] : [];
+
 			return [];
 		};
 

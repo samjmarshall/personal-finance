@@ -23,6 +23,7 @@ function rethrowNameTaken(error: unknown): never {
 	if (isPgViolation(error, PgViolation.UniqueViolation)) {
 		throw new ConflictError(NAME_TAKEN_MESSAGE, { cause: error });
 	}
+
 	throw error;
 }
 
@@ -51,6 +52,7 @@ export class CategoriesService {
 		const row = await this.repository
 			.insert({ ...normalize(input), sortOrder })
 			.catch(rethrowNameTaken);
+
 		return assertRow(row, "create category");
 	}
 
@@ -58,7 +60,9 @@ export class CategoriesService {
 		const row = await this.repository
 			.update(id, normalize(input))
 			.catch(rethrowNameTaken);
+
 		if (!row) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		return row;
 	}
 
@@ -81,12 +85,15 @@ export class CategoriesService {
 	// page, never per row. An id with no row has no entry.
 	async namesByIds(ids: number[]): Promise<ReadonlyMap<number, string>> {
 		const rows = ids.length ? await this.repository.findNames(ids) : [];
+
 		return new Map(rows.map(({ id, name }) => [id, name]));
 	}
 
 	private async findOrThrow(id: number): Promise<Category> {
 		const existing = await this.repository.find(id);
+
 		if (!existing) throw new NotFoundError(NOT_FOUND_MESSAGE);
+
 		return existing;
 	}
 }

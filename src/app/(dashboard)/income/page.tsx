@@ -18,6 +18,7 @@ async function IncomeData() {
 	// sync-IO prerender error. io() ends the static shell here first.
 	await io();
 	void api.income.list.prefetch();
+
 	return (
 		<HydrateClient>
 			<IncomeView />

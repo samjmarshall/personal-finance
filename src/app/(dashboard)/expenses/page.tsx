@@ -26,6 +26,7 @@ async function ExpensesData() {
 	void api.expense.list.prefetch();
 	void api.expense.consumption.prefetch();
 	void api.category.list.prefetch();
+
 	return (
 		<HydrateClient>
 			<ExpensesView />

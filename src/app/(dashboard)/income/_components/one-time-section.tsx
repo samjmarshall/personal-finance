@@ -43,11 +43,17 @@ export function OneTimeSection<T extends { id: number }>({
 	const now = new Date();
 	const upcoming: T[] = [];
 	const past: T[] = [];
+
 	for (const item of items) {
 		const date = getExpectedDate(item);
-		if (date && isPast(date, now)) past.push(item);
-		else upcoming.push(item);
+
+		if (date && isPast(date, now)) {
+			past.push(item);
+		} else {
+			upcoming.push(item);
+		}
 	}
+
 	const byDate = (a: T, b: T) =>
 		(getExpectedDate(a)?.getTime() ?? 0) - (getExpectedDate(b)?.getTime() ?? 0);
 	upcoming.sort(byDate); // soonest first
@@ -55,6 +61,7 @@ export function OneTimeSection<T extends { id: number }>({
 	const total = items.reduce((s, item) => s + (getAmount(item) ?? 0), 0);
 
 	const pastId = `${idPrefix}-onetime-past`;
+
 	return (
 		<Card className="[--card-spacing:0px]">
 			<div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3">

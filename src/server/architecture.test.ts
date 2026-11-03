@@ -51,8 +51,10 @@ const domainOf = (path: string) => path.match(/^src\/server\/([^/]+)\//)?.[1];
 
 const resolve = (file: string, specifier: string) => {
 	let path = specifier;
+
 	if (specifier.startsWith("~/")) path = `src/${specifier.slice(2)}`;
 	if (specifier.startsWith(".")) path = join(dirname(file), specifier);
+
 	// `…/db/index` is the same module as `…/db`.
 	return path.replace(/\/index$/, "");
 };
@@ -74,6 +76,7 @@ function ruleBroken(file: string, specifier: string): Rule | undefined {
 	) {
 		return 6;
 	}
+
 	const target = resolve(file, specifier);
 	const crossDomain = domainOf(target) !== domainOf(file);
 	const isSchema = target.endsWith(".schema");
@@ -81,6 +84,7 @@ function ruleBroken(file: string, specifier: string): Rule | undefined {
 	if (/\.(service|repository)\.ts$/.test(file) && isSchema && crossDomain) {
 		return 1;
 	}
+
 	if (
 		target.endsWith(".repository") &&
 		crossDomain &&
@@ -88,31 +92,39 @@ function ruleBroken(file: string, specifier: string): Rule | undefined {
 	) {
 		return 2;
 	}
+
 	if (target.endsWith(".module") && !isCompositionRoot(file)) return 5;
+
 	const isController =
 		file.endsWith(".controller.ts") ||
 		file.startsWith("src/server/api/routers/");
+
 	if (
 		isController &&
 		(isSchema || target === "src/server/db" || isDrizzle(specifier))
 	) {
 		return 3;
 	}
+
 	// Pages, layouts and server actions are entry points too. A route may import
 	// `db`: it is its own composition root.
 	if (file.startsWith("src/app/")) {
 		const isDb = target === "src/server/db" && basename(file) !== "route.ts";
+
 		if (isSchema || isDb || isDrizzle(specifier)) return 3;
 	}
+
 	return undefined;
 }
 
 function violationsIn(file: string, source: string): Violation[] {
 	const found: Violation[] = [];
+
 	for (const { 0: text, 1: specifier = "", index } of source.matchAll(
 		SPECIFIER,
 	)) {
 		const rule = ruleBroken(file, specifier);
+
 		if (rule) {
 			found.push({
 				rule,
@@ -122,9 +134,11 @@ function violationsIn(file: string, source: string): Violation[] {
 			});
 		}
 	}
+
 	for (const { 0: text, index } of source.matchAll(RELATIONAL_QUERY)) {
 		found.push({ rule: 4, file, line: lineAt(source, index), specifier: text });
 	}
+
 	return found;
 }
 

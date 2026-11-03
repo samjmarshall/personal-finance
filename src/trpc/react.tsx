@@ -15,15 +15,18 @@ import { createQueryClient } from "./query-client";
 export function trpcHeaders(): Headers {
 	const headers = new Headers();
 	headers.set("x-trpc-source", "nextjs-react");
+
 	return headers;
 }
 
 let clientQueryClientSingleton: QueryClient | undefined;
+
 const getQueryClient = () => {
 	if (typeof window === "undefined") {
 		// Server: always make a new query client
 		return createQueryClient();
 	}
+
 	// Browser: use singleton pattern to keep the same query client
 	clientQueryClientSingleton ??= createQueryClient();
 
@@ -78,5 +81,6 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 function getBaseUrl() {
 	if (typeof window !== "undefined") return window.location.origin;
 	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+
 	return `http://localhost:${process.env.PORT ?? 3000}`;
 }

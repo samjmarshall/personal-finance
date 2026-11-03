@@ -54,9 +54,12 @@ export function AsyncBoundary({
 	}, []);
 	const focusRef = useCallback((element: HTMLElement | null) => {
 		if (!element || !focusOnReveal.current) return;
+
 		focusOnReveal.current = false;
+
 		// The user moved on while it loaded. Don't pull focus back.
 		if (document.activeElement !== document.body) return;
+
 		element.focus({ preventScroll: true });
 	}, []);
 
@@ -108,6 +111,7 @@ function Pending({
 	onShow: () => void;
 }) {
 	useEffect(() => onShow(), [onShow]);
+
 	return <LoadingRegion label={label} skeleton={skeleton} />;
 }
 
@@ -181,6 +185,7 @@ function AsyncBoundaryError({
 	// retry: the new key loads on the client, with no server refresh.
 	useEffect(() => {
 		if (Object.is(resetKey, failedKey)) return;
+
 		resetQueryErrors();
 		// Forget old failures too, or going back to a failed filter reshows its error, untried.
 		queryClient.removeQueries({
@@ -198,9 +203,11 @@ function AsyncBoundaryError({
 	}, []);
 
 	if (skeleton === null) return null;
+
 	// A stale session is already reloading to sign-in. Don't flash a failure first.
-	if (isAuthError(error))
+	if (isAuthError(error)) {
 		return <LoadingRegion label={label} skeleton={skeleton} />;
+	}
 
 	const card = (
 		<RetryCard

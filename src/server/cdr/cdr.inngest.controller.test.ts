@@ -56,6 +56,7 @@ function harness(
 	const inngest = {
 		createFunction: (opts: Declared["opts"], handler: Declared["handler"]) => {
 			declared.push({ opts, handler });
+
 			return { id: () => opts.id };
 		},
 	};
@@ -73,7 +74,9 @@ function harness(
 		service: service as unknown as CdrSyncService,
 	});
 	const [sync, imported] = declared;
+
 	if (!sync || !imported) throw new Error("expected both functions declared");
+
 	return { controller, declared, service, sync, imported };
 }
 
@@ -83,9 +86,11 @@ function fakeStep() {
 	const step: Step = {
 		run: (id, work) => {
 			ids.push(id);
+
 			return work();
 		},
 	};
+
 	return { ids, step };
 }
 
@@ -97,6 +102,7 @@ async function thrownBy(handler: () => Promise<unknown>): Promise<unknown> {
 	} catch (error) {
 		return error;
 	}
+
 	throw new Error("expected the handler to throw");
 }
 
@@ -162,7 +168,9 @@ describe("CdrInngestController", () => {
 			const h = harness({
 				planImport: async () => {
 					planCalls += 1;
+
 					if (planCalls === 1) throw new Error("db blip");
+
 					return PLAN;
 				},
 			});
@@ -170,6 +178,7 @@ describe("CdrInngestController", () => {
 			const step: Step = {
 				run: async <T>(id: string, work: () => Promise<T>) => {
 					if (!saved.has(id)) saved.set(id, await work());
+
 					return saved.get(id) as T;
 				},
 			};
@@ -232,6 +241,7 @@ describe("CdrInngestController", () => {
 					throw error;
 				},
 			});
+
 			return thrownBy(() =>
 				h.sync.handler({ event: importEvent, step: fakeStep().step }),
 			);

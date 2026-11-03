@@ -14,6 +14,7 @@ export function expensesInCategory<T extends Linkable>(
 	categoryId: number | null,
 ): T[] {
 	if (categoryId === null) return [...expenses];
+
 	return expenses.filter((e) => e.categoryId === categoryId);
 }
 
@@ -25,6 +26,7 @@ export function pickCategory(
 ): CategoryLink {
 	const linked = expenses.find((e) => e.id === link.expenseId);
 	const stays = linked !== undefined && linked.categoryId === categoryId;
+
 	return { categoryId, expenseId: stays ? link.expenseId : null };
 }
 
@@ -35,6 +37,7 @@ export function pickExpense(
 	expenses: readonly Linkable[],
 ): CategoryLink {
 	const picked = expenses.find((e) => e.id === expenseId);
+
 	return {
 		categoryId: picked?.categoryId ?? link.categoryId,
 		expenseId,

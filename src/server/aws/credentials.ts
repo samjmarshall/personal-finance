@@ -22,5 +22,6 @@ export function selectAwsCredentials({
 	roleArn?: string;
 }): AwsCredentialsProvider | undefined {
 	if (!isVercel || !roleArn) return undefined;
+
 	return awsCredentialsProvider({ roleArn });
 }

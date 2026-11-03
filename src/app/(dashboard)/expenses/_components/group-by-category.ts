@@ -8,6 +8,7 @@ export function groupByCategory<T extends { categoryId: number | null }>(
 ) {
 	const known = new Set(categories.map((c) => c.id));
 	const byId = new Map<number | null, T[]>();
+
 	for (const item of items) {
 		const id =
 			item.categoryId !== null && known.has(item.categoryId)
@@ -17,13 +18,16 @@ export function groupByCategory<T extends { categoryId: number | null }>(
 		arr.push(item);
 		byId.set(id, arr);
 	}
+
 	const filed = categories.flatMap((c) => {
 		const grouped = byId.get(c.id);
+
 		return grouped
 			? [{ key: String(c.id), label: c.name, items: grouped }]
 			: [];
 	});
 	const unfiled = byId.get(null);
+
 	return unfiled
 		? [...filed, { key: "none", label: "No category", items: unfiled }]
 		: filed;

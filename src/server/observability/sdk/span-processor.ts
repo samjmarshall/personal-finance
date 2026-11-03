@@ -32,6 +32,7 @@ export class SpanAttributeProcessor implements SpanProcessor {
 
 	onStart(span: Span, parentContext: Context): void {
 		this.stampBaggage(span, parentContext);
+
 		if (span.name.startsWith("ai.")) {
 			this.redactPrompt(span);
 			this.stampTokenPrices(span);
@@ -40,6 +41,7 @@ export class SpanAttributeProcessor implements SpanProcessor {
 
 	private stampBaggage(span: Span, parentContext: Context): void {
 		const bag = readBaggage(parentContext);
+
 		for (const [key, value] of Object.entries(bag)) {
 			// Don't clobber a typed attribute set at span start (e.g. a numeric
 			// receipt.id) with the baggage string copy — keeps a key's type stable
@@ -48,7 +50,9 @@ export class SpanAttributeProcessor implements SpanProcessor {
 				span.setAttribute(key, value);
 			}
 		}
+
 		const memberId = bag[BaggageKey.MemberId];
+
 		if (memberId && span.attributes["posthog.distinct_id"] === undefined) {
 			span.setAttribute("posthog.distinct_id", memberId);
 		}
@@ -57,8 +61,11 @@ export class SpanAttributeProcessor implements SpanProcessor {
 	private redactPrompt(span: Span): void {
 		for (const attr of PROMPT_ATTRS) {
 			const raw = span.attributes[attr];
+
 			if (typeof raw !== "string") continue;
+
 			const redacted = redactPromptJson(raw);
+
 			if (redacted !== raw) span.setAttribute(attr, redacted);
 		}
 	}
@@ -67,6 +74,7 @@ export class SpanAttributeProcessor implements SpanProcessor {
 		if (this.inputTokenPriceUsd !== undefined) {
 			span.setAttribute("$ai_input_token_price", this.inputTokenPriceUsd);
 		}
+
 		if (this.outputTokenPriceUsd !== undefined) {
 			span.setAttribute("$ai_output_token_price", this.outputTokenPriceUsd);
 		}

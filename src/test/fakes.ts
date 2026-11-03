@@ -11,16 +11,20 @@ export function deferred<T>() {
 	const promise = new Promise<T>((res) => {
 		resolve = res;
 	});
+
 	return { promise, resolve };
 }
 
 /** A fake method that resolves `result` and keeps each call's arguments. */
 export function recorder<T>(result: T) {
 	const calls: unknown[][] = [];
+
 	const method = async (...args: unknown[]) => {
 		calls.push(args);
+
 		return result;
 	};
+
 	return { method, calls };
 }
 
@@ -38,6 +42,7 @@ export const unstaged = async (): Promise<never> => {
 // with the driver error on `.cause`.
 export function failedQuery(code: string) {
 	const driver = Object.assign(new Error("postgres"), { code });
+
 	return Object.assign(new Error("Failed query"), { cause: driver });
 }
 

@@ -24,11 +24,13 @@ type OneTimeShape = {
 	amount?: number | null;
 	expectedDate?: Date | null;
 };
+
 function requireOneTimeFigures(
 	value: OneTimeShape,
 	ctx: z.RefinementCtx,
 ): void {
 	if (value.kind !== CommitmentKind.OneTime) return;
+
 	if (value.amount == null) {
 		ctx.addIssue({
 			code: "custom",
@@ -36,6 +38,7 @@ function requireOneTimeFigures(
 			message: "A one-time income needs an amount.",
 		});
 	}
+
 	if (value.expectedDate == null) {
 		ctx.addIssue({
 			code: "custom",

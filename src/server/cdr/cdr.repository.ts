@@ -158,6 +158,7 @@ export class DrizzleCdrRepository implements CdrRepository {
 			.set({ inBalance })
 			.where(eq(cdrSyncState.accountId, accountId))
 			.returning();
+
 		return row;
 	}
 
@@ -180,6 +181,7 @@ export class DrizzleCdrRepository implements CdrRepository {
 			.set({ nickname })
 			.where(eq(cdrSyncState.accountId, accountId))
 			.returning();
+
 		return row;
 	}
 
@@ -196,7 +198,9 @@ export class DrizzleCdrRepository implements CdrRepository {
 					buildOutboxEvent("cdr/import.requested", { importId: row.id }),
 				),
 		);
+
 		if (!row) throw new Error("insertImport: no row returned");
+
 		return row;
 	}
 
@@ -211,6 +215,7 @@ export class DrizzleCdrRepository implements CdrRepository {
 				),
 			)
 			.limit(1);
+
 		return row;
 	}
 
@@ -220,6 +225,7 @@ export class DrizzleCdrRepository implements CdrRepository {
 			.from(cdrImport)
 			.orderBy(desc(cdrImport.id))
 			.limit(1);
+
 		return row;
 	}
 
@@ -235,6 +241,7 @@ export class DrizzleCdrRepository implements CdrRepository {
 				),
 			)
 			.returning();
+
 		return row;
 	}
 

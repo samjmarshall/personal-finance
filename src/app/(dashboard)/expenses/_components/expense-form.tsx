@@ -42,10 +42,12 @@ const KIND_OPTIONS = [
 // Seed the amount field: one-time reads its own amount, recurring the first non-zero cadence figure.
 function seedAmount(expense: Expense | null) {
 	if (!expense) return "";
+
 	const value =
 		expense.kind === CommitmentKind.OneTime
 			? (expense.amount ?? 0)
 			: expense.month || expense.fortnight || expense.year;
+
 	return value ? String(Number(value.toFixed(2))) : "";
 }
 
@@ -82,6 +84,7 @@ export function ExpenseForm({
 	// otherwise show the previous entry's values.
 	useEffect(() => {
 		if (!open) return;
+
 		setName(expense?.name ?? "");
 		setCategoryId(expense?.categoryId ?? null);
 		setBasis("month");
@@ -113,9 +116,15 @@ export function ExpenseForm({
 
 	function deriveAmounts(value: number, from: "fortnight" | "month" | "year") {
 		let month: number;
-		if (from === "fortnight") month = value * FORTNIGHTS_PER_MONTH;
-		else if (from === "year") month = value / 12;
-		else month = value;
+
+		if (from === "fortnight") {
+			month = value * FORTNIGHTS_PER_MONTH;
+		} else if (from === "year") {
+			month = value / 12;
+		} else {
+			month = value;
+		}
+
 		return {
 			fortnight: Number((month / FORTNIGHTS_PER_MONTH).toFixed(2)),
 			month: Number(month.toFixed(2)),
@@ -127,22 +136,30 @@ export function ExpenseForm({
 		e.preventDefault();
 		setError(null);
 		const value = Number.parseFloat(amount);
+
 		if (!name.trim()) return setError("Please enter a name.");
 		if (categoryId === null) return setError("Please choose a category.");
-		if (Number.isNaN(value) || value < 0)
+
+		if (Number.isNaN(value) || value < 0) {
 			return setError("Please enter a valid amount.");
+		}
 
 		const date = isOneTime ? fromDateInput(expectedDate) : null;
+
 		if (isOneTime && !date) return setError("Please enter a valid date.");
 
 		// Empty Timing fields stay null (row smears); submitting null on update
 		// clears a stored value, so a cleared field genuinely reverts to a smear.
 		const day = dueDay ? Number.parseInt(dueDay, 10) : null;
 		const month = dueMonth ? Number.parseInt(dueMonth, 10) : null;
-		if (!isOneTime && day != null && (day < 1 || day > 31))
+
+		if (!isOneTime && day != null && (day < 1 || day > 31)) {
 			return setError("Due day must be between 1 and 31.");
-		if (!isOneTime && month != null && (month < 1 || month > 12))
+		}
+
+		if (!isOneTime && month != null && (month < 1 || month > 12)) {
 			return setError("Due month must be between 1 and 12.");
+		}
 
 		// One-time carries amount + expectedDate; its three cadence figures are
 		// unused (zeroed). Recurring is the inverse: derived cadence, no one-time pair.
@@ -169,15 +186,22 @@ export function ExpenseForm({
 				};
 
 		rememberFocus();
-		if (expense) update.mutate({ id: expense.id, ...payload });
-		else create.mutate(payload);
+
+		if (expense) {
+			update.mutate({ id: expense.id, ...payload });
+		} else {
+			create.mutate(payload);
+		}
 	}
 
 	return (
 		<Dialog
 			onOpenChange={(next, eventDetails) => {
-				if (isSaving) eventDetails.cancel();
-				else if (!next) onClose();
+				if (isSaving) {
+					eventDetails.cancel();
+				} else if (!next) {
+					onClose();
+				}
 			}}
 			open={open}
 		>

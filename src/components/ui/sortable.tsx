@@ -239,6 +239,7 @@ function Sortable<T>({
 	// Find the active child for the overlay
 	const overlayContent = useMemo(() => {
 		if (!activeId) return null;
+
 		let result: ReactNode = null;
 
 		Children.forEach(children, (child) => {

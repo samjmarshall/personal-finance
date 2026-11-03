@@ -57,6 +57,7 @@ export class DrizzleReceiptExtractionRepository
 			.select()
 			.from(receipts)
 			.where(eq(receipts.id, id));
+
 		return receipt;
 	}
 
@@ -83,6 +84,7 @@ export class DrizzleReceiptExtractionRepository
 					eq(receipts.status, ReceiptStatus.Processed),
 				),
 			);
+
 		return dup;
 	}
 
@@ -103,6 +105,7 @@ export class DrizzleReceiptExtractionRepository
 				.update(receipts)
 				.set({ status: ReceiptStatus.Processed, ...values })
 				.where(eq(receipts.id, id));
+
 			if (items.length > 0) {
 				await tx
 					.insert(receiptItems)

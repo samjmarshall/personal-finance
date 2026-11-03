@@ -17,6 +17,8 @@ export function itemsTotalMismatch(
 	items: PricedItem[],
 ): boolean {
 	if (total === null || items.length === 0) return false;
+
 	const sum = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
+
 	return Math.abs(sum - total) > TOLERANCE;
 }

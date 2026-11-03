@@ -39,6 +39,7 @@ export const receiptRouter = createTRPCRouter({
 
 	delete: protectedProcedure.input(byId).mutation(async ({ ctx, input }) => {
 		await ctx.services.receipts.delete(input.id);
+
 		return { success: true };
 	}),
 

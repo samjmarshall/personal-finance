@@ -24,6 +24,7 @@ function renderRow(over: Partial<BankAccountRowProps["account"]> = {}) {
 			/>
 		</ul>,
 	);
+
 	return { onInBalanceChange, onRename, user: userEvent.setup() };
 }
 
@@ -44,8 +45,11 @@ describe("BankAccountRow", () => {
 	])("shows the switch on only when the flag is true (%s)", (inBalance, on) => {
 		renderRow({ inBalance });
 
-		if (on) expect(toggle()).toBeChecked();
-		else expect(toggle()).not.toBeChecked();
+		if (on) {
+			expect(toggle()).toBeChecked();
+		} else {
+			expect(toggle()).not.toBeChecked();
+		}
 	});
 
 	it.each([

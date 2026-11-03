@@ -18,6 +18,7 @@ export function withFlush<Args extends unknown[], Result>(
 ): (...args: Args) => Result {
 	return (...args) => {
 		flushAfterResponse();
+
 		return handler(...args);
 	};
 }
@@ -30,6 +31,7 @@ export function withFlush<Args extends unknown[], Result>(
 export async function flushTelemetry(): Promise<void> {
 	const registered = getRegisteredProcessors();
 	const tasks: Promise<unknown>[] = [flushPostHog()];
+
 	if (registered) {
 		tasks.push(
 			registered.traceBatch.forceFlush(),
@@ -37,6 +39,7 @@ export async function flushTelemetry(): Promise<void> {
 			registered.logBatch.forceFlush(),
 		);
 	}
+
 	await Promise.allSettled(tasks.map(withTimeout));
 }
 
@@ -47,6 +50,7 @@ function withTimeout(task: Promise<unknown>): Promise<unknown> {
 		timer = setTimeout(resolve, FLUSH_TIMEOUT_MS);
 		timer.unref();
 	});
+
 	// Clear the timer once the winner settles, so a fast flush leaves no pending
 	// timer behind on a long-lived (dev / warm) process.
 	return Promise.race([task, timeout]).finally(() => clearTimeout(timer));

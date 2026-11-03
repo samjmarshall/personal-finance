@@ -58,13 +58,16 @@ const flatLinks: (NavLeaf & { group?: string })[] = [
 /** Returns the href of the most specific link matching the current pathname. */
 function activeHref(pathname: string) {
 	let best = "";
+
 	for (const link of flatLinks) {
 		const matches =
 			link.href === "/"
 				? pathname === "/"
 				: pathname === link.href || pathname.startsWith(`${link.href}/`);
+
 		if (matches && link.href.length > best.length) best = link.href;
 	}
+
 	return best;
 }
 
@@ -73,6 +76,7 @@ const navRowClass = "flex items-center gap-3 px-3 py-2 font-medium text-sm";
 
 function DesktopNavLink({ link, active }: { link: NavLeaf; active: boolean }) {
 	const Icon = link.icon;
+
 	return (
 		<Link
 			aria-current={active ? "page" : undefined}
@@ -97,6 +101,7 @@ function NavLinks({ current }: { current: string }) {
 			{links.map((item) => {
 				if ("children" in item) {
 					const Icon = item.icon;
+
 					return (
 						// biome-ignore lint/a11y/useSemanticElements: role="group" labels the nav subsection; <fieldset> is form-only
 						<div aria-label={item.label} key={item.label} role="group">
@@ -119,6 +124,7 @@ function NavLinks({ current }: { current: string }) {
 						</div>
 					);
 				}
+
 				return (
 					<DesktopNavLink
 						active={item.href === current}
@@ -134,6 +140,7 @@ function NavLinks({ current }: { current: string }) {
 /** Member slot is server-rendered, so the nav paints before the session read. */
 export function AppNav({ member }: { member: ReactNode }) {
 	const current = activeHref(usePathname());
+
 	return (
 		<aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between bg-sidebar p-4 text-sidebar-foreground lg:flex">
 			<div>
@@ -182,11 +189,13 @@ export function MobileNav() {
 function MobileLinks() {
 	const pathname = usePathname();
 	const current = activeHref(pathname);
+
 	return (
 		<>
 			{flatLinks.map((link) => {
 				const active = link.href === current;
 				const Icon = link.icon;
+
 				return (
 					<Link
 						aria-current={active ? "page" : undefined}

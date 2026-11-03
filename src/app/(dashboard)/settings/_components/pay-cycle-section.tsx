@@ -36,9 +36,11 @@ export function PayCycleSection() {
 		e.preventDefault();
 		setError(null);
 		const parsed = fortnightAnchorSetDto.safeParse({ anchor: draft });
+
 		// Guarding here as well as on the server: a value that fails to parse would be
 		// written, then read back as null, silently dropping the grid to months.
 		if (!parsed.success) return setError("Please enter a valid date.");
+
 		setFortnightAnchor.mutate(parsed.data);
 	}
 
@@ -59,6 +61,7 @@ export function PayCycleSection() {
 							id="fortnight-anchor"
 							onChange={(e) => {
 								setDraft(e.target.value);
+
 								// Stale error text plus aria-invalid would mislead a screen
 								// reader once they start correcting.
 								if (error) setError(null);

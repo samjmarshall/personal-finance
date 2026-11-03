@@ -50,6 +50,7 @@ function CopyButton({
 	clipboard: CopyState;
 }) {
 	const copied = clipboard.copiedKey === copyKey;
+
 	return (
 		<button
 			className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -129,15 +130,18 @@ const STAGE_META: Record<
 
 function StageIcon({ state }: { state: StageState }) {
 	const { Icon, cls } = STAGE_META[state];
+
 	return <Icon aria-hidden className={cn("h-4 w-4 shrink-0", cls)} />;
 }
 
 function Timeline({ data }: { data: ReceiptDetail }) {
 	const stages = receiptPipeline(data);
+
 	return (
 		<ol className="flex flex-col">
 			{stages.map((s, i) => {
 				const last = i === stages.length - 1;
+
 				return (
 					<li className="flex gap-3" key={s.label}>
 						<div className="flex flex-col items-center">
@@ -185,6 +189,7 @@ function RawPanel({
 	clipboard: CopyState;
 }) {
 	const text = rawJsonText(data);
+
 	return (
 		<div className="flex flex-1 flex-col">
 			<pre className="max-h-72 overflow-auto rounded-md border border-border bg-background px-2 py-2 font-mono text-[11px] text-foreground">
@@ -228,11 +233,15 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 		// No clipboard API (insecure context / webview) or a denied write must not
 		// flash "Copied" — only claim success once the write actually resolves.
 		const clipboard = navigator.clipboard;
+
 		if (!clipboard) return;
+
 		void clipboard.writeText(text).then(
 			() => {
 				setCopiedKey(key);
+
 				if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
+
 				copyResetTimer.current = setTimeout(
 					() => setCopiedKey((k) => (k === key ? null : k)),
 					1200,
@@ -248,6 +257,7 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 			},
 		);
 	}
+
 	const clipboard: CopyState = { copiedKey, copy };
 	const [tab, setTab] = useState<Tab>("timeline");
 	const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
@@ -276,7 +286,9 @@ export function MoreDetails({ data }: { data: ReceiptDetail }) {
 						: e.key === "End"
 							? order[order.length - 1]
 							: null;
+
 		if (!to) return;
+
 		e.preventDefault();
 		setTab(to);
 		tabRefs.current[to]?.focus();

@@ -5,9 +5,12 @@ export const REDACT_IN_TELEMETRY = { observability: { redact: true } };
 
 /** Whether a prompt part's provider options carry the redact tag. */
 export function isRedactTagged(providerOptions: unknown): boolean {
-	if (typeof providerOptions !== "object" || providerOptions === null)
+	if (typeof providerOptions !== "object" || providerOptions === null) {
 		return false;
+	}
+
 	const ns = (providerOptions as Record<string, unknown>).observability;
+
 	return (
 		typeof ns === "object" &&
 		ns !== null &&

@@ -41,5 +41,6 @@ export const api = helpers.trpc;
 // With PPR a stale session's prefetch can fail before this dehydrates.
 export function HydrateClient(props: { children: ReactNode }) {
 	rethrowAuthFailure(getQueryClient());
+
 	return createElement(helpers.HydrateClient, props);
 }

@@ -18,6 +18,7 @@ function renderThumbnail(contentType: string | null) {
 			src={SRC}
 		/>,
 	);
+
 	return { onOpen };
 }
 

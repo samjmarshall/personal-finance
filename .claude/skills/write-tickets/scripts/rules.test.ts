@@ -25,6 +25,7 @@ function normFixture(name: string): NormalizedIssue {
 		item: unknown;
 		subIssues: number[];
 	};
+
 	return normalize(
 		RawIssueSchema.parse(raw.issue),
 		RawProjectItemSchema.parse(raw.item),

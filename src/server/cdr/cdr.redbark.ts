@@ -101,6 +101,7 @@ export class HttpRedbarkClient implements RedbarkClient {
 	async listBalances(accountIds: string[]): Promise<RedbarkBalance[]> {
 		const query = new URLSearchParams(accountIds.map((id) => ["account", id]));
 		const { body } = await this.get(`${this.apiRoot}/balances?${query}`);
+
 		return redbarkPageDto(redbarkBalanceDto).parse(body).data;
 	}
 
@@ -113,24 +114,32 @@ export class HttpRedbarkClient implements RedbarkClient {
 		const query = new URLSearchParams({ ...params, limit: String(PAGE_LIMIT) });
 		const rows: z.infer<T>[] = [];
 		let url: string | null = `${this.apiRoot}${path}?${query}`;
+
 		while (url) {
 			const { body, headers } = await this.get(url);
+
 			// Rows past RedBark's cap are dropped, and the cursor would then skip them for good.
-			if (headers.get("x-redbark-truncated") === "true")
+			if (headers.get("x-redbark-truncated") === "true") {
 				throw new Error(`redbark GET ${path}: window truncated`);
+			}
+
 			const page = pageDto.parse(body);
 			rows.push(...page.data);
 			url = page.next_page_url;
+
 			// Every request carries the key, so never follow a link off RedBark's origin.
-			if (url && new URL(url).origin !== new URL(this.apiRoot).origin)
+			if (url && new URL(url).origin !== new URL(this.apiRoot).origin) {
 				throw new Error(`redbark GET ${path}: next page on another origin`);
+			}
 		}
+
 		return rows;
 	}
 
 	private async get(url: string): Promise<{ body: unknown; headers: Headers }> {
 		const path = new URL(url).pathname;
 		let response: Response;
+
 		try {
 			response = await fetch(url, {
 				headers: {
@@ -146,17 +155,22 @@ export class HttpRedbarkClient implements RedbarkClient {
 
 		if (!response.ok) {
 			const message = `redbark GET ${path} failed: ${response.status} ${await readErrorCode(response)}`;
-			if (response.status === 429 || response.status >= 500)
+
+			if (response.status === 429 || response.status >= 500) {
 				throw new RedbarkRetryableError(message, {
 					retryAfterMs: parseRetryAfter(response.headers.get("retry-after")),
 				});
+			}
+
 			throw new Error(message);
 		}
+
 		try {
 			return { body: await response.json(), headers: response.headers };
 		} catch (cause) {
 			// Bad JSON won't heal on retry; a body cut off by a reset or timeout will.
 			if (cause instanceof SyntaxError) throw cause;
+
 			throw new RedbarkRetryableError(`redbark GET ${path} failed`, { cause });
 		}
 	}
@@ -166,6 +180,7 @@ async function readErrorCode(response: Response): Promise<string> {
 	const parsed = errorBodyDto.safeParse(
 		await response.json().catch(() => null),
 	);
+
 	return parsed.success ? parsed.data.error.code : "unknown";
 }
 
@@ -173,6 +188,8 @@ async function readErrorCode(response: Response): Promise<string> {
 function parseRetryAfter(header: string | null): number | null {
 	if (!header) return null;
 	if (/^\d+$/.test(header.trim())) return Number(header) * 1000;
+
 	const ms = Date.parse(header) - Date.now();
+
 	return Number.isFinite(ms) && ms > 0 ? ms : null;
 }

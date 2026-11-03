@@ -115,7 +115,8 @@ function ViewerSurface({
 
 	if (kind === "pdf") {
 		const src = receiptImageUrl(receiptId);
-		if (!canFramePdf())
+
+		if (!canFramePdf()) {
 			return (
 				<div className={cn(SURFACE, PLACEHOLDER)}>
 					<FileText aria-hidden className="h-8 w-8" />
@@ -123,6 +124,8 @@ function ViewerSurface({
 					<NewTabLink href={src} primary />
 				</div>
 			);
+		}
+
 		return (
 			<WithNewTabLink href={src}>
 				<div className={cn(SURFACE, "w-full")}>
@@ -142,6 +145,7 @@ function ViewerSurface({
 
 	if (kind === "text") {
 		const src = receiptHtmlUrl(receiptId);
+
 		return (
 			<WithNewTabLink href={src}>
 				<div className={cn(SURFACE, "w-full")}>
@@ -166,6 +170,7 @@ function ViewerSurface({
 	}
 
 	const src = receiptImageUrl(receiptId);
+
 	return (
 		<WithNewTabLink href={src}>
 			<section

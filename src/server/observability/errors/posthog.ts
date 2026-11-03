@@ -10,9 +10,11 @@ let client: PostHog | null | undefined;
 
 function getClient(): PostHog | null {
 	if (client !== undefined) return client;
+
 	client = env.POSTHOG_KEY
 		? new PostHog(env.POSTHOG_KEY, { host: env.POSTHOG_HOST, flushAt: 1 })
 		: null;
+
 	return client;
 }
 
@@ -26,6 +28,7 @@ export function captureException(
 	props?: Record<string, unknown>,
 ): void {
 	const posthog = getClient();
+
 	if (!posthog) return;
 
 	try {
@@ -47,5 +50,6 @@ export function captureException(
 /** Drains queued events before a serverless freeze. No-op without a client. */
 export async function flushPostHog(): Promise<void> {
 	if (!client) return;
+
 	await client.flush();
 }

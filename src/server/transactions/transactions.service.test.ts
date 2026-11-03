@@ -66,6 +66,7 @@ function serviceWith(
 		namesByIds: unstaged,
 		...stagedCategories,
 	};
+
 	return new TransactionsService({ repository, expenses, categories });
 }
 
@@ -121,15 +122,18 @@ function writing(
 			findLink: async () => link,
 			update: async (id, values) => {
 				written.push([id, values]);
+
 				return TRANSACTION;
 			},
 			setLink: async (id, values) => {
 				written.push([id, values]);
+
 				return TRANSACTION;
 			},
 		},
 		{ namesByIds: async () => expenseNames },
 	);
+
 	return { service, written };
 }
 
@@ -139,6 +143,7 @@ describe("create", () => {
 		const service = serviceWith({
 			insert: async (values) => {
 				inserted.push(values);
+
 				return TRANSACTION;
 			},
 		});
@@ -152,6 +157,7 @@ describe("create", () => {
 		const service = serviceWith({
 			insert: async (values) => {
 				inserted.push(values);
+
 				return TRANSACTION;
 			},
 		});
@@ -229,6 +235,7 @@ describe("possible duplicates", () => {
 		const service = serviceWith({
 			[method]: async (id: number) => {
 				calls.push(id);
+
 				return true;
 			},
 		});
@@ -244,10 +251,12 @@ describe("possible duplicates", () => {
 		const service = serviceWith({
 			keepMine: async (id) => {
 				calls.push(["keepMine", id]);
+
 				return true;
 			},
 			useBanks: async (id) => {
 				calls.push(["useBanks", id]);
+
 				return true;
 			},
 		});
@@ -300,6 +309,7 @@ describe("update", () => {
 			...MANUAL_ROW,
 			update: async (id, values) => {
 				updated.push([id, values]);
+
 				return TRANSACTION;
 			},
 		});
@@ -391,6 +401,7 @@ describe("update", () => {
 			...MANUAL_ROW,
 			update: async (_, values) => {
 				expect(values).toEqual({ ...FIELDS, categoryId: 4 });
+
 				return TRANSACTION;
 			},
 		});
@@ -456,9 +467,11 @@ describe("update", () => {
 				findSyncedValues: async () => SAVED,
 				update: async (id, values) => {
 					written.push([id, values]);
+
 					return TRANSACTION;
 				},
 			});
+
 			return { service, written };
 		}
 
@@ -595,22 +608,26 @@ describe("list", () => {
 			{
 				list: async (query) => {
 					queries.push(query);
+
 					return { items, total: 9 };
 				},
 			},
 			{
 				namesByIds: async (ids) => {
 					asked.push(["expenses", ids]);
+
 					return expenseNames;
 				},
 			},
 			{
 				namesByIds: async (ids) => {
 					asked.push(["categories", ids]);
+
 					return categoryNames;
 				},
 			},
 		);
+
 		return { service, queries, asked };
 	}
 
@@ -760,6 +777,7 @@ describe("reads", () => {
 		const service = serviceWith({
 			findUnplanned: async (window) => {
 				windows.push(window);
+
 				return rows;
 			},
 		});
@@ -785,6 +803,7 @@ describe("reads", () => {
 		const service = serviceWith({
 			findInDateWindow: async (window) => {
 				windows.push(window);
+
 				return rows;
 			},
 		});
@@ -822,6 +841,7 @@ describe("descriptionsByIds", () => {
 		const service = serviceWith({
 			findDescriptions: async (ids) => {
 				asked.push(ids);
+
 				return [{ id: 1, description: "Groceries" }];
 			},
 		});

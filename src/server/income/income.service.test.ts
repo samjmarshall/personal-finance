@@ -18,6 +18,7 @@ function serviceWith(staged: Partial<IncomeRepository>) {
 		delete: unstaged,
 		...staged,
 	};
+
 	return new IncomeService({ repository });
 }
 
@@ -53,6 +54,7 @@ describe("IncomeService", () => {
 		const service = serviceWith({
 			insert: async (values) => {
 				inserted.push(values);
+
 				return INCOME;
 			},
 		});
@@ -82,6 +84,7 @@ describe("IncomeService", () => {
 		const service = serviceWith({
 			update: async (id, values) => {
 				updated.push([id, values]);
+
 				return INCOME;
 			},
 		});

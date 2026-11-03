@@ -127,6 +127,7 @@ export function TransactionsView() {
 			setSortBy(col);
 			setSortDir(col === "description" || col === "group" ? "asc" : "desc");
 		}
+
 		setPage(0);
 	}
 
@@ -141,6 +142,7 @@ export function TransactionsView() {
 		setEditing(null);
 		setFormOpen(true);
 	}
+
 	function openEdit(tx: Transaction) {
 		setEditing(tx);
 		setFormOpen(true);
@@ -242,11 +244,12 @@ export function TransactionsView() {
 			<DeleteConfirmDialog
 				label={deleteTarget?.description}
 				onConfirm={() => {
-					if (deleteTarget)
+					if (deleteTarget) {
 						remove.mutate(
 							{ id: deleteTarget.id },
 							{ onSuccess: () => setConfirmOpen(false) },
 						);
+					}
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}
@@ -260,6 +263,7 @@ export function TransactionsView() {
 // suspense, so a slow count never holds the header back.
 function ImportLink() {
 	const { data: toReview } = api.transaction.possibleDuplicateCount.useQuery();
+
 	return (
 		<Link
 			className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -287,9 +291,11 @@ function TransactionCount({ input }: { input: ListInput }) {
 		// showed a bar beside its error card.
 		enabled: false,
 	});
+
 	// The table's card says why. A bar would look like it's still loading.
 	if (!hydrating && !data && isError) return <span className="block h-5" />;
 	if (hydrating || !data) return <BarSlot bar="h-4 w-72" height="h-5" />;
+
 	return `${data.total.toLocaleString()} transactions on record.`;
 }
 
@@ -406,6 +412,7 @@ function TransactionsTable({
 					>
 						{items.map((tx) => {
 							const ps = priorityStyle(tx.priority);
+
 							return (
 								<tr className="group hover:bg-muted/30" key={tx.id}>
 									<td className="tabular px-4 py-3 whitespace-nowrap text-muted-foreground">

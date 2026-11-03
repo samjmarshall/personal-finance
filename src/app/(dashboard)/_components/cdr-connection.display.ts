@@ -22,12 +22,15 @@ type Label = (a: CdrSyncState) => string;
 // shared name gets its masked number.
 function labeller(states: CdrSyncState[]): Label {
 	const counts = new Map<string, number>();
+
 	for (const s of states) {
 		const name = accountLabel(s);
 		counts.set(name, (counts.get(name) ?? 0) + 1);
 	}
+
 	return (a) => {
 		const name = accountLabel(a);
+
 		return (counts.get(name) ?? 0) > 1 && a.accountNumber
 			? `${name} (${a.accountNumber})`
 			: name;
@@ -49,13 +52,18 @@ const STALLED_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
 // no error, so the only sign is that no live account moved.
 function stalledLine(states: CdrSyncState[]): string | null {
 	const live = states.filter((s) => isSyncingConsent(s.connectionStatus));
+
 	if (live.length === 0) return null;
+
 	const newest = Math.max(
 		...live.map((s) => (s.lastSyncedAt ?? s.createdAt).getTime()),
 	);
+
 	if (Date.now() - newest <= STALLED_AFTER_MS) return null;
+
 	// Show only a real sync's day. A just-found account only delays the warning.
 	const synced = live.flatMap((s) => s.lastSyncedAt ?? []);
+
 	return synced.length > 0
 		? `No bank account has synced since ${formatDate(new Date(Math.max(...synced.map((d) => d.getTime()))))}.`
 		: "No bank account has synced yet.";
@@ -86,7 +94,8 @@ export function connectionNotice(
 			? [`${names(expiring, label)} will lose access soon.`]
 			: []),
 	];
-	if (reauthorizeLines.length > 0)
+
+	if (reauthorizeLines.length > 0) {
 		reauthorizeLines.push(
 			dead.length === 0
 				? "Reauthorise in RedBark's dashboard to keep syncing."
@@ -94,6 +103,8 @@ export function connectionNotice(
 					? "Reauthorise in RedBark's dashboard and it picks up where it left off."
 					: "Reauthorise them in RedBark's dashboard.",
 		);
+	}
+
 	// A stalled run already covers every live account; don't name them again.
 	const behindLines = stalled
 		? [
@@ -103,6 +114,7 @@ export function connectionNotice(
 					.map((a) => behindLine(a, label)),
 			]
 		: stuck.map((a) => behindLine(a, label));
+
 	if (reauthorizeLines.length === 0 && behindLines.length === 0) return null;
 
 	// Title leads with the most urgent issue. Plural counts banks, not accounts:
@@ -115,6 +127,7 @@ export function connectionNotice(
 			: expiring.length > 0
 				? `Bank connection${plural(expiring)} expiring`
 				: "Bank sync is behind";
+
 	return {
 		behind: behindLines.length > 0 ? behindLines.join(" ") : null,
 		reauthorize:

@@ -11,6 +11,7 @@ export const IMPORT_MAX_YEARS = 7;
 export function importEarliestDay(today: string): string {
 	// The span isn't a multiple of 4 years, so that far back from a leap day is never a leap year.
 	const monthDay = today.slice(4) === "-02-29" ? "-02-28" : today.slice(4);
+
 	return `${Number(today.slice(0, 4)) - IMPORT_MAX_YEARS}${monthDay}`;
 }
 
@@ -23,8 +24,11 @@ export function importRangeError(
 	if (!from || !to) return "Pick a From and a To day.";
 	if (from > to) return "The From day must be on or before the To day.";
 	if (to > today) return "The To day can't be after today.";
-	if (from < importEarliestDay(today))
+
+	if (from < importEarliestDay(today)) {
 		return `An import can reach back ${IMPORT_MAX_YEARS} years at most.`;
+	}
+
 	return null;
 }
 
@@ -40,6 +44,7 @@ export interface DayRange {
 export function importWindows(from: string, to: string): DayRange[] {
 	const end = Date.parse(to);
 	const windows: DayRange[] = [];
+
 	for (
 		let start = Date.parse(from);
 		start <= end;
@@ -52,5 +57,6 @@ export function importWindows(from: string, to: string): DayRange[] {
 			),
 		});
 	}
+
 	return windows;
 }

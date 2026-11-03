@@ -31,10 +31,12 @@ export function ImportView() {
 		// A run ended: its new rows and reviews are in. A short run can end before
 		// the first poll, so a new run already finished counts too.
 		const ended = seen.current.active || seen.current.id !== runId;
+
 		if (ended && !active) {
 			void utils.transaction.invalidate();
 			void utils.expense.consumption.invalidate();
 		}
+
 		seen.current = { id: runId, active };
 	}, [active, runId, utils]);
 

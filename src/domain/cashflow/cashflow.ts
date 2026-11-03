@@ -88,15 +88,22 @@ export function buildCashflow(input: BuildCashflowInput): CashflowResult {
 		// only up to now, leaving the rest of its window to projection (date-split).
 		let actualSpend = 0;
 		let actualInflow = 0;
+
 		if (!isForward) {
 			const upTo = isCurrent ? input.now : undefined;
+
 			for (const t of input.transactions) {
 				if (!withinWindow(t.date, window)) continue;
 				if (upTo && t.date.getTime() > upTo.getTime()) continue;
-				if (t.amount > 0) actualSpend += t.amount;
-				else if (t.amount < 0) actualInflow += -t.amount;
+
+				if (t.amount > 0) {
+					actualSpend += t.amount;
+				} else if (t.amount < 0) {
+					actualInflow += -t.amount;
+				}
 			}
 		}
+
 		bucket.spend += actualSpend;
 		bucket.inflow += actualInflow;
 
@@ -107,7 +114,9 @@ export function buildCashflow(input: BuildCashflowInput): CashflowResult {
 					c.kind === CommitmentKind.OneTime
 						? oneTimeFigure(c, window, isCurrent, isLast, horizonEnd, input.now)
 						: recurringFigure(c, window, isCurrent, input.now);
+
 				if (figure === 0) continue;
+
 				addContribution(bucket, c, figure);
 			}
 		}
@@ -127,6 +136,7 @@ export function buildCashflow(input: BuildCashflowInput): CashflowResult {
 		currentActualNet,
 		currentProjectedNet,
 	});
+
 	return { buckets, hasBalanceAnchor: input.anchor != null };
 }
 
@@ -146,6 +156,7 @@ function buildGrid(
 	const windows = Array.from({ length: GRID_RADIUS * 2 + 1 }, (_, i) =>
 		utcShiftWindow(current, kind, i - GRID_RADIUS),
 	);
+
 	return { windows, kind };
 }
 
@@ -182,6 +193,7 @@ function toCommitments(
 			consumed: 0,
 		}),
 	);
+
 	return [...fromExpenses, ...fromIncomes];
 }
 
@@ -193,8 +205,12 @@ function addContribution(
 ): void {
 	const sign = c.direction === "spend" ? 1 : -1;
 	bucket.items.push({ label: c.label, amount: sign * figure });
-	if (c.direction === "spend") bucket.spend += figure;
-	else bucket.inflow += figure;
+
+	if (c.direction === "spend") {
+		bucket.spend += figure;
+	} else {
+		bucket.inflow += figure;
+	}
 }
 
 // Timing-keyed cadence (Basis is not stored): dueMonth → annual spike; dueDay →
@@ -207,15 +223,21 @@ function recurringFigure(
 ): number {
 	if (c.dueMonth != null) {
 		const landing = annualLanding(window, c.dueMonth, c.dueDay ?? 1);
+
 		return spikeInWindow(landing, isCurrent, now) ? c.year : 0;
 	}
+
 	if (c.dueDay != null) {
 		const landing = monthlyLanding(window, c.dueDay);
+
 		return spikeInWindow(landing, isCurrent, now) ? c.month : 0;
 	}
+
 	const yearDays = daysInYear(window.from.getUTCFullYear());
 	const full = c.year * (bucketDays(window) / yearDays);
+
 	if (!isCurrent) return full;
+
 	// Current bucket: actuals already cover [from, now]; smear only the remaining days.
 	return c.year * (remainingDaysAfterToday(window, now) / yearDays);
 }
@@ -230,6 +252,7 @@ function spikeInWindow(
 ): boolean {
 	if (!landing) return false;
 	if (isCurrent && isPastUtc(landing, now)) return false;
+
 	return true;
 }
 
@@ -242,6 +265,7 @@ function oneTimeFigure(
 	now: Date,
 ): number {
 	if (c.expectedDate == null || c.amount == null) return 0;
+
 	// A future one-time lands in its own bucket, or — when its date falls past the grid's
 	// horizon — clamps into the last bucket rather than silently vanishing (the fortnight
 	// grid reaches ~5.5 months, the month grid a year, so the same row must not drop on
@@ -252,14 +276,18 @@ function oneTimeFigure(
 
 	if (c.direction === "spend") {
 		const remaining = Math.max(c.amount - c.consumed, 0);
+
 		if (remaining <= 0) return 0;
 		// A past, still-unconsumed remaining rolls into the current bucket rather than
 		// staying in a historic one (never silently drops).
 		if (isPastUtc(c.expectedDate, now)) return isCurrent ? remaining : 0;
+
 		return landsHere ? remaining : 0;
 	}
+
 	// Income: a past one-time drops out (assumed received — no FK to measure receipt).
 	if (isPastUtc(c.expectedDate, now)) return 0;
+
 	return landsHere ? c.amount : 0;
 }
 
@@ -275,9 +303,12 @@ function applyBalanceLine(
 	pivotSplit: { currentActualNet: number; currentProjectedNet: number },
 ): void {
 	if (!anchor) return;
+
 	const pivot = pivotIndex(windows, anchor.asOf);
 	const pivotBucket = buckets[pivot];
+
 	if (!pivotBucket) return;
+
 	const net = (b: CashflowBucket) => b.inflow - b.spend;
 
 	// A snapshot dated to a non-current bucket is rare; approximate the anchor at that
@@ -287,17 +318,23 @@ function applyBalanceLine(
 		pivot === CURRENT_INDEX ? pivotSplit.currentProjectedNet : net(pivotBucket);
 
 	pivotBucket.balance = anchor.amount + postNet;
+
 	for (let i = pivot + 1; i < buckets.length; i++) {
 		const cur = buckets[i];
 		const prev = buckets[i - 1];
+
 		if (cur && prev) cur.balance = (prev.balance ?? 0) + net(cur);
 	}
+
 	const before = buckets[pivot - 1];
+
 	if (before) {
 		before.balance = anchor.amount - preNet;
+
 		for (let i = pivot - 2; i >= 0; i--) {
 			const cur = buckets[i];
 			const next = buckets[i + 1];
+
 			if (cur && next) cur.balance = (next.balance ?? 0) - net(next);
 		}
 	}
@@ -317,6 +354,7 @@ function utcDateKey(d: Date): string {
 	const year = d.getUTCFullYear();
 	const month = String(d.getUTCMonth() + 1).padStart(2, "0");
 	const day = String(d.getUTCDate()).padStart(2, "0");
+
 	return `${year}-${month}-${day}`;
 }
 
@@ -356,6 +394,7 @@ function daysInYear(year: number): number {
 function utcMonthWindow(ref: Date): PeriodWindow {
 	const year = ref.getUTCFullYear();
 	const month = ref.getUTCMonth();
+
 	return {
 		from: new Date(Date.UTC(year, month, 1)),
 		to: new Date(Date.UTC(year, month + 1, 1)),
@@ -374,6 +413,7 @@ function utcFortnightWindow(anchor: Date, ref: Date): PeriodWindow {
 		),
 	);
 	const from = addUtcDays(anchorMidnight, index * 14);
+
 	return { from, to: addUtcDays(from, 14) };
 }
 
@@ -393,6 +433,7 @@ function utcShiftWindow(
 			),
 		);
 	}
+
 	// Fortnight windows are exactly 14 days and already grid-aligned, so a plain day
 	// shift preserves alignment without the anchor.
 	return {
@@ -416,7 +457,9 @@ function monthsTouching(
 	};
 	const lastDay = new Date(window.to.getTime() - MS_PER_DAY);
 	const end = { year: lastDay.getUTCFullYear(), month0: lastDay.getUTCMonth() };
+
 	if (end.year === start.year && end.month0 === start.month0) return [start];
+
 	return [start, end];
 }
 
@@ -429,10 +472,13 @@ function annualLanding(
 ): Date | null {
 	for (const { year, month0 } of monthsTouching(window)) {
 		if (month0 + 1 !== dueMonth) continue;
+
 		const day = Math.min(dueDay, daysInMonth(year, dueMonth));
 		const landing = new Date(Date.UTC(year, dueMonth - 1, day));
+
 		if (withinWindow(landing, window)) return landing;
 	}
+
 	return null;
 }
 
@@ -442,8 +488,10 @@ function monthlyLanding(window: PeriodWindow, dueDay: number): Date | null {
 	for (const { year, month0 } of monthsTouching(window)) {
 		const day = Math.min(dueDay, daysInMonth(year, month0 + 1));
 		const landing = new Date(Date.UTC(year, month0, day));
+
 		if (withinWindow(landing, window)) return landing;
 	}
+
 	return null;
 }
 
@@ -451,7 +499,9 @@ function monthlyLanding(window: PeriodWindow, dueDay: number): Date | null {
 // dates it (a recent snapshot usually sits near the current bucket).
 function pivotIndex(windows: PeriodWindow[], asOf: Date): number {
 	const found = windows.findIndex((w) => withinWindow(asOf, w));
+
 	if (found !== -1) return found;
+
 	return asOf.getTime() < (windows[0]?.from.getTime() ?? 0)
 		? 0
 		: windows.length - 1;

@@ -28,6 +28,7 @@ function harness({ rows = [] }: { rows?: unknown[] } = {}) {
 		set: (vals: Record<string, unknown>) => ({
 			where: (cond: unknown) => {
 				updates.push({ table, set: vals, where: cond });
+
 				return Promise.resolve();
 			},
 		}),
@@ -38,6 +39,7 @@ function harness({ rows = [] }: { rows?: unknown[] } = {}) {
 			from: () => ({
 				where: (cond: unknown) => {
 					selectWhere = cond;
+
 					return Promise.resolve(rows);
 				},
 			}),
@@ -45,11 +47,13 @@ function harness({ rows = [] }: { rows?: unknown[] } = {}) {
 		update: mkUpdate,
 		transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
 			transactions += 1;
+
 			return cb({
 				update: mkUpdate,
 				insert: (table: unknown) => ({
 					values: (vals: unknown) => {
 						inserts.push({ table, values: vals });
+
 						return Promise.resolve();
 					},
 				}),

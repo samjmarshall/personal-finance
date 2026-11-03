@@ -58,6 +58,7 @@ function Button({
 }: ButtonPrimitive.Props &
 	VariantProps<typeof buttonVariants> & { loading?: boolean }) {
 	const iconOnly = size?.startsWith("icon");
+
 	return (
 		<ButtonPrimitive
 			aria-busy={loading || undefined}

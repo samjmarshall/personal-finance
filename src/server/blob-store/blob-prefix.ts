@@ -14,5 +14,6 @@ export function isBranchPrefix(prefix: string): boolean {
  */
 export function owns(prefix: string, pathname: string): boolean {
 	if (prefix !== "") return pathname.startsWith(prefix);
+
 	return !pathname.startsWith("local/") && !pathname.startsWith("preview/");
 }

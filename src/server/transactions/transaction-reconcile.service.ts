@@ -87,11 +87,14 @@ export class TransactionReconcileService {
 			SyncedTransaction["provenance"],
 			Map<string, SyncedTransaction>
 		>();
+
 		for (const row of rows) {
 			const group = byProvenance.get(row.provenance) ?? new Map();
 			byProvenance.set(row.provenance, group.set(row.externalId, row));
 		}
+
 		let counts = NO_COUNTS;
+
 		for (const [provenance, group] of byProvenance) {
 			const result = await this.reconcileGroup(
 				provenance,
@@ -100,6 +103,7 @@ export class TransactionReconcileService {
 			);
 			counts = sumCounts(counts, result);
 		}
+
 		return counts;
 	}
 
@@ -134,6 +138,7 @@ export class TransactionReconcileService {
 		const [weights, vectors] = pairs.length
 			? await Promise.all([this.weightsFor(incoming), this.vectorsFor(pairs)])
 			: [NO_WEIGHTS, null];
+
 		return this.repository.applyReconcile(
 			planReconcile({ ...match, weights, vectors }),
 		);
@@ -143,6 +148,7 @@ export class TransactionReconcileService {
 		incoming: SyncedTransaction[],
 	): Promise<WordWeights> {
 		const saved = await this.repository.listDescriptions();
+
 		return wordWeights([...saved, ...incoming.map((row) => row.description)]);
 	}
 
@@ -162,12 +168,15 @@ export class TransactionReconcileService {
 			cached.map(({ description, embedding }) => [description, embedding]),
 		);
 		const misses = [...texts].filter((text) => !vectors.has(text));
+
 		if (!misses.length) return vectors;
 
 		const abortSignal = AbortSignal.timeout(EMBED_TIMEOUT_MS);
+
 		for (let start = 0; start < misses.length; start += EMBED_BATCH_SIZE) {
 			const batch = misses.slice(start, start + EMBED_BATCH_SIZE);
 			let embeddings: number[][];
+
 			try {
 				embeddings = await this.embedBatch(batch, abortSignal);
 			} catch (error) {
@@ -176,17 +185,22 @@ export class TransactionReconcileService {
 					error,
 					descriptions: misses.length - start,
 				});
+
 				return vectors;
 			}
+
 			// embedMany keeps input order and length.
 			const fresh = batch.map((description, i) => ({
 				description,
 				embedding: embeddings[i] as number[],
 			}));
 			await this.repository.saveEmbeddings(model, fresh);
-			for (const { description, embedding } of fresh)
+
+			for (const { description, embedding } of fresh) {
 				vectors.set(description, embedding);
+			}
 		}
+
 		return vectors;
 	}
 
@@ -208,6 +222,7 @@ export class TransactionReconcileService {
 			// The span processor would price an ai.* span as Claude tokens.
 			telemetry: { isEnabled: false },
 		});
+
 		return embeddings;
 	}
 }

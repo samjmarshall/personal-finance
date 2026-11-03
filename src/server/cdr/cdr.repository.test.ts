@@ -25,10 +25,12 @@ function harness(respond?: Respond) {
 			db.transaction(async (tx) => {
 				const result = await writes(tx as never);
 				events.push(...toEvents(result));
+
 				return result;
 			}),
 		publish: unstaged,
 	};
+
 	return {
 		repository: new DrizzleCdrRepository({ db: db as never, outbox }),
 		queries,

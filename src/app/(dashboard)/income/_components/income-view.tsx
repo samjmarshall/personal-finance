@@ -44,19 +44,23 @@ export function IncomeView() {
 
 	const groups = useMemo(() => {
 		const map = new Map<string, Income[]>();
+
 		for (const item of list) {
 			// One-time income lives in its own section, not the person cards.
 			if (item.kind !== CommitmentKind.Recurring) continue;
+
 			const arr = map.get(item.person) ?? [];
 			arr.push(item);
 			map.set(item.person, arr);
 		}
+
 		return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 	}, [list]);
 
 	// Summary totals are recurring-only — one-time figures aren't a cadence.
 	const totals = useMemo(() => {
 		const recurring = list.filter((e) => e.kind === CommitmentKind.Recurring);
+
 		return {
 			fortnight: recurring.reduce((s, e) => s + (e.fortnight ?? 0), 0),
 			month: recurring.reduce((s, e) => s + (e.month ?? 0), 0),
@@ -73,6 +77,7 @@ export function IncomeView() {
 		setEditing(null);
 		setFormOpen(true);
 	}
+
 	function openEdit(item: Income) {
 		setEditing(item);
 		setFormOpen(true);
@@ -158,6 +163,7 @@ export function IncomeView() {
 			<div className="mt-6 flex flex-col gap-6">
 				{groups.map(([person, items]) => {
 					const groupTotal = items.reduce((s, e) => s + (e.month ?? 0), 0);
+
 					return (
 						<Card className="[--card-spacing:0px]" key={person}>
 							<div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
@@ -273,11 +279,12 @@ export function IncomeView() {
 			<DeleteConfirmDialog
 				label={deleteTarget?.source}
 				onConfirm={() => {
-					if (deleteTarget)
+					if (deleteTarget) {
 						remove.mutate(
 							{ id: deleteTarget.id },
 							{ onSuccess: () => setConfirmOpen(false) },
 						);
+					}
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}

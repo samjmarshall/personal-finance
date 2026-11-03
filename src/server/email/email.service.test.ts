@@ -130,12 +130,14 @@ function harness({
 	const allowedSenders = {
 		memberFor: async (email: string) => {
 			looked.push(email);
+
 			return allowlist[0]?.userId;
 		},
 	};
 	const receipts = {
 		createFromEmail: async (userId: string, blobs: StoredBlob[]) => {
 			created.push({ userId, blobs });
+
 			return blobs.map((_, i) => i + 1);
 		},
 	};

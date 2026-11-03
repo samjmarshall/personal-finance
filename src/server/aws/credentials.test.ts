@@ -37,6 +37,7 @@ describe("selectAwsCredentials", () => {
 		// an un-invoked closure that only resolves credentials at send() time.
 		const saved = process.env.VERCEL_OIDC_TOKEN;
 		delete process.env.VERCEL_OIDC_TOKEN;
+
 		try {
 			const provider = selectAwsCredentials({
 				isVercel: true,

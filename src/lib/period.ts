@@ -36,6 +36,7 @@ export function fortnightWindow(anchor: Date, ref: Date): PeriodWindow {
 	const offset = localDayNumber(ref) - localDayNumber(anchor);
 	const index = Math.floor(offset / 14);
 	const from = addDays(anchor, index * 14);
+
 	return { from, to: addDays(from, 14) };
 }
 
@@ -49,6 +50,7 @@ export function shiftWindow(
 			new Date(window.from.getFullYear(), window.from.getMonth() + step, 1),
 		);
 	}
+
 	// Fortnight windows are exactly 14 days and already grid-aligned, so a plain
 	// day shift preserves alignment without the anchor.
 	return {

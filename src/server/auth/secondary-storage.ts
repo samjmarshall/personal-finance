@@ -34,7 +34,9 @@ const isRevocationManifest = (key: string) =>
  */
 function redactReason(error: unknown) {
 	const name = errorName(error);
+
 	if (name === "UpstashJSONParseError") return name;
+
 	return errorMessage(error).split(", command was:")[0];
 }
 
@@ -62,6 +64,7 @@ class RedisUnavailableError extends Error {
 function isNextInterrupt(error: unknown) {
 	try {
 		unstable_rethrow(error);
+
 		return false;
 	} catch {
 		return true;
@@ -71,10 +74,13 @@ function isNextInterrupt(error: unknown) {
 /** Logs the redacted reason; returns the error to rethrow on fail-closed paths. */
 function fail(operation: string, error: unknown) {
 	const reason = redactReason(error);
+
 	// Static body + operation as an attribute so every Redis failure lands in one
 	// filterable group, not one per operation name.
-	if (!isNextInterrupt(error))
+	if (!isNextInterrupt(error)) {
 		logger.error("redis operation failed", { operation, reason });
+	}
+
 	return new RedisUnavailableError(
 		`[auth:redis] ${operation} failed: ${reason}`,
 	);
@@ -96,12 +102,16 @@ export function createSecondaryStorage({ url, token, prefix }: Options) {
 		get: async (key: string) => {
 			try {
 				const value = await redis.get(k(key));
+
 				if (value === null || value === undefined) return null;
+
 				// The Upstash REST client parses JSON for us; Better Auth expects a string.
 				return typeof value === "string" ? value : JSON.stringify(value);
 			} catch (error) {
 				const failure = fail("get", error);
+
 				if (isRevocationManifest(key)) throw failure;
+
 				return null; // Presents as a miss, so the Postgres fallback runs.
 			}
 		},
@@ -112,7 +122,9 @@ export function createSecondaryStorage({ url, token, prefix }: Options) {
 		getAndDelete: async (key: string) => {
 			try {
 				const value = await redis.getdel(k(key));
+
 				if (value === null || value === undefined) return null;
+
 				return typeof value === "string" ? value : JSON.stringify(value);
 			} catch (error) {
 				throw fail("getAndDelete", error);
@@ -125,11 +137,16 @@ export function createSecondaryStorage({ url, token, prefix }: Options) {
 			// Writing it without `ex` leaves a key nothing ever reclaims — eviction is
 			// disabled on the instance, and only the TTL removes session keys.
 			if (ttl !== undefined && ttl <= 0) return;
+
 			try {
-				if (ttl === undefined) await redis.set(k(key), value);
-				else await redis.set(k(key), value, { ex: ttl });
+				if (ttl === undefined) {
+					await redis.set(k(key), value);
+				} else {
+					await redis.set(k(key), value, { ex: ttl });
+				}
 			} catch (error) {
 				const failure = fail("set", error);
+
 				if (isRevocationManifest(key)) throw failure;
 			}
 		},
@@ -155,9 +172,11 @@ export function createSecondaryStorage({ url, token, prefix }: Options) {
 					.incr(k(key))
 					.expire(k(key), ttl, "NX")
 					.exec<[number, 0 | 1]>();
+
 				return count;
 			} catch (error) {
 				fail("increment", error);
+
 				return 0; // Allowed. A throw 500s every /api/auth/* request.
 			}
 		},

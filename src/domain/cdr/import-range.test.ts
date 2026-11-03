@@ -34,11 +34,14 @@ describe("importWindows", () => {
 
 		expect(windows[0]?.from).toBe("2019-10-28");
 		expect(windows.at(-1)?.to).toBe("2026-10-28");
+
 		for (const [i, window] of windows.entries()) {
 			expect(window.from <= window.to).toBe(true);
 			const next = windows[i + 1];
+
 			if (next) expect(next.from).toBe(dayAfter(window.to));
 		}
+
 		expect(windows).toHaveLength(29);
 	});
 });

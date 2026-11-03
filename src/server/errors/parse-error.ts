@@ -37,8 +37,11 @@ const SQLSTATE = /^[0-9A-Z]{5}$/;
 
 function asPgError(value: unknown): PgLike | null {
 	if (typeof value !== "object" || value === null) return null;
+
 	const { code } = value as { code?: unknown };
+
 	if (typeof code !== "string" || !SQLSTATE.test(code)) return null;
+
 	return value as PgLike;
 }
 
@@ -52,7 +55,9 @@ function findPgError(error: unknown): PgLike | null {
 
 function parsePg(error: unknown): ParsedError | null {
 	const pg = findPgError(error);
+
 	if (!pg) return null;
+
 	return {
 		kind: "pg",
 		code: pg.code,
@@ -71,5 +76,6 @@ export function parseError(error: unknown): ParsedError {
 // Callers that need `code`/`constraint` reach for parseError directly.
 export function isPgViolation(error: unknown, violation: PgViolation): boolean {
 	const parsed = parseError(error);
+
 	return parsed.kind === "pg" && parsed.violation === violation;
 }

@@ -30,6 +30,7 @@ describe("worker golden", () => {
 			send: async () => {},
 			createFunction: ({ id, triggers, concurrency }: Opts) => {
 				declared.push({ id, triggers, concurrency });
+
 				return { id: () => id };
 			},
 			// biome-ignore lint/suspicious/noExplicitAny: spy stands in for the inngest client.

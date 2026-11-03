@@ -39,12 +39,15 @@ export function ReceiptUpload({
 
 	async function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
 		const file = event.target.files?.[0];
+
 		if (!file) return;
+
 		// Clear so re-picking the same file fires onChange again.
 		event.target.value = "";
 
 		setStatus("processing");
 		let ready: File;
+
 		try {
 			ready = await prepReceipt(file);
 		} catch (err) {
@@ -53,6 +56,7 @@ export function ReceiptUpload({
 				err instanceof Error ? err.message : "Couldn't read that image",
 			);
 			setStatus("idle");
+
 			return;
 		}
 
@@ -62,6 +66,7 @@ export function ReceiptUpload({
 		// only reachable with a signed/authenticated request, never anonymously.
 		setStatus("uploading");
 		let blob: Awaited<ReturnType<typeof upload>>;
+
 		try {
 			blob = await upload(`${uploadPrefix}${ready.name}`, ready, {
 				access: "private",
@@ -71,6 +76,7 @@ export function ReceiptUpload({
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : "Upload failed");
 			setStatus("idle");
+
 			return;
 		}
 

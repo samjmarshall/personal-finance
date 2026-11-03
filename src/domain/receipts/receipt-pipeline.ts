@@ -15,7 +15,9 @@ export type Stage = {
 // the "—" fallback belongs to the render layer, not this pure derivation.
 export function isoOrNull(d: Date | string | null | undefined): string | null {
 	if (!d) return null;
+
 	const t = new Date(d);
+
 	return Number.isNaN(t.getTime()) ? null : t.toISOString();
 }
 
@@ -129,6 +131,7 @@ export function receiptPipeline(data: ReceiptDetail): Stage[] {
 		// "Processed" pipeline: the `never` binding turns that omission into a build error.
 		default: {
 			const unhandled: never = data.status;
+
 			throw new Error(`Unhandled receipt status: ${String(unhandled)}`);
 		}
 	}
