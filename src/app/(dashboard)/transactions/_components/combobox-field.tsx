@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
 	Combobox,
 	ComboboxContent,
@@ -38,6 +38,7 @@ export function ComboboxField<T>({
 	"aria-describedby"?: string;
 }) {
 	const [open, setOpen] = useState(false);
+	const highlighted = useRef<ComboboxFieldOption<T> | undefined>(undefined);
 	const label = items.find((item) => Object.is(item.value, value))?.label;
 	// A new object each render resets half-typed text, so rebuild only on a real change.
 	const selected = useMemo(
@@ -51,13 +52,20 @@ export function ComboboxField<T>({
 			disabled={disabled}
 			isItemEqualToValue={(a, b) => Object.is(a.value, b.value)}
 			items={items}
+			onItemHighlighted={(item) => {
+				highlighted.current = item;
+			}}
 			onOpenChange={(next) => setOpen(next)}
 			onValueChange={(item, details) => {
-				// Emptied mid-search is a new search: the pick stays, its label returns on close.
-				// Shut, no close will bring it back, so empty means cleared.
-				if (item === null && details.reason === "input-clear" && open) return;
+				// Emptied text is a new search, not a clear: the pick stays and its
+				// label returns when the list closes. Only the X clears.
+				if (item === null && details.reason === "input-clear") {
+					setOpen(true);
+					return;
+				}
 				onValueChange(item?.value ?? null);
 			}}
+			open={open}
 			value={selected}
 		>
 			<ComboboxInput
@@ -71,6 +79,12 @@ export function ComboboxField<T>({
 					if (e.key === "Enter" && open) e.preventDefault();
 					// With it shut, Escape belongs to the dialog; it must not wipe the pick.
 					if (e.key === "Escape" && !open) e.preventBaseUIHandler();
+					// Tab takes the highlighted match of a typed search, then moves on.
+					// Empty text highlights row one too; leaving then must not pick it.
+					const typed = e.currentTarget.value.trim() !== "";
+					if (e.key === "Tab" && open && typed && highlighted.current) {
+						onValueChange(highlighted.current.value);
+					}
 				}}
 				placeholder={placeholder}
 				showClear={selected !== null}

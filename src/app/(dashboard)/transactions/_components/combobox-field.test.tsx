@@ -75,12 +75,17 @@ describe("ComboboxField", () => {
 		await waitFor(() => expect(input).toHaveValue("Banana"));
 	});
 
-	it("emptying the text with the list shut clears the pick", async () => {
+	it("emptying the text with the list shut keeps the pick and restores its label on blur", async () => {
 		const user = userEvent.setup();
 		const { input, onValueChange } = renderField(2);
-		await user.clear(input);
+		// Tab in, select all, Backspace: the keyboard path, list never opened.
+		input.focus();
+		(input as HTMLInputElement).select();
+		await user.keyboard("{Backspace}");
+		await user.tab();
 
-		expect(onValueChange).toHaveBeenCalledWith(null);
+		expect(onValueChange).not.toHaveBeenCalled();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
 	});
 
 	it("Enter picks the highlighted match", async () => {
@@ -91,6 +96,40 @@ describe("ComboboxField", () => {
 		await user.keyboard("{Enter}");
 
 		expect(onValueChange).toHaveBeenCalledWith(2);
+	});
+
+	it("Tab picks the highlighted match and moves on", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField();
+		await user.type(input, "ban");
+		await screen.findByRole("option", { name: "Banana" });
+		await user.tab();
+
+		expect(onValueChange).toHaveBeenCalledWith(2);
+		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
+	});
+
+	it("Tab on a reopened filled field keeps the pick", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(2);
+		await user.click(input);
+		await screen.findByRole("option", { name: "Apple" });
+		await user.tab();
+
+		expect(onValueChange).not.toHaveBeenCalledWith(1);
+		await waitFor(() => expect(input).toHaveValue("Banana"));
+	});
+
+	it("Tab with no match keeps the pick", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(2);
+		await user.clear(input);
+		await user.type(input, "kiwi");
+		await screen.findByText("No fruit found.");
+		await user.tab();
+
+		expect(onValueChange).not.toHaveBeenCalled();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
 	});
 
 	it("Enter with no match does not submit the form", async () => {
