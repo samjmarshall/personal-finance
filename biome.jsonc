@@ -1,7 +1,15 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"root": true,
-	"plugins": ["./biome-plugins/no-namespace-suspense.grit"],
+	// useBlockStatements has no options (braces everywhere or nowhere), so these plugins
+	// keep one-line ifs legal and brace everything else.
+	// Blank lines live in Oxlint; .oxlintrc.json says why and when to move them here.
+	"plugins": [
+		"./biome-plugins/no-namespace-suspense.grit",
+		"./biome-plugins/loop-braces.grit",
+		"./biome-plugins/if-chain-braces.grit",
+		"./biome-plugins/if-multiline-braces.grit"
+	],
 	"vcs": {
 		"enabled": true,
 		"useIgnoreFile": true,

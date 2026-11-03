@@ -61,18 +61,23 @@ export class VercelBlobStore implements BlobStore {
 
 	async read(pathname: string): Promise<FetchedBlob> {
 		const result = await get(pathname, { access: "private" });
+
 		if (result?.statusCode !== 200) {
 			throw new Error(`blob fetch failed for ${pathname}`);
 		}
+
 		const bytes = new Uint8Array(
 			await new Response(result.stream).arrayBuffer(),
 		);
+
 		return { bytes, mediaType: result.blob.contentType };
 	}
 
 	async stream(pathname: string): Promise<StreamedBlob | null> {
 		const result = await get(pathname, { access: "private" });
+
 		if (result?.statusCode !== 200) return null;
+
 		return { stream: result.stream, contentType: result.blob.contentType };
 	}
 
@@ -90,11 +95,13 @@ export class VercelBlobStore implements BlobStore {
 			typeof body === "string" ? body : Buffer.from(body),
 			{ access: "private", contentType, addRandomSuffix: false },
 		);
+
 		return { url: result.url, pathname: result.pathname };
 	}
 
 	async delete(pathname: string): Promise<void> {
 		if (!owns(this.prefix, pathname)) return;
+
 		await del(pathname);
 	}
 }

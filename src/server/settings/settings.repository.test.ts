@@ -8,6 +8,7 @@ import { DrizzleSettingsRepository } from "./settings.repository";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleSettingsRepository({ db: db as never }),
 		queries,

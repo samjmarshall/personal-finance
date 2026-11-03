@@ -25,9 +25,11 @@ const monthLabelFormatter = new Intl.DateTimeFormat("en-AU", {
 
 function periodLabel(kind: PeriodKind, range: PeriodWindow): string {
 	if (kind === "month") return monthLabelFormatter.format(range.from);
+
 	// Window is half-open [from, to); show the inclusive last day.
 	const last = new Date(range.to);
 	last.setDate(last.getDate() - 1);
+
 	return `${formatDate(range.from)} – ${formatDate(last)}`;
 }
 
@@ -57,6 +59,7 @@ export function UnplannedView() {
 	const seededFor = useRef<string | null | undefined>(undefined);
 	useEffect(() => {
 		if (seededFor.current === anchor) return;
+
 		seededFor.current = anchor;
 		const now = new Date();
 		setKind(anchorDate ? "fortnight" : "month");
@@ -71,6 +74,7 @@ export function UnplannedView() {
 		// Re-clicking the active length would reset the window back to today,
 		// discarding the user's prev/next navigation — only act on a real change.
 		if (next === kind) return;
+
 		setKind(next);
 		setRange(
 			next === "fortnight" && anchorDate

@@ -23,6 +23,7 @@ import { transactions } from "./transactions.schema";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleTransactionsRepository({ db: db as never }),
 		queries,
@@ -300,6 +301,7 @@ describe("summary", () => {
 		if (sql.includes("date_trunc")) return [["2026-09", 80]];
 		if (sql.includes("priority")) return [[Priority.MustHave, 60, 1]];
 		if (sql.includes("frequency")) return [[Frequency.OneOff, 60, 1]];
+
 		return [[80, -20, 60, 3]];
 	}
 
@@ -687,7 +689,8 @@ describe("applyReconcile", () => {
 	it("releases the review a held row had into a row of its own", async () => {
 		const { repository, queries } = harness(({ sql }) => {
 			if (sql.startsWith('update "transaction"')) return [[1]];
-			if (sql.startsWith('delete from "possible_duplicate"'))
+
+			if (sql.startsWith('delete from "possible_duplicate"')) {
 				return [
 					[
 						"cdr",
@@ -700,6 +703,8 @@ describe("applyReconcile", () => {
 						9,
 					],
 				];
+			}
+
 			return [];
 		});
 
@@ -759,8 +764,11 @@ describe("applyReconcile", () => {
 		];
 		const { repository, queries } = harness(({ sql }) => {
 			if (sql.startsWith('update "transaction"')) return [[1]];
-			if (sql.startsWith('delete from "possible_duplicate"'))
+
+			if (sql.startsWith('delete from "possible_duplicate"')) {
 				return [review("txn_close", 9), review("txn_same_day", 10)];
+			}
+
 			return [];
 		});
 
@@ -782,7 +790,8 @@ describe("applyReconcile", () => {
 	it("adds a released review's bank row once, from this batch's copy", async () => {
 		const { repository, queries } = harness(({ sql }) => {
 			if (sql.startsWith('update "transaction"')) return [[1]];
-			if (sql.startsWith('delete from "possible_duplicate"'))
+
+			if (sql.startsWith('delete from "possible_duplicate"')) {
 				return [
 					[
 						"cdr",
@@ -795,6 +804,8 @@ describe("applyReconcile", () => {
 						9,
 					],
 				];
+			}
+
 			return [];
 		});
 		const refetched = {

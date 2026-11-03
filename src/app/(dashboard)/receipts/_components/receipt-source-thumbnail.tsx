@@ -21,7 +21,9 @@ const STAND_IN = {
 // unknown type gets a broken-image icon. No icon means the real image is safe to show.
 export function previewIcon(contentType: string | null) {
 	const kind = receiptMediaKind(contentType);
+
 	if (kind === null) return ImageOff;
+
 	return kind === "image" ? null : STAND_IN[kind].Icon;
 }
 
@@ -52,13 +54,14 @@ export function ReceiptSourceThumbnail({
 	const [failed, setFailed] = useState(false);
 	const kind = receiptMediaKind(contentType);
 
-	if (kind === null)
+	if (kind === null) {
 		return (
 			<div className={cn(FRAME, PLACEHOLDER)}>
 				<ImageOff aria-hidden className="h-8 w-8" />
 				No preview
 			</div>
 		);
+	}
 
 	return (
 		<button

@@ -152,6 +152,7 @@ describe("tracing span", () => {
 		const lines: string[] = [];
 		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
 			if (typeof chunk === "string") lines.push(chunk);
+
 			return true;
 		});
 		await caller().ok();
@@ -173,6 +174,7 @@ describe("tracing span", () => {
 		const lines: string[] = [];
 		vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
 			if (typeof chunk === "string") lines.push(chunk);
+
 			return true;
 		});
 		await expect(caller().unauth()).rejects.toThrow();
@@ -212,14 +214,17 @@ function captureStdout(): string[] {
 	const lines: string[] = [];
 	vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
 		if (typeof chunk === "string") lines.push(chunk);
+
 		return true;
 	});
+
 	return lines;
 }
 
 function spanNamed(name: string) {
 	const span = exporter.getFinishedSpans().find((s) => s.name === name);
 	expect(span).toBeDefined();
+
 	// biome-ignore lint/style/noNonNullAssertion: asserted defined above.
 	return span!;
 }

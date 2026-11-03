@@ -21,8 +21,11 @@ export function AttentionBanner({
 	tone: "alert" | "warn";
 }) {
 	const [dismissed, setDismissed] = useState(false);
+
 	if (dismissed) return null;
+
 	const Icon = tone === "alert" ? AlertTriangle : Info;
+
 	// Sticky, not fixed: its own slot at page end, so it never covers the last content.
 	// Status even when red: it repeats every visit, so it mustn't interrupt a screen reader.
 	return (
@@ -45,6 +48,7 @@ export function AttentionBanner({
 						focusBefore(e.currentTarget);
 						swallowHeldEnter();
 					}
+
 					setDismissed(true);
 				}}
 				size="icon-sm"
@@ -71,7 +75,9 @@ const isTabbable = (el: HTMLElement) =>
 // reader's place. The banner is last, so hand focus to the control before it.
 function focusBefore(dismiss: HTMLElement) {
 	const banner = dismiss.closest("[role=status]");
+
 	if (!banner) return;
+
 	const before = [...document.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
 		(el) =>
 			el.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING &&
@@ -85,14 +91,18 @@ function focusBefore(dismiss: HTMLElement) {
 function swallowHeldEnter() {
 	const block = (e: KeyboardEvent) => {
 		if (e.key !== "Enter" || !e.repeat) return;
+
 		e.preventDefault();
 		e.stopPropagation();
 	};
+
 	const release = (e: KeyboardEvent) => {
 		if (e.key !== "Enter") return;
+
 		window.removeEventListener("keydown", block, true);
 		window.removeEventListener("keyup", release, true);
 	};
+
 	window.addEventListener("keydown", block, true);
 	window.addEventListener("keyup", release, true);
 }
@@ -109,6 +119,7 @@ function reserveScrollRoom(banner: HTMLDivElement) {
 		page.style.scrollPaddingBottom = `${height + ROOM_ABOVE_PX}px`;
 	});
 	observer.observe(banner);
+
 	return () => {
 		observer.disconnect();
 		page.style.scrollPaddingBottom = "";

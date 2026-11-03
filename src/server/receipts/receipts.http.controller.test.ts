@@ -86,7 +86,9 @@ function harness({ memberId = "m1" }: { memberId?: string } = {}) {
 			if (event.type === "blob.upload-completed") {
 				return { type: event.type, response: "ok" };
 			}
+
 			if (member === undefined) throw new UploadUnauthorizedError();
+
 			return { type: event.type, clientToken: `tok:${member}` };
 		},
 	);
@@ -99,6 +101,7 @@ function harness({ memberId = "m1" }: { memberId?: string } = {}) {
 		sessions: { memberId: sessionMember },
 		logger,
 	});
+
 	return { controller, logs, sessionMember, openImage, openHtml, answerUpload };
 }
 
@@ -308,6 +311,7 @@ describe("ReceiptsHttpController.upload", () => {
 		const http = provider
 			.getTracer("test")
 			.startSpan("POST /api/receipts/upload");
+
 		try {
 			const response = await context.with(
 				trace.setSpan(context.active(), http),

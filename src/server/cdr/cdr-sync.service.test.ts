@@ -171,9 +171,12 @@ function harness(opts: HarnessOptions = {}) {
 		setConnectionStatus: async (connectionId, status) => {
 			calls.push(`setConnectionStatus ${connectionId}`);
 			statusSets.push({ connectionId, status });
-			for (const [id, s] of states)
-				if (s.connectionId === connectionId)
+
+			for (const [id, s] of states) {
+				if (s.connectionId === connectionId) {
 					states.set(id, { ...s, connectionStatus: status });
+				}
+			}
 		},
 		recordError: async (accountId, message) => {
 			calls.push(`recordError ${accountId}`);
@@ -193,6 +196,7 @@ function harness(opts: HarnessOptions = {}) {
 		latestImport: unstaged,
 		markImportRunning: async (id) => {
 			calls.push(`markImportRunning ${id}`);
+
 			return "runningImport" in opts ? opts.runningImport : importRow({ id });
 		},
 		addImportCounts: async (id, counts) => {
@@ -217,6 +221,7 @@ function harness(opts: HarnessOptions = {}) {
 		listTransactions: async ({ accountId, from, to }) => {
 			calls.push(`fetch ${accountId}`);
 			fetches.push({ accountId, from, to });
+
 			return opts.listTransactions
 				? opts.listTransactions(accountId)
 				: (opts.rows?.[accountId] ?? []);
@@ -224,6 +229,7 @@ function harness(opts: HarnessOptions = {}) {
 		listBalances: async (accountIds) => {
 			calls.push("listBalances");
 			balanceReads.push(accountIds);
+
 			return opts.listBalances
 				? opts.listBalances(accountIds)
 				: accountIds.map((id) => opts.balances?.[id] ?? balance(id));
@@ -237,6 +243,7 @@ function harness(opts: HarnessOptions = {}) {
 			calls.push("reconcileSynced");
 			reconciles.push({ rows, liveAccountIds });
 			await opts.reconcileSynced?.(rows);
+
 			return { added: rows.length, adopted: 0, flagged: 0, known: 0 };
 		},
 	};
@@ -245,6 +252,7 @@ function harness(opts: HarnessOptions = {}) {
 			calls.push("recordSynced");
 			await opts.recordSynced?.(input);
 			anchors.push(input);
+
 			return { ...input, id: 1, createdAt: NOW, source: BalanceSource.Cdr };
 		},
 	};
@@ -262,6 +270,7 @@ function harness(opts: HarnessOptions = {}) {
 		balances,
 		logger,
 	});
+
 	return {
 		service,
 		calls,
@@ -286,6 +295,7 @@ async function caught(promise: Promise<unknown>): Promise<unknown> {
 	} catch (error) {
 		return error;
 	}
+
 	throw new Error("expected a rejection");
 }
 
@@ -602,6 +612,7 @@ describe("CdrSyncService.run", () => {
 				accounts: [account("acct_bad"), account("acct_ok")],
 				listTransactions: async (accountId) => {
 					if (accountId === "acct_bad") throw new Error("boom");
+
 					return [row("t1", "2026-10-01")];
 				},
 			});
@@ -620,6 +631,7 @@ describe("CdrSyncService.run", () => {
 				accounts: [account("acct_bad"), account("acct_ok")],
 				listTransactions: async (accountId) => {
 					if (accountId === "acct_bad") throw new RedbarkRetryableError("503");
+
 					return [row("t1", "2026-10-01")];
 				},
 				recordError: async () => {
@@ -672,6 +684,7 @@ describe("CdrSyncService.run", () => {
 				accounts: [account("a"), account("b")],
 				listTransactions: async (accountId) => {
 					if (accountId === "a") throw new Error("mapping");
+
 					throw new RedbarkRetryableError("503");
 				},
 			});
@@ -873,6 +886,7 @@ describe("CdrSyncService.run", () => {
 				accounts: [account("acct_1"), account("acct_2")],
 				listTransactions: async (accountId) => {
 					if (accountId === "acct_2") throw new Error("boom");
+
 					return [];
 				},
 			});
@@ -888,6 +902,7 @@ describe("CdrSyncService.run", () => {
 				accounts: [account("acct_1"), account("acct_loan", { type: "loan" })],
 				listTransactions: async (accountId) => {
 					if (accountId === "acct_loan") throw new Error("boom");
+
 					return [];
 				},
 			});
@@ -1258,8 +1273,10 @@ describe("CdrSyncService.importChunk", () => {
 		});
 
 		const plan = await h.service.planImport(7, IMPORT_ROW_RANGE);
-		for (const c of plan.chunks)
+
+		for (const c of plan.chunks) {
 			await h.service.importChunk(7, c, plan.liveAccountIds);
+		}
 
 		expect(h.reconciles.length).toBeGreaterThan(0);
 		expect(h.advances).toEqual([]);

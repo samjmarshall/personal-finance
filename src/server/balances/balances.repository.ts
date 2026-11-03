@@ -30,6 +30,7 @@ export class DrizzleBalancesRepository implements BalancesRepository {
 			.from(balanceSnapshots)
 			.orderBy(desc(balanceSnapshots.asOf), desc(balanceSnapshots.id))
 			.limit(1);
+
 		return row;
 	}
 
@@ -40,6 +41,7 @@ export class DrizzleBalancesRepository implements BalancesRepository {
 			.insert(balanceSnapshots)
 			.values(values)
 			.returning();
+
 		return row;
 	}
 }

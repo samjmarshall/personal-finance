@@ -31,13 +31,15 @@ describe("ImportStatus", () => {
 
 		expect(screen.getByText("Importing")).toBeInTheDocument();
 		expect(screen.getByText("01 Jan 2026 – 31 Mar 2026")).toBeInTheDocument();
+
 		for (const count of [
 			"Added 1,204",
 			"Matched to yours 3",
 			"Flagged 2",
 			"Already here 40",
-		])
+		]) {
 			expect(screen.getByText(count)).toBeInTheDocument();
+		}
 	});
 
 	// Counts change every poll; reading them out each time would drown the status.

@@ -37,6 +37,7 @@ export class NameDropSampler implements Sampler {
 		if (spanName === this.dropName) {
 			return { decision: SamplingDecision.NOT_RECORD };
 		}
+
 		return this.inner.shouldSample(
 			context,
 			traceId,

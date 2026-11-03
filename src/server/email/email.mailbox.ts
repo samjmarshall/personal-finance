@@ -50,7 +50,9 @@ export class ResendInboundMailbox implements InboundMailbox {
 			undefined,
 			{ signal: AbortSignal.timeout(RESEND_READ_TIMEOUT_MS) },
 		);
+
 		if (error) throw new Error(`resend get email failed: ${error.message}`);
+
 		return { html: data.html, text: data.text };
 	}
 
@@ -59,8 +61,11 @@ export class ResendInboundMailbox implements InboundMailbox {
 			{ emailId },
 			{ signal: AbortSignal.timeout(RESEND_READ_TIMEOUT_MS) },
 		);
-		if (error)
+
+		if (error) {
 			throw new Error(`resend list attachments failed: ${error.message}`);
+		}
+
 		return data.data;
 	}
 
@@ -75,19 +80,26 @@ export class ResendInboundMailbox implements InboundMailbox {
 				attributes: { "http.url": unsigned },
 			},
 		});
-		if (!response.ok)
+
+		if (!response.ok) {
 			throw new Error(`attachment download failed: ${response.status}`);
+		}
 
 		// Declared length first — it rejects an oversized attachment before a byte is
 		// read. It is only a claim, so the buffered length is checked too; together
 		// they bound what an inbound email can make us hold.
 		const declared = Number(response.headers.get("content-length"));
-		if (declared > MAX_ATTACHMENT_BYTES)
+
+		if (declared > MAX_ATTACHMENT_BYTES) {
 			throw new Error(`attachment too large: ${declared} bytes`);
+		}
 
 		const bytes = new Uint8Array(await response.arrayBuffer());
-		if (bytes.byteLength > MAX_ATTACHMENT_BYTES)
+
+		if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
 			throw new Error(`attachment too large: ${bytes.byteLength} bytes`);
+		}
+
 		return bytes;
 	}
 }

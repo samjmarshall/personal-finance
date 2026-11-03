@@ -6,6 +6,7 @@ export function TopGroups({
 	data: { group: string; total: number; count: number }[];
 }) {
 	const rows = data.filter((d) => d.total > 0);
+
 	if (!rows.length) {
 		return (
 			<p className="py-6 text-center text-sm text-muted-foreground">
@@ -13,6 +14,7 @@ export function TopGroups({
 			</p>
 		);
 	}
+
 	const max = Math.max(...rows.map((r) => r.total), 1);
 
 	return (

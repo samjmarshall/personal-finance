@@ -81,16 +81,22 @@ export function resolveContext(): RepoContext {
 		parseJson(sh(repoCmd), repoCmd),
 	).nameWithOwner;
 	const [repoOwner, name] = repo.split("/");
-	if (!repoOwner || !name)
+
+	if (!repoOwner || !name) {
 		throw new GhError(`could not parse owner/name from "${repo}"`);
+	}
 
 	const override = process.env.TICKET_PROJECT?.trim();
+
 	if (override) {
-		if (!/^\d+$/.test(override))
+		if (!/^\d+$/.test(override)) {
 			throw new GhError(
 				`TICKET_PROJECT must be a project number, got "${override}"`,
 			);
+		}
+
 		_ctx = { repo, owner: repoOwner, project: override };
+
 		return _ctx;
 	}
 
@@ -98,18 +104,23 @@ export function resolveContext(): RepoContext {
 	const nodes = LinkedProjectsSchema.parse(parseJson(sh(gqlCmd), gqlCmd)).data
 		.repository.projectsV2.nodes;
 	const open = nodes.filter((n) => !n.closed);
-	if (open.length === 0)
+
+	if (open.length === 0) {
 		throw new GhError(
 			`no open linked Projects v2 board for ${repo} — link one to the repo, or set TICKET_PROJECT`,
 		);
-	if (open.length > 1)
+	}
+
+	if (open.length > 1) {
 		throw new GhError(
 			`${repo} has ${open.length} linked boards (${open
 				.map((n) => `#${n.number} ${n.title}`)
 				.join(", ")}) — set TICKET_PROJECT to disambiguate`,
 		);
+	}
 
 	_ctx = { repo, owner: open[0].owner.login, project: String(open[0].number) };
+
 	return _ctx;
 }
 
@@ -118,14 +129,19 @@ export function fetchIssue(n: number): RawIssue {
 	const { repo } = resolveContext();
 	const cmd = `gh issue view ${n} --repo ${repo} --json number,title,body,labels,milestone,url`;
 	const parsed = RawIssueSchema.safeParse(parseJson(sh(cmd), cmd));
-	if (!parsed.success)
+
+	if (!parsed.success) {
 		throw new GhError(
 			`issue #${n}: unexpected gh shape — ${parsed.error.message}`,
 		);
-	if (!/\/issues\/\d+$/.test(parsed.data.url))
+	}
+
+	if (!/\/issues\/\d+$/.test(parsed.data.url)) {
 		throw new GhError(
 			`#${n} is not an issue (got ${parsed.data.url}) — PR number?`,
 		);
+	}
+
 	return parsed.data;
 }
 
@@ -134,14 +150,23 @@ export function fetchBoard(): Map<number, RawProjectItem> {
 	const { owner, project } = resolveContext();
 	const cmd = `gh project item-list ${project} --owner ${owner} --format json --limit 200`;
 	const parsed = RawBoardSchema.safeParse(parseJson(sh(cmd), cmd));
-	if (!parsed.success)
+
+	if (!parsed.success) {
 		throw new GhError(`board: unexpected gh shape — ${parsed.error.message}`);
-	if (parsed.data.items.length < parsed.data.totalCount)
+	}
+
+	if (parsed.data.items.length < parsed.data.totalCount) {
 		throw new GhError(
 			`board truncated: read ${parsed.data.items.length}/${parsed.data.totalCount} items — raise --limit`,
 		);
+	}
+
 	const map = new Map<number, RawProjectItem>();
-	for (const item of parsed.data.items) map.set(item.content.number, item);
+
+	for (const item of parsed.data.items) {
+		map.set(item.content.number, item);
+	}
+
 	return map;
 }
 
@@ -149,6 +174,7 @@ export function fetchBoard(): Map<number, RawProjectItem> {
 export function fetchSubIssues(n: number): number[] {
 	const { repo } = resolveContext();
 	const cmd = `gh api /repos/${repo}/issues/${n}/sub_issues --jq 'map(.number)'`;
+
 	return z.array(z.number()).parse(parseJson(sh(cmd), cmd));
 }
 
@@ -161,14 +187,20 @@ export function assertExpectedFields(): void {
 	const { owner, project } = resolveContext();
 	const cmd = `gh project field-list ${project} --owner ${owner} --format json`;
 	const parsed = FieldListSchema.safeParse(parseJson(sh(cmd), cmd));
-	if (!parsed.success)
+
+	if (!parsed.success) {
 		throw new GhError(
 			`field-list: unexpected gh shape — ${parsed.error.message}`,
 		);
+	}
+
 	const names = new Set(parsed.data.fields.map((f) => f.name.toLowerCase()));
-	for (const required of REQUIRED_FIELD_NAMES)
-		if (!names.has(required))
+
+	for (const required of REQUIRED_FIELD_NAMES) {
+		if (!names.has(required)) {
 			throw new GhError(
 				`project field "${required}" not found — renamed? The validator reads fields by name.`,
 			);
+		}
+	}
 }

@@ -18,6 +18,7 @@ function renderField({ readOnly = false }: { readOnly?: boolean } = {}) {
 			value="a"
 		/>,
 	);
+
 	return screen.getByRole("combobox", { name: "Fruit" });
 }
 

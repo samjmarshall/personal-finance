@@ -8,6 +8,7 @@ export function withFlush<Args extends unknown[], Result>(
 ): (...args: Args) => Result {
 	return (...args) => {
 		flushAfterResponse();
+
 		return handler(...args);
 	};
 }

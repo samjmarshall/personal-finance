@@ -38,6 +38,7 @@ export class DrizzleIncomeRepository implements IncomeRepository {
 
 	async insert(values: IncomeCreateInput): Promise<Income | undefined> {
 		const [row] = await this.db.insert(income).values(values).returning();
+
 		return row;
 	}
 
@@ -50,6 +51,7 @@ export class DrizzleIncomeRepository implements IncomeRepository {
 			.set(values)
 			.where(eq(income.id, id))
 			.returning();
+
 		return row;
 	}
 

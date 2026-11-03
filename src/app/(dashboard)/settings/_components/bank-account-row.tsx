@@ -65,6 +65,7 @@ export function BankAccountRow({
 		setDraft(account.nickname ?? "");
 		setEditing(true);
 	}
+
 	function close() {
 		refocusPencil.current = true;
 		setEditing(false);
@@ -84,6 +85,7 @@ export function BankAccountRow({
 						// On the form, so Escape works from Save and Cancel too.
 						onKeyDown={(event) => {
 							if (event.key !== "Escape") return;
+
 							event.preventDefault();
 							close();
 						}}

@@ -10,9 +10,9 @@
 	},
 	"scripts": {
 		"build": "next build",
-		"check": "biome check .",
+		"check": "biome check . && oxlint",
 		"check:unsafe": "biome check --write --unsafe .",
-		"check:write": "biome check --write .",
+		"check:write": "biome check --write .; biome check --write .; oxlint --fix",
 		"db:check": "drizzle-kit check",
 		"db:generate": "drizzle-kit generate",
 		"db:custom": "drizzle-kit generate --custom",
@@ -84,6 +84,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.15",
 		"@opentelemetry/sdk-trace-node": "2.12.0",
+		"@stylistic/eslint-plugin": "5.10.0",
 		"@tailwindcss/postcss": "^4.3.3",
 		"@testing-library/dom": "^10.4.2",
 		"@testing-library/jest-dom": "^7.0.1",
@@ -97,6 +98,7 @@
 		"husky": "^9.1.7",
 		"inngest-cli": "^1.46.0",
 		"jsdom": "^30.1.2",
+		"oxlint": "1.90.0",
 		"portless": "^0.15.7",
 		"postcss": "^8.5.29",
 		"shadcn": "4.23.0",

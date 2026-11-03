@@ -25,6 +25,7 @@ export function PriorityBreakdown({
 			{rows.map((row) => {
 				const pct = total > 0 ? Math.round((row.total / total) * 100) : 0;
 				const style = priorityStyle(row.priority);
+
 				return (
 					<div className="flex flex-col gap-1.5" key={row.priority}>
 						<div className="flex items-center justify-between text-sm">

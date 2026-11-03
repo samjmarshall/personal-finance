@@ -8,6 +8,7 @@ export interface SessionReader {
 export class BetterAuthSessionReader implements SessionReader {
 	async memberId(headers: Headers): Promise<string | undefined> {
 		const session = await auth.api.getSession({ headers });
+
 		return session?.user.id;
 	}
 }

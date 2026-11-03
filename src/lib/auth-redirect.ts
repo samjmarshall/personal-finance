@@ -9,5 +9,6 @@ export function authRedirect(
 	hasCookie: boolean,
 ): string | null {
 	if (hasCookie || AUTH_PAGES.has(pathname)) return null;
+
 	return "/sign-in";
 }

@@ -16,6 +16,7 @@ function serviceWith(staged: Partial<BalancesRepository>) {
 		insert: unstaged,
 		...staged,
 	};
+
 	return new BalancesService({ repository });
 }
 
@@ -47,6 +48,7 @@ describe("BalancesService", () => {
 		const service = serviceWith({
 			insert: async (values) => {
 				inserted.push(values);
+
 				return SNAPSHOT;
 			},
 		});
@@ -76,6 +78,7 @@ describe("BalancesService", () => {
 		const service = serviceWith({
 			insert: async (values) => {
 				inserted.push(values);
+
 				return synced;
 			},
 		});

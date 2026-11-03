@@ -15,6 +15,7 @@ function serviceWith(staged: Partial<SettingsRepository>) {
 		upsert: unstaged,
 		...staged,
 	};
+
 	return new SettingsService({ repository });
 }
 
@@ -24,6 +25,7 @@ describe("SettingsService", () => {
 		const service = serviceWith({
 			findValue: async (key) => {
 				keys.push(key);
+
 				return "2026-08-26";
 			},
 		});
@@ -49,6 +51,7 @@ describe("SettingsService", () => {
 		const service = serviceWith({
 			upsert: async (key, value) => {
 				upserts.push([key, value]);
+
 				return { key, value };
 			},
 		});

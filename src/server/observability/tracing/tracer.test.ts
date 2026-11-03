@@ -83,6 +83,7 @@ function fakeSpan() {
 		recordException: (e: unknown) => recorded.push(e),
 		setStatus: (s: unknown) => statuses.push(s),
 	} as unknown as Span;
+
 	return { span, recorded, statuses };
 }
 

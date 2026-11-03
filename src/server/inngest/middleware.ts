@@ -59,6 +59,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 		isFinalAttempt,
 	}: Middleware.OnRunErrorArgs): boolean {
 		if (isFinalAttempt || ctx.maxAttempts !== undefined) return isFinalAttempt;
+
 		return ctx.attempt >= (fn.opts.retries ?? DEFAULT_RETRIES);
 	}
 
@@ -96,6 +97,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 			},
 			async (span) => {
 				this.runSpan = span.spanContext();
+
 				// Warn under our own span. The ambient one out here is Inngest's dropped
 				// `inngest.execution`, so its trace id would point at nothing exported.
 				if (carrierMissing) {
@@ -105,6 +107,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 						"inngest.function_id": fn.id(),
 					});
 				}
+
 				return await next();
 			},
 		);
@@ -137,6 +140,7 @@ export class TracingMiddleware extends Middleware.BaseMiddleware {
 			context.with(restored, () => {
 				logger.warn("inngest attempt failed", { error, ...attrs });
 			});
+
 			return;
 		}
 

@@ -7,16 +7,19 @@ import { useRestoreFocus } from "~/hooks/use-restore-focus";
 function Form({ settle }: { settle: () => Promise<void> }) {
 	const [locked, setLocked] = useState(false);
 	const rememberFocus = useRestoreFocus(locked);
+
 	return (
 		<form
 			onSubmit={async (e) => {
 				e.preventDefault();
 				rememberFocus();
 				setLocked(true);
+
 				// jsdom keeps focus on a disabled field; a browser drops it to body.
 				if (document.activeElement instanceof HTMLElement) {
 					document.activeElement.blur();
 				}
+
 				await settle().catch(() => undefined);
 				setLocked(false);
 			}}

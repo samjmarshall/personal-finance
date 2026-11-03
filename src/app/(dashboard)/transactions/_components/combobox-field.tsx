@@ -79,8 +79,10 @@ export function ComboboxField<T extends string | number>({
 				// label returns when the list closes. Only the X clears.
 				if (item === null && details.reason === "input-clear") {
 					setOpen(true);
+
 					return;
 				}
+
 				pendingTabPick.current = null;
 				onValueChange(item?.value ?? null);
 			}}
@@ -95,21 +97,26 @@ export function ComboboxField<T extends string | number>({
 				id={id}
 				onBlur={() => {
 					// Pick on blur, not on Tab press: the pick would show the X and focus would land on it.
-					if (pendingTabPick.current)
+					if (pendingTabPick.current) {
 						onValueChange(pendingTabPick.current.value);
+					}
+
 					pendingTabPick.current = null;
 				}}
 				onKeyDown={(e) => {
 					// Any key after a Tab means focus stayed, so that Tab pick is stale.
 					pendingTabPick.current = null;
+
 					// With the list open, Enter picks or closes; it never saves the form on a typo.
 					if (e.key === "Enter" && open) e.preventDefault();
 					// With it shut, Escape belongs to the dialog; it must not wipe the pick.
 					if (e.key === "Escape" && !open) e.preventBaseUIHandler();
+
 					// Only a typed search lets Tab pick; a stray highlight must not.
 					// Ctrl/Alt/Cmd+Tab switches tabs or windows, so it never picks.
 					const plainTab =
 						e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.metaKey;
+
 					if (plainTab && open && searching && highlightedItem.current) {
 						pendingTabPick.current = highlightedItem.current;
 					}

@@ -13,22 +13,29 @@ export function mapRedbarkTransaction(
 	accountName: string,
 ): SyncedTransaction {
 	// A pending row gets a new id once it settles, so ingesting it would count the Spend twice.
-	if (row.status && row.status !== "posted")
+	if (row.status && row.status !== "posted") {
 		throw new Error(`redbark ${row.id}: status ${row.status} is not settled`);
+	}
+
 	if (!row.amount) throw new Error(`redbark ${row.id}: no amount`);
+
 	const { amount: minor, currency } = row.amount;
-	if (currency.toLowerCase() !== "aud")
+
+	if (currency.toLowerCase() !== "aud") {
 		throw new Error(`redbark ${row.id}: currency ${currency} is not AUD`);
+	}
 
 	// CDR signs from the account holder's side (money out < 0); Spend is positive here.
 	const amount = minor === 0 ? 0 : -minor / 100;
 	const disagrees =
 		(row.direction === "debit" && amount < 0) ||
 		(row.direction === "credit" && amount > 0);
-	if (disagrees)
+
+	if (disagrees) {
 		throw new Error(
 			`redbark ${row.id}: direction ${row.direction} disagrees with amount ${minor}`,
 		);
+	}
 
 	return {
 		provenance: Provenance.Cdr,
@@ -63,25 +70,35 @@ export function anchorFromBalances(
 	balances: RedbarkBalance[],
 ): BalanceSetInput | null {
 	if (balances.length === 0) return null;
+
 	let minor = 0;
 	let asOf: Date | null = null;
+
 	for (const { account, current, freshness, observed_at } of balances) {
 		if (freshness !== "fresh" || !current || !observed_at) return null;
-		if (current.currency.toLowerCase() !== "aud")
+
+		if (current.currency.toLowerCase() !== "aud") {
 			throw new Error(
 				`redbark ${account}: balance currency ${current.currency} is not AUD`,
 			);
+		}
+
 		minor += current.amount;
 		const observed = new Date(observed_at);
+
 		if (!asOf || observed < asOf) asOf = observed;
 	}
+
 	return asOf ? { amount: minor / 100, asOf } : null;
 }
 
 /** One account's balance in dollars for the list. Null when unread or not AUD, so the saved one stays. */
 export function latestBalance(balance: RedbarkBalance): BalanceSetInput | null {
 	const { current, observed_at } = balance;
-	if (!current || !observed_at || current.currency.toLowerCase() !== "aud")
+
+	if (!current || !observed_at || current.currency.toLowerCase() !== "aud") {
 		return null;
+	}
+
 	return { amount: current.amount / 100, asOf: new Date(observed_at) };
 }

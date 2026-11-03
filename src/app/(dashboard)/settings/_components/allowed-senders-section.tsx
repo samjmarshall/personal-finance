@@ -55,7 +55,9 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 		e.preventDefault();
 		setError(null);
 		const parsed = allowedSenderCreateDto.safeParse({ email: draft });
+
 		if (!parsed.success) return setError("Please enter a valid email address.");
+
 		add.mutate(parsed.data);
 	}
 
@@ -93,6 +95,7 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 							inputMode="email"
 							onChange={(e) => {
 								setDraft(e.target.value);
+
 								// Stale error text plus aria-invalid would mislead a screen
 								// reader once they start correcting.
 								if (error) setError(null);
@@ -166,11 +169,12 @@ export function AllowedSendersSection({ inboundAddress }: SettingsViewProps) {
 			<DeleteConfirmDialog
 				label={deleteTarget?.email}
 				onConfirm={() => {
-					if (deleteTarget)
+					if (deleteTarget) {
 						remove.mutate(
 							{ id: deleteTarget.id },
 							{ onSuccess: () => setConfirmOpen(false) },
 						);
+					}
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}

@@ -1,0 +1,10 @@
+// Lone ifs only (chains belong to if-chain-braces.grit): brace-less is fine on one line, not once it spans lines.
+language js
+
+JsIfStatement(consequent=$body, else_clause=.) as $if where {
+	$if <: not within JsElseClause(alternate=$if),
+	$body <: not JsBlockStatement(),
+	$if <: r"(?s).*\n.*",
+	register_diagnostic(span=$if, message="Add braces, or fit the whole if on one line.", severity="error", fix_kind="safe"),
+	$body => `{ $body }`
+}

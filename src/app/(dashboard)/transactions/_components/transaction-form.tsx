@@ -94,6 +94,7 @@ export function TransactionForm({
 
 	useEffect(() => {
 		if (!open) return;
+
 		setDate(toDateInput(transaction?.date ?? new Date()));
 		setDescription(transaction?.description ?? "");
 		setAmount(transaction ? String(transaction.amount) : "");
@@ -118,14 +119,17 @@ export function TransactionForm({
 		]);
 		onClose();
 	};
+
 	const create = api.transaction.create.useMutation({ onSuccess });
 	const update = api.transaction.update.useMutation({ onSuccess });
 	const pending = create.isPending || update.isPending;
 	const rememberFocus = useRestoreFocus(pending);
 	const descriptionRef = useRef<HTMLInputElement>(null);
+
 	// A bank description runs long and leads with the merchant, so open at its start.
 	const focusDescriptionStart = () => {
 		descriptionRef.current?.setSelectionRange(0, 0);
+
 		return descriptionRef.current;
 	};
 
@@ -176,15 +180,22 @@ export function TransactionForm({
 						: categoryId,
 		};
 		rememberFocus();
-		if (transaction) update.mutate({ id: transaction.id, ...payload });
-		else create.mutate(payload);
+
+		if (transaction) {
+			update.mutate({ id: transaction.id, ...payload });
+		} else {
+			create.mutate(payload);
+		}
 	}
 
 	return (
 		<Dialog
 			onOpenChange={(next, eventDetails) => {
-				if (pending) eventDetails.cancel();
-				else if (!next) onClose();
+				if (pending) {
+					eventDetails.cancel();
+				} else if (!next) {
+					onClose();
+				}
 			}}
 			open={open}
 		>

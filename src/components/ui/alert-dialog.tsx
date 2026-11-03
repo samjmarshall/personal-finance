@@ -10,6 +10,7 @@ function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
 	// Remount on hide so a closed dialog doesn't fade out on return; see Dialog.
 	const [hides, setHides] = useState(0);
 	useLayoutEffect(() => () => setHides((n) => n + 1), []);
+
 	return (
 		<AlertDialogPrimitive.Root
 			data-slot="alert-dialog"

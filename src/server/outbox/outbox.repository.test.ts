@@ -32,6 +32,7 @@ function harness({
 			values: (values: unknown[]) => {
 				log.push("tx.insert");
 				inserted.push({ table, rows: values });
+
 				return Promise.resolve();
 			},
 		}),
@@ -42,15 +43,18 @@ function harness({
 			log.push("tx.begin");
 			const result = await cb(tx);
 			log.push("tx.commit");
+
 			return result;
 		},
 		select: () => ({
 			from: () => ({
 				where: (cond: unknown) => {
 					selectWhere = cond;
+
 					return {
 						orderBy: (arg: unknown) => {
 							orderByArg = arg;
+
 							return Promise.resolve(rows);
 						},
 					};
@@ -61,6 +65,7 @@ function harness({
 			set: (vals: Record<string, unknown>) => ({
 				where: (cond: unknown) => {
 					updates.push({ set: vals, where: cond });
+
 					return Promise.resolve();
 				},
 			}),
@@ -68,6 +73,7 @@ function harness({
 		delete: () => ({
 			where: (cond: unknown) => {
 				deleteWhere = cond;
+
 				return { returning: () => Promise.resolve(deleted) };
 			},
 		}),

@@ -29,6 +29,7 @@ import { SpanAttributeProcessor } from "./span-processor";
  */
 export function registerObservability(): void {
 	const key = env.POSTHOG_KEY;
+
 	if (!key) return;
 	if (getRegisteredProcessors()) return;
 

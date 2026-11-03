@@ -12,9 +12,12 @@ let focusOnMount = false;
 
 function focusTryAgain(button: HTMLButtonElement | null) {
 	if (!button || !focusOnMount) return;
+
 	focusOnMount = false;
+
 	// The user moved on while it loaded. Don't pull focus back.
 	if (document.activeElement !== document.body) return;
+
 	button.focus({ preventScroll: true });
 }
 

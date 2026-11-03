@@ -40,6 +40,7 @@ afterAll(() => provider.shutdown());
 
 function inSpan<T>(run: () => Promise<T>) {
 	const span = trace.getTracer("test").startSpan("receipts");
+
 	return {
 		traceId: span.spanContext().traceId,
 		result: context.with(trace.setSpan(context.active(), span), run),
@@ -247,22 +248,26 @@ describe("list", () => {
 			repository: {
 				findAll: async (filter) => {
 					filters.push(filter);
+
 					return rows;
 				},
 			},
 			members: {
 				namesByIds: async (ids) => {
 					asked.push(["members", ids]);
+
 					return memberNames;
 				},
 			},
 			transactions: {
 				descriptionsByIds: async (ids) => {
 					asked.push(["transactions", ids]);
+
 					return descriptions;
 				},
 			},
 		});
+
 		return { service, asked, filters };
 	}
 
@@ -334,22 +339,26 @@ describe("get", () => {
 			transactions: {
 				descriptionsByIds: async (ids) => {
 					asked.push(["transactions", ids]);
+
 					return new Map([[3, "COLES 123"]]);
 				},
 			},
 			expenses: {
 				namesByIds: async (ids) => {
 					asked.push(["expenses", ids]);
+
 					return new Map([[7, { name: "Weekly shop", categoryId: 3 }]]);
 				},
 			},
 			categories: {
 				namesByIds: async (ids) => {
 					asked.push(["categories", ids]);
+
 					return new Map([[4, "Dairy"]]);
 				},
 			},
 		});
+
 		return { service, asked };
 	}
 
@@ -809,6 +818,7 @@ describe("answerUpload", () => {
 		): ClientUploads["answer"] =>
 		async (_request, _event, grant) => {
 			answered.push(await grant(pathname));
+
 			return { type: "blob.generate-client-token", clientToken: "tok" };
 		};
 
@@ -818,6 +828,7 @@ describe("answerUpload", () => {
 			uploads: {
 				answer: async (...args) => {
 					seen.push(args);
+
 					return "answer";
 				},
 			},

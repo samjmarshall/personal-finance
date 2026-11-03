@@ -88,6 +88,7 @@ export class OtelLogger implements Logger {
 				: {};
 
 			const errorAttrs: LogAttributes = {};
+
 			if (exception !== undefined) {
 				if (exception instanceof Error) {
 					errorAttrs["exception.type"] = exception.name;

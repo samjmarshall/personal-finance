@@ -43,8 +43,10 @@ export function ConfirmDialog({
 			onOpenChange={(next, eventDetails) => {
 				if (pending) {
 					eventDetails.cancel();
+
 					return;
 				}
+
 				onOpenChange(next);
 			}}
 			open={open}

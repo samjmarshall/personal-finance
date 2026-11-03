@@ -13,6 +13,7 @@ import { income } from "./income.schema";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleIncomeRepository({ db: db as never }),
 		queries,

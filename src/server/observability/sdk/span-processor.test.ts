@@ -39,6 +39,7 @@ function runSpan(
 	tracer.startActiveSpan(name, { attributes: attrs }, ctx, (span) => {
 		span.end();
 	});
+
 	return exporter.getFinishedSpans()[0];
 }
 

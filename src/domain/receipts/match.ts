@@ -47,12 +47,15 @@ export function matchScanWindow(
 	receiptDate: string,
 ): { from: Date; to: Date } | null {
 	const receiptDay = fromDateInput(receiptDate);
+
 	if (!receiptDay) return null;
+
 	const from = new Date(receiptDay);
 	from.setDate(from.getDate() - MATCH_SCAN_DAYS);
 	const to = new Date(receiptDay);
 	// Half-open upper bound, so the last in-window day counts whole.
 	to.setDate(to.getDate() + MATCH_SCAN_DAYS + 1);
+
 	return { from, to };
 }
 
@@ -73,8 +76,11 @@ export function matchCandidates(
 	timeZone: string,
 ): MatchCandidate[] {
 	const { total, receiptDate } = receipt;
+
 	if (total === null || receiptDate === null) return [];
+
 	const receiptDay = fromDateInput(receiptDate);
+
 	if (!receiptDay) return [];
 
 	const maxAmountDelta = Math.abs(total) * AMOUNT_TOLERANCE;

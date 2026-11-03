@@ -31,12 +31,14 @@ export function parseFromAddress(from: string): string {
 	// A decoded name's quotes and brackets may be sender text, so count every address
 	// and fail closed on two. A stray `@` is an unreadable address, maybe the real one.
 	if (from.replace(ADDRESS_LIKE, "").includes("@")) return "";
+
 	const addresses = new Set(
 		(from.match(ADDRESS_LIKE) ?? []).map((address) =>
 			address.toLowerCase().replace(ADDRESS_WRAPPER, ""),
 		),
 	);
 	const [only] = addresses;
+
 	return addresses.size === 1 &&
 		only &&
 		allowedSenderCreateDto.shape.email.validate(only)
@@ -48,6 +50,7 @@ export function parseFromAddress(from: string): string {
 // domain is not. Undefined when there is no `@` so a malformed value never leaks.
 function fromDomain(address: string): string | undefined {
 	const at = address.lastIndexOf("@");
+
 	return at === -1 ? undefined : address.slice(at + 1);
 }
 
@@ -67,6 +70,7 @@ export function isReceiptAttachment(a: InboundAttachmentMeta): boolean {
 	// mint a junk Receipt per decoration.
 	if (a.content_disposition === "inline") return false;
 	if (a.content_id) return false;
+
 	return true;
 }
 
@@ -85,6 +89,7 @@ const BLOB_EXTENSIONS: Record<string, string> = {
  */
 export function emailBlobPathname(contentType: string): string {
 	const ext = BLOB_EXTENSIONS[contentType] ?? "bin";
+
 	return `receipts/email/${crypto.randomUUID()}.${ext}`;
 }
 
@@ -141,6 +146,7 @@ export class EmailService {
 				"email.id": event.data.email_id,
 				"email.from_domain": fromDomain(from),
 			});
+
 			return { status: "dropped" };
 		}
 
@@ -159,11 +165,13 @@ export class EmailService {
 				if (!stored.length) {
 					// Resend listed attachments the metadata promised and none came back.
 					// Not worth a 5xx retry storm — the mail is still in Resend if it matters.
-					if (qualifying.length)
+					if (qualifying.length) {
 						this.logger.warn("inbound email attachments resolved to nothing", {
 							"email.id": event.data.email_id,
 							"email.qualifying": qualifying.length,
 						});
+					}
+
 					return { status: "empty" };
 				}
 
@@ -175,6 +183,7 @@ export class EmailService {
 					"email.id": event.data.email_id,
 					"receipt.ids": receiptIds,
 				});
+
 				return { status: "ingested", receiptIds };
 			},
 		);
@@ -189,14 +198,18 @@ export class EmailService {
 		const downloads = await this.mailbox.listAttachments(emailId);
 		const byId = new Map(downloads.map((d) => [d.id, d]));
 		const stored: StoredBlob[] = [];
+
 		for (const attachment of qualifying) {
 			const download = byId.get(attachment.id);
+
 			if (!download) continue;
+
 			const bytes = await this.mailbox.download(download.download_url);
 			stored.push(
 				await this.store(bytes, bareMediaType(attachment.content_type)),
 			);
 		}
+
 		return stored;
 	}
 
@@ -207,9 +220,11 @@ export class EmailService {
 		const html = email.html?.trim();
 		const text = email.text?.trim();
 		const body = html || text;
+
 		// Nothing to extract from, so no row: a Receipt with an empty blob would only
 		// ever reach the worker's failed state.
 		if (!body) return [];
+
 		return [await this.store(body, html ? "text/html" : "text/plain")];
 	}
 
@@ -222,6 +237,7 @@ export class EmailService {
 			body,
 			contentType,
 		);
+
 		return { blobUrl: blob.url, blobPathname: blob.pathname, contentType };
 	}
 }

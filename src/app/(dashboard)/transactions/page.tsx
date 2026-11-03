@@ -31,6 +31,7 @@ async function TransactionsData() {
 	void api.expense.list.prefetch();
 	void api.transaction.list.prefetch(toListInput(DEFAULT_FILTERS));
 	void api.transaction.possibleDuplicateCount.prefetch();
+
 	return (
 		<HydrateClient>
 			<TransactionsView />

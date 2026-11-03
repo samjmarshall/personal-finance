@@ -28,7 +28,9 @@ const MAX_RECEIPT_ID = 2 ** 31 - 1;
 // A plain positive integer only: `Number("1e3")` would read as 1000.
 function parseReceiptId(raw: string): number | null {
 	if (!/^[1-9]\d*$/.test(raw)) return null;
+
 	const id = Number(raw);
+
 	return id <= MAX_RECEIPT_ID ? id : null;
 }
 
@@ -40,6 +42,7 @@ function failureStatus(
 ): 401 | 400 | 500 {
 	if (error instanceof UploadUnauthorizedError) return 401;
 	if (error instanceof InvalidInputError) return 400;
+
 	return type === "blob.upload-completed" ? 400 : 500;
 }
 
@@ -47,9 +50,13 @@ function failureStatus(
 // bad body up front, so a throw past here is ours to own as a 500.
 function isUploadBody(body: unknown): body is HandleUploadBody {
 	if (typeof body !== "object" || body === null) return false;
+
 	const { type, payload } = body as { type?: unknown; payload?: unknown };
-	if (typeof type !== "string" || !Object.hasOwn(SPAN_NAME_BY_EVENT, type))
+
+	if (typeof type !== "string" || !Object.hasOwn(SPAN_NAME_BY_EVENT, type)) {
 		return false;
+	}
+
 	return (
 		type !== "blob.generate-client-token" ||
 		typeof (payload as { pathname?: unknown } | undefined)?.pathname ===
@@ -114,10 +121,12 @@ export class ReceiptsHttpController {
 		if (!(await this.signedIn(request))) return unauthorized();
 
 		const id = parseReceiptId(rawId);
+
 		if (id === null) return notFound();
 
 		try {
 			const image = await this.service.openImage(id);
+
 			return new Response(image.stream, {
 				headers: {
 					"Content-Type": image.contentType,
@@ -130,6 +139,7 @@ export class ReceiptsHttpController {
 			});
 		} catch (error) {
 			if (error instanceof NotFoundError) return notFound();
+
 			throw error;
 		}
 	}
@@ -139,10 +149,12 @@ export class ReceiptsHttpController {
 		if (!(await this.signedIn(request))) return unauthorized();
 
 		const id = parseReceiptId(rawId);
+
 		if (id === null) return notFound();
 
 		try {
 			const body = await this.service.openHtml(id);
+
 			return new Response(body.stream, {
 				headers: {
 					"Content-Type": body.contentType,
@@ -153,6 +165,7 @@ export class ReceiptsHttpController {
 			});
 		} catch (error) {
 			if (error instanceof NotFoundError) return notFound();
+
 			throw error;
 		}
 	}
@@ -169,12 +182,15 @@ export class ReceiptsHttpController {
 	// echo names this one in the Network tab.
 	async upload(request: Request): Promise<Response> {
 		let body: unknown;
+
 		try {
 			body = await request.json();
 		} catch {
 			return badBody();
 		}
+
 		if (!isUploadBody(body)) return badBody();
+
 		const event = body;
 
 		// Only the browser's token request has a member; Blob's completion webhook has
@@ -184,6 +200,7 @@ export class ReceiptsHttpController {
 			event.type === "blob.generate-client-token"
 				? await this.sessions.memberId(request.headers)
 				: undefined;
+
 		return withSpan(
 			SPAN_NAME_BY_EVENT[event.type],
 			{
@@ -196,17 +213,20 @@ export class ReceiptsHttpController {
 					if (event.type === "blob.generate-client-token" && memberId) {
 						span.setAttribute("blob.pathname", event.payload.pathname);
 					}
+
 					const answer = await this.service.answerUpload(
 						request,
 						event,
 						memberId,
 					);
+
 					return Response.json(answer, { headers: traceIdHeaders() });
 				} catch (error) {
 					const status = failureStatus(error, event.type);
 					// Stamp every refusal, like trpc.error_code: a 401 leaves the span
 					// status clean, so without this it looks like a success in PostHog.
 					span.setAttribute("http.response.status_code", status);
+
 					// Same levels as the tRPC middleware: a signed-out tab is routine (warn,
 					// clean span), a rejected callback or token path is the caller's fault
 					// (warn), the rest is ours (error).
@@ -232,11 +252,13 @@ export class ReceiptsHttpController {
 							"blob.event_type": event.type,
 						});
 					}
+
 					// A 500's message is ours (e.g. a missing store token), not the caller's.
 					const message =
 						status !== 500 && error instanceof Error
 							? error.message
 							: "Upload failed";
+
 					return Response.json(
 						{ error: message },
 						{ status, headers: traceIdHeaders() },

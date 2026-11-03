@@ -13,13 +13,16 @@ export function fmtIso(d: Date | string | null | undefined): string {
 // confirm time — hours of idle, not processing), so callers render "—" not a lie.
 export function processingMs(data: ReceiptDetail): number | null {
 	if (!data.updatedAt || data.transactionId != null) return null;
+
 	const ms =
 		new Date(data.updatedAt).getTime() - new Date(data.createdAt).getTime();
+
 	return ms >= 0 ? ms : null;
 }
 
 export function fmtMs(ms: number | null): string {
 	if (ms == null) return "—";
+
 	return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
@@ -75,7 +78,9 @@ export function diagnosticsJson(data: ReceiptDetail): string {
 }
 
 export function rawJsonText(data: ReceiptDetail): string {
-	if (data.rawJson == null)
+	if (data.rawJson == null) {
 		return "// no raw extraction stored for this receipt";
+	}
+
 	return JSON.stringify(data.rawJson, null, 2);
 }

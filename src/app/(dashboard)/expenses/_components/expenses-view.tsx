@@ -68,8 +68,13 @@ export function ExpensesView() {
 	function toggle(key: string) {
 		setCollapsed((prev) => {
 			const next = new Set(prev);
-			if (next.has(key)) next.delete(key);
-			else next.add(key);
+
+			if (next.has(key)) {
+				next.delete(key);
+			} else {
+				next.add(key);
+			}
+
 			return next;
 		});
 	}
@@ -95,6 +100,7 @@ export function ExpensesView() {
 	// Summary totals are recurring-only — one-time figures aren't a cadence.
 	const totals = useMemo(() => {
 		const recurring = list.filter((e) => e.kind === CommitmentKind.Recurring);
+
 		return {
 			fortnight: recurring.reduce((s, e) => s + (e.fortnight ?? 0), 0),
 			month: recurring.reduce((s, e) => s + (e.month ?? 0), 0),
@@ -117,10 +123,12 @@ export function ExpensesView() {
 		setEditing(null);
 		setFormOpen(true);
 	}
+
 	function openEdit(expense: Expense) {
 		setEditing(expense);
 		setFormOpen(true);
 	}
+
 	function askDelete(expense: Expense) {
 		setDeleteTarget(expense);
 		setConfirmOpen(true);
@@ -155,6 +163,7 @@ export function ExpensesView() {
 		// Float subtraction can leave a sub-cent negative on an exactly-met budget;
 		// only treat it as over-consumed past half a cent so it never shows -$0.00.
 		const isOver = remaining < -0.005;
+
 		return (
 			<div
 				className={cn(
@@ -264,6 +273,7 @@ export function ExpensesView() {
 							const key = `r:${groupKey}`;
 							const isCollapsed = collapsed.has(key);
 							const panelId = `expense-recurring-${groupKey}`;
+
 							return (
 								<Card className="[--card-spacing:0px]" key={key}>
 									<button
@@ -355,15 +365,19 @@ export function ExpensesView() {
 							const items = [...itemsRaw].sort((a, b) => {
 								const pa = isPastItem(a);
 								const pb = isPastItem(b);
+
 								if (pa !== pb) return pa ? 1 : -1;
+
 								const da = a.expectedDate?.getTime() ?? 0;
 								const db = b.expectedDate?.getTime() ?? 0;
+
 								return pa ? db - da : da - db;
 							});
 							const total = items.reduce((s, e) => s + (e.amount ?? 0), 0);
 							const key = `o:${groupKey}`;
 							const isCollapsed = collapsed.has(key);
 							const panelId = `expense-onetime-${groupKey}`;
+
 							return (
 								<Card className="[--card-spacing:0px]" key={key}>
 									<button
@@ -437,11 +451,12 @@ export function ExpensesView() {
 			<DeleteConfirmDialog
 				label={deleteTarget?.name}
 				onConfirm={() => {
-					if (deleteTarget)
+					if (deleteTarget) {
 						remove.mutate(
 							{ id: deleteTarget.id },
 							{ onSuccess: () => setConfirmOpen(false) },
 						);
+					}
 				}}
 				onOpenChange={setConfirmOpen}
 				open={confirmOpen}

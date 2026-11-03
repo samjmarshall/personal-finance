@@ -31,6 +31,7 @@ export function withSpan<T>(
 	fn: (span: Span) => Promise<T>,
 ): Promise<T> {
 	const base = parent ?? context.active();
+
 	return tracer.startActiveSpan(
 		name,
 		options,
@@ -40,6 +41,7 @@ export function withSpan<T>(
 				return await fn(span);
 			} catch (error) {
 				failSpan(span, error);
+
 				throw error;
 			} finally {
 				span.end();

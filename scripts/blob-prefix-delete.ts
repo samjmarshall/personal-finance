@@ -12,6 +12,7 @@ function deletable(prefix: string): boolean {
 }
 
 const prefixes = process.argv.slice(2);
+
 if (prefixes.length === 0 || !prefixes.every(deletable)) {
 	console.error(
 		`[blob-prefix-delete] refusing ${JSON.stringify(prefixes)}: each prefix must be local/<branch>/, preview/<branch>/, local/ or preview/`,
@@ -22,13 +23,17 @@ if (prefixes.length === 0 || !prefixes.every(deletable)) {
 for (const prefix of prefixes) {
 	let deleted = 0;
 	let cursor: string | undefined;
+
 	do {
 		const page = await list({ prefix, cursor });
+
 		if (page.blobs.length > 0) {
 			await del(page.blobs.map((blob) => blob.url));
 			deleted += page.blobs.length;
 		}
+
 		cursor = page.hasMore ? page.cursor : undefined;
 	} while (cursor);
+
 	console.log(`[blob-prefix-delete] ${prefix}: deleted ${deleted} blob(s)`);
 }

@@ -26,6 +26,7 @@ function makeHarness(level: LogLevel = LogLevel.DEBUG, pretty = false) {
 	const emitter = { emit: (r: LogRecord) => emitCalls.push(r as FakeRecord) };
 	const stdout = { write: (line: string) => stdoutLines.push(line) };
 	const logger = new OtelLogger({ emitter, stdout, level, pretty });
+
 	return { logger, emitCalls, stdoutLines };
 }
 

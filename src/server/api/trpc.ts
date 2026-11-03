@@ -81,6 +81,7 @@ const devLatencyMiddleware = t.middleware(async ({ next }) => {
 		const waitMs = Math.floor(Math.random() * 400) + 100;
 		await new Promise((resolve) => setTimeout(resolve, waitMs));
 	}
+
 	return next();
 });
 
@@ -151,20 +152,27 @@ const observabilityMiddleware = t.middleware(
  */
 const errorMappingMiddleware = t.middleware(async ({ next }) => {
 	const result = await next();
+
 	if (result.ok || result.error.code !== "INTERNAL_SERVER_ERROR") return result;
+
 	const { cause } = result.error;
+
 	if (cause instanceof NotFoundError) throw mappedError("NOT_FOUND", cause);
 	if (cause instanceof ConflictError) throw mappedError("CONFLICT", cause);
+
 	if (cause instanceof InvalidInputError) {
 		throw mappedError("BAD_REQUEST", cause);
 	}
+
 	return result;
 });
 
 function mappedError(code: TRPCError["code"], cause: Error): TRPCError {
 	const error = new TRPCError({ code, message: cause.message, cause });
+
 	// Keep the real throw site, as tRPC's own wrap does, or traces point here.
 	if (cause.stack) error.stack = cause.stack;
+
 	return error;
 }
 

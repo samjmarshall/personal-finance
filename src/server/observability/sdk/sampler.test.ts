@@ -16,10 +16,12 @@ function recordingInner() {
 	const inner: Sampler = {
 		shouldSample: (_ctx, _traceId, name) => {
 			calls.push(name);
+
 			return { decision: SamplingDecision.RECORD_AND_SAMPLED };
 		},
 		toString: () => "inner",
 	};
+
 	return { inner, calls };
 }
 

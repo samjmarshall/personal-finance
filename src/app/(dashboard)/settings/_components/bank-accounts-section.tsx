@@ -45,7 +45,9 @@ export function BankAccountsSection() {
 		},
 		onSettled: () => {
 			if (!refetchWhenDrained.current || !isLastSave()) return;
+
 			refetchWhenDrained.current = false;
+
 			return utils.cdr.syncState.invalidate();
 		},
 	};
@@ -56,8 +58,10 @@ export function BankAccountsSection() {
 	async function save(accountId: string, change: Partial<CdrSyncState>) {
 		// Stop a refetch already on its way, or it lands the old row on top. Redo it once
 		// the saves finish, or a row a failed save left wrong stays wrong.
-		if (queryClient.isFetching({ queryKey: getQueryKey(api.cdr.syncState) }))
+		if (queryClient.isFetching({ queryKey: getQueryKey(api.cdr.syncState) })) {
 			refetchWhenDrained.current = true;
+		}
+
 		await utils.cdr.syncState.cancel();
 		putRow(accountId, change);
 	}

@@ -23,6 +23,7 @@ function renderViewer({
 		vendor,
 	};
 	const view = render(<ReceiptViewer {...props} />);
+
 	return { ...view, onOpenChange, props };
 }
 

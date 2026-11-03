@@ -21,6 +21,7 @@ export const categoryRouter = createTRPCRouter({
 		.input(categoryReorderDto)
 		.mutation(async ({ ctx, input }) => {
 			await ctx.services.categories.reorder(input.ids);
+
 			return { success: true };
 		}),
 
@@ -28,6 +29,7 @@ export const categoryRouter = createTRPCRouter({
 		.input(z.object({ id: z.number() }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.services.categories.delete(input.id);
+
 			return { success: true };
 		}),
 });

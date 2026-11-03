@@ -18,6 +18,7 @@ export class SettingsService {
 	// day early behind UTC. null when unset or invalid, so pickers fall back to month.
 	async fortnightAnchor(): Promise<string | null> {
 		const value = await this.repository.findValue(FORTNIGHT_ANCHOR_KEY);
+
 		return value && fromDateInput(value) ? value : null;
 	}
 
@@ -25,6 +26,7 @@ export class SettingsService {
 	// the same timezone reason as the read.
 	async setFortnightAnchor(anchor: string): Promise<string> {
 		const row = await this.repository.upsert(FORTNIGHT_ANCHOR_KEY, anchor);
+
 		return assertRow(row, "set fortnight anchor").value;
 	}
 }

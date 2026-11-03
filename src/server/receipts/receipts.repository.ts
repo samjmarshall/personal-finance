@@ -117,6 +117,7 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.select()
 			.from(receipts)
 			.where(eq(receipts.id, id));
+
 		return receipt;
 	}
 
@@ -145,6 +146,7 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 						and(eq(receipts.id, id), eq(receipts.status, ReceiptStatus.Failed)),
 					)
 					.returning();
+
 				return row;
 			},
 			(row) =>
@@ -157,6 +159,7 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.select({ blobPathname: receipts.blobPathname })
 			.from(receipts)
 			.where(eq(receipts.id, id));
+
 		return row?.blobPathname;
 	}
 
@@ -169,14 +172,19 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 				.from(receipts)
 				.where(eq(receipts.id, id))
 				.for("update");
+
 			if (!row) return "missing";
+
 			const [copy] = await tx
 				.select({ id: receipts.id })
 				.from(receipts)
 				.where(eq(receipts.duplicateOfId, id))
 				.limit(1);
+
 			if (copy) return "has-duplicates";
+
 			await tx.delete(receipts).where(eq(receipts.id, id));
+
 			return row;
 		});
 	}
@@ -186,15 +194,18 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.select({ total: receipts.total, receiptDate: receipts.receiptDate })
 			.from(receipts)
 			.where(eq(receipts.id, id));
+
 		return row;
 	}
 
 	async findMatchedTransactionIds(transactionIds: number[]): Promise<number[]> {
 		if (!transactionIds.length) return [];
+
 		const rows = await this.db
 			.select({ transactionId: receipts.transactionId })
 			.from(receipts)
 			.where(inArray(receipts.transactionId, transactionIds));
+
 		return rows.map((row) => row.transactionId).filter((id) => id !== null);
 	}
 
@@ -207,6 +218,7 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.set({ transactionId })
 			.where(eq(receipts.id, id))
 			.returning();
+
 		return row;
 	}
 
@@ -219,6 +231,7 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.set({ expenseId })
 			.where(eq(receiptItems.id, itemId))
 			.returning();
+
 		return row;
 	}
 
@@ -231,6 +244,7 @@ export class DrizzleReceiptsRepository implements ReceiptsRepository {
 			.set({ categoryId })
 			.where(eq(receiptItems.id, itemId))
 			.returning();
+
 		return row;
 	}
 }

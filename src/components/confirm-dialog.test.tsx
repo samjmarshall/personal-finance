@@ -13,11 +13,13 @@ function Harness({
 }) {
 	const [open, setOpen] = useState(true);
 	const [running, setRunning] = useState(false);
+
 	return (
 		<ConfirmDialog
 			confirmLabel="Delete"
 			onConfirm={async () => {
 				setRunning(true);
+
 				try {
 					await onConfirm?.();
 					setOpen(false);
@@ -118,6 +120,7 @@ describe("ConfirmDialog", () => {
 function HidingView() {
 	const [open, setOpen] = useState(true);
 	useLayoutEffect(() => () => setOpen(false), []);
+
 	return (
 		<ConfirmDialog
 			onConfirm={() => undefined}

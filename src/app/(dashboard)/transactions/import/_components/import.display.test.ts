@@ -123,6 +123,7 @@ function review(
 ): PossibleDuplicateReview {
 	const mineDate = new Date(`${mineDay}T00:00:00.000Z`);
 	mineDate.setUTCHours(-11);
+
 	return {
 		id,
 		bank: {

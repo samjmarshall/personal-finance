@@ -125,10 +125,13 @@ const normalizeHeading = (s: string): string =>
 /** Set of normalized H2/H3 heading texts present in the body. */
 export function parseHeadings(body: string): Set<string> {
 	const set = new Set<string>();
+
 	for (const line of body.split("\n")) {
 		const text = HEADING_RE.exec(line)?.[1];
+
 		if (text !== undefined) set.add(normalizeHeading(text));
 	}
+
 	return set;
 }
 
@@ -140,14 +143,19 @@ export function checkboxCountUnder(body: string, acHeadings: string[]): number {
 	const targets = new Set(acHeadings.map(normalizeHeading));
 	let inSection = false;
 	let count = 0;
+
 	for (const line of body.split("\n")) {
 		const text = HEADING_RE.exec(line)?.[1];
+
 		if (text !== undefined) {
 			inSection = targets.has(normalizeHeading(text));
+
 			continue;
 		}
+
 		if (inSection && /^\s*-\s+\[[ xX]\]\s+\S/.test(line)) count++;
 	}
+
 	return count;
 }
 
@@ -164,17 +172,25 @@ export function weakPhrasesInAc(body: string, acHeadings: string[]): string[] {
 	const targets = new Set(acHeadings.map(normalizeHeading));
 	const found = new Set<string>();
 	let inSection = false;
+
 	for (const line of body.split("\n")) {
 		const text = HEADING_RE.exec(line)?.[1];
+
 		if (text !== undefined) {
 			inSection = targets.has(normalizeHeading(text));
+
 			continue;
 		}
+
 		if (inSection) {
 			const lower = line.toLowerCase();
-			for (const p of WEAK_AC_PHRASES) if (lower.includes(p)) found.add(p);
+
+			for (const p of WEAK_AC_PHRASES) {
+				if (lower.includes(p)) found.add(p);
+			}
 		}
 	}
+
 	return [...found];
 }
 
@@ -190,7 +206,9 @@ export function parseWorkReadiness(body: string): WorkReadiness {
 		/^\*\*Work-readiness:\*\*\s+(AFK|HITL)\b[ \t]*([—–-][ \t]*\S.*)?$/m.exec(
 			body,
 		);
+
 	if (!m) return { present: false, type: null, hasReason: false };
+
 	return {
 		present: true,
 		type: m[1] as "AFK" | "HITL",
@@ -329,29 +347,44 @@ export const TICKET_SPECS: Record<TicketType, TicketSpec> = {
 
 export function detectType(body: string, labels: string[]): TicketType | null {
 	const hs = parseHeadings(body);
+
 	if (
 		labels.includes("epic") ||
 		(headingPresent(hs, "Goal") &&
 			headingPresent(hs, "Business Context") &&
 			headingPresent(hs, "Key Deliverables"))
-	)
+	) {
 		return "epic";
-	if (headingPresent(hs, "Research Question") && headingPresent(hs, "Time Box"))
+	}
+
+	if (
+		headingPresent(hs, "Research Question") &&
+		headingPresent(hs, "Time Box")
+	) {
 		return "spike";
+	}
+
 	if (
 		headingPresent(hs, "Steps to Reproduce") &&
 		headingPresent(hs, "Impact Assessment")
-	)
+	) {
 		return "bug";
-	if (headingPresent(hs, "Story") && headingPresent(hs, "Context"))
+	}
+
+	if (headingPresent(hs, "Story") && headingPresent(hs, "Context")) {
 		return "story";
+	}
+
 	if (
 		hasPartOf(body) &&
 		headingPresent(hs, "Purpose") &&
 		headingPresent(hs, "Out of scope")
-	)
+	) {
 		return "child";
+	}
+
 	if (headingPresent(hs, "Technical Approach")) return "task";
+
 	return null;
 }
 
@@ -367,18 +400,21 @@ const DateRulesSchema = z
 		milestoneDueOn: z.string().nullable(),
 	})
 	.superRefine((val, ctx) => {
-		if (val.startDate > val.targetDate)
+		if (val.startDate > val.targetDate) {
 			ctx.addIssue({
 				code: "custom",
 				path: ["targetDate"],
 				message: `target date ${val.targetDate} is before start date ${val.startDate}`,
 			});
-		if (val.milestoneDueOn !== null && val.targetDate > val.milestoneDueOn)
+		}
+
+		if (val.milestoneDueOn !== null && val.targetDate > val.milestoneDueOn) {
 			ctx.addIssue({
 				code: "custom",
 				path: ["targetDate"],
 				message: `target date ${val.targetDate} is after milestone due date ${val.milestoneDueOn}`,
 			});
+		}
 	});
 
 const isIso = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -398,41 +434,47 @@ function validateProjectFields(issue: NormalizedIssue, push: Push): void {
 			"issue is not on the project board",
 			"project",
 		);
+
 		return;
 	}
+
 	const p = issue.project;
+
 	if (!p.status) push("ERROR", "STATUS_UNSET", "Status is not set", "status");
 
 	const { startDate: start, targetDate: target } = p;
-	if (!start)
+
+	if (!start) {
 		push(
 			"ERROR",
 			"START_DATE_UNSET",
 			"Start date is not set (required for the roadmap)",
 			"start date",
 		);
-	else if (!isIso(start))
+	} else if (!isIso(start)) {
 		push(
 			"ERROR",
 			"START_DATE_INVALID",
 			`Start date "${start}" is not YYYY-MM-DD`,
 			"start date",
 		);
+	}
 
-	if (!target)
+	if (!target) {
 		push(
 			"ERROR",
 			"TARGET_DATE_UNSET",
 			"Target date is not set (required for the roadmap)",
 			"target date",
 		);
-	else if (!isIso(target))
+	} else if (!isIso(target)) {
 		push(
 			"ERROR",
 			"TARGET_DATE_INVALID",
 			`Target date "${target}" is not YYYY-MM-DD`,
 			"target date",
 		);
+	}
 
 	if (start && target && isIso(start) && isIso(target)) {
 		const due = p.milestone?.dueOn ?? issue.milestone?.dueOn ?? null;
@@ -441,18 +483,22 @@ function validateProjectFields(issue: NormalizedIssue, push: Push): void {
 			targetDate: target,
 			milestoneDueOn: due,
 		});
-		if (!parsed.success)
-			for (const iss of parsed.error.issues)
+
+		if (!parsed.success) {
+			for (const iss of parsed.error.issues) {
 				push("ERROR", "DATE_ORDER", iss.message, "target date");
+			}
+		}
 	}
 
-	if (!issue.milestone && !p.milestone)
+	if (!issue.milestone && !p.milestone) {
 		push(
 			"WARN",
 			"MILESTONE_UNSET",
 			"no milestone set (recommended)",
 			"milestone",
 		);
+	}
 }
 
 /** The heart of the validator: structural + field checks for one issue. PURE. */
@@ -466,100 +512,111 @@ export function validateTicket(
 	const spec = TICKET_SPECS[type];
 	const headings = parseHeadings(issue.body);
 
-	for (const req of spec.headings)
-		if (!req.anyOf.some((name) => headingPresent(headings, name)))
+	for (const req of spec.headings) {
+		if (!req.anyOf.some((name) => headingPresent(headings, name))) {
 			push(
 				"ERROR",
 				req.code,
 				`missing required section "## ${req.label}"`,
 				req.label,
 			);
+		}
+	}
 
 	if (spec.requireCurrentDesired) {
 		const combined = headingPresent(headings, "Current / Desired behaviour");
 		const split =
 			headingPresent(headings, "Current behaviour") &&
 			headingPresent(headings, "Desired behaviour");
-		if (!combined && !split)
+
+		if (!combined && !split) {
 			push(
 				"ERROR",
 				"MISSING_CURRENT_DESIRED",
 				'missing "## Current / Desired behaviour" (or both "## Current behaviour" and "## Desired behaviour")',
 				"Current / Desired behaviour",
 			);
+		}
 	}
 
 	if (spec.requireWorkReadiness) {
 		const wr = parseWorkReadiness(issue.body);
-		if (!wr.present)
+
+		if (!wr.present) {
 			push(
 				"ERROR",
 				"MISSING_WORK_READINESS",
 				'missing "**Work-readiness:** AFK|HITL" tag',
 				"Work-readiness",
 			);
-		else if (wr.type === "HITL" && !wr.hasReason)
+		} else if (wr.type === "HITL" && !wr.hasReason) {
 			push(
 				"WARN",
 				"HITL_NO_REASON",
 				'HITL tag should give a one-line reason ("HITL — <reason>")',
 				"Work-readiness",
 			);
+		}
 	}
 
 	if (spec.acHeadings) {
-		if (!spec.acHeadings.some((n) => headingPresent(headings, n)))
+		if (!spec.acHeadings.some((n) => headingPresent(headings, n))) {
 			push(
 				"ERROR",
 				"MISSING_AC",
 				'missing "## Acceptance Criteria" section',
 				"Acceptance Criteria",
 			);
-		else if (checkboxCountUnder(issue.body, spec.acHeadings) < 1)
+		} else if (checkboxCountUnder(issue.body, spec.acHeadings) < 1) {
 			push(
 				"ERROR",
 				"AC_NO_CHECKBOXES",
 				'Acceptance Criteria has no checkbox ("- [ ]") items',
 				"Acceptance Criteria",
 			);
-		else
-			for (const phrase of weakPhrasesInAc(issue.body, spec.acHeadings))
+		} else {
+			for (const phrase of weakPhrasesInAc(issue.body, spec.acHeadings)) {
 				push(
 					"WARN",
 					"WEAK_AC",
 					`acceptance criterion contains vague phrase "${phrase}"`,
 					"Acceptance Criteria",
 				);
+			}
+		}
 	}
 
-	if (spec.requirePartOf && !hasPartOf(issue.body))
+	if (spec.requirePartOf && !hasPartOf(issue.body)) {
 		push(
 			"ERROR",
 			"MISSING_PART_OF",
 			'child slice must reference its epic with "Part of #<n>"',
 			"Part of",
 		);
+	}
 
 	if (
 		spec.visualEvidenceForUiBug &&
 		!headingPresent(headings, "Visual Evidence")
-	)
+	) {
 		push(
 			"WARN",
 			"MISSING_VISUAL_EVIDENCE",
 			'no "## Visual Evidence" section (required for UI bugs)',
 			"Visual Evidence",
 		);
+	}
 
 	validateProjectFields(issue, push);
 
-	if (spec.minSubIssues > 0 && issue.subIssues.length < spec.minSubIssues)
+	if (spec.minSubIssues > 0 && issue.subIssues.length < spec.minSubIssues) {
 		push(
 			"ERROR",
 			"EPIC_NO_CHILDREN",
 			`epic has ${issue.subIssues.length} sub-issue(s), needs >= ${spec.minSubIssues}`,
 			"sub-issues",
 		);
+	}
 
 	return out;
 }

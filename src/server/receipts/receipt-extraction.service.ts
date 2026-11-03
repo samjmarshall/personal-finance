@@ -137,12 +137,15 @@ const MODEL_MEDIA: Record<
 
 function modelMedia(mediaType: string) {
 	const kind = receiptMediaKind(mediaType);
+
 	if (!kind) throw new Error(`Unsupported media type: ${mediaType}`);
+
 	return MODEL_MEDIA[kind];
 }
 
 function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
 	const { maxBytes } = modelMedia(mediaType);
+
 	if (bytes.byteLength > maxBytes) throw new ReceiptTooLargeError(maxBytes);
 }
 
@@ -153,17 +156,23 @@ function assertWithinModelCap(bytes: Uint8Array, mediaType: string): void {
 // on every attempt, so telling the member to retry would just waste their time. Nor
 // does a reply cut off at MAX_OUTPUT_TOKENS: the same receipt cuts off the same way.
 function memberFacingError(error: unknown): string {
-	if (error instanceof ReceiptTooLargeError)
+	if (error instanceof ReceiptTooLargeError) {
 		return `Receipt is too large to read (max ${formatBytes(error.maxBytes)}). Delete it and upload a smaller file.`;
+	}
+
 	if (
 		NoObjectGeneratedError.isInstance(error) &&
 		error.finishReason === "length"
-	)
+	) {
 		return "Receipt has too many lines to read in one go. Delete it and upload it in smaller parts.";
-	if (APICallError.isInstance(error))
+	}
+
+	if (APICallError.isInstance(error)) {
 		return error.isRetryable
 			? "The extraction service couldn't read this receipt. Retry in a moment."
 			: "The extraction service rejected this receipt. Delete it and upload a clearer photo.";
+	}
+
 	return "Couldn't extract this receipt. Retry, or delete it and upload a clearer photo.";
 }
 
@@ -195,6 +204,7 @@ export function buildExtractionPrompt(
 	const list = categories.map((c) => `- ${c.id}: ${c.name}`).join("\n");
 	const kind = receiptMediaKind(mediaType);
 	const hint = kind ? MODEL_MEDIA[kind].hint : "";
+
 	return `Extract the receipt's vendor, date (YYYY-MM-DD), grand total, currency, and every line item (name, price, quantity).
 ${hint}
 For each item, set categoryId to the id of the single best-matching category below, or null when none clearly fits. Only use an id from this list — never invent one:
@@ -296,8 +306,10 @@ export class ReceiptExtractionService {
 					// does no work — tagged so the trace still shows why nothing happened.
 					if (!receipt || DONE_STATUSES.includes(receipt.status)) {
 						span.setAttribute("receipt.outcome", ReceiptOutcome.Skipped);
+
 						return;
 					}
+
 					span.setAttribute("receipt.channel", receipt.channel);
 
 					// Read by store-relative pathname, never the member-supplied blobUrl: the
@@ -308,8 +320,10 @@ export class ReceiptExtractionService {
 					);
 					const contentHash = sha256(bytes);
 					await this.repository.setContentHash(receiptId, contentHash);
+
 					if (await this.linkDuplicate(receiptId, contentHash)) {
 						span.setAttribute("receipt.outcome", ReceiptOutcome.Duplicate);
+
 						return;
 					}
 
@@ -348,6 +362,7 @@ export class ReceiptExtractionService {
 		// backoff; a schema, FK or blob failure is deterministic and would just re-spend.
 		const retryable =
 			APICallError.isInstance(error) && error.isRetryable === true;
+
 		if (retryable && !isFinalAttempt) {
 			span.setAttribute("receipt.outcome", ReceiptOutcome.Retry);
 			this.logger.warn("receipt extraction retrying", {
@@ -355,6 +370,7 @@ export class ReceiptExtractionService {
 				...attrs,
 				"receipt.is_final_attempt": isFinalAttempt,
 			});
+
 			throw error;
 		}
 
@@ -388,8 +404,11 @@ export class ReceiptExtractionService {
 			contentHash,
 			receiptId,
 		);
+
 		if (!dup) return false;
+
 		await this.repository.markDuplicate(receiptId, dup.id);
+
 		return true;
 	}
 

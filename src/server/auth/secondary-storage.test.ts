@@ -33,8 +33,14 @@ const storage = () =>
 let stdoutLines: string[];
 
 beforeEach(() => {
-	for (const fn of Object.values(client)) fn.mockReset();
-	for (const fn of Object.values(pipeline)) fn.mockReset();
+	for (const fn of Object.values(client)) {
+		fn.mockReset();
+	}
+
+	for (const fn of Object.values(pipeline)) {
+		fn.mockReset();
+	}
+
 	client.pipeline.mockReturnValue(pipeline);
 	pipeline.incr.mockReturnValue(pipeline);
 	pipeline.expire.mockReturnValue(pipeline);
@@ -44,6 +50,7 @@ beforeEach(() => {
 	stdoutLines = [];
 	vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
 		if (typeof chunk === "string") stdoutLines.push(chunk);
+
 		return true;
 	});
 });
@@ -252,6 +259,7 @@ describe("prerender interrupt", () => {
 			"fetch()",
 		);
 		prerender.abort();
+
 		return fetchCall.catch((error: unknown) => error);
 	};
 
@@ -287,6 +295,7 @@ describe("prefixing", () => {
 			pipeline.incr,
 			pipeline.expire,
 		];
+
 		for (const fn of keyed) {
 			expect(fn.mock.calls[0]?.[0]).toBe("ba:preview:deadbeef:k");
 		}

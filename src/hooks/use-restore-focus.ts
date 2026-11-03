@@ -10,12 +10,16 @@ export function useRestoreFocus(locked: boolean) {
 	useEffect(() => {
 		if (locked) {
 			wasLocked.current = true;
+
 			return;
 		}
+
 		if (!wasLocked.current) return;
+
 		wasLocked.current = false;
 		const field = target.current;
 		target.current = null;
+
 		// A saved dialog is closing, so focus belongs to its trigger. Focus the
 		// Member moved on purpose is also left alone.
 		if (

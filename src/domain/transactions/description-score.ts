@@ -61,19 +61,28 @@ export function cleanDescription(text: string): string {
 		.toUpperCase()
 		.split(/[^\p{L}\p{N}]+/u)
 		.filter((word) => word && !NOISE.has(word) && !isCode(word));
+
 	return [...new Set(words)].join(" ");
 }
 
 /** Takes raw descriptions; each distinct cleaned one counts once, so a weekly merchant stays rare. */
 export function wordWeights(corpus: Iterable<string>): WordWeights {
 	const docs = new Set<string>();
+
 	for (const text of corpus) {
 		const cleaned = cleanDescription(text);
+
 		if (cleaned) docs.add(cleaned);
 	}
+
 	const df = new Map<string, number>();
-	for (const doc of docs)
-		for (const word of doc.split(" ")) df.set(word, (df.get(word) ?? 0) + 1);
+
+	for (const doc of docs) {
+		for (const word of doc.split(" ")) {
+			df.set(word, (df.get(word) ?? 0) + 1);
+		}
+	}
+
 	return { docs: docs.size, df };
 }
 
@@ -90,13 +99,20 @@ export function wordScore(a: string, b: string, weights: WordWeights): number {
 	let dot = 0;
 	let normA = 0;
 	let normB = 0;
+
 	for (const word of wordsA) {
 		const w = idf(word, weights) ** 2;
 		normA += w;
+
 		if (wordsB.has(word)) dot += w;
 	}
-	for (const word of wordsB) normB += idf(word, weights) ** 2;
+
+	for (const word of wordsB) {
+		normB += idf(word, weights) ** 2;
+	}
+
 	if (dot === 0) return 0;
+
 	return Math.min(1, dot / Math.sqrt(normA * normB));
 }
 
@@ -111,7 +127,9 @@ export function meaningScore(a: number[], b: number[]): number {
 		normA += x ** 2;
 		normB += y ** 2;
 	});
+
 	if (dot <= 0) return 0;
+
 	return Math.min(1, dot / Math.sqrt(normA * normB));
 }
 
@@ -133,5 +151,6 @@ export function scoreDescriptions(
 	const vectorA = vectors?.get(a);
 	const vectorB = vectors?.get(b);
 	const meaning = vectorA && vectorB ? meaningScore(vectorA, vectorB) : null;
+
 	return { word, meaning, merged: mergedScore(word, meaning) };
 }

@@ -20,6 +20,7 @@ function Field({
 	onValueChange: (value: number | null) => void;
 }) {
 	const [value, setValue] = useState(initial);
+
 	return (
 		<>
 			<label htmlFor="fruit">Fruit</label>
@@ -44,6 +45,7 @@ function renderField(value: number | null = null, options = items) {
 	render(
 		<Field initial={value} onValueChange={onValueChange} options={options} />,
 	);
+
 	return {
 		input: screen.getByRole("combobox", { name: "Fruit" }),
 		onValueChange,

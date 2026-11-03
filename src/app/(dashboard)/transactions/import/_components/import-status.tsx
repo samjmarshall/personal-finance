@@ -58,6 +58,7 @@ function RunStatus({ run }: { run: LatestImport }) {
 		phase === "importing" ||
 		phase === "done" ||
 		(phase !== "waiting" && counted);
+
 	return (
 		<div className="space-y-2">
 			<p className={cn("flex items-center gap-1.5 text-sm font-medium", tone)}>
@@ -94,5 +95,6 @@ function statusAnnouncement(run: LatestImport): string {
 	const status = `Import status: ${importStatusLabel(run)}.`;
 	const next =
 		run.error ?? (importPhase(run) === "stalled" ? STALLED_NEXT : null);
+
 	return next ? `${status} ${next}` : status;
 }

@@ -29,10 +29,13 @@ export class AllowedSendersService {
 	// is taken before a duplicate add fails.
 	async list(memberId: string): Promise<AllowedSenderListItem[]> {
 		const rows = await this.repository.list();
+
 		if (!rows.length) return [];
+
 		const names = await this.members.namesByIds([
 			...new Set(rows.map((row) => row.userId)),
 		]);
+
 		// Own-row flag set here: the client has no session to compare against.
 		return rows.map((row) => ({
 			...row,
@@ -43,15 +46,19 @@ export class AllowedSendersService {
 
 	async add(memberId: string, email: string): Promise<AllowedSender> {
 		let row: AllowedSender | undefined;
+
 		try {
 			row = await this.repository.insert(memberId, email);
 		} catch (error) {
 			// One address maps to one Member, so a re-add (in any casing — the DTO
 			// normalised it) trips the unique index. Say so rather than 500.
-			if (isPgViolation(error, PgViolation.UniqueViolation))
+			if (isPgViolation(error, PgViolation.UniqueViolation)) {
 				throw new ConflictError(ALREADY_ALLOWED_MESSAGE, { cause: error });
+			}
+
 			throw error;
 		}
+
 		return assertRow(row, "add allowed sender");
 	}
 
@@ -59,6 +66,7 @@ export class AllowedSendersService {
 	// forwarded receipts, since a drop is only logged.
 	async remove(memberId: string, id: number): Promise<void> {
 		const row = await this.repository.deleteOwn(memberId, id);
+
 		if (!row) throw new NotFoundError(NOT_YOURS_MESSAGE);
 	}
 

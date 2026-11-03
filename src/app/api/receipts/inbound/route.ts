@@ -24,6 +24,7 @@ let controller: EmailHttpController | null = null;
 
 function compose(apiKey: string, webhookSecret: string): EmailHttpController {
 	if (controller) return controller;
+
 	const resend = new Resend(apiKey);
 	controller = new EmailHttpController({
 		resend,
@@ -37,6 +38,7 @@ function compose(apiKey: string, webhookSecret: string): EmailHttpController {
 		}),
 		logger: rootLogger.with({ component: "controller" }),
 	});
+
 	return controller;
 }
 
@@ -46,13 +48,16 @@ export const POST = withFlush(async (request: Request): Promise<Response> => {
 	// that means.
 	const webhookSecret = env.RESEND_WEBHOOK_SECRET;
 	const apiKey = env.RESEND_API_KEY;
+
 	if (!webhookSecret || !apiKey) {
 		rootLogger
 			.with({ component: "route" })
 			.error("Resend credentials are not configured", {
 				"event.name": "email.route.unconfigured",
 			});
+
 		return new Response("Not configured", { status: 500 });
 	}
+
 	return compose(apiKey, webhookSecret).handle(request);
 });

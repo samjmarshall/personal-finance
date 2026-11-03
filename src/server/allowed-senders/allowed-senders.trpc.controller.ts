@@ -21,6 +21,7 @@ export const allowedSenderRouter = createTRPCRouter({
 		.input(allowedSenderRefDto)
 		.mutation(async ({ ctx, input }) => {
 			await ctx.services.allowedSenders.remove(ctx.session.user.id, input.id);
+
 			return { success: true };
 		}),
 });

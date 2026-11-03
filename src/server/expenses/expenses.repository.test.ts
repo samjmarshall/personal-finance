@@ -12,6 +12,7 @@ import { expenses } from "./expenses.schema";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleExpensesRepository({ db: db as never }),
 		queries,

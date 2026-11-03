@@ -65,17 +65,22 @@ function harness(
 			const result = await writes({} as never);
 			const enqueued = events(result);
 			committed.push(enqueued);
+
 			return { result, events: enqueued };
 		},
 		findUnsent: async () => rows,
 		markProcessed: async (id) => {
 			log.push("markProcessed");
+
 			if (opts.markProcessedThrows) throw new Error("update failed");
+
 			processed.push(id);
 		},
 		markFailed: async (id, message) => {
 			log.push("markFailed");
+
 			if (opts.markFailedThrows) throw new Error("update failed");
+
 			failed.push({ id, message });
 		},
 		deleteProcessed: async () => opts.deleted ?? 0,
@@ -85,7 +90,9 @@ function harness(
 		send: async (event: SentEvent) => {
 			log.push("inngest.send");
 			sends.push(event);
+
 			if (opts.sendThrows) throw new Error("boom");
+
 			return { ids: [event.id] };
 		},
 	};
@@ -328,11 +335,13 @@ describe("OutboxService.sweep", () => {
 			{ id: "r1", name: "receipt/uploaded", data: { receiptId: "r1" } },
 			{ id: "r2", name: "receipt/uploaded", data: { receiptId: "r2" } },
 		]);
+
 		// Only the wire fields cross to Inngest — internal columns
 		// (attempts/processedAt/lastError) must never ride along.
 		for (const sent of h.sends) {
 			expect(Object.keys(sent).sort()).toEqual(["data", "id", "name"]);
 		}
+
 		expect(h.processed).toEqual(["r1", "r2"]);
 		expect(h.failed).toEqual([]);
 	});

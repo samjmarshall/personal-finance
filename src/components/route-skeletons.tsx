@@ -427,6 +427,7 @@ function StatTilesSkeleton({ className }: { className?: string }) {
 function GroupCardSkeleton({ rows }: { rows: number }) {
 	const grid =
 		"grid grid-cols-2 items-center gap-2 px-4 sm:grid-cols-[1fr_repeat(3,7rem)_3rem]";
+
 	return (
 		<Card className="[--card-spacing:0px]">
 			<div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">

@@ -77,6 +77,7 @@ export function UnplannedTable({
 			)}
 			{groups.map(({ key, label, items: rowsInGroup }) => {
 				const groupTotal = rowsInGroup.reduce((s, r) => s + r.amount, 0);
+
 				return (
 					<Card className="[--card-spacing:0px]" key={key}>
 						{/* Same grid as rows: total sits under the amounts, picker
@@ -102,6 +103,7 @@ export function UnplannedTable({
 								// Block only the row being linked. The save is shared,
 								// so a global flag would freeze every picker.
 								const linking = link.isPending && link.variables?.id === row.id;
+
 								return (
 									<div
 										className="flex flex-col gap-2 px-4 py-3 text-sm sm:grid sm:grid-cols-[7rem_1fr_7rem_14rem] sm:items-center sm:gap-3"
@@ -125,8 +127,9 @@ export function UnplannedTable({
 											items={expenseOptions}
 											loading={linking}
 											onValueChange={(v) => {
-												if (v)
+												if (v) {
 													link.mutate({ id: row.id, expenseId: Number(v) });
+												}
 											}}
 											placeholder="Link to expense…"
 											value={null}

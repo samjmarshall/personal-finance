@@ -31,6 +31,7 @@ export class DrizzleSettingsRepository implements SettingsRepository {
 			.select({ value: appSettings.value })
 			.from(appSettings)
 			.where(eq(appSettings.key, key));
+
 		return row?.value;
 	}
 
@@ -40,6 +41,7 @@ export class DrizzleSettingsRepository implements SettingsRepository {
 			.values({ key, value })
 			.onConflictDoUpdate({ target: appSettings.key, set: { value } })
 			.returning();
+
 		return row;
 	}
 }

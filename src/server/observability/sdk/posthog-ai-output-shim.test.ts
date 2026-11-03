@@ -15,6 +15,7 @@ function harness() {
 		forceFlush: async () => {},
 		shutdown: async () => {},
 	};
+
 	return { ended, processor: new PostHogAiOutputShim({ inner }) };
 }
 

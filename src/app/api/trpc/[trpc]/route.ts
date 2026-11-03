@@ -26,6 +26,7 @@ export function reportPreProcedureError({
 }): void {
 	if (ctx !== undefined || getHTTPStatusCodeFromError(error) < 500) return;
 	if (reportedErrors.has(error)) return;
+
 	reportedErrors.add(error);
 	reportError(trpcLogger, "trpc request failed before procedure", error, {
 		"trpc.path": path,

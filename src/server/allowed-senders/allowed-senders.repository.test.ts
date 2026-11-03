@@ -12,6 +12,7 @@ import { allowedSenders } from "./allowed-senders.schema";
 
 function harness(respond?: Respond) {
 	const { db, queries } = recordingDb(respond);
+
 	return {
 		repository: new DrizzleAllowedSendersRepository({ db: db as never }),
 		queries,

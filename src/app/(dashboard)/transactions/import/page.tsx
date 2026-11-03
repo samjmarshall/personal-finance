@@ -25,6 +25,7 @@ async function ImportData() {
 	await io();
 	void api.cdr.latestImport.prefetch();
 	void api.transaction.possibleDuplicates.prefetch();
+
 	return (
 		<HydrateClient>
 			<ImportView />

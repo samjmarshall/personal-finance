@@ -47,6 +47,7 @@ function gapParts({ amountDelta, dayDelta }: Candidate) {
 		dayDelta === 0
 			? "same day"
 			: `${Math.abs(dayDelta)} day${Math.abs(dayDelta) === 1 ? "" : "s"} ${dayDelta < 0 ? "earlier" : "later"}`;
+
 	return [amount, days];
 }
 
@@ -140,7 +141,7 @@ function MatchBanner({
 	// Pending/failed/duplicate rows have no total or date to match on yet.
 	if (!unmatched) return null;
 
-	if (isLoading)
+	if (isLoading) {
 		return (
 			<p
 				className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
@@ -150,13 +151,15 @@ function MatchBanner({
 				Looking for a matching transaction…
 			</p>
 		);
+	}
 
-	if (!candidates?.length)
+	if (!candidates?.length) {
 		return (
 			<p className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
 				No transaction within 2% and 4 days of this receipt.
 			</p>
 		);
+	}
 
 	return (
 		<section
@@ -173,6 +176,7 @@ function MatchBanner({
 				{candidates.slice(0, MAX_SUGGESTIONS).map((c) => {
 					const saving =
 						confirm.isPending && confirm.variables?.transactionId === c.id;
+
 					return (
 						<li key={c.id}>
 							<button
@@ -224,7 +228,9 @@ export function ReceiptDetail({
 	// the last selected id keeps the query key — and its cached data — stable
 	// while fading out, instead of snapping to "Receipt" + a spinner.
 	const lastId = useRef(receiptId);
+
 	if (receiptId !== null) lastId.current = receiptId;
+
 	const { data, isError, refetch } = api.receipt.get.useQuery(
 		{ id: lastId.current ?? 0 },
 		{ enabled: open },

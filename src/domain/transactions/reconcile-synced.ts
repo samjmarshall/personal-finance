@@ -29,7 +29,11 @@ export function descriptionWords(text: string): Set<string> {
 export function sharedWords(a: string, b: string): number {
 	const words = descriptionWords(b);
 	let shared = 0;
-	for (const word of descriptionWords(a)) if (words.has(word)) shared++;
+
+	for (const word of descriptionWords(a)) {
+		if (words.has(word)) shared++;
+	}
+
 	return shared;
 }
 
@@ -153,27 +157,36 @@ function splitIncoming(input: MatchInput) {
 	const incoming = [...input.incoming].sort((a, b) =>
 		byId(a.externalId, b.externalId),
 	);
+
 	for (const row of incoming) {
 		const review = reviews.get(row.externalId);
-		if (known.has(row.externalId)) result.refresh.push(row);
-		else if (review?.status === PossibleDuplicateStatus.Pending)
+
+		if (known.has(row.externalId)) {
+			result.refresh.push(row);
+		} else if (review?.status === PossibleDuplicateStatus.Pending) {
 			result.flag.push({
 				transactionId: review.transactionId,
 				row,
 				reviewId: review.id,
 				descriptionScore: null,
 			});
-		else if (review) result.skipped.push(row);
-		else unmatched.push(row);
+		} else if (review) {
+			result.skipped.push(row);
+		} else {
+			unmatched.push(row);
+		}
 	}
+
 	return { result, unmatched };
 }
 
 function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
 	const live = new Set(input.liveAccountIds);
 	const sides = new Map<SyncedTransaction | MatchCandidate, Side>();
+
 	const side = (item: SyncedTransaction | MatchCandidate) => {
 		let found = sides.get(item);
+
 		if (!found) {
 			found = {
 				day: dayNumberInZone(item.date, input.timeZone),
@@ -181,25 +194,34 @@ function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
 			};
 			sides.set(item, found);
 		}
+
 		return found;
 	};
 
 	const pairs: MatchPair[] = [];
+
 	for (const bank of unmatched) {
 		const b = side(bank);
+
 		// A $0 row is a note (a waived fee, a loan notice), not a Spend: pairing two is noise.
 		if (b.cents === 0) continue;
+
 		for (const candidate of input.candidates) {
 			const c = side(candidate);
+
 			// A real copy keeps its amount; a near one was always another purchase in review.
 			if (b.cents !== c.cents) continue;
+
 			const dayGap = Math.abs(b.day - c.day);
+
 			if (dayGap > MATCH_DAYS) continue;
 			// Every Adopt can also flag, so this drops only pairs that could do neither.
 			if (!canFlag(candidate, live, dayGap)) continue;
+
 			pairs.push({ bank, candidate, dayGap });
 		}
 	}
+
 	return pairs;
 }
 
@@ -232,11 +254,15 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 
 	const usedBanks = new Set<SyncedTransaction>();
 	const usedCandidates = new Set<MatchCandidate>();
+
 	const take = (pair: ScoredPair) => {
-		if (usedBanks.has(pair.bank) || usedCandidates.has(pair.candidate))
+		if (usedBanks.has(pair.bank) || usedCandidates.has(pair.candidate)) {
 			return false;
+		}
+
 		usedBanks.add(pair.bank);
 		usedCandidates.add(pair.candidate);
+
 		return true;
 	};
 
@@ -251,13 +277,15 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 				byId(x.bank.externalId, y.bank.externalId) ||
 				x.candidate.id - y.candidate.id,
 		);
+
 	for (const pair of exact) {
-		if (take(pair))
+		if (take(pair)) {
 			result.adopt.push({
 				transactionId: pair.candidate.id,
 				row: pair.bank,
 				heldBy: pair.candidate.heldBy,
 			});
+		}
 	}
 
 	// Best description match beats nearest day: same-price subscriptions a day apart must not swap.
@@ -268,18 +296,24 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 			byId(x.bank.externalId, y.bank.externalId) ||
 			x.candidate.id - y.candidate.id,
 	);
+
 	for (const pair of close) {
-		if (take(pair))
+		if (take(pair)) {
 			result.flag.push({
 				transactionId: pair.candidate.id,
 				row: pair.bank,
 				reviewId: null,
 				descriptionScore: pair.score.merged,
 			});
+		}
 	}
 
-	for (const bank of unmatched) if (!usedBanks.has(bank)) result.add.push(bank);
+	for (const bank of unmatched) {
+		if (!usedBanks.has(bank)) result.add.push(bank);
+	}
+
 	result.adopt.sort((x, y) => byId(x.row.externalId, y.row.externalId));
 	result.flag.sort((x, y) => byId(x.row.externalId, y.row.externalId));
+
 	return result;
 }

@@ -73,6 +73,7 @@ function renderPiles({
 			reviews={reviews}
 		/>,
 	);
+
 	return { onApply, user: userEvent.setup() };
 }
 
@@ -258,8 +259,10 @@ describe("PossibleDuplicatePiles", () => {
 	it("holds every answer while an apply saves", () => {
 		renderPiles({ applying: true });
 
-		for (const radio of screen.getAllByRole("radio"))
+		for (const radio of screen.getAllByRole("radio")) {
 			expect(radio).toBeDisabled();
+		}
+
 		expect(
 			screen.getByRole("button", { name: "Use bank's for all 2" }),
 		).toHaveAttribute("aria-disabled", "true");

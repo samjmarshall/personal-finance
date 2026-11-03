@@ -45,11 +45,14 @@ export class PostHogAiOutputShim implements SpanProcessor {
 // An ended span can't take new attributes, so hand on a view with the copy added.
 function withResponseText(span: ReadableSpan): ReadableSpan {
 	const object = span.attributes[RESPONSE_OBJECT];
+
 	if (
 		typeof object !== "string" ||
 		span.attributes[RESPONSE_TEXT] !== undefined
-	)
+	) {
 		return span;
+	}
+
 	return Object.create(span, {
 		attributes: {
 			value: { ...span.attributes, [RESPONSE_TEXT]: object },

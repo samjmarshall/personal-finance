@@ -7,5 +7,6 @@ export function rethrowFkConflict(error: unknown, message: string): never {
 	if (isPgViolation(error, PgViolation.ForeignKeyViolation)) {
 		throw new ConflictError(message, { cause: error });
 	}
+
 	throw error;
 }

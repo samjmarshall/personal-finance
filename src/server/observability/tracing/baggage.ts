@@ -44,9 +44,11 @@ export function setBaggage(
  */
 export function scrubBaggage(ctx = context.active()): Context {
 	const entries: Record<string, { value: string }> = {};
+
 	for (const [key, value] of Object.entries(readBaggage(ctx))) {
 		entries[key] = { value };
 	}
+
 	return propagation.setBaggage(ctx, propagation.createBaggage(entries));
 }
 
@@ -56,6 +58,7 @@ export function scrubBaggage(ctx = context.active()): Context {
  */
 export function readBaggage(ctx = context.active()): Record<string, string> {
 	const bag = propagation.getBaggage(ctx);
+
 	if (!bag) return {};
 
 	const result: Record<string, string> = {};

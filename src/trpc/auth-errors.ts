@@ -16,7 +16,9 @@ export function isAuthError(error: unknown): boolean {
 	if (error instanceof TRPCClientError) {
 		return error.data?.code === "UNAUTHORIZED";
 	}
+
 	const digest = (error as { digest?: unknown } | null)?.digest;
+
 	return (
 		typeof digest === "string" && /^NEXT_REDIRECT;\w+;\/sign-in;/.test(digest)
 	);

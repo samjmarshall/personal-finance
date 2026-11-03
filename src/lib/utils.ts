@@ -55,10 +55,12 @@ const monthFormatter = new Intl.DateTimeFormat("en-AU", {
 // timestamp still parses as the instant it is.
 export function formatDate(value: Date | string | null | undefined) {
 	if (!value) return "—";
+
 	const date =
 		typeof value === "string"
 			? (fromDateInput(value) ?? new Date(value))
 			: value;
+
 	return dateFormatter.format(date);
 }
 
@@ -70,6 +72,7 @@ export function toDateInput(value: Date | string) {
 	const year = date.getFullYear();
 	const month = String(date.getMonth() + 1).padStart(2, "0");
 	const day = String(date.getDate()).padStart(2, "0");
+
 	return `${year}-${month}-${day}`;
 }
 
@@ -79,16 +82,23 @@ export function toDateInput(value: Date | string) {
 // month). Local (not UTC) so the calendar date survives for users behind UTC.
 export function fromDateInput(value: string): Date | null {
 	const parts = value.split("-");
+
 	if (parts.length !== 3) return null;
+
 	const [year, month, day] = parts.map(Number);
+
 	if (!year || !month || !day) return null;
+
 	const date = new Date(year, month - 1, day);
+
 	if (
 		date.getFullYear() !== year ||
 		date.getMonth() !== month - 1 ||
 		date.getDate() !== day
-	)
+	) {
 		return null;
+	}
+
 	return date;
 }
 
@@ -96,21 +106,27 @@ export function fromDateInput(value: string): Date | null {
 // client — fall back to the runtime's own zone so a bad value degrades rather than 500s.
 // Cached because the zoned-day helpers run per row over a scan window.
 const zonedDayFormatters = new Map<string, Intl.DateTimeFormat>();
+
 function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 	const cached = zonedDayFormatters.get(timeZone);
+
 	if (cached) return cached;
+
 	const options: Intl.DateTimeFormatOptions = {
 		year: "numeric",
 		month: "2-digit",
 		day: "2-digit",
 	};
 	let formatter: Intl.DateTimeFormat;
+
 	try {
 		formatter = new Intl.DateTimeFormat("en-AU", { ...options, timeZone });
 	} catch {
 		formatter = new Intl.DateTimeFormat("en-AU", options);
 	}
+
 	zonedDayFormatters.set(timeZone, formatter);
+
 	return formatter;
 }
 
@@ -120,6 +136,7 @@ function zonedDayFormatter(timeZone: string): Intl.DateTimeFormat {
 // cleanly against fromDateInput's parse of a YYYY-MM-DD calendar column.
 export function startOfDayInZone(value: Date, timeZone: string): Date {
 	const { year, month, day } = zonedDayParts(value, timeZone);
+
 	return new Date(Number(year), Number(month) - 1, Number(day));
 }
 
@@ -127,6 +144,7 @@ export function startOfDayInZone(value: Date, timeZone: string): Date {
 // instants from either side of UTC midnight compare as one day.
 export function dayKeyInZone(value: Date, timeZone: string): string {
 	const { year, month, day } = zonedDayParts(value, timeZone);
+
 	return `${year}-${month}-${day}`;
 }
 
@@ -135,6 +153,7 @@ function zonedDayParts(value: Date, timeZone: string) {
 	const parts = zonedDayFormatter(timeZone).formatToParts(value);
 	const part = (type: Intl.DateTimeFormatPartTypes) =>
 		parts.find((p) => p.type === type)?.value;
+
 	return { year: part("year"), month: part("month"), day: part("day") };
 }
 
@@ -161,12 +180,15 @@ export function utcMidnight(day: string): Date {
 export function isPast(date: Date, now: Date): boolean {
 	const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 	const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
 	return day.getTime() < today.getTime();
 }
 
 export function formatMonthKey(key: string) {
 	const [year, month] = key.split("-").map(Number);
+
 	if (!year || !month) return key;
+
 	return monthFormatter.format(new Date(year, month - 1, 1));
 }
 

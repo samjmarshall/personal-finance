@@ -25,7 +25,9 @@ async function ReceiptsData() {
 	// Proxy only checks a cookie is there, so check the session before the env
 	// value reaches the response (adr026).
 	if (!(await getSession())) redirect("/sign-in");
+
 	void api.receipt.list.prefetch(toListInput(DEFAULT_FILTERS));
+
 	return (
 		<HydrateClient>
 			<ReceiptsView uploadPrefix={receiptUploadPrefix(env.BLOB_PATH_PREFIX)} />

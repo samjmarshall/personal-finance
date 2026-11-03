@@ -115,6 +115,7 @@ function CashFlowChartBody({ periodKind }: { periodKind: PeriodKind }) {
 	const [data] = api.cashflow.get.useSuspenseQuery({ periodKind });
 
 	const hasFlow = data.buckets.some((b) => b.spend > 0 || b.inflow > 0);
+
 	if (!hasFlow && !data.hasBalanceAnchor) {
 		return (
 			<p className="py-8 text-center text-sm text-muted-foreground">
@@ -256,6 +257,7 @@ function CashFlowTooltip({
 	row?: ChartRow;
 }) {
 	if (!active || !row) return null;
+
 	const spend = Math.abs(row.spend);
 
 	// Label+amount can repeat within one bucket (two "Rent" at $600); a per-bucket
@@ -265,6 +267,7 @@ function CashFlowTooltip({
 		const base = `${it.label}:${it.amount}`;
 		const n = seen.get(base) ?? 0;
 		seen.set(base, n + 1);
+
 		return { ...it, key: n ? `${base}#${n}` : base };
 	});
 

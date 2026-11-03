@@ -7,6 +7,7 @@ import { rethrowFkConflict } from "./fk-conflict";
 // with the driver error on `.cause`.
 function pgError(code: string) {
 	const driver = Object.assign(new Error("postgres"), { code });
+
 	return Object.assign(new Error("Failed query"), { cause: driver });
 }
 

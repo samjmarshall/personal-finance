@@ -56,6 +56,7 @@ export class DrizzleCategoriesRepository implements CategoriesRepository {
 					),
 			})
 			.from(categories);
+
 		return next?.sortOrder ?? 0;
 	}
 
@@ -63,6 +64,7 @@ export class DrizzleCategoriesRepository implements CategoriesRepository {
 		values: CategoryValues & Pick<Category, "sortOrder">,
 	): Promise<Category | undefined> {
 		const [row] = await this.db.insert(categories).values(values).returning();
+
 		return row;
 	}
 
@@ -71,6 +73,7 @@ export class DrizzleCategoriesRepository implements CategoriesRepository {
 			.select()
 			.from(categories)
 			.where(eq(categories.id, id));
+
 		return row;
 	}
 
@@ -83,6 +86,7 @@ export class DrizzleCategoriesRepository implements CategoriesRepository {
 			.set(values)
 			.where(eq(categories.id, id))
 			.returning();
+
 		return row;
 	}
 

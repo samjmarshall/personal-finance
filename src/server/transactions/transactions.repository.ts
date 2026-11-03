@@ -189,11 +189,16 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				ilike(transactions.group, term),
 				ilike(transactions.notes, term),
 			);
+
 			if (clause) filters.push(clause);
 		}
+
 		if (query.priority) filters.push(eq(transactions.priority, query.priority));
-		if (query.frequency)
+
+		if (query.frequency) {
 			filters.push(eq(transactions.frequency, query.frequency));
+		}
+
 		if (query.group) filters.push(eq(transactions.group, query.group));
 		if (query.from) filters.push(gte(transactions.date, query.from));
 		if (query.to) filters.push(lte(transactions.date, query.to));
@@ -294,6 +299,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		values: TransactionCreateInput,
 	): Promise<Transaction | undefined> {
 		const [row] = await this.db.insert(transactions).values(values).returning();
+
 		return row;
 	}
 
@@ -302,6 +308,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		externalIds: string[],
 	): Promise<string[]> {
 		if (!externalIds.length) return [];
+
 		const rows = await this.db
 			.select({ externalId: transactions.externalId })
 			.from(transactions)
@@ -311,6 +318,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					inArray(transactions.externalId, externalIds),
 				),
 			);
+
 		// The `in` filter drops null ids, but the column type stays nullable.
 		return rows.map((r) => r.externalId as string);
 	}
@@ -320,6 +328,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		externalIds: string[],
 	): Promise<ReconcileReview[]> {
 		if (!externalIds.length) return [];
+
 		return this.db
 			.select({
 				id: possibleDuplicates.id,
@@ -352,6 +361,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.where(isPending)
 			.groupBy(possibleDuplicates.transactionId)
 			.as("held");
+
 		return this.db
 			.select({
 				id: transactions.id,
@@ -396,21 +406,30 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			const alsoAdd: SyncedTransaction[] = [];
 			// A held review's bank row can come in this batch too; that copy is newer.
 			const newerCopy = new Map<number, SyncedTransaction>();
-			for (const { reviewId, row } of plan.flag)
+
+			for (const { reviewId, row } of plan.flag) {
 				if (reviewId !== null) newerCopy.set(reviewId, row);
+			}
+
 			const releasedIds = new Set<number>();
 			let adopted = 0;
 			let released = 0;
+
 			for (const { transactionId, row, heldBy } of plan.adopt) {
 				if (!(await this.adopt(tx, transactionId, row))) {
 					alsoAdd.push(row);
+
 					continue;
 				}
+
 				adopted++;
+
 				if (heldBy === null) continue;
+
 				// Row is now the exact bank row, so its other reviews were different purchases: release them.
 				const taken = await this.takeReviewsOn(tx, transactionId);
 				released += taken.length;
+
 				for (const { id, ...bank } of taken) {
 					releasedIds.add(id);
 					alsoAdd.push(newerCopy.get(id) ?? bank);
@@ -444,6 +463,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					? []
 					: [{ reviewId, row }],
 			);
+
 			for (const { reviewId, row } of refreshedReviews) {
 				// Not an upsert: a review resolved since the read must not come back.
 				await tx
@@ -460,6 +480,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 
 			// A new flag the insert skipped already has a review: known, not flagged.
 			const alreadyFlagged = newFlags.length - inserted.length;
+
 			return {
 				added: plan.add.length + alsoAdd.length,
 				adopted,
@@ -507,6 +528,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.select({ count: sql<number>`cast(count(*) as int)` })
 			.from(possibleDuplicates)
 			.where(isPending);
+
 		return row?.count ?? 0;
 	}
 
@@ -516,13 +538,16 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.set({ status: PossibleDuplicateStatus.Kept })
 			.where(and(eq(possibleDuplicates.id, id), isPending))
 			.returning({ id: possibleDuplicates.id });
+
 		return kept.length > 0;
 	}
 
 	useBanks(id: number): Promise<boolean> {
 		return this.db.transaction(async (tx) => {
 			const [review] = await this.takeReview(tx, id);
+
 			if (!review) return false;
+
 			const { transactionId, description: _, ...bank } = review;
 			await tx
 				.update(transactions)
@@ -530,11 +555,14 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				.where(eq(transactions.id, transactionId));
 			// The row is now that bank row, so any other review it held is another purchase.
 			const others = await this.takeReviewsOn(tx, transactionId);
-			if (others.length)
+
+			if (others.length) {
 				await tx
 					.insert(transactions)
 					.values(others.map(({ id: _, ...bank }) => bank))
 					.onConflictDoNothing();
+			}
+
 			return true;
 		});
 	}
@@ -542,9 +570,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 	bothReal(id: number): Promise<boolean> {
 		return this.db.transaction(async (tx) => {
 			const [review] = await this.takeReview(tx, id);
+
 			if (!review) return false;
+
 			const { transactionId: _, ...bank } = review;
 			await tx.insert(transactions).values(bank).onConflictDoNothing();
+
 			return true;
 		});
 	}
@@ -556,6 +587,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		rows: SyncedTransaction[],
 	): Promise<void> {
 		if (!rows.length) return;
+
 		await db
 			.insert(transactions)
 			.values(rows)
@@ -584,6 +616,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.set(bank)
 			.where(and(eq(transactions.id, id), isNull(transactions.externalId)))
 			.returning({ id: transactions.id });
+
 		return adopted.length > 0;
 	}
 
@@ -616,6 +649,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			})
 			.from(transactions)
 			.where(eq(transactions.id, id));
+
 		return row;
 	}
 
@@ -628,6 +662,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.set(values)
 			.where(eq(transactions.id, id))
 			.returning();
+
 		return row;
 	}
 
@@ -668,6 +703,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		const rows = await this.db
 			.selectDistinct({ description: transactions.description })
 			.from(transactions);
+
 		return rows.map((row) => row.description);
 	}
 
@@ -676,6 +712,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		descriptions: string[],
 	): Promise<CachedEmbedding[]> {
 		if (!descriptions.length) return [];
+
 		return this.db
 			.select({
 				description: descriptionEmbeddings.description,
@@ -727,6 +764,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			})
 			.from(transactions)
 			.where(eq(transactions.id, id));
+
 		return row;
 	}
 
@@ -739,6 +777,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.set(link)
 			.where(eq(transactions.id, id))
 			.returning();
+
 		return row;
 	}
 
@@ -748,9 +787,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				.select(reviewBankRow)
 				.from(possibleDuplicates)
 				.where(eq(possibleDuplicates.transactionId, id));
+
 			// A held bank row has no other copy, and sync never refetches an old date.
-			if (held.length)
+			if (held.length) {
 				await tx.insert(transactions).values(held).onConflictDoNothing();
+			}
+
 			await tx.delete(transactions).where(eq(transactions.id, id));
 		});
 	}
@@ -768,6 +810,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.from(transactions)
 			.where(isNotNull(transactions.expenseId))
 			.groupBy(transactions.expenseId);
+
 		// The filter drops unlinked rows, but the column type stays nullable.
 		return rows.map((r) => ({
 			expenseId: r.expenseId as number,

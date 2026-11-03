@@ -80,11 +80,14 @@ export const auth = betterAuth({
 		// failure instead. The endpoint's own call then finds the key already gone.
 		before: createAuthMiddleware(async (ctx) => {
 			if (ctx.path !== "/sign-out" || !secondaryStorage) return;
+
 			const token = await ctx.getSignedCookie(
 				ctx.context.authCookies.sessionToken.name,
 				ctx.context.secret,
 			);
+
 			if (!token) return;
+
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
 			} catch (error) {
@@ -94,6 +97,7 @@ export const auth = betterAuth({
 				logger.error("sign-out revocation failed", {
 					"error.name": errorName(error),
 				});
+
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: "Could not sign out. Please try again.",
 				});

@@ -32,14 +32,18 @@ export function PossibleDuplicateList({
 	useEffect(() => {
 		const had = hadReviews.current;
 		hadReviews.current = reviews.length > 0;
+
 		if (!had || reviews.length > 0) return;
-		if (!document.activeElement || document.activeElement === document.body)
+
+		if (!document.activeElement || document.activeElement === document.body) {
 			emptied();
+		}
 	}, [reviews]);
 
 	async function apply(answers: ResolveDuplicateInput[]) {
 		setApplying(true);
 		const tally = { resolved: 0, gone: 0, taken: 0 };
+
 		try {
 			for (let at = 0; at < answers.length; at += RESOLVE_DUPLICATES_MAX) {
 				const done = await resolve.mutateAsync({
@@ -49,13 +53,20 @@ export function PossibleDuplicateList({
 				tally.gone += done.gone;
 				tally.taken += done.taken;
 			}
-			if (tally.gone > 0 || tally.taken > 0) toast.warning(appliedLabel(tally));
-			else toast.success(appliedLabel(tally));
+
+			if (tally.gone > 0 || tally.taken > 0) {
+				toast.warning(appliedLabel(tally));
+			} else {
+				toast.success(appliedLabel(tally));
+			}
+
 			return true;
 		} catch {
 			// Error toast: src/trpc/query-client.ts. Earlier calls still landed, so count them.
 			const landed = appliedLabel(tally);
+
 			if (landed) toast.warning(landed);
+
 			return false;
 		} finally {
 			// An answer changes rows, totals, the header badge and the review list, so refetch all.
@@ -67,13 +78,15 @@ export function PossibleDuplicateList({
 		}
 	}
 
-	if (!reviews.length)
+	if (!reviews.length) {
 		return (
 			<p className="mt-4 rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
 				Nothing to review. When an import finds a bank row that may copy one of
 				yours, it shows here.
 			</p>
 		);
+	}
+
 	return (
 		<PossibleDuplicatePiles
 			applying={applying}

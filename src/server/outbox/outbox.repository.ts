@@ -61,9 +61,11 @@ export class DrizzleOutboxRepository implements OutboxRepository {
 		return this.db.transaction(async (tx) => {
 			const result = await writes(tx);
 			const enqueued = events(result);
+
 			if (enqueued.length) {
 				await tx.insert(outbox).values(enqueued);
 			}
+
 			return { result, events: enqueued };
 		});
 	}
@@ -106,6 +108,7 @@ export class DrizzleOutboxRepository implements OutboxRepository {
 			.delete(outbox)
 			.where(lt(outbox.processedAt, sql`now() - interval '7 days'`))
 			.returning({ id: outbox.id });
+
 		return deleted.length;
 	}
 }
