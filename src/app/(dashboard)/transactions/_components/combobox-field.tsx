@@ -39,6 +39,8 @@ export function ComboboxField<T>({
 }) {
 	const [open, setOpen] = useState(false);
 	const highlighted = useRef<ComboboxFieldOption<T> | undefined>(undefined);
+	const highlightedByKeys = useRef(false);
+	const tabPick = useRef<ComboboxFieldOption<T> | null>(null);
 	const label = items.find((item) => Object.is(item.value, value))?.label;
 	// A new object each render resets half-typed text, so rebuild only on a real change.
 	const selected = useMemo(
@@ -52,8 +54,9 @@ export function ComboboxField<T>({
 			disabled={disabled}
 			isItemEqualToValue={(a, b) => Object.is(a.value, b.value)}
 			items={items}
-			onItemHighlighted={(item) => {
+			onItemHighlighted={(item, details) => {
 				highlighted.current = item;
+				highlightedByKeys.current = details.reason === "keyboard";
 			}}
 			onOpenChange={(next) => setOpen(next)}
 			onValueChange={(item, details) => {
@@ -74,6 +77,11 @@ export function ComboboxField<T>({
 				clearLabel={clearLabel}
 				disabled={disabled}
 				id={id}
+				onBlur={() => {
+					// Picked on Tab but sent only now: sent sooner, the X it shows grabs the Tab.
+					if (tabPick.current) onValueChange(tabPick.current.value);
+					tabPick.current = null;
+				}}
 				onKeyDown={(e) => {
 					// With the list open, Enter picks or closes; it never saves the form on a typo.
 					if (e.key === "Enter" && open) e.preventDefault();
@@ -82,13 +90,17 @@ export function ComboboxField<T>({
 					// Tab takes the highlighted match of a typed search, then moves on.
 					// Empty or untouched text is no search, so a stray highlight must not pick.
 					const text = e.currentTarget.value;
-					const typed = text.trim() !== "" && text !== label;
-					if (e.key === "Tab" && open && typed && highlighted.current) {
-						// A typed full name beats a longer match listed above it ("Fees" vs "Bank fees").
-						const exact = items.find(
-							(item) => item.label.toLowerCase() === text.trim().toLowerCase(),
-						);
-						onValueChange((exact ?? highlighted.current).value);
+					const searching = text.trim() !== "" && text !== label;
+					if (e.key === "Tab" && open && searching && highlighted.current) {
+						// A typed full name beats a longer match listed above it ("Fees" vs
+						// "Bank fees"), but not a row the arrow keys picked, as Enter would take it.
+						const exact = highlightedByKeys.current
+							? undefined
+							: items.find(
+									(item) =>
+										item.label.toLowerCase() === text.trim().toLowerCase(),
+								);
+						tabPick.current = exact ?? highlighted.current;
 					}
 				}}
 				placeholder={placeholder}

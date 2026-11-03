@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ComboboxField } from "./combobox-field";
 
@@ -27,6 +28,24 @@ function renderField(value: number | null = null, options = items) {
 		input: screen.getByRole("combobox", { name: "Fruit" }),
 		onValueChange,
 	};
+}
+
+// Feeds each pick back like the real form, so the X shows up.
+function LiveField() {
+	const [value, setValue] = useState<number | null>(null);
+	return (
+		<>
+			<label htmlFor="fruit">Fruit</label>
+			<ComboboxField
+				emptyText="No fruit found."
+				id="fruit"
+				items={items}
+				onValueChange={setValue}
+				value={value}
+			/>
+			<button type="button">Next</button>
+		</>
+	);
 }
 
 describe("ComboboxField", () => {
@@ -120,6 +139,18 @@ describe("ComboboxField", () => {
 		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
 	});
 
+	it("Tab pick on a live field moves past the X that appears", async () => {
+		const user = userEvent.setup();
+		render(<LiveField />);
+		const input = screen.getByRole("combobox", { name: "Fruit" });
+		await user.type(input, "ban");
+		await screen.findByRole("option", { name: "Banana" });
+		await user.tab();
+
+		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
+	});
+
 	it("Tab takes a typed full name over a longer match above it", async () => {
 		const user = userEvent.setup();
 		const { input, onValueChange } = renderField(null, [
@@ -128,6 +159,35 @@ describe("ComboboxField", () => {
 		]);
 		await user.type(input, "fees");
 		await screen.findByRole("option", { name: "Bank fees" });
+		await user.tab();
+
+		expect(onValueChange).toHaveBeenCalledWith(2);
+	});
+
+	it("Tab takes an arrowed-to row over a typed full name", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(null, [
+			{ value: 1, label: "Fees" },
+			{ value: 2, label: "Bank fees" },
+		]);
+		await user.type(input, "fees");
+		await screen.findByRole("option", { name: "Bank fees" });
+		await user.keyboard("{ArrowDown}");
+		await user.tab();
+
+		expect(onValueChange).toHaveBeenCalledWith(2);
+	});
+
+	it("Tab takes the arrowed-to row of two with the same name", async () => {
+		const user = userEvent.setup();
+		// Expense names need not be unique.
+		const { input, onValueChange } = renderField(null, [
+			{ value: 1, label: "Rego" },
+			{ value: 2, label: "Rego" },
+		]);
+		await user.type(input, "rego");
+		await screen.findAllByRole("option", { name: "Rego" });
+		await user.keyboard("{ArrowDown}");
 		await user.tab();
 
 		expect(onValueChange).toHaveBeenCalledWith(2);
