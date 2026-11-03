@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -27,6 +27,7 @@ function Field({
 				emptyText="No fruit found."
 				id="fruit"
 				items={options}
+				label="Fruit"
 				onValueChange={(next) => {
 					setValue(next);
 					onValueChange(next);
@@ -79,16 +80,16 @@ describe("ComboboxField", () => {
 	it("clear emits null", async () => {
 		const user = userEvent.setup();
 		const { onValueChange } = renderField(1);
-		await user.click(screen.getByRole("button", { name: "Clear" }));
+		await user.click(screen.getByRole("button", { name: "Clear Fruit" }));
 
 		expect(onValueChange).toHaveBeenCalledWith(null);
 	});
 
 	it("a saved value missing from the list can still be cleared", async () => {
 		const user = userEvent.setup();
-		// A stale list can lack the saved row; the old select's None row could unlink it.
+		// Stale list can miss the saved row; the X must still unlink it.
 		const { input, onValueChange } = renderField(99);
-		await user.click(screen.getByRole("button", { name: "Clear" }));
+		await user.click(screen.getByRole("button", { name: "Clear Fruit" }));
 
 		expect(input).toHaveValue("");
 		expect(onValueChange).toHaveBeenCalledWith(null);
@@ -100,7 +101,7 @@ describe("ComboboxField", () => {
 		input.focus();
 		await user.tab();
 
-		expect(screen.getByRole("button", { name: "Clear" })).toHaveFocus();
+		expect(screen.getByRole("button", { name: "Clear Fruit" })).toHaveFocus();
 		await user.keyboard("{Enter}");
 		expect(onValueChange).toHaveBeenCalledWith(null);
 	});
@@ -182,7 +183,7 @@ describe("ComboboxField", () => {
 
 		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
 		await waitFor(() => expect(input).toHaveValue("Banana"));
-		expect(screen.getByRole("button", { name: "Clear" })).toBeVisible();
+		expect(screen.getByRole("button", { name: "Clear Fruit" })).toBeVisible();
 	});
 
 	it("Tab takes a typed full name over a longer match above it", async () => {
@@ -302,6 +303,36 @@ describe("ComboboxField", () => {
 		await waitFor(() => expect(input).toHaveValue("Banana"));
 	});
 
+	it("a Tab that never left the field picks nothing later", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(2);
+		await user.clear(input);
+		await user.type(input, "app");
+		await screen.findByRole("option", { name: "Apple" });
+		// A blocked Tab: the key fires but focus stays put.
+		fireEvent.keyDown(input, { key: "Tab" });
+		await user.clear(input);
+		await user.type(input, "kiwi");
+		await screen.findByText("No fruit found.");
+		await user.click(document.body);
+
+		expect(onValueChange).not.toHaveBeenCalled();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
+	});
+
+	it("a click pick after a blocked Tab wins", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField();
+		await user.type(input, "a");
+		await screen.findByRole("option", { name: "Banana" });
+		fireEvent.keyDown(input, { key: "Tab" });
+		await user.click(screen.getByRole("option", { name: "Banana" }));
+		await user.click(document.body);
+
+		expect(onValueChange).toHaveBeenCalledTimes(1);
+		expect(onValueChange).toHaveBeenCalledWith(2);
+	});
+
 	it("Enter with no match does not submit the form", async () => {
 		const user = userEvent.setup();
 		const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
@@ -312,6 +343,7 @@ describe("ComboboxField", () => {
 					emptyText="No fruit found."
 					id="fruit"
 					items={items}
+					label="Fruit"
 					onValueChange={vi.fn()}
 					value={null}
 				/>
@@ -345,6 +377,7 @@ describe("ComboboxField", () => {
 		const props = {
 			emptyText: "No fruit found.",
 			id: "fruit",
+			label: "Fruit",
 			onValueChange: vi.fn(),
 			value: 2,
 		};
@@ -374,22 +407,22 @@ describe("ComboboxField", () => {
 		input.focus();
 		await user.tab();
 
-		expect(screen.getByRole("button", { name: "Show options" })).toBeVisible();
+		expect(
+			screen.getByRole("button", { name: "Show Fruit options" }),
+		).toBeVisible();
 		expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
 	});
 
-	it("names the X after its field", () => {
-		render(
-			<ComboboxField
-				clearLabel="Clear Fruit"
-				emptyText="No fruit found."
-				items={items}
-				onValueChange={vi.fn()}
-				value={1}
-			/>,
-		);
+	it("names the X, open-list button and list after its field", async () => {
+		const user = userEvent.setup();
+		const { input } = renderField(1);
 
 		expect(screen.getByRole("button", { name: "Clear Fruit" })).toBeVisible();
+		expect(
+			screen.getByRole("button", { name: "Show Fruit options" }),
+		).toBeInTheDocument();
+		await user.click(input);
+		expect(await screen.findByRole("listbox", { name: "Fruit" })).toBeVisible();
 	});
 
 	it("no match shows the empty text", async () => {

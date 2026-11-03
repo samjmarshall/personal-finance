@@ -10,10 +10,14 @@ import {
 	ComboboxList,
 } from "~/components/ui/combobox";
 
-export type ComboboxFieldOption<T> = { value: T; label: string };
+// Primitive values only: rows key by the value's text and match by identity.
+export type ComboboxFieldOption<T extends string | number> = {
+	value: T;
+	label: string;
+};
 
 /** Only listed options can be picked (click, Enter, or Tab on typed text). Other or emptied text snaps back on blur; only the X gives `null`. */
-export function ComboboxField<T>({
+export function ComboboxField<T extends string | number>({
 	items,
 	value,
 	onValueChange,
@@ -22,7 +26,7 @@ export function ComboboxField<T>({
 	disabled,
 	placeholder,
 	emptyText,
-	clearLabel,
+	label,
 	"aria-describedby": ariaDescribedBy,
 }: {
 	items: readonly ComboboxFieldOption<T>[];
@@ -33,17 +37,17 @@ export function ComboboxField<T>({
 	disabled?: boolean;
 	placeholder?: string;
 	emptyText: string;
-	/** Names the X; two fields in one form need different names. */
-	clearLabel?: string;
+	/** Names the list and its buttons; two fields in one form need different names. */
+	label: string;
 	"aria-describedby"?: string;
 }) {
 	const [open, setOpen] = useState(false);
 	const [text, setText] = useState("");
 	const highlightedItem = useRef<ComboboxFieldOption<T> | undefined>(undefined);
 	const pendingTabPick = useRef<ComboboxFieldOption<T> | null>(null);
-	const label = items.find((item) => Object.is(item.value, value))?.label;
+	const pickedLabel = items.find((item) => Object.is(item.value, value))?.label;
 	// Empty or untouched text is no search.
-	const searching = text.trim() !== "" && text !== label;
+	const searching = text.trim() !== "" && text !== pickedLabel;
 	// A typed full name lists first, so it is the row lit up and the one Enter
 	// or Tab takes ("Fees" over "Bank fees").
 	const query = text.trim().toLowerCase();
@@ -55,8 +59,8 @@ export function ComboboxField<T>({
 	// A new object each render resets half-typed text, so rebuild only on a real change.
 	// A saved value missing from a stale list stays picked, nameless, so the X can unlink it.
 	const selected = useMemo(
-		() => (value === null ? null : { value, label: label ?? "" }),
-		[value, label],
+		() => (value === null ? null : { value, label: pickedLabel ?? "" }),
+		[value, pickedLabel],
 	);
 
 	return (
@@ -77,6 +81,7 @@ export function ComboboxField<T>({
 					setOpen(true);
 					return;
 				}
+				pendingTabPick.current = null;
 				onValueChange(item?.value ?? null);
 			}}
 			open={open}
@@ -85,7 +90,7 @@ export function ComboboxField<T>({
 			<ComboboxInput
 				aria-describedby={ariaDescribedBy}
 				className={className}
-				clearLabel={clearLabel}
+				clearLabel={`Clear ${label}`}
 				disabled={disabled}
 				id={id}
 				onBlur={() => {
@@ -95,12 +100,13 @@ export function ComboboxField<T>({
 					pendingTabPick.current = null;
 				}}
 				onKeyDown={(e) => {
+					// Any key after a Tab means focus stayed, so that Tab pick is stale.
+					pendingTabPick.current = null;
 					// With the list open, Enter picks or closes; it never saves the form on a typo.
 					if (e.key === "Enter" && open) e.preventDefault();
 					// With it shut, Escape belongs to the dialog; it must not wipe the pick.
 					if (e.key === "Escape" && !open) e.preventBaseUIHandler();
-					// Tab takes the highlighted match of a typed search, then moves on.
-					// With no search, a stray highlight must not pick.
+					// Only a typed search lets Tab pick; a stray highlight must not.
 					if (e.key === "Tab" && open && searching && highlightedItem.current) {
 						pendingTabPick.current = highlightedItem.current;
 					}
@@ -108,10 +114,11 @@ export function ComboboxField<T>({
 				placeholder={placeholder}
 				// Hidden mid-search, so a Tab pick moves past it, not onto an X that would undo it.
 				showClear={selected !== null && !searching}
+				triggerLabel={`Show ${label} options`}
 			/>
 			<ComboboxContent>
 				<ComboboxEmpty>{emptyText}</ComboboxEmpty>
-				<ComboboxList>
+				<ComboboxList aria-label={label}>
 					{(item: ComboboxFieldOption<T>) => (
 						<ComboboxItem key={String(item.value)} value={item}>
 							{item.label}

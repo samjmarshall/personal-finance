@@ -56,11 +56,13 @@ function ComboboxInput({
 	showTrigger = true,
 	showClear = false,
 	clearLabel = "Clear",
+	triggerLabel = "Show options",
 	...props
 }: ComboboxPrimitive.Input.Props & {
 	showTrigger?: boolean;
 	showClear?: boolean;
 	clearLabel?: string;
+	triggerLabel?: string;
 }) {
 	return (
 		<InputGroup className={cn("w-auto", className)}>
@@ -73,7 +75,7 @@ function ComboboxInput({
 			<InputGroupAddon align="inline-end">
 				{showTrigger && (
 					<InputGroupButton
-						aria-label="Show options"
+						aria-label={triggerLabel}
 						className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
 						data-slot="input-group-button"
 						disabled={disabled}

@@ -276,11 +276,11 @@ export function TransactionForm({
 							</FieldLabel>
 							<ComboboxField
 								className="w-full"
-								clearLabel="Clear Category"
 								disabled={pending}
 								emptyText="No categories found."
 								id="tx-category"
 								items={categoryOptions}
+								label="Category"
 								onValueChange={(v) => setLink(pickCategory(link, v, expenses))}
 								placeholder="None"
 								value={categoryId}
@@ -294,11 +294,11 @@ export function TransactionForm({
 							<ComboboxField
 								aria-describedby="tx-expense-hint"
 								className="w-full"
-								clearLabel="Clear Expense"
 								disabled={pending}
 								emptyText="No expenses found."
 								id="tx-expense"
 								items={expenseOptions}
+								label="Expense"
 								onValueChange={(v) => setLink(pickExpense(link, v, expenses))}
 								placeholder="None"
 								value={expenseId}
