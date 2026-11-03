@@ -3,12 +3,7 @@
 	"root": true,
 	// useBlockStatements has no options (braces everywhere or nowhere), so these plugins
 	// keep one-line ifs legal and brace everything else.
-	// Blank lines live in Oxlint (.oxlintrc.json). Why: Biome has no blank-line rule
-	// (https://github.com/biomejs/biome/discussions/10879), and Grit plugins can't see
-	// whitespace between statements. Exit condition: when Biome ships a padding rule, or a
-	// plugin API that sees whitespace and can fix it, move the rule here. Then delete
-	// .oxlintrc.json, the two dev deps, and the Oxlint steps in package.json and
-	// .claude/scripts/biome-check.sh.
+	// Blank lines live in Oxlint; .oxlintrc.json says why and when to move them here.
 	"plugins": [
 		"./biome-plugins/no-namespace-suspense.grit",
 		"./biome-plugins/loop-braces.grit",

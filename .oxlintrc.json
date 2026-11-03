@@ -2,7 +2,8 @@
 // and Grit plugins can't see whitespace between statements.
 // Exit condition: when Biome ships a padding rule, or a plugin API that sees whitespace and
 // can fix it, move this rule into Biome. Then delete this file, the two dev deps, and the
-// Oxlint steps in package.json and .claude/scripts/biome-check.sh.
+// Oxlint steps in package.json, .claude/scripts/biome-check.sh, src/test/layout-lint.test.ts
+// and AGENTS.md.
 // Pins: oxlint and @stylistic/eslint-plugin use exact versions because jsPlugins are alpha.
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",

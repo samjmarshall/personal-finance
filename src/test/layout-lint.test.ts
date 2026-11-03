@@ -287,7 +287,7 @@ return to the menu
 }
 `,
 	},
-	// The three examples from the brief, from src/domain/transactions/reconcile-synced.ts.
+	// Real code shapes from reconcile-synced.ts; rules must handle them as written.
 	{
 		name: "brief-take",
 		input: `export function taker(usedBanks: Set<Bank>, usedCandidates: Set<Txn>) {
@@ -369,7 +369,7 @@ return to the menu
 	},
 ];
 
-const messages = {
+const diagnostics = {
 	loop: "Loops need braces.",
 	chain: "An if with an else needs braces on every branch.",
 	multiline: "Add braces, or fit the whole if on one line.",
@@ -411,7 +411,7 @@ function lint(dir: string) {
 	const results = [biome(dir, "--max-diagnostics=500"), oxlint(dir)];
 
 	return {
-		status: Math.max(...results.map((r) => r.status)),
+		statuses: results.map((r) => r.status),
 		output: results.map((r) => r.output).join("\n"),
 	};
 }
@@ -428,22 +428,22 @@ async function readAll(dir: string) {
 }
 
 let dir: string;
-let raw: ReturnType<typeof run>;
-let clean: ReturnType<typeof run>;
-let first: Record<string, string>;
-let second: Record<string, string>;
+let lintBefore: ReturnType<typeof lint>;
+let lintAfter: ReturnType<typeof lint>;
+let fixedOnce: Record<string, string>;
+let fixedTwice: Record<string, string>;
 
 beforeAll(async () => {
 	dir = await mkdtemp(join(tmpdir(), "layout-lint-"));
 	await Promise.all(
 		cases.map(({ name, input }) => writeFile(join(dir, `${name}.ts`), input)),
 	);
-	raw = lint(dir);
+	lintBefore = lint(dir);
 	pipeline(dir);
-	first = await readAll(dir);
-	clean = lint(dir);
+	fixedOnce = await readAll(dir);
+	lintAfter = lint(dir);
 	pipeline(dir);
-	second = await readAll(dir);
+	fixedTwice = await readAll(dir);
 }, 30_000);
 
 afterAll(async () => {
@@ -452,21 +452,26 @@ afterAll(async () => {
 
 describe("layout lint", () => {
 	it.each(cases)("fixes $name", ({ name, expected }) => {
-		expect(first[name]).toBe(expected);
+		expect(fixedOnce[name]).toBe(expected);
 	});
 
 	it("changes nothing on a second run", () => {
-		expect(second).toEqual(first);
+		expect(fixedTwice).toEqual(fixedOnce);
 	});
 
 	it("passes the check once fixed", () => {
-		expect(clean.status, clean.output).toBe(0);
+		expect(lintAfter.statuses, lintAfter.output).toEqual([0, 0]);
 	});
 
-	it.each(Object.values(messages))(
+	// A rule set to warn still prints its message, so each tool must also exit non-zero.
+	it("exits non-zero in both tools before fixing", () => {
+		expect(lintBefore.statuses).not.toContain(0);
+	});
+
+	it.each(Object.values(diagnostics))(
 		"fails the check before fixing: %s",
 		(message) => {
-			expect(raw.output).toContain(message);
+			expect(lintBefore.output).toContain(message);
 		},
 	);
 });

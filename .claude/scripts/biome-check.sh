@@ -11,6 +11,16 @@ if [ -z "$FILE" ]; then
   exit 0
 fi
 
+# Oxlint fixes any path it's handed, so leave other repos and gitignored folders alone.
+case "$FILE" in
+  "$CLAUDE_PROJECT_DIR"/*) ;;
+  *) exit 0 ;;
+esac
+
+if git -C "$CLAUDE_PROJECT_DIR" check-ignore -q "$FILE"; then
+  exit 0
+fi
+
 # Twice: Biome lints before it formats, so a long `if` it splits only gets braces on pass two.
 for _ in 1 2; do
   "$CLAUDE_PROJECT_DIR/node_modules/.bin/biome" check \

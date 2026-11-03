@@ -12,7 +12,7 @@
 		"build": "next build",
 		"check": "biome check . && oxlint",
 		"check:unsafe": "biome check --write --unsafe .",
-		"check:write": "biome check --write . && biome check --write . && oxlint --fix",
+		"check:write": "biome check --write .; biome check --write .; oxlint --fix",
 		"db:check": "drizzle-kit check",
 		"db:generate": "drizzle-kit generate",
 		"db:custom": "drizzle-kit generate --custom",
