@@ -94,7 +94,7 @@ export function ComboboxField<T extends string | number>({
 				disabled={disabled}
 				id={id}
 				onBlur={() => {
-					// Send the Tab pick on blur: sent on keypress, the X it shows would catch the Tab.
+					// Pick on blur, not on Tab press: the pick would show the X and focus would land on it.
 					if (pendingTabPick.current)
 						onValueChange(pendingTabPick.current.value);
 					pendingTabPick.current = null;
@@ -107,7 +107,10 @@ export function ComboboxField<T extends string | number>({
 					// With it shut, Escape belongs to the dialog; it must not wipe the pick.
 					if (e.key === "Escape" && !open) e.preventBaseUIHandler();
 					// Only a typed search lets Tab pick; a stray highlight must not.
-					if (e.key === "Tab" && open && searching && highlightedItem.current) {
+					// Ctrl/Alt/Cmd+Tab switches tabs or windows, so it never picks.
+					const plainTab =
+						e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.metaKey;
+					if (plainTab && open && searching && highlightedItem.current) {
 						pendingTabPick.current = highlightedItem.current;
 					}
 				}}

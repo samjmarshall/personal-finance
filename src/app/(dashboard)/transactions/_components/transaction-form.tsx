@@ -295,7 +295,12 @@ export function TransactionForm({
 								aria-describedby="tx-expense-hint"
 								className="w-full"
 								disabled={pending}
-								emptyText="No expenses found."
+								// The open list hides the hint, so say the list is narrowed here too.
+								emptyText={
+									categoryId === null
+										? "No expenses found."
+										: "No expenses in this Category."
+								}
 								id="tx-expense"
 								items={expenseOptions}
 								label="Expense"

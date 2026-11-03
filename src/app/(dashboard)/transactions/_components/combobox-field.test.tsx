@@ -320,6 +320,20 @@ describe("ComboboxField", () => {
 		await waitFor(() => expect(input).toHaveValue("Banana"));
 	});
 
+	it("Ctrl+Tab then leaving the window picks nothing", async () => {
+		const user = userEvent.setup();
+		const { input, onValueChange } = renderField(2);
+		await user.clear(input);
+		await user.type(input, "app");
+		await screen.findByRole("option", { name: "Apple" });
+		// Switching browser tabs: the key reaches the page, then focus leaves.
+		fireEvent.keyDown(input, { key: "Tab", ctrlKey: true });
+		await user.click(document.body);
+
+		expect(onValueChange).not.toHaveBeenCalled();
+		await waitFor(() => expect(input).toHaveValue("Banana"));
+	});
+
 	it("a click pick after a blocked Tab wins", async () => {
 		const user = userEvent.setup();
 		const { input, onValueChange } = renderField();
