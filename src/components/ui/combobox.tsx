@@ -55,10 +55,12 @@ function ComboboxInput({
 	disabled = false,
 	showTrigger = true,
 	showClear = false,
+	clearLabel = "Clear",
 	...props
 }: ComboboxPrimitive.Input.Props & {
 	showTrigger?: boolean;
 	showClear?: boolean;
+	clearLabel?: string;
 }) {
 	return (
 		<InputGroup className={cn("w-auto", className)}>
@@ -69,15 +71,20 @@ function ComboboxInput({
 			<InputGroupAddon align="inline-end">
 				{showTrigger && (
 					<InputGroupButton
+						aria-label="Show options"
 						className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
 						data-slot="input-group-button"
 						disabled={disabled}
 						render={<ComboboxTrigger />}
 						size="icon-xs"
+						// Arrow keys on the input already open the list, so skip a 2nd Tab stop.
+						tabIndex={-1}
 						variant="ghost"
 					/>
 				)}
-				{showClear && <ComboboxClear disabled={disabled} />}
+				{showClear && (
+					<ComboboxClear aria-label={clearLabel} disabled={disabled} />
+				)}
 			</InputGroupAddon>
 			{children}
 		</InputGroup>
