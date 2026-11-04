@@ -12,19 +12,26 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 # Extract only the first line (the actual shell command, not heredoc body)
 FIRST_LINE=$(echo "$COMMAND" | head -1)
 
-# Block force pushes on any branch. --force matches both --force and --force-with-lease.
-if echo "$FIRST_LINE" | grep -qE 'git[[:space:]]+push.*(--force|[[:space:]]-f([[:space:]]|$))'; then
-  echo "BLOCKED: '$FIRST_LINE' is a force push. The user has prevented this without explicit override." >&2
-  exit 2
-fi
+# Push checks read one command at a time. The `.*` in each pattern would otherwise run
+# past `&&`, `;`, `|` or `$(` into a later command, so `git push origin feat && gh pr
+# create --base main` was blocked as a push to main.
+SEGMENTS=$(echo "$FIRST_LINE" | tr ';|&()`' '\n')
 
-# Block pushes that target main / master. Matches 'origin main', 'origin master',
-# 'HEAD:main', 'dev:master', etc. Does not match 'maintenance', 'feature/main', or
-# 'main:dev' (pushing FROM main is allowed; only pushing TO main/master is blocked).
-if echo "$FIRST_LINE" | grep -qE 'git[[:space:]]+push.*([[:space:]]|:)(main|master)([[:space:]]|$)'; then
-  echo "BLOCKED: '$FIRST_LINE' targets the protected main/master branch. The user has prevented this without explicit override." >&2
-  exit 2
-fi
+while IFS= read -r SEG; do
+  # Block force pushes on any branch. --force matches both --force and --force-with-lease.
+  if echo "$SEG" | grep -qE 'git[[:space:]]+push.*(--force|[[:space:]]-f([[:space:]]|$))'; then
+    echo "BLOCKED: '$FIRST_LINE' is a force push. The user has prevented this without explicit override." >&2
+    exit 2
+  fi
+
+  # Block pushes that target main / master. Matches 'origin main', 'origin master',
+  # 'HEAD:main', 'dev:master', etc. Does not match 'maintenance', 'feature/main', or
+  # 'main:dev' (pushing FROM main is allowed; only pushing TO main/master is blocked).
+  if echo "$SEG" | grep -qE 'git[[:space:]]+push.*([[:space:]]|:)(main|master)([[:space:]]|$)'; then
+    echo "BLOCKED: '$FIRST_LINE' targets the protected main/master branch. The user has prevented this without explicit override." >&2
+    exit 2
+  fi
+done <<< "$SEGMENTS"
 
 # Other destructive patterns (push patterns handled above).
 DANGEROUS_PATTERNS=(

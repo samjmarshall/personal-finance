@@ -203,7 +203,7 @@ function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
 	for (const bank of unmatched) {
 		const b = side(bank);
 
-		// A $0 row is a note (a waived fee, a loan notice), not a Spend: pairing two is noise.
+		// A $0 row is a note (a waived fee, a loan notice, a foreign fee already in its purchase), not a Spend: pairing two is noise.
 		if (b.cents === 0) continue;
 
 		for (const candidate of input.candidates) {
