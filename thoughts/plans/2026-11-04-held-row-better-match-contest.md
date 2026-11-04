@@ -1,7 +1,7 @@
 ---
 date: 2026-11-04
 adrs: []
-status: Done
+status: Validated - Phase 2 of 3
 ---
 # Let a better bank row contest a held household row Implementation Plan
 
@@ -20,7 +20,7 @@ The history import paired the household row "AD MURRUMBA DOWNS PTY MURRUMBA DO A
 - Tests pin the old rule: `src/domain/transactions/reconcile-synced.test.ts:419` ("never flags a held row a second time") and `:511` ("skips a held row unless the bank row is on its day").
 
 ## Desired End State
-- A held household row gets one more Possible duplicate from a bank row within 7 days when that pair's merged score is ≥ `SIMILAR_SCORE` **and** beats the row's best pending score.
+- A held household row gets one more Possible duplicate from a bank row within 7 days when that pair's merged score is ≥ `SIMILAR_SCORE` **and** none of the row's pending reviews is (a Similar hold already has its copy; a second is likely another purchase).
 - A weaker bank row on a held row is still added, and a same-day one still flags as today. Adopt still needs day gap 0.
 - The outcome no longer depends on which account syncs first. A strong copy that arrives after a weak one is reviewed, not added.
 - Prod has no doubled card Spends from this bug. Reviews 1, 2, 8, 9, 10, 11, 15 are answered, and their transfers are Transactions.
@@ -32,21 +32,21 @@ The history import paired the household row "AD MURRUMBA DOWNS PTY MURRUMBA DO A
 - Rescoring old reviews.
 
 ## Approach
-Give each `MatchCandidate` the best merged score of its pending reviews (`heldScore`). `pairUp` lets a held household row through at any day gap within `MATCH_DAYS`, because the score isn't known until after pairing. `planReconcile` drops a held pair that is a day or more off unless its score clears `SIMILAR_SCORE` and beats `heldScore` (null counts as 0). Then the existing one-to-one Adopt/flag loops run unchanged. After deploy, the doubled rows are deleted and re-imported, so each card row comes back as a "Similar" review that "Use bank's" answers.
+Give each `MatchCandidate` the best merged score of its pending reviews (`heldScore`). `pairUp` lets a held household row through at any day gap within `MATCH_DAYS`, because the score isn't known until after pairing. `planReconcile` drops a held pair that is a day or more off unless its score clears `SIMILAR_SCORE` and `heldScore` doesn't (null counts as 0). `pairUp` already skips a day-off pair whose row has a Similar hold, so it costs no embedding. Then the existing one-to-one Adopt/flag loops run unchanged. After deploy, the doubled rows are deleted and re-imported, so each card row comes back as a "Similar" review that "Use bank's" answers.
 
 ## Phase 1: Contest rule
 ### Changes
 - `src/domain/transactions/reconcile-synced.ts`
   - `MatchCandidate` (`:47-59`): add `heldScore: number | null`. Doc: best merged score of its pending reviews; null when none or every one is pre-adr029.
   - `canFlag` (`:131-138`): a household row passes whether held or not. The retired-account branch is unchanged. Rewrite the rule comment above `canAdopt` (`:122-125`) to say a held row is flagged again by a same-day row, or by a closer-worded row a day or more off.
-  - `planReconcile` (`:243-253`): right after scoring, keep a held pair only when `dayGap === 0 || (merged >= SIMILAR_SCORE && merged > (heldScore ?? 0))`. Import `SIMILAR_SCORE` from `./description-score`. Update the JSDoc (`:236-242`) to match.
+  - `planReconcile` (`:243-253`): right after scoring, keep a held pair only when `dayGap === 0 || merged >= SIMILAR_SCORE`; `pairUp` drops a day-off pair when `(heldScore ?? 0) >= SIMILAR_SCORE`. Import `SIMILAR_SCORE` from `./description-score`. Update the JSDoc (`:236-242`) to match.
 - `src/server/transactions/transactions.repository.ts:355-374` — `held` subquery adds `max(possibleDuplicates.descriptionScore).as("heldScore")`; select `heldScore: held.heldScore`.
 - `src/server/transactions/transactions.repository.test.ts:540-576` — harness row gains a score column. Expect `heldScore` on the result, and update the inline SQL snapshot.
 - `src/domain/transactions/reconcile-synced.test.ts` — TDD, one test → one change (`tdd` skill):
   - `mine()` fixture (`:44-62`) gains `heldScore: null`.
   - Replace `:419` with: a held row (`heldScore: 0.04`) a day off from a same-words bank row → flagged, not added.
   - New: the same held row against a day-off bank row scoring below `SIMILAR_SCORE` → added.
-  - New: a held row with `heldScore` at or above the new pair's score, a day off → added.
+  - New: a held row whose `heldScore` is at or above `SIMILAR_SCORE`, a day off from a same-words bank row → added.
   - New: the real case as two plans in sequence (transfer step, then card step, with the candidate held after the first), and in reverse order → both end with the card row flagged on the household row.
   - Replace `matchPairs` test `:510-523`: a held household row now pairs at any day gap within 7. Update its comment (an embedding per pair is the cost).
 - `src/server/transactions/transaction-reconcile.service.test.ts:100-108` — `mine()` fixture gains `heldScore: null`.
@@ -74,6 +74,7 @@ No code. Data steps, first on a branch, then prod.
   - Expect 7 new reviews in "Similar" (AD MURRUMBA, IREMIA RECOVERY, SQ \*EARTH MOSS TWINE, PAYPAL \*BOOKINGCOMA, ATO Payment, 99 Bikes, CRED VOUCHER PAYPAL \*AIRBNBPAYME), each on the same household row as its wrong review.
   - "Use bank's" on each → the household row takes the bank id. Its transfer review (1, 2, 8, 9, 10, 11, 15) is released into a Transaction.
 - **Prod.** After deploy, the Member does the same delete, re-import and "Use bank's" ×7 on `main`. Confirm with the Member before any prod write.
+  - Before the delete, read the 7 rows. A delete drops their Expense, Category and notes, and unlinks a Receipt (`receipt.transactionId` is `on delete set null`, `src/server/receipts/receipts.schema.ts:47-49`). Copy any of those onto the household row first.
 
 ### Success
 - [x] Branch: 7 "Similar" reviews appear after re-import, and the Westpac "WITHDRAWAL MOBILE … TFR Altitude Ve" rows are not re-flagged
