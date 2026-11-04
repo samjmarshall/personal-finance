@@ -4,6 +4,7 @@ import {
 	ADOPT_MEANING_SCORE,
 	ADOPT_WORD_SCORE,
 	type DescriptionScore,
+	SIMILAR_SCORE,
 	scoreDescriptions,
 	type WordWeights,
 } from "./description-score";
@@ -44,7 +45,7 @@ export interface ReconcileReview {
 	transactionId: number;
 }
 
-/** A row a bank row may pair with. `heldBy`: the pending review on it, if any. */
+/** A row a bank row may pair with. `heldBy`: its oldest pending review, if any. */
 export interface MatchCandidate
 	extends Pick<
 		Transaction,
@@ -56,6 +57,8 @@ export interface MatchCandidate
 		| "externalAccountId"
 	> {
 	heldBy: number | null;
+	/** Top merged score of its pending reviews; null if none, or none saved a score. */
+	heldScore: number | null;
 }
 
 export interface ReconcileInput {
@@ -119,23 +122,22 @@ interface ScoredPair extends MatchPair {
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-// A household row can be adopted or flagged; a held one only adopted, or
-// flagged again by a same-day copy (it may be the row's own, so a Member is
-// asked); a retired account's bank row only flagged. A listed account's bank
-// row is never a candidate.
+// A household row can be adopted or flagged; a retired account's bank row only
+// flagged. A listed account's bank row is never a candidate.
 const canAdopt = (c: MatchCandidate) => c.externalId === null;
 const isRetired = (c: MatchCandidate, live: ReadonlySet<string>) =>
 	c.externalId !== null &&
 	c.externalAccountId !== null &&
 	!live.has(c.externalAccountId);
-const canFlag = (
-	c: MatchCandidate,
-	live: ReadonlySet<string>,
-	dayGap: number,
-) =>
-	canAdopt(c)
-		? c.heldBy === null || dayGap === 0
-		: c.heldBy === null && isRetired(c, live);
+const canFlag = (c: MatchCandidate, live: ReadonlySet<string>) =>
+	canAdopt(c) || (c.heldBy === null && isRetired(c, live));
+// A row already held by a close copy: a second a day or more off is likely another buy.
+const hasSimilarHold = (c: MatchCandidate) =>
+	(c.heldScore ?? 0) >= SIMILAR_SCORE;
+// Accounts sync in any order, so a held row's real copy may come later: same
+// day, or a Similar one.
+const clearsHold = ({ candidate, dayGap, score }: ScoredPair) =>
+	candidate.heldBy === null || dayGap === 0 || score.merged >= SIMILAR_SCORE;
 
 const clearsAdoptBars = ({ word, meaning }: DescriptionScore) =>
 	word >= ADOPT_WORD_SCORE &&
@@ -216,7 +218,9 @@ function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
 
 			if (dayGap > MATCH_DAYS) continue;
 			// Every Adopt can also flag, so this drops only pairs that could do neither.
-			if (!canFlag(candidate, live, dayGap)) continue;
+			if (!canFlag(candidate, live)) continue;
+			// Dropped before scoring: each pair costs an embedding.
+			if (dayGap > 0 && hasSimilarHold(candidate)) continue;
 
 			pairs.push({ bank, candidate, dayGap });
 		}
@@ -234,23 +238,25 @@ export function matchPairs(input: MatchInput): MatchPair[] {
 }
 
 /**
- * Decides, per bank row: refresh a known one, refresh or skip its review, adopt
- * a same-day household row whose description clears both Adopt bars, flag a
- * close one (same cent, within 7 days), or add it. Pairs one-to-one, Adopts
- * first; within each, highest merged score, then nearest day, in an order fixed
- * by the data alone, so a retry gives the same plan.
+ * Per bank row: refresh a known one, refresh or skip its review, adopt a
+ * same-day household row clearing both Adopt bars, flag a close one (same cent,
+ * within 7 days; a held row a day off only by a Similar pair, and only if no
+ * Similar review holds it), else add. One-to-one, Adopts first, then highest
+ * merged score, then nearest day, so a retry plans the same.
  */
 export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	const { result, unmatched } = splitIncoming(input);
-	const pairs: ScoredPair[] = pairUp(unmatched, input).map((pair) => ({
-		...pair,
-		score: scoreDescriptions(
-			pair.bank.description,
-			pair.candidate.description,
-			input.weights,
-			input.vectors,
-		),
-	}));
+	const pairs: ScoredPair[] = pairUp(unmatched, input)
+		.map((pair) => ({
+			...pair,
+			score: scoreDescriptions(
+				pair.bank.description,
+				pair.candidate.description,
+				input.weights,
+				input.vectors,
+			),
+		}))
+		.filter(clearsHold);
 
 	const usedBanks = new Set<SyncedTransaction>();
 	const usedCandidates = new Set<MatchCandidate>();

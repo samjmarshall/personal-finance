@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PossibleDuplicateStatus, Provenance } from "~/lib/constants";
 import {
 	cleanDescription,
+	SIMILAR_SCORE,
 	scoreDescriptions,
 	wordWeights,
 } from "./description-score";
@@ -58,6 +59,7 @@ function mine(
 		externalId: null,
 		externalAccountId: null,
 		heldBy: null,
+		heldScore: null,
 		...extra,
 	};
 }
@@ -338,9 +340,13 @@ describe("planReconcile", () => {
 			expect(result).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
 		});
 
-		it("flags a held row's same-day pair that falls short", () => {
+		it.each([
+			["an unscored", null],
+			["a Similar", SIMILAR_SCORE],
+		])("flags %s held row's same-day pair that falls short", (_, heldScore) => {
 			const held = mine(1, "2026-11-10", 5, {
 				heldBy: 90,
+				heldScore,
 				description: "Groceries",
 			});
 			expect(plan({ incoming: [row], candidates: [held] })).toEqual({
@@ -416,14 +422,98 @@ describe("planReconcile", () => {
 		).toEqual({ ...EMPTY, adopt: [{ transactionId: 1, row, heldBy: 90 }] });
 	});
 
-	it("never flags a held row a second time", () => {
+	// An unscored hold predates adr029 scores; it counts as not Similar.
+	it.each([
+		["a weak", 0.04],
+		["an unscored", null],
+		["a just-short-of-Similar", SIMILAR_SCORE - 0.01],
+	])("flags a closer-worded bank row a day off %s held row", (_, heldScore) => {
 		const row = bank("t1", "2026-11-11", 5);
 		expect(
 			plan({
 				incoming: [row],
-				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90 })],
+				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90, heldScore })],
+			}),
+		).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
+	});
+
+	it("adds a bank row a day off a held row when it isn't Similar", () => {
+		const row = bank("t1", "2026-11-11", 5);
+		const held = mine(1, "2026-11-10", 5, {
+			heldBy: 90,
+			heldScore: 0.04,
+			description: "Groceries",
+		});
+		expect(
+			plan({ incoming: [row], candidates: [held], vectors: null }),
+		).toEqual({ ...EMPTY, add: [row] });
+	});
+
+	// Repeat same-price purchases: a Similar hold already has its copy.
+	it("adds a closer bank row a day off a held row whose review is Similar", () => {
+		const row = bank("t1", "2026-11-11", 5);
+		expect(
+			plan({
+				incoming: [row],
+				candidates: [
+					mine(1, "2026-11-10", 5, { heldBy: 90, heldScore: SIMILAR_SCORE }),
+				],
 			}),
 		).toEqual({ ...EMPTY, add: [row] });
+	});
+
+	// History import: a Member's row, its own-account transfer the same day, and
+	// its card copy a day earlier, each from an account that syncs on its own.
+	describe("whichever account syncs first", () => {
+		const yours = mine(1, "2026-01-19", 4545, {
+			description: "AD MURRUMBA DOWNS PTY MURRUMBA DO AUS",
+		});
+		const transfer = {
+			...bank("t_transfer", "2026-01-19", 4545, "acct_offset"),
+			description: "Transfer To Samuel Marshall, CommBank App Dentist",
+		};
+		const card = {
+			...bank("t_card", "2026-01-18", 4545, "acct_card"),
+			description: "AD MURRUMBA DOWNS PTY MURRUMBA DO AUS",
+		};
+		const step = (row: SyncedTransaction, candidate: MatchCandidate) =>
+			plan({
+				incoming: [row],
+				candidates: [candidate],
+				liveAccountIds: ["acct_offset", "acct_card"],
+				weights: wordWeights([
+					yours.description,
+					transfer.description,
+					card.description,
+				]),
+				vectors: new Map([
+					[cleanDescription(yours.description), [1, 0]],
+					[cleanDescription(transfer.description), [0, 1]],
+				]),
+			});
+		const heldAfter = (first: ReturnType<typeof plan>) => ({
+			...yours,
+			heldBy: 90,
+			heldScore: first.flag[0]?.descriptionScore ?? null,
+		});
+
+		it.each([
+			["the transfer", transfer, card],
+			["the card", card, transfer],
+		])("flags both copies on your row when %s comes first", (_, a, b) => {
+			const first = step(a, yours);
+			const second = step(b, heldAfter(first));
+			const flags = [...first.flag, ...second.flag];
+
+			expect([...first.add, ...second.add]).toEqual([]);
+			expect(flags).toHaveLength(2);
+			expect(flags).toEqual(
+				expect.arrayContaining([newFlag(1, transfer), newFlag(1, card)]),
+			);
+			expect(
+				flags.find((f) => f.row === card)?.descriptionScore,
+			).toBeGreaterThanOrEqual(SIMILAR_SCORE);
+		});
 	});
 
 	it("flags, never adopts, an exact row from an account RedBark dropped", () => {
@@ -435,6 +525,19 @@ describe("planReconcile", () => {
 		expect(plan({ incoming: [row], candidates: [retired] })).toEqual({
 			...EMPTY,
 			flag: [newFlag(1, row)],
+		});
+	});
+
+	it("adds an exact row when the dropped account's row is already held", () => {
+		const row = bank("t_new", "2026-11-10", 5);
+		const retired = mine(1, "2026-11-10", 5, {
+			externalId: "t_old",
+			externalAccountId: "acct_gone",
+			heldBy: 90,
+		});
+		expect(plan({ incoming: [row], candidates: [retired] })).toEqual({
+			...EMPTY,
+			add: [row],
 		});
 	});
 
@@ -507,9 +610,31 @@ describe("matchPairs", () => {
 		).toEqual([{ bank: fresh, candidate, dayGap: 2 }]);
 	});
 
-	// Each pair costs an embedding, and a held row a day off can be neither adopted nor flagged.
-	it("skips a held row unless the bank row is on its day", () => {
+	// Each pair costs an embedding, but only the score tells a held row's copy from a new buy.
+	it("pairs a held row at any day within 7", () => {
 		const held = mine(1, "2026-11-10", 5, { heldBy: 90 });
+		const sameDay = bank("t1", "2026-11-10", 5);
+		const dayOff = bank("t2", "2026-11-11", 5);
+		expect(
+			matchPairs({
+				incoming: [sameDay, dayOff, bank("t3", "2026-11-18", 5)],
+				knownIds: [],
+				reviews: [],
+				candidates: [held],
+				liveAccountIds: ["acct_live"],
+				timeZone: ZONE,
+			}),
+		).toEqual([
+			{ bank: sameDay, candidate: held, dayGap: 0 },
+			{ bank: dayOff, candidate: held, dayGap: 1 },
+		]);
+	});
+
+	it("pairs a row held by a Similar review only on its day", () => {
+		const held = mine(1, "2026-11-10", 5, {
+			heldBy: 90,
+			heldScore: SIMILAR_SCORE,
+		});
 		const sameDay = bank("t1", "2026-11-10", 5);
 		expect(
 			matchPairs({

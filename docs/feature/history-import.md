@@ -147,7 +147,7 @@ When a bank row could pair with more than one of yours, the pair whose descripti
 
 **Review answers**:
 - **Keep mine**: drops the bank's copy.
-- **Use bank's**: your row takes the bank's date and amount, and keeps your description, category, expense and receipt. Any other review on your row becomes its own row: your row is now that bank copy, so the other is a second purchase. (A row gets a second review when its same-day bank copy lands after a close one and falls short of an Adopt.)
+- **Use bank's**: your row takes the bank's date and amount, and keeps your description, category, expense and receipt. Any other review on your row becomes its own row: your row is now that bank copy, so the other is a second purchase. (A row gets a second review when, after a close one, its same-day bank copy lands short of an Adopt, or a Similar copy a day or more off lands while none of its reviews is Similar. Accounts sync in any order, so the real copy can come second.)
 - **Both are real**: adds the bank's row too.
 
 Reviews sit in two piles:
