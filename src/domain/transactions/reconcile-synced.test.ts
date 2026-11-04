@@ -340,9 +340,13 @@ describe("planReconcile", () => {
 			expect(result).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
 		});
 
-		it("flags a held row's same-day pair that falls short", () => {
+		it.each([
+			["an unscored", null],
+			["a Similar", SIMILAR_SCORE],
+		])("flags %s held row's same-day pair that falls short", (_, heldScore) => {
 			const held = mine(1, "2026-11-10", 5, {
 				heldBy: 90,
+				heldScore,
 				description: "Groceries",
 			});
 			expect(plan({ incoming: [row], candidates: [held] })).toEqual({
@@ -524,6 +528,19 @@ describe("planReconcile", () => {
 		});
 	});
 
+	it("adds an exact row when the dropped account's row is already held", () => {
+		const row = bank("t_new", "2026-11-10", 5);
+		const retired = mine(1, "2026-11-10", 5, {
+			externalId: "t_old",
+			externalAccountId: "acct_gone",
+			heldBy: 90,
+		});
+		expect(plan({ incoming: [row], candidates: [retired] })).toEqual({
+			...EMPTY,
+			add: [row],
+		});
+	});
+
 	it("never matches a bank row from a listed account", () => {
 		const row = bank("t2", "2026-11-10", 5);
 		const listed = mine(1, "2026-11-10", 5, {
@@ -593,7 +610,7 @@ describe("matchPairs", () => {
 		).toEqual([{ bank: fresh, candidate, dayGap: 2 }]);
 	});
 
-	// Each pair costs an embedding, but a held row's contest needs the score.
+	// Each pair costs an embedding, but only the score tells a held row's copy from a new buy.
 	it("pairs a held row at any day within 7", () => {
 		const held = mine(1, "2026-11-10", 5, { heldBy: 90 });
 		const sameDay = bank("t1", "2026-11-10", 5);

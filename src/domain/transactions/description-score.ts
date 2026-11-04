@@ -22,9 +22,8 @@ export const EMBEDDING_DIMENSIONS = 1024;
 export const ADOPT_WORD_SCORE = 0.55;
 export const ADOPT_MEANING_SCORE = 0.7;
 /**
- * Merged score at or above this piles a review under "Similar", and lets a held
- * row's copy a day or more off be flagged, not added: raise it and more real
- * copies count twice.
+ * At or above: a review piles under "Similar", and a held row's copy a day or
+ * more off is flagged, not added. Raise it and more real copies count twice.
  */
 export const SIMILAR_SCORE = 0.59;
 
