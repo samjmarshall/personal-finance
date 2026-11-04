@@ -64,6 +64,49 @@ A named grouping kept by the household, used to file Expenses, Transactions and 
 items.
 _Avoid_: expense category, type, bucket, tag
 
+**Group**:
+A named set of Categories kept by the household, such as Housing or Food.
+_Avoid_: parent category, section, category group
+
+### Filing
+
+**Unfiled**:
+A Transaction linked to no Expense and filed under no Category — a classification by absence,
+never a stored record. Not the same as Unplanned: an Unplanned row may be filed under a
+Category, and an Inflow can be Unfiled.
+_Avoid_: uncategorised, unassigned, to review
+
+**Bank category**:
+The bank feed's own category on a bank Transaction, mapped to at most one Category.
+_Avoid_: Redbark category, provider category
+
+**Bank code**:
+The Open Banking code beneath a Bank category, such as `FOOD_AND_DRINK`.
+_Avoid_: provider category, bank category (for the code)
+
+**Rule**:
+A standing instruction, kept by the Household and saved by a Member, to file Transactions that
+match given words, and optionally an amount and account, under one Expense or one Category.
+_Avoid_: filter, automation
+
+**Suggestion**:
+A proposed filing for an Unfiled Transaction, saved with its Clues and Strength, for a Member
+to accept or change.
+_Avoid_: prediction, recommendation, guess
+
+**Clue**:
+One independent reason behind a Suggestion: the Bank category, past matches, an Expense name,
+the Old group, or the AI.
+_Avoid_: signal, feature, vote
+
+**Strength**:
+How far a Suggestion's Clues agree: Strong, Weak, Split or None.
+_Avoid_: confidence, score
+
+**Auto-filed**:
+Filed by a Rule or an exact repeat, not by a Member; a Member can undo it.
+_Avoid_: auto-categorised, auto-assigned
+
 ### Attributes
 
 **Basis**:
@@ -93,16 +136,21 @@ _Avoid_: used, spent-to-date
 A one-time Expense's amount minus its Consumed; below zero means over.
 _Avoid_: left, balance
 
-**Group**:
-The household's own rough label on a Transaction, kept from the spreadsheet import to filter
-and sort the imported data; not a Category.
-_Avoid_: category (for this field)
+**Old group**:
+The household's own rough label on a Transaction, kept from the statement import; read-only,
+used once as a Clue, then removed. Not a Category or a Group.
+_Avoid_: group, category (for this field)
 
 **Provenance**:
 Which system a Transaction lives in — hand-entered, statement import, bank sync or PayPal.
 One purchase can surface in several systems (a PayPal purchase also lands as a bank
 transaction), so consolidation keys on Provenance.
 _Avoid_: source, origin
+
+**Bank import**:
+A Member-run fetch of older history from the bank feed, years back; its rows have bank sync
+Provenance.
+_Avoid_: history import, backfill, import (alone)
 
 **Adopt**:
 The bank sync takes a household Transaction as its own when a bank row has the same day, the
@@ -115,6 +163,14 @@ A bank row with the same amount to the cent as a household Transaction within 7 
 an Adopt, held until a Member keeps theirs, uses the bank's, or says both are real. (Same-day
 pairs: adr029.)
 _Avoid_: conflict, dupe
+
+**Answer**:
+A Member's pick on one Possible duplicate: Keep mine, Use bank's or Both are real.
+_Avoid_: choice, resolution, decision
+
+**Apply**:
+One send of a Member's Answers, saved in the background and counted as it goes.
+_Avoid_: job, batch, task, run
 
 **Channel**:
 How a Receipt arrived — upload or email. A Receipt lives only here, so it has a Channel,
@@ -129,10 +185,21 @@ _Avoid_: provenance (for a balance)
 
 ## Relationships
 
-- A **Household** owns every **Expense**, **Income**, **Transaction**, **Category** and
-  **Receipt**
+- A **Household** owns every **Expense**, **Income**, **Transaction**, **Category**, **Group**,
+  **Rule** and **Receipt**
 - An **Expense** is filed under exactly one **Category**
-- A **Transaction** is filed under at most one **Category** and may carry one **Group**
+- A **Transaction** is filed under at most one **Category** and may carry one **Old group**
+- A **Category** sits in exactly one **Group**; a Group cannot be deleted while it holds a
+  Category
+- A **Bank category** maps to at most one **Category**, and many may map to the same one;
+  deleting a Category unmaps them
+- A bank **Transaction** carries at most one **Bank category** and one **Bank code**
+- A **Rule** files under exactly one **Expense** or one **Category**
+- A **Rule** is saved by at most one **Member**; removing that Member clears the note and
+  keeps the Rule
+- An **Unfiled** **Transaction** has at most one **Suggestion**; filing it removes the Suggestion
+- **Rules** and **Suggestions** act only on **Unfiled** Transactions; they never change a
+  Member's filing
 - A **Transaction** or **Receipt** line item linked to an **Expense** is filed under that
   Expense's **Category** and cannot be filed separately; only one with no Expense (for a
   Transaction, an **Unplanned** one) is filed under a Category directly
@@ -153,6 +220,9 @@ _Avoid_: provenance (for a balance)
   Member is removed, because a Receipt is kept as tax evidence.
 - A **Transaction** is adopted by at most one bank row; a **Possible duplicate** points at
   exactly one **Transaction**
+- A **Possible duplicate** has at most one **Answer**; an Answer that didn't apply stays on
+  the row until the Member applies again
+- An **Apply** carries one or more **Answers**; at most one Apply runs at a time
 
 ## Example dialogue
 
@@ -185,6 +255,17 @@ _Avoid_: provenance (for a balance)
 > **Domain expert:** "No. Once it's linked, it sits wherever 'Weekly shop' sits. I only pick a
 > **Category** myself for **Unplanned** purchases. If I move 'Weekly shop' to another
 > Category, everything linked to it moves too."
+>
+> **Dev:** "The bank already says this Woolworths row is Groceries. Is that its **Category**?"
+>
+> **Domain expert:** "No, that's the **Bank category**. It's one **Clue**. Ours lives in our
+> list, and the bank gets about one in five wrong."
+>
+> **Dev:** "So the row gets a **Suggestion**. If the bank and the past matches both say
+> Groceries, it's **Strong**?"
+>
+> **Domain expert:** "Yes, but I still tick it. Only a **Rule** I saved, or the same purchase
+> I've filed the same way three times, gets **Auto-filed**."
 
 ## Flagged ambiguities
 
@@ -201,13 +282,21 @@ _Avoid_: provenance (for a balance)
   only Expenses were filed. Resolved: say **Category**; "expense category" suggests a second,
   Expense-only list that does not exist.
 - **"category" on a Transaction** named two fields: the linked **Category** and a free text
-  label from the spreadsheet import, both shown as "Category" at some point. Resolved: the
-  link is the filing; the text label is the **Group**, not a Category. Renaming a Category
-  leaves every Group alone.
-- **"Uncategorised"** is the placeholder **Group** on a Transaction with no Group of its own.
-  Resolved: it means "no Group" and says nothing about the **Category**; a Transaction showing
-  Group "Uncategorised" may still be filed under a Category. Do not name a Category
-  "Uncategorised".
+  label from the statement import, both shown as "Category" at some point. Resolved: the
+  link is the filing; the text label is the **Old group**, not a Category. Renaming a Category
+  leaves every Old group alone.
+- **"Uncategorised"** is the placeholder **Old group** on a Transaction with no label of its
+  own. Resolved: it means "no Old group" and says nothing about the **Category**; a
+  Transaction showing "Uncategorised" may still be filed under a Category. Do not name a
+  Category "Uncategorised".
+- **"group"** meant the spreadsheet label until Categories gained parents. Resolved: a
+  **Group** is the parent of Categories (Housing, Food); the spreadsheet label is the **Old
+  group**, read-only until it is removed.
+- **"bank category"** — the bank feed's own screens use it for Open Banking codes. Resolved:
+  a **Bank category** is the feed's category on a row; the code beneath it is a **Bank
+  code**.
+- **"confidence"** of a guess. Resolved: **Strength** counts agreeing **Clues**; the AI's own
+  confidence is never used.
 - **"amount"** on an **Expense** or **Income** is three figures, not one. Resolved: they are
   derived from a single entered figure and its **Basis**, so they never disagree; there is no
   independent "fortnightly amount" to set.
@@ -235,3 +324,7 @@ _Avoid_: provenance (for a balance)
   better-auth's table is `user`) and both mean **Member**. Resolved: activity, errors and AI
   spend are attributed to a **Member**, and to the **Household** once scoping exists;
   dashboards, alerts and cost reports say Member and Household, never "user".
+- **"import"** named three things: the spreadsheet import (Old group), the statement import
+  (Provenance `import`) and the "Import from bank" page. Resolved: the spreadsheet import is the
+  statement import, one thing; the page is a **Bank import**, and its rows have bank sync
+  Provenance, never `import`.
