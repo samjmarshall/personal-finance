@@ -1,7 +1,7 @@
 ---
 date: 2026-11-04
 adrs: []
-status: Validated - Phase 2 of 3
+status: Done
 ---
 # Let a better bank row contest a held household row Implementation Plan
 
@@ -79,8 +79,8 @@ No code. Data steps, first on a branch, then prod.
 ### Success
 - [x] Branch: 7 "Similar" reviews appear after re-import, and the Westpac "WITHDRAWAL MOBILE … TFR Altitude Ve" rows are not re-flagged
 - [x] Branch: after "Use bank's" ×7, no pending review has a merged score < 0.59 on rows 403, 406, 562, 570, 576, 580, 588
-- [ ] Prod: the same two checks hold, and the read-only query shows one `AD MURRUMBA DOWNS` $4,545 Transaction, not two
-- [ ] Prod: the re-import adds 0 rows (no tombstone, so any bank row deleted in the window comes back; branch added 0)
+- [x] Prod: the same two checks hold, and the read-only query shows one `AD MURRUMBA DOWNS` $4,545 Transaction, not two
+- [x] Prod: the re-import adds 0 rows (no tombstone, so any bank row deleted in the window comes back; branch added 0)
 
 ## References
 - ADRs: `docs/adr/adr029-pair-bank-rows-by-word-and-meaning-scores.md` (Accepted) — rule refined by Phase 1, recorded in Phase 2; `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md:52` (In Progress) — Possible duplicate facet
