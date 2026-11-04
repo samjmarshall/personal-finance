@@ -540,7 +540,7 @@ describe("findReviews", () => {
 describe("findMatchCandidates", () => {
 	it("selects household and retired-account rows no kept review holds", async () => {
 		const { repository, queries } = harness(() => [
-			[1, "2026-10-14T13:00:00.000Z", 42.5, "Coffee", null, null, 9],
+			[1, "2026-10-14T13:00:00.000Z", 42.5, "Coffee", null, null, 9, 0.04],
 		]);
 
 		const rows = await repository.findMatchCandidates({
@@ -558,6 +558,7 @@ describe("findMatchCandidates", () => {
 				externalId: null,
 				externalAccountId: null,
 				heldBy: 9,
+				heldScore: 0.04,
 			},
 		]);
 		expect(queries).toMatchInlineSnapshot(`
@@ -572,7 +573,7 @@ describe("findMatchCandidates", () => {
 			      "acct_2",
 			      "kept",
 			    ],
-			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."externalId", "transaction"."externalAccountId", "heldBy" from "transaction" left join (select "transactionId", min("id") as "heldBy" from "possible_duplicate" where "possible_duplicate"."status" = $1 group by "possible_duplicate"."transactionId") "held" on "held"."transactionId" = "transaction"."id" where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
+			    "sql": "select "transaction"."id", "transaction"."date", "transaction"."amount", "transaction"."description", "transaction"."externalId", "transaction"."externalAccountId", "heldBy", "heldScore" from "transaction" left join (select "transactionId", min("id") as "heldBy", max("descriptionScore") as "heldScore" from "possible_duplicate" where "possible_duplicate"."status" = $1 group by "possible_duplicate"."transactionId") "held" on "held"."transactionId" = "transaction"."id" where ("transaction"."date" >= $2 and "transaction"."date" < $3 and ("transaction"."externalId" is null or ("transaction"."externalAccountId" is not null and "transaction"."externalAccountId" not in ($4, $5))) and not exists (select "id" from "possible_duplicate" "kept" where ("kept"."transactionId" = "transaction"."id" and "kept"."status" = $6)))",
 			  },
 			]
 		`);

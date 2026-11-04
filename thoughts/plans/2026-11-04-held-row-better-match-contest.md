@@ -1,7 +1,7 @@
 ---
 date: 2026-11-04
 adrs: []
-status: Ready to implement
+status: In Progress - Phase 3 of 3
 ---
 # Let a better bank row contest a held household row Implementation Plan
 
@@ -52,9 +52,9 @@ Give each `MatchCandidate` the best merged score of its pending reviews (`heldSc
 - `src/server/transactions/transaction-reconcile.service.test.ts:100-108` — `mine()` fixture gains `heldScore: null`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] Replaying the AD MURRUMBA case in either account order gives a flag on the household row with merged score ≥ 0.59, and no added card row
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] Replaying the AD MURRUMBA case in either account order gives a flag on the household row with merged score ≥ 0.59, and no added card row
 
 ## Phase 2: Record the rule
 ### Changes
@@ -62,8 +62,8 @@ Give each `MatchCandidate` the best merged score of its pending reviews (`heldSc
 - `CONTEXT.md:156-160` (Possible duplicate) — check the wording still holds. It says "within 7 days, but not an Adopt", so it likely needs no edit. `CONTEXT.md` has uncommitted Member edits: touch only that entry, if at all.
 
 ### Success
-- [ ] `make check` passes
-- [ ] adr029 names the contest rule; `CONTEXT.md` has no stale line
+- [x] `make check` passes
+- [x] adr029 names the contest rule; `CONTEXT.md` has no stale line
 
 ## Phase 3: Repair the doubled Spends
 ### Changes
@@ -76,8 +76,8 @@ No code. Data steps, first on a branch, then prod.
 - **Prod.** After deploy, the Member does the same delete, re-import and "Use bank's" ×7 on `main`. Confirm with the Member before any prod write.
 
 ### Success
-- [ ] Branch: 7 "Similar" reviews appear after re-import, and the Westpac "WITHDRAWAL MOBILE … TFR Altitude Ve" rows are not re-flagged
-- [ ] Branch: after "Use bank's" ×7, no pending review has a merged score < 0.59 on rows 403, 406, 562, 570, 576, 580, 588
+- [x] Branch: 7 "Similar" reviews appear after re-import, and the Westpac "WITHDRAWAL MOBILE … TFR Altitude Ve" rows are not re-flagged
+- [x] Branch: after "Use bank's" ×7, no pending review has a merged score < 0.59 on rows 403, 406, 562, 570, 576, 580, 588
 - [ ] Prod: the same two checks hold, and the read-only query shows one `AD MURRUMBA DOWNS` $4,545 Transaction, not two
 
 ## References

@@ -105,6 +105,7 @@ describe("reconcileSynced", () => {
 		externalId: null,
 		externalAccountId: null,
 		heldBy: null,
+		heldScore: null,
 	});
 
 	function reconciling(

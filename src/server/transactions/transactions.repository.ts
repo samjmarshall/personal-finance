@@ -11,6 +11,7 @@ import {
 	isNull,
 	lt,
 	lte,
+	max,
 	min,
 	notExists,
 	notInArray,
@@ -351,11 +352,12 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		liveAccountIds,
 	}: DateWindow & { liveAccountIds: string[] }): Promise<MatchCandidate[]> {
 		const kept = alias(possibleDuplicates, "kept");
-		// A row can hold two reviews (a same-day copy joins a close one); one row each here.
+		// A row can hold several reviews (a same-day or closer-worded copy joins one); one row each here.
 		const held = this.db
 			.select({
 				transactionId: possibleDuplicates.transactionId,
 				id: min(possibleDuplicates.id).as("heldBy"),
+				score: max(possibleDuplicates.descriptionScore).as("heldScore"),
 			})
 			.from(possibleDuplicates)
 			.where(isPending)
@@ -371,6 +373,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				externalId: transactions.externalId,
 				externalAccountId: transactions.externalAccountId,
 				heldBy: held.id,
+				heldScore: held.score,
 			})
 			.from(transactions)
 			.leftJoin(held, eq(held.transactionId, transactions.id))

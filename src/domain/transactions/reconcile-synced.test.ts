@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PossibleDuplicateStatus, Provenance } from "~/lib/constants";
 import {
 	cleanDescription,
+	SIMILAR_SCORE,
 	scoreDescriptions,
 	wordWeights,
 } from "./description-score";
@@ -58,6 +59,7 @@ function mine(
 		externalId: null,
 		externalAccountId: null,
 		heldBy: null,
+		heldScore: null,
 		...extra,
 	};
 }
@@ -416,14 +418,87 @@ describe("planReconcile", () => {
 		).toEqual({ ...EMPTY, adopt: [{ transactionId: 1, row, heldBy: 90 }] });
 	});
 
-	it("never flags a held row a second time", () => {
+	it("flags a held row again for a closer-worded bank row a day off", () => {
 		const row = bank("t1", "2026-11-11", 5);
 		expect(
 			plan({
 				incoming: [row],
-				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90 })],
+				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90, heldScore: 0.04 })],
+			}),
+		).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
+	});
+
+	it("adds a bank row a day off a held row when it isn't Similar", () => {
+		const row = bank("t1", "2026-11-11", 5);
+		const held = mine(1, "2026-11-10", 5, {
+			heldBy: 90,
+			heldScore: 0.04,
+			description: "Groceries",
+		});
+		expect(
+			plan({ incoming: [row], candidates: [held], vectors: null }),
+		).toEqual({ ...EMPTY, add: [row] });
+	});
+
+	it("adds a bank row a day off a held row whose review scores as high", () => {
+		const row = bank("t1", "2026-11-11", 5);
+		expect(
+			plan({
+				incoming: [row],
+				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90, heldScore: 1 })],
 			}),
 		).toEqual({ ...EMPTY, add: [row] });
+	});
+
+	// History import: a Member's row, its own-account transfer the same day, and
+	// its card copy a day earlier, each from an account that syncs on its own.
+	describe("whichever account syncs first", () => {
+		const yours = mine(1, "2026-01-19", 4545, {
+			description: "AD MURRUMBA DOWNS PTY MURRUMBA DO AUS",
+		});
+		const transfer = {
+			...bank("t_transfer", "2026-01-19", 4545, "acct_offset"),
+			description: "Transfer To Samuel Marshall, CommBank App Dentist",
+		};
+		const card = {
+			...bank("t_card", "2026-01-18", 4545, "acct_card"),
+			description: "AD MURRUMBA DOWNS PTY MURRUMBA DO AUS",
+		};
+		const step = (row: SyncedTransaction, candidate: MatchCandidate) =>
+			plan({
+				incoming: [row],
+				candidates: [candidate],
+				liveAccountIds: ["acct_offset", "acct_card"],
+				weights: wordWeights([
+					yours.description,
+					transfer.description,
+					card.description,
+				]),
+				vectors: new Map([
+					[cleanDescription(yours.description), [1, 0]],
+					[cleanDescription(transfer.description), [0, 1]],
+				]),
+			});
+		const heldAfter = (first: ReturnType<typeof plan>) => ({
+			...yours,
+			heldBy: 90,
+			heldScore: first.flag[0]?.descriptionScore ?? null,
+		});
+
+		it.each([
+			["the transfer", transfer, card],
+			["the card", card, transfer],
+		])("flags the card copy on your row when %s comes first", (_, a, b) => {
+			const first = step(a, yours);
+			const second = step(b, heldAfter(first));
+			const cardFlag = [...first.flag, ...second.flag].find(
+				(f) => f.row === card,
+			);
+
+			expect([...first.add, ...second.add]).toEqual([]);
+			expect(cardFlag).toEqual(newFlag(1, card));
+			expect(cardFlag?.descriptionScore).toBeGreaterThanOrEqual(SIMILAR_SCORE);
+		});
 	});
 
 	it("flags, never adopts, an exact row from an account RedBark dropped", () => {
@@ -507,19 +582,23 @@ describe("matchPairs", () => {
 		).toEqual([{ bank: fresh, candidate, dayGap: 2 }]);
 	});
 
-	// Each pair costs an embedding, and a held row a day off can be neither adopted nor flagged.
-	it("skips a held row unless the bank row is on its day", () => {
+	// Each pair costs an embedding, but a held row's contest needs the score.
+	it("pairs a held row at any day within 7", () => {
 		const held = mine(1, "2026-11-10", 5, { heldBy: 90 });
 		const sameDay = bank("t1", "2026-11-10", 5);
+		const dayOff = bank("t2", "2026-11-11", 5);
 		expect(
 			matchPairs({
-				incoming: [sameDay, bank("t2", "2026-11-11", 5)],
+				incoming: [sameDay, dayOff, bank("t3", "2026-11-18", 5)],
 				knownIds: [],
 				reviews: [],
 				candidates: [held],
 				liveAccountIds: ["acct_live"],
 				timeZone: ZONE,
 			}),
-		).toEqual([{ bank: sameDay, candidate: held, dayGap: 0 }]);
+		).toEqual([
+			{ bank: sameDay, candidate: held, dayGap: 0 },
+			{ bank: dayOff, candidate: held, dayGap: 1 },
+		]);
 	});
 });
