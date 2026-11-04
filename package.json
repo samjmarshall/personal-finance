@@ -52,7 +52,7 @@
 		"@trpc/client": "11.22.1",
 		"@trpc/react-query": "11.22.1",
 		"@trpc/server": "11.22.1",
-		"@upstash/redis": "1.40.0",
+		"@upstash/redis": "1.41.0",
 		"@vercel/blob": "2.8.2",
 		"@vercel/oidc-aws-credentials-provider": "3.3.18",
 		"@vercel/otel": "2.1.4",
