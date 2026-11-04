@@ -73,13 +73,14 @@ No code. Data steps, first on a branch, then prod.
   - From `https://<branch>.personal-finance.localhost/transactions/import`, import 2026-01-01 → 2026-03-31.
   - Expect 7 new reviews in "Similar" (AD MURRUMBA, IREMIA RECOVERY, SQ \*EARTH MOSS TWINE, PAYPAL \*BOOKINGCOMA, ATO Payment, 99 Bikes, CRED VOUCHER PAYPAL \*AIRBNBPAYME), each on the same household row as its wrong review.
   - "Use bank's" on each → the household row takes the bank id. Its transfer review (1, 2, 8, 9, 10, 11, 15) is released into a Transaction.
-- **Prod.** After deploy, the Member does the same delete, re-import and "Use bank's" ×7 on `main`. Confirm with the Member before any prod write.
+- **Prod.** After deploy, the Member does the same delete, re-import and "Use bank's" ×7 in the deployed prod app, never local `main` (its `.env` is prod: no writes, AGENTS.md). Confirm with the Member before any prod write.
   - Before the delete, read the 7 rows. A delete drops their Expense, Category and notes, and unlinks a Receipt (`receipt.transactionId` is `on delete set null`, `src/server/receipts/receipts.schema.ts:47-49`). Copy any of those onto the household row first.
 
 ### Success
 - [x] Branch: 7 "Similar" reviews appear after re-import, and the Westpac "WITHDRAWAL MOBILE … TFR Altitude Ve" rows are not re-flagged
 - [x] Branch: after "Use bank's" ×7, no pending review has a merged score < 0.59 on rows 403, 406, 562, 570, 576, 580, 588
 - [ ] Prod: the same two checks hold, and the read-only query shows one `AD MURRUMBA DOWNS` $4,545 Transaction, not two
+- [ ] Prod: the re-import adds 0 rows (no tombstone, so any bank row deleted in the window comes back; branch added 0)
 
 ## References
 - ADRs: `docs/adr/adr029-pair-bank-rows-by-word-and-meaning-scores.md` (Accepted) — rule refined by Phase 1, recorded in Phase 2; `docs/adr/adr017-external-transaction-sync-via-cdr-redbark.md:52` (In Progress) — Possible duplicate facet
