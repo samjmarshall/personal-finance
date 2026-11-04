@@ -418,12 +418,17 @@ describe("planReconcile", () => {
 		).toEqual({ ...EMPTY, adopt: [{ transactionId: 1, row, heldBy: 90 }] });
 	});
 
-	it("flags a held row again for a closer-worded bank row a day off", () => {
+	// An unscored hold predates adr029 scores; it counts as not Similar.
+	it.each([
+		["a weak", 0.04],
+		["an unscored", null],
+		["a just-short-of-Similar", SIMILAR_SCORE - 0.01],
+	])("flags a closer-worded bank row a day off %s held row", (_, heldScore) => {
 		const row = bank("t1", "2026-11-11", 5);
 		expect(
 			plan({
 				incoming: [row],
-				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90, heldScore: 0.04 })],
+				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90, heldScore })],
 			}),
 		).toEqual({ ...EMPTY, flag: [newFlag(1, row)] });
 	});
@@ -491,16 +496,19 @@ describe("planReconcile", () => {
 		it.each([
 			["the transfer", transfer, card],
 			["the card", card, transfer],
-		])("flags the card copy on your row when %s comes first", (_, a, b) => {
+		])("flags both copies on your row when %s comes first", (_, a, b) => {
 			const first = step(a, yours);
 			const second = step(b, heldAfter(first));
-			const cardFlag = [...first.flag, ...second.flag].find(
-				(f) => f.row === card,
-			);
+			const flags = [...first.flag, ...second.flag];
 
 			expect([...first.add, ...second.add]).toEqual([]);
-			expect(cardFlag).toEqual(newFlag(1, card));
-			expect(cardFlag?.descriptionScore).toBeGreaterThanOrEqual(SIMILAR_SCORE);
+			expect(flags).toHaveLength(2);
+			expect(flags).toEqual(
+				expect.arrayContaining([newFlag(1, transfer), newFlag(1, card)]),
+			);
+			expect(
+				flags.find((f) => f.row === card)?.descriptionScore,
+			).toBeGreaterThanOrEqual(SIMILAR_SCORE);
 		});
 	});
 
@@ -603,5 +611,23 @@ describe("matchPairs", () => {
 			{ bank: sameDay, candidate: held, dayGap: 0 },
 			{ bank: dayOff, candidate: held, dayGap: 1 },
 		]);
+	});
+
+	it("pairs a row held by a Similar review only on its day", () => {
+		const held = mine(1, "2026-11-10", 5, {
+			heldBy: 90,
+			heldScore: SIMILAR_SCORE,
+		});
+		const sameDay = bank("t1", "2026-11-10", 5);
+		expect(
+			matchPairs({
+				incoming: [sameDay, bank("t2", "2026-11-11", 5)],
+				knownIds: [],
+				reviews: [],
+				candidates: [held],
+				liveAccountIds: ["acct_live"],
+				timeZone: ZONE,
+			}),
+		).toEqual([{ bank: sameDay, candidate: held, dayGap: 0 }]);
 	});
 });

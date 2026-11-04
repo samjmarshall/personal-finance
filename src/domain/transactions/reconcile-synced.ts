@@ -45,7 +45,7 @@ export interface ReconcileReview {
 	transactionId: number;
 }
 
-/** A row a bank row may pair with. `heldBy`: the pending review on it, if any. */
+/** A row a bank row may pair with. `heldBy`: its oldest pending review, if any. */
 export interface MatchCandidate
 	extends Pick<
 		Transaction,
@@ -131,13 +131,13 @@ const isRetired = (c: MatchCandidate, live: ReadonlySet<string>) =>
 	!live.has(c.externalAccountId);
 const canFlag = (c: MatchCandidate, live: ReadonlySet<string>) =>
 	canAdopt(c) || (c.heldBy === null && isRetired(c, live));
-// A held row is flagged again by a same-day copy (maybe its own, so ask), or a
-// Similar one while its hold isn't, since accounts sync in any order. A Similar
-// hold already has its copy: a second is likely another purchase.
+// A row already held by a close copy: a second a day or more off is likely another buy.
+const hasSimilarHold = (c: MatchCandidate) =>
+	(c.heldScore ?? 0) >= SIMILAR_SCORE;
+// Accounts sync in any order, so a held row's real copy may come later: same
+// day, or a Similar one.
 const clearsHold = ({ candidate, dayGap, score }: ScoredPair) =>
-	candidate.heldBy === null ||
-	dayGap === 0 ||
-	(score.merged >= SIMILAR_SCORE && (candidate.heldScore ?? 0) < SIMILAR_SCORE);
+	candidate.heldBy === null || dayGap === 0 || score.merged >= SIMILAR_SCORE;
 
 const clearsAdoptBars = ({ word, meaning }: DescriptionScore) =>
 	word >= ADOPT_WORD_SCORE &&
@@ -219,6 +219,8 @@ function pairUp(unmatched: SyncedTransaction[], input: MatchInput) {
 			if (dayGap > MATCH_DAYS) continue;
 			// Every Adopt can also flag, so this drops only pairs that could do neither.
 			if (!canFlag(candidate, live)) continue;
+			// Dropped before scoring: each pair costs an embedding.
+			if (dayGap > 0 && hasSimilarHold(candidate)) continue;
 
 			pairs.push({ bank, candidate, dayGap });
 		}
@@ -236,13 +238,11 @@ export function matchPairs(input: MatchInput): MatchPair[] {
 }
 
 /**
- * Decides, per bank row: refresh a known one, refresh or skip its review, adopt
- * a same-day household row whose description clears both Adopt bars, flag a
- * close one (same cent, within 7 days), or add it. A held row a day or more
- * off is flagged only by a "Similar" pair, and only while none of its pending
- * reviews is; else the bank row is added. Pairs one-to-one, Adopts first; within
- * each, highest merged score, then nearest day, in an order fixed by the data
- * alone, so a retry gives the same plan.
+ * Per bank row: refresh a known one, refresh or skip its review, adopt a
+ * same-day household row clearing both Adopt bars, flag a close one (same cent,
+ * within 7 days; a held row a day off only by a Similar pair, and only if no
+ * Similar review holds it), else add. One-to-one, Adopts first, then highest
+ * merged score, then nearest day, so a retry plans the same.
  */
 export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	const { result, unmatched } = splitIncoming(input);

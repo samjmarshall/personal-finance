@@ -21,7 +21,11 @@ export const EMBEDDING_DIMENSIONS = 1024;
 // each sits 0.05 above the highest two-purchase pair, or at its floor.
 export const ADOPT_WORD_SCORE = 0.55;
 export const ADOPT_MEANING_SCORE = 0.7;
-/** Merged score at or above this piles a review under "Similar". */
+/**
+ * Merged score at or above this piles a review under "Similar", and lets a held
+ * row's copy a day or more off be flagged, not added: raise it and more real
+ * copies count twice.
+ */
 export const SIMILAR_SCORE = 0.59;
 
 export interface WordWeights {
