@@ -57,7 +57,7 @@ export interface MatchCandidate
 		| "externalAccountId"
 	> {
 	heldBy: number | null;
-	/** Best merged score of its pending reviews; null when none, or each predates adr029. */
+	/** Top merged score of its pending reviews; null if none, or none saved a score. */
 	heldScore: number | null;
 }
 
@@ -122,11 +122,8 @@ interface ScoredPair extends MatchPair {
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-// A household row can be adopted or flagged. A held one is flagged again by a
-// same-day copy (it may be the row's own, so a Member is asked), or by a
-// closer-worded row a day or more off, since accounts sync in any order. A
-// retired account's bank row is only flagged. A listed account's bank row is
-// never a candidate.
+// A household row can be adopted or flagged; a retired account's bank row only
+// flagged. A listed account's bank row is never a candidate.
 const canAdopt = (c: MatchCandidate) => c.externalId === null;
 const isRetired = (c: MatchCandidate, live: ReadonlySet<string>) =>
 	c.externalId !== null &&
@@ -134,10 +131,13 @@ const isRetired = (c: MatchCandidate, live: ReadonlySet<string>) =>
 	!live.has(c.externalAccountId);
 const canFlag = (c: MatchCandidate, live: ReadonlySet<string>) =>
 	canAdopt(c) || (c.heldBy === null && isRetired(c, live));
-const contests = ({ candidate, dayGap, score }: ScoredPair) =>
+// A held row is flagged again by a same-day copy (maybe its own, so ask), or a
+// Similar one while its hold isn't, since accounts sync in any order. A Similar
+// hold already has its copy: a second is likely another purchase.
+const clearsHold = ({ candidate, dayGap, score }: ScoredPair) =>
 	candidate.heldBy === null ||
 	dayGap === 0 ||
-	(score.merged >= SIMILAR_SCORE && score.merged > (candidate.heldScore ?? 0));
+	(score.merged >= SIMILAR_SCORE && (candidate.heldScore ?? 0) < SIMILAR_SCORE);
 
 const clearsAdoptBars = ({ word, meaning }: DescriptionScore) =>
 	word >= ADOPT_WORD_SCORE &&
@@ -239,10 +239,10 @@ export function matchPairs(input: MatchInput): MatchPair[] {
  * Decides, per bank row: refresh a known one, refresh or skip its review, adopt
  * a same-day household row whose description clears both Adopt bars, flag a
  * close one (same cent, within 7 days), or add it. A held row a day or more
- * off is flagged only by a "Similar" pair that beats its best pending review's
- * score; else the bank row is added. Pairs one-to-one, Adopts
- * first; within each, highest merged score, then nearest day, in an order fixed
- * by the data alone, so a retry gives the same plan.
+ * off is flagged only by a "Similar" pair, and only while none of its pending
+ * reviews is; else the bank row is added. Pairs one-to-one, Adopts first; within
+ * each, highest merged score, then nearest day, in an order fixed by the data
+ * alone, so a retry gives the same plan.
  */
 export function planReconcile(input: ReconcileInput): ReconcilePlan {
 	const { result, unmatched } = splitIncoming(input);
@@ -256,7 +256,7 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
 				input.vectors,
 			),
 		}))
-		.filter(contests);
+		.filter(clearsHold);
 
 	const usedBanks = new Set<SyncedTransaction>();
 	const usedCandidates = new Set<MatchCandidate>();

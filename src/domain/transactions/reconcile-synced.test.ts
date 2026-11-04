@@ -440,12 +440,15 @@ describe("planReconcile", () => {
 		).toEqual({ ...EMPTY, add: [row] });
 	});
 
-	it("adds a bank row a day off a held row whose review scores as high", () => {
+	// Repeat same-price purchases: a Similar hold already has its copy.
+	it("adds a closer bank row a day off a held row whose review is Similar", () => {
 		const row = bank("t1", "2026-11-11", 5);
 		expect(
 			plan({
 				incoming: [row],
-				candidates: [mine(1, "2026-11-10", 5, { heldBy: 90, heldScore: 1 })],
+				candidates: [
+					mine(1, "2026-11-10", 5, { heldBy: 90, heldScore: SIMILAR_SCORE }),
+				],
 			}),
 		).toEqual({ ...EMPTY, add: [row] });
 	});

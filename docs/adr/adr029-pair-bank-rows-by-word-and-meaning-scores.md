@@ -89,7 +89,7 @@ This changes adr017 facet 2: its **Adopt** rule gains the description test, its 
 - **New moving parts.** The pgvector extension, an embedding cache table, a cleaning list to keep up, and thresholds that need tuning on real data.
 - **Determinism rests on the cache.** The same model returns the same vector for the same text, and the cache pins it, so a retry gives the same pairs. A model change can move a borderline pair to the other side of a threshold.
 - **Descriptions leave the database.** They go to Bedrock in the app's own AWS account and region, under the same terms as receipt images today.
-- **A held row can collect a second review.** Each account reconciles on its own, so a row held by a weak pair (an own-account transfer on its day) is flagged again by a bank row a day or more off when that pair is "Similar" and beats the row's best pending score. That is one more click; "Use bank's" releases the other review. A weaker bank row is still added.
+- **A held row can collect a second review.** Each account reconciles on its own, so a row held by a weak pair (an own-account transfer on its day) is flagged again by a bank row a day or more off when that pair is "Similar" and none of the row's pending reviews is. That is one more click; "Use bank's" releases the other review. A weaker bank row is still added, and so is any day-off row once a Similar review holds the row, since a second close copy is likely another purchase.
 
 ## Pros and Cons of the Options
 
