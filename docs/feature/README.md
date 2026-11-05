@@ -6,5 +6,6 @@ Regenerate or add one with `/document-feature {slug}`.
 
 ## Index
 
+- [Duplicate Apply](async-duplicate-apply.md) — answer your Possible duplicates, click Apply, and keep using Ledger while a toast counts the Answers in.
 - [History import](history-import.md) — pick a date range, and Ledger brings in your older bank history, up to 7 years back, without making copies of rows you already have.
 - [Receipt trace diagnostics](receipt-trace-diagnostics.md) — shows a receipt's processing trace id and a one-click link to open that trace in PostHog.

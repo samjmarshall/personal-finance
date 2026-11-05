@@ -24,7 +24,7 @@ order.
 | # | Decision | Rejected |
 |---|---|---|
 | 1 | A server job: an Apply row, an outbox event and an Inngest worker. The client polls the row. | A browser loop in a global store (dies on reload). Inngest Realtime push (developer preview, at-most-once, still needs the row). |
-| 2 | Each Answer lives on its review row (`apply_id`, `choice`). | Answers as JSON on the Apply row. A separate `apply_answer` table. |
+| 2 | Each Answer lives on its review row (`apply_id`, `answer`). | Answers as JSON on the Apply row. A separate `apply_answer` table. |
 | 3 | Rows in a running Apply leave the list and the counts. | Locked rows in place. An "Applying" pile. |
 | 4 | One Apply at a time. The server refuses a second. | A queue. Joining the running Apply. |
 | 5 | One Inngest step per batch of 50. | One step for the whole Apply (timeout risk). A step per Answer (overhead, 1,000-step cap). |
@@ -73,13 +73,13 @@ Verified facts:
 **New columns on `possible_duplicate`**
 
 - `apply_id`: FK to `duplicate_apply.id`, `on delete set null`, indexed.
-- `choice`: the Answer enum (`keep_mine | use_bank | both_real`).
+- `answer`: the Answer enum (`keep_mine | use_bank | both_real`).
 
 Row states:
 
 - **In a running Apply:** pending, and `apply_id` points at a running, active Apply. Hidden.
 - **Didn't apply:** pending, and `apply_id` points at a failed or stuck Apply. Shown with its
-  `choice` filled in and a "Didn't apply" badge.
+  `answer` filled in and a "Didn't apply" badge.
 
 **Stuck rule:** a `running` Apply whose `updatedAt` is over 15 minutes old reads as inactive. Every
 Answer moves `updatedAt`, so a big Apply that is still working never trips it. Each worker batch
@@ -108,7 +108,7 @@ stamping query must stay under its 65,534 bind-value limit. **Kept:** the per-An
 
 1. Fail any stuck `running` Apply.
 2. Insert `duplicate_apply` with `total = answers.length`.
-3. Stamp `apply_id` and `choice` on each answered review that is pending and not in a running
+3. Stamp `apply_id` and `answer` on each answered review that is pending and not in a running
    Apply. An unstamped Answer ends up in `gone`.
 4. Emit `duplicate/apply.requested { applyId }`.
 
@@ -124,7 +124,7 @@ A clash on the partial unique index throws `ConflictError("An apply is already r
     any Use bank's can release its row. Both are real and a release both add the bank row, so
     their order doesn't matter.
   - Resolved: the Answer and `resolved + 1` (with `updatedAt`) commit in one transaction.
-  - Taken: clear the row's `apply_id` and `choice`, and add 1 to `taken` (with `updatedAt`). The row returns blank,
+  - Taken: clear the row's `apply_id` and `answer`, and add 1 to `taken` (with `updatedAt`). The row returns blank,
     as it does today.
 - The loop stops on a short batch. A `finish` step then sets `done`, `gone` and `finishedAt`,
   only when the Apply is still `running`.
@@ -138,7 +138,7 @@ A clash on the partial unique index throws `ConflictError("An apply is already r
 Progress is `total − remaining`.
 
 `listPendingDuplicates` and `countPendingDuplicates` leave out rows in a running Apply. The review
-DTO (`PossibleDuplicateReview`) gains `choice` and `notApplied`.
+DTO (`PossibleDuplicateReview`) gains `answer` and `notApplied`.
 
 ## Client
 
@@ -175,7 +175,7 @@ DTO (`PossibleDuplicateReview`) gains `choice` and `notApplied`.
   tally and the `applying` flag go.
 - `possible-duplicate-piles.tsx`: while an Apply runs, the Apply button is disabled and reads
   "Applying 120 of 200…". Picking and filling stay live. `staged` starts from each row's saved
-  `choice`. A `notApplied` row shows a "Didn't apply" badge.
+  `answer`. A `notApplied` row shows a "Didn't apply" badge.
 - New copy in `import.display.ts`: `applyProgressLabel`, `applyStoppedLabel`.
 
 ## Errors and edge cases
@@ -245,7 +245,7 @@ DTO (`PossibleDuplicateReview`) gains `choice` and `notApplied`.
 - `possible-duplicate-piles.test.tsx`:
   - The disabled "Applying x of y…" button.
   - Picking still works during an Apply.
-  - A saved `choice` pre-fills the pick.
+  - A saved `answer` pre-fills the pick.
   - The "Didn't apply" badge.
 - `import.display.test.ts`: the new labels.
 - Accessibility: the progressbar has a name and `aria-valuetext`; only start and finish are

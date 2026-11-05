@@ -2,7 +2,7 @@
 date: 2026-11-04
 design: thoughts/designs/2026-11-04-async-duplicate-apply-progress-toast.md
 adrs: [adr032]
-status: Ready to implement
+status: In Progress - Phase 3 of 3
 ---
 # Async Duplicate Apply with a Progress Toast Implementation Plan
 
@@ -144,13 +144,13 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - `src/server/transactions/transactions.service.test.ts:36-63`: add the 7 new methods to the fake as `unstaged`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] The generated `drizzle/0029_*.sql` has both enums, the table, the partial unique index `WHERE status = 'running'`, both columns, the FK `ON DELETE SET NULL` and the `apply_id` index
-- [ ] `make db_branch_status` shows `*` on `local/<branch>`, then `make db_migrate` applies 0029
-- [ ] The existing "resolving a review" snapshots pass unchanged
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] The generated `drizzle/0029_*.sql` has both enums, the table, the partial unique index `WHERE status = 'running'`, both columns, the FK `ON DELETE SET NULL` and the `apply_id` index
+- [x] `make db_branch_status` shows `*` on `local/<branch>`, then `make db_migrate` applies 0029
+- [x] The existing "resolving a review" snapshots pass unchanged
 - [ ] Apply on the Import page still works through the old path
-- [ ] `/security-review` (touches `src/lib/constants.ts`)
+- [x] `/security-review` (touches `src/lib/constants.ts`)
 
 ## Phase 2: Background job and tRPC procedures
 ### Changes
@@ -218,10 +218,10 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
   - `possible-duplicate-piles.test.tsx:13-41`: the fixture gains `answer: null, notApplied: false`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `registry-golden.test.ts` pins `duplicate/apply.requested`, `duplicate-apply` and the `"duplicate-apply"` key
-- [ ] On `local/<branch>` with the Inngest dev server running, `duplicate-apply` shows with concurrency key `"duplicate-apply"`
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `registry-golden.test.ts` pins `duplicate/apply.requested`, `duplicate-apply` and the `"duplicate-apply"` key
+- [x] On `local/<branch>` with the Inngest dev server running, `duplicate-apply` shows with concurrency key `"duplicate-apply"`
 - [ ] Apply on the Import page still works through the old path, and its rows still show
 
 ## Phase 3: Progress toast and Import page switch
@@ -298,9 +298,9 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - `transaction.interface.ts:84-90`: delete `ResolveDuplicatesResult`, and drop the barrel exports (`src/domain/transactions/index.ts:26-29,47,69-71,91-92`).
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `rg "resolveDuplicates|RESOLVE_DUPLICATES_MAX|DuplicateChoice" src` returns nothing
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `rg "resolveDuplicates|RESOLVE_DUPLICATES_MAX|DuplicateChoice" src` returns nothing
 - [ ] On `local/<branch>`, applying 300+ Answers returns at once, the rows leave the list, and the toast counts up to "300 of 300", then shows success
 - [ ] Going to another page and reloading mid-Apply brings the toast back
 - [ ] Closing the toast mid-Apply keeps it closed until the finish toast

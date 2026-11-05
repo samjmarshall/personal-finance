@@ -169,8 +169,14 @@ A Member's pick on one Possible duplicate: Keep mine, Use bank's or Both are rea
 _Avoid_: choice, resolution, decision
 
 **Apply**:
-One send of a Member's Answers, saved in the background and counted as it goes.
+One send of a Member's Answers, saved at once, then applied in the background and counted as
+it goes; it ends Done or Stopped.
 _Avoid_: job, batch, task, run
+
+**Stopped**:
+An Apply that ended before all its Answers applied, because it failed or made no progress for
+too long; its leftover Answers stay saved, marked Didn't apply.
+_Avoid_: failed, stuck, crashed
 
 **Channel**:
 How a Receipt arrived — upload or email. A Receipt lives only here, so it has a Channel,
@@ -220,9 +226,12 @@ _Avoid_: provenance (for a balance)
   Member is removed, because a Receipt is kept as tax evidence.
 - A **Transaction** is adopted by at most one bank row; a **Possible duplicate** points at
   exactly one **Transaction**
-- A **Possible duplicate** has at most one **Answer**; an Answer that didn't apply stays on
-  the row until the Member applies again
+- A **Possible duplicate** has at most one **Answer**. An Answer whose **Apply** stopped stays
+  on the row, marked Didn't apply, until the Member applies again; a Use bank's whose bank row
+  is already a **Transaction** is cleared, so the Member answers again
 - An **Apply** carries one or more **Answers**; at most one Apply runs at a time
+- The **Household** owns every **Apply**; an Apply isn't attributed to a **Member**, so every
+  Member sees it run
 
 ## Example dialogue
 
@@ -266,6 +275,23 @@ _Avoid_: provenance (for a balance)
 >
 > **Domain expert:** "Yes, but I still tick it. Only a **Rule** I saved, or the same purchase
 > I've filed the same way three times, gets **Auto-filed**."
+>
+> **Dev:** "I answered 300 **Possible duplicates** and hit Apply. Then the toast said it
+> stopped. Are my **Answers** gone?"
+>
+> **Domain expert:** "No. They were saved the moment you sent them. The **Apply** was
+> **Stopped**, so the rows it didn't reach still show your Answer, marked Didn't apply. Hit
+> Apply again and it finishes them."
+>
+> **Dev:** "One row went blank instead."
+>
+> **Domain expert:** "That was a Use bank's whose bank row is already another **Transaction**.
+> It can't work, so it's cleared and you answer it again, most likely Keep mine."
+>
+> **Dev:** "My partner saw the toast on their phone too."
+>
+> **Domain expert:** "Right. The **Household** owns the Apply, and only one runs at a time, so
+> everyone sees it."
 
 ## Flagged ambiguities
 
@@ -328,3 +354,6 @@ _Avoid_: provenance (for a balance)
   (Provenance `import`) and the "Import from bank" page. Resolved: the spreadsheet import is the
   statement import, one thing; the page is a **Bank import**, and its rows have bank sync
   Provenance, never `import`.
+- **"failed" / "stuck"** named two ways an **Apply** ends early: its job gave up, or it went
+  quiet for 15 minutes. The Member can't tell them apart and does the same thing next.
+  Resolved: both are **Stopped**; `failed` survives only as the stored status.

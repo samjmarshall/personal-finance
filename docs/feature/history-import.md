@@ -86,7 +86,7 @@ adr029 item 8 holds the full cleaning list and the tuning behind the cut-offs.
 **Triggers**:
 - UI: the Import button on `/transactions/import` → `cdr.startImport`.
 - Event: `cdr/import.requested` (sent through the outbox in the same transaction as the new `cdr_import` row) → Inngest `cdr-import`.
-- UI: Apply on the To review list → `transaction.resolveDuplicates`, 200 answers per call.
+- UI: Apply on the To review list → `transaction.applyAnswers`, which saves every Answer and hands them to a background job ([Duplicate Apply](async-duplicate-apply.md)).
 
 **Data path**: `startImport` saves the picked range as a `cdr_import` row plus an outbox event. The job splits the range into account × 90-day chunks, reads each from RedBark, and reconciles the rows into `transaction` and `possible_duplicate`. Each chunk adds its counts to the row, which the page polls.
 
@@ -120,8 +120,8 @@ sequenceDiagram
         Job->>DB: add counts to cdr_import
     end
     Job->>DB: finishImport: running → done
-    M->>App: resolveDuplicates(answers)
-    App->>DB: keep mine / use bank's / both real, one at a time
+    M->>App: applyAnswers(answers)
+    App->>DB: save Answers, then a background job applies them (see Duplicate Apply)
 ```
 
 **State transitions** (`cdr_import.status`):
@@ -154,12 +154,12 @@ Reviews sit in two piles:
 - **Similar description**: a saved description score of 0.59 (`SIMILAR_SCORE`) or more. A review flagged before adr029 has no score, so it needs 3 or more shared words instead: a word is any run of letters or digits, case-blind, counted once. Its fill button picks **Use bank's**.
 - **Different description**: the rest. Its fill button picks **Both are real**.
 
-A fill only answers rows with no answer yet. **Apply** sends every answer at once, and a toast confirms it.
+A fill only answers rows with no answer yet. **Apply** sends every answer at once. A background job applies them while a toast shows progress ([Duplicate Apply](async-duplicate-apply.md)).
 
 **Edge cases**:
 - Ranges that run past 7 years or after today, or a From after the To → stopped in the form, and again by the server with the same words.
 - Starting while a run is active → the form locks and says why; the server returns a `CONFLICT` "An import is already running."
-- The same review answered in another tab → the toast counts it as already answered, and a refetch drops the row.
+- The same review answered in another tab → the finish toast counts it as no longer needing an answer.
 - A repeat event delivery → `claimImport` finds the row finished and runs nothing. A retried claim finds its own `running` row and carries on.
 
 **Side effects**: inserts into `transaction` and `possible_duplicate`; updates your rows on adopt and Use bank's. Never moves the daily sync's cursor and never writes a balance anchor. Never deletes a transaction.

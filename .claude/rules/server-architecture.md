@@ -239,12 +239,13 @@ repository that is `this.db.transaction(...)` (`saveExtraction`,
 
 ## FROZEN external identifiers
 
-`EVENT_REGISTRY` keys (incl. `cdr/import.requested`), the Inngest app id (the
-`package.json` `name`, via `env.PROJECT_NAME`), Inngest function ids (`outbox-sweep`,
-`outbox-prune`, `process-receipt`, `cdr-sync`, `cdr-import`, and `cdr-import-failure`,
-which Inngest derives for its `onFailure`), their crons / event triggers, and
-concurrency keys (`event.data.receiptId`, and `"cdr-sync"` shared by `cdr-sync` and
-`cdr-import`) are byte-stable wire strings: Inngest keys schedules and runs by them.
+`EVENT_REGISTRY` keys (incl. `cdr/import.requested` and `duplicate/apply.requested`),
+the Inngest app id (the `package.json` `name`, via `env.PROJECT_NAME`), Inngest
+function ids (`outbox-sweep`, `outbox-prune`, `process-receipt`, `cdr-sync`,
+`cdr-import`, `duplicate-apply`, and `cdr-import-failure` / `duplicate-apply-failure`,
+which Inngest derives for each `onFailure`), their crons / event triggers, and
+concurrency keys (`event.data.receiptId`, `"cdr-sync"` shared by `cdr-sync` and
+`cdr-import`, and `"duplicate-apply"`) are byte-stable wire strings: Inngest keys schedules and runs by them.
 `src/server/inngest/registry-golden.test.ts` pins them. Changing one requires
 updating the golden test **deliberately** and recording the rename in an ADR
 consequence note — never a drive-by.
