@@ -259,4 +259,4 @@ DTO (`PossibleDuplicateReview`) gains `answer` and `notApplied`.
 
 ## Related ADRs
 
-- [adr032](../../docs/adr/adr032-apply-answers-as-a-background-job-stamped-on-the-review-row.md): Apply possible-duplicate Answers as a background job, stamped on the review row, with progress polled from Postgres (Proposed)
+- [adr032](../../docs/adr/adr032-apply-answers-as-a-background-job-stamped-on-the-review-row.md): Apply possible-duplicate Answers as a background job, stamped on the review row, with progress polled from Postgres (Accepted)

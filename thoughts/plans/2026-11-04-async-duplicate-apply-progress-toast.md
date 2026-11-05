@@ -2,7 +2,7 @@
 date: 2026-11-04
 design: thoughts/designs/2026-11-04-async-duplicate-apply-progress-toast.md
 adrs: [adr032]
-status: In Progress - Phase 3 of 3
+status: Validated - Phase 2 of 3
 ---
 # Async Duplicate Apply with a Progress Toast Implementation Plan
 
@@ -149,7 +149,7 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - [x] The generated `drizzle/0029_*.sql` has both enums, the table, the partial unique index `WHERE status = 'running'`, both columns, the FK `ON DELETE SET NULL` and the `apply_id` index
 - [x] `make db_branch_status` shows `*` on `local/<branch>`, then `make db_migrate` applies 0029
 - [x] The existing "resolving a review" snapshots pass unchanged
-- [ ] Apply on the Import page still works through the old path
+- [ ] Apply on the Import page still works through the old path — n/a at validation: Phase 3 removed the old path; the new path was verified live instead
 - [x] `/security-review` (touches `src/lib/constants.ts`)
 
 ## Phase 2: Background job and tRPC procedures
@@ -222,7 +222,7 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - [x] `make test` passes
 - [x] `registry-golden.test.ts` pins `duplicate/apply.requested`, `duplicate-apply` and the `"duplicate-apply"` key
 - [x] On `local/<branch>` with the Inngest dev server running, `duplicate-apply` shows with concurrency key `"duplicate-apply"`
-- [ ] Apply on the Import page still works through the old path, and its rows still show
+- [ ] Apply on the Import page still works through the old path, and its rows still show — n/a at validation: old path removed in Phase 3
 
 ## Phase 3: Progress toast and Import page switch
 ### Changes
@@ -301,16 +301,16 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - [x] `make check` passes
 - [x] `make test` passes
 - [x] `rg "resolveDuplicates|RESOLVE_DUPLICATES_MAX|DuplicateChoice" src` returns nothing
-- [ ] On `local/<branch>`, applying 300+ Answers returns at once, the rows leave the list, and the toast counts up to "300 of 300", then shows success
-- [ ] Going to another page and reloading mid-Apply brings the toast back
-- [ ] Closing the toast mid-Apply keeps it closed until the finish toast
-- [ ] Stopping the Inngest dev server mid-Apply, then letting retries run out, shows the error toast "Stopped at x of y…" with "Review". The leftover rows show their saved answer and "Didn't apply"
-- [ ] A second Apply during a run shows "An apply is already running."
-- [ ] `/design-review`
+- [x] On `local/<branch>`, applying 300+ Answers returns at once, the rows leave the list, and the toast counts up to "300 of 300", then shows success
+- [x] Going to another page and reloading mid-Apply brings the toast back
+- [x] Closing the toast mid-Apply keeps it closed until the finish toast
+- [ ] Stopping the Inngest dev server mid-Apply, then letting retries run out, shows the error toast "Stopped at x of y…" with "Review". The leftover rows show their saved answer and "Didn't apply" — verified via the stale path (worker killed, Apply backdated 16 min); the retries-exhausted `onFailure` path is unit-tested only
+- [x] A second Apply during a run shows "An apply is already running."
+- [ ] `/design-review` — ran 2026-11-05: 0 blockers, 1 High open ("Didn't apply" pill not announced to screen readers)
 
 ## References
 - Design doc: `thoughts/designs/2026-11-04-async-duplicate-apply-progress-toast.md` (carries `## Related ADRs`)
-- ADRs: `docs/adr/adr032-apply-answers-as-a-background-job-stamped-on-the-review-row.md` (Proposed), implemented by Phases 1–3 (data and repository in Phase 1, job in Phase 2, client in Phase 3)
+- ADRs: `docs/adr/adr032-apply-answers-as-a-background-job-stamped-on-the-review-row.md` (Accepted), implemented by Phases 1–3 (data and repository in Phase 1, job in Phase 2, client in Phase 3)
 - Composes with: adr002 (outbox write door), adr004 (3-tier), adr017 (`cdr-import` precedent), adr029 (how reviews are flagged)
 - Precedent: `src/server/cdr/cdr.repository.ts:190-205`, `src/server/cdr/cdr.inngest.controller.ts:48-88`, `src/server/cdr/cdr.service.ts:74-94`, `src/app/(dashboard)/transactions/import/_components/import-view.tsx:16-41`
 - sonner 2.0.8 behaviour: `node_modules/sonner/dist/index.mjs:189-215,528-565,842,860,1145-1147`
