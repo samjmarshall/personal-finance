@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CdrInngestController } from "~/server/cdr/cdr.inngest.controller";
 import { OutboxInngestController } from "~/server/outbox/outbox.inngest.controller";
 import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
+import { TransactionsInngestController } from "~/server/transactions/transactions.inngest.controller";
 import pkg from "../../../package.json" with { type: "json" };
 
 import { EVENT_REGISTRY } from "./events";
@@ -13,6 +14,7 @@ describe("event registry golden", () => {
 	it("pins the frozen event names", () => {
 		expect(Object.keys(EVENT_REGISTRY).sort()).toEqual([
 			"cdr/import.requested",
+			"duplicate/apply.requested",
 			"receipt/email.received",
 			"receipt/retry",
 			"receipt/uploaded",
@@ -39,6 +41,7 @@ describe("worker golden", () => {
 		new OutboxInngestController({ inngest: spy, service: {} as never });
 		new ReceiptsInngestController({ inngest: spy, service: {} as never });
 		new CdrInngestController({ inngest: spy, service: {} as never });
+		new TransactionsInngestController({ inngest: spy, service: {} as never });
 
 		expect(declared).toEqual([
 			{ id: "outbox-sweep", triggers: [{ cron: "0 * * * *" }] },
@@ -61,6 +64,11 @@ describe("worker golden", () => {
 				id: "cdr-import",
 				concurrency: { limit: 1, key: '"cdr-sync"', scope: "env" },
 				triggers: [{ event: "cdr/import.requested" }],
+			},
+			{
+				id: "duplicate-apply",
+				concurrency: { limit: 1, key: '"duplicate-apply"', scope: "env" },
+				triggers: [{ event: "duplicate/apply.requested" }],
 			},
 		]);
 	});

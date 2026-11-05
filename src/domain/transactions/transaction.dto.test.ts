@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
-import { Frequency, Priority } from "~/lib/constants";
+import { Answer, Frequency, Priority } from "~/lib/constants";
 import type { Expect, WritesInto } from "~/test/type-contracts";
 import {
+	APPLY_ANSWERS_MAX,
+	applyAnswersDto,
 	linkExpenseDto,
-	RESOLVE_DUPLICATES_MAX,
-	resolveDuplicatesDto,
 	transactionCreateDto,
 	transactionUpdateDto,
 	unplannedDto,
@@ -299,32 +299,40 @@ describe("linkExpenseDto", () => {
 	});
 });
 
-describe("resolveDuplicatesDto", () => {
-	const answer = (id: number) => ({ id, choice: "use_bank" as const });
+describe("applyAnswersDto", () => {
+	const answer = (id: number) => ({ id, answer: Answer.UseBank });
+	const answers = (count: number) =>
+		Array.from({ length: count }, (_, i) => answer(i + 1));
 
-	it("accepts one answer per review", () => {
+	it("accepts the most answers one apply takes", () => {
 		expect(
-			resolveDuplicatesDto.safeParse({ answers: [answer(1), answer(2)] })
+			applyAnswersDto.safeParse({ answers: answers(APPLY_ANSWERS_MAX) })
 				.success,
 		).toBe(true);
 	});
 
 	it("rejects no answers", () => {
-		expect(resolveDuplicatesDto.safeParse({ answers: [] }).success).toBe(false);
+		expect(applyAnswersDto.safeParse({ answers: [] }).success).toBe(false);
 	});
 
-	it("rejects two answers for one review", () => {
+	it("rejects more answers than one apply takes", () => {
 		expect(
-			resolveDuplicatesDto.safeParse({ answers: [answer(1), answer(1)] })
+			applyAnswersDto.safeParse({ answers: answers(APPLY_ANSWERS_MAX + 1) })
 				.success,
 		).toBe(false);
 	});
 
-	it("rejects more answers than one apply sends", () => {
-		const answers = Array.from({ length: RESOLVE_DUPLICATES_MAX + 1 }, (_, i) =>
-			answer(i + 1),
-		);
-		expect(resolveDuplicatesDto.safeParse({ answers }).success).toBe(false);
+	it("rejects two answers for one review", () => {
+		expect(
+			applyAnswersDto.safeParse({ answers: [answer(1), answer(1)] }).success,
+		).toBe(false);
+	});
+
+	it("rejects an unknown answer", () => {
+		expect(
+			applyAnswersDto.safeParse({ answers: [{ id: 1, answer: "maybe" }] })
+				.success,
+		).toBe(false);
 	});
 });
 

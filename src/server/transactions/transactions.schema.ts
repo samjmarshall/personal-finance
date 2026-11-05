@@ -8,6 +8,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { EMBEDDING_DIMENSIONS } from "~/domain/transactions";
 import {
+	Answer,
+	DuplicateApplyStatus,
 	Frequency,
 	PossibleDuplicateStatus,
 	Priority,
@@ -85,6 +87,48 @@ export const possibleDuplicateStatus = pgEnum(
 	],
 );
 
+export const duplicateAnswer = pgEnum(
+	"duplicate_answer",
+	Object.values(Answer) as [Answer, ...Answer[]],
+);
+export const duplicateApplyStatus = pgEnum(
+	"duplicate_apply_status",
+	Object.values(DuplicateApplyStatus) as [
+		DuplicateApplyStatus,
+		...DuplicateApplyStatus[],
+	],
+);
+
+// One Apply of a Member's Answers, run in the background (adr032).
+export const duplicateApply = pgTable(
+	"duplicate_apply",
+	(d) => ({
+		id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+		status: duplicateApplyStatus()
+			.notNull()
+			.default(DuplicateApplyStatus.Running),
+		total: d.integer().notNull(),
+		applied: d.integer().notNull().default(0),
+		taken: d.integer().notNull().default(0),
+		gone: d.integer().notNull().default(0),
+		error: d.text(),
+		createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
+		// Every counter bump moves it, so a stale value means a stuck Apply.
+		updatedAt: d
+			.timestamp({ withTimezone: true })
+			.defaultNow()
+			.$onUpdate(() => new Date())
+			.notNull(),
+		finishedAt: d.timestamp({ withTimezone: true }),
+	}),
+	(t) => [
+		// adr032: one Apply at a time.
+		uniqueIndex("duplicate_apply_running_idx")
+			.on(t.status)
+			.where(sql`${t.status} = 'running'`),
+	],
+);
+
 // A bank row that looks like a household row but isn't exact, held until a
 // member answers. Nothing reaches `transaction` until then.
 export const possibleDuplicates = pgTable(
@@ -110,6 +154,12 @@ export const possibleDuplicates = pgTable(
 		status: possibleDuplicateStatus()
 			.notNull()
 			.default(PossibleDuplicateStatus.Pending),
+		// Set while an Apply holds the Answer; a stamp on a listed row means its
+		// Apply failed or stuck (adr032).
+		applyId: d
+			.integer()
+			.references(() => duplicateApply.id, { onDelete: "set null" }),
+		answer: duplicateAnswer(),
 		createdAt: d
 			.timestamp({ withTimezone: true })
 			.$defaultFn(() => new Date())
@@ -122,6 +172,7 @@ export const possibleDuplicates = pgTable(
 			t.externalId,
 		),
 		index("possible_duplicate_transaction_idx").on(t.transactionId),
+		index("possible_duplicate_apply_idx").on(t.applyId),
 	],
 );
 

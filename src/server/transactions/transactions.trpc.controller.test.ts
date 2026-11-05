@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { Transaction, TransactionSummary } from "~/domain/transactions";
-import { Frequency, Priority, Provenance } from "~/lib/constants";
+import type {
+	CurrentApply,
+	Transaction,
+	TransactionSummary,
+} from "~/domain/transactions";
+import {
+	Answer,
+	DuplicateApplyStatus,
+	Frequency,
+	Priority,
+	Provenance,
+} from "~/lib/constants";
 import { createTestCaller } from "~/server/api/test-caller";
 import { createTRPCRouter } from "~/server/api/trpc";
-import { NotFoundError } from "~/server/errors/domain-errors";
-import { recorder } from "~/test/fakes";
+import { ConflictError, NotFoundError } from "~/server/errors/domain-errors";
+import { recorder, throwing } from "~/test/fakes";
+import type { DuplicateApplyService } from "./duplicate-apply.service";
 import type { TransactionsService } from "./transactions.service";
 import { transactionRouter } from "./transactions.trpc.controller";
 
@@ -16,6 +27,28 @@ function callerWith(
 ) {
 	return createTestCaller(router, { services: { transactions }, session });
 }
+
+function applyCallerWith(
+	duplicateApply: Partial<DuplicateApplyService>,
+	session?: null,
+) {
+	return createTestCaller(router, { services: { duplicateApply }, session });
+}
+
+const APPLY: CurrentApply = {
+	id: 7,
+	active: true,
+	createdAt: new Date("2026-09-01T01:00:00.000Z"),
+	error: null,
+	finishedAt: null,
+	gone: 0,
+	pending: 2,
+	applied: 0,
+	status: DuplicateApplyStatus.Running,
+	taken: 0,
+	total: 2,
+	updatedAt: new Date("2026-09-01T01:00:00.000Z"),
+};
 
 const TRANSACTION: Transaction = {
 	id: 1,
@@ -148,47 +181,61 @@ describe("transaction router", () => {
 		expect([list.calls, count.calls]).toEqual([[[]], [[]]]);
 	});
 
-	it("resolveDuplicates hands the service the answers and returns its tally", async () => {
-		const tally = { resolved: 2, gone: 0, taken: 0 };
-		const { method, calls } = recorder(tally);
+	it("applyAnswers hands the service the Answers and returns the new Apply", async () => {
+		const { method, calls } = recorder(APPLY);
 		const answers = [
-			{ id: 4, choice: "use_bank" },
-			{ id: 5, choice: "keep_mine" },
-		] as const;
+			{ id: 4, answer: Answer.UseBank },
+			{ id: 5, answer: Answer.KeepMine },
+		];
 
 		await expect(
-			callerWith({
-				resolveDuplicates: method,
-			}).transaction.resolveDuplicates({ answers: [...answers] }),
-		).resolves.toEqual(tally);
+			applyCallerWith({ start: method }).transaction.applyAnswers({ answers }),
+		).resolves.toEqual(APPLY);
 		expect(calls).toEqual([[{ answers }]]);
 	});
 
-	it("resolveDuplicates refuses an unknown choice before reaching the service", async () => {
-		const { method, calls } = recorder({ resolved: 0, gone: 0, taken: 0 });
+	it("applyAnswers refuses an unknown Answer before reaching the service", async () => {
+		const { method, calls } = recorder(APPLY);
 
 		await expect(
-			callerWith({
-				resolveDuplicates: method,
-			}).transaction.resolveDuplicates({
-				answers: [{ id: 4, choice: "merge" as never }],
+			applyCallerWith({ start: method }).transaction.applyAnswers({
+				answers: [{ id: 4, answer: "merge" as never }],
 			}),
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
 		expect(calls).toEqual([]);
 	});
 
-	it("rejects a signed-out resolveDuplicates before reaching the service", async () => {
-		const { method, calls } = recorder({ resolved: 0, gone: 0, taken: 0 });
+	it("applyAnswers surfaces a running Apply as CONFLICT", async () => {
+		const start = throwing(new ConflictError("An apply is already running."));
 
 		await expect(
-			callerWith(
-				{ resolveDuplicates: method },
-				null,
-			).transaction.resolveDuplicates({
-				answers: [{ id: 4, choice: "keep_mine" }],
+			applyCallerWith({ start }).transaction.applyAnswers({
+				answers: [{ id: 4, answer: Answer.KeepMine }],
+			}),
+		).rejects.toMatchObject({
+			code: "CONFLICT",
+			message: "An apply is already running.",
+		});
+	});
+
+	it("rejects a signed-out applyAnswers before reaching the service", async () => {
+		const { method, calls } = recorder(APPLY);
+
+		await expect(
+			applyCallerWith({ start: method }, null).transaction.applyAnswers({
+				answers: [{ id: 4, answer: Answer.KeepMine }],
 			}),
 		).rejects.toMatchObject({ code: "UNAUTHORIZED" });
 		expect(calls).toEqual([]);
+	});
+
+	it("currentApply returns the service's Apply", async () => {
+		const { method, calls } = recorder(APPLY);
+
+		await expect(
+			applyCallerWith({ current: method }).transaction.currentApply(),
+		).resolves.toEqual(APPLY);
+		expect(calls).toEqual([[]]);
 	});
 
 	it("surfaces a NotFoundError as NOT_FOUND", async () => {
