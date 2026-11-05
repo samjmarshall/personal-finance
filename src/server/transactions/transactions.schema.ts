@@ -113,7 +113,7 @@ export const duplicateApply = pgTable(
 		gone: d.integer().notNull().default(0),
 		error: d.text(),
 		createdAt: d.timestamp({ withTimezone: true }).defaultNow().notNull(),
-		// Every counter bump moves it, so a stale value means a stuck Apply.
+		// Every counter bump moves it, so a stale value means the job died.
 		updatedAt: d
 			.timestamp({ withTimezone: true })
 			.defaultNow()
@@ -154,8 +154,8 @@ export const possibleDuplicates = pgTable(
 		status: possibleDuplicateStatus()
 			.notNull()
 			.default(PossibleDuplicateStatus.Pending),
-		// Set while an Apply holds the Answer; a stamp on a listed row means its
-		// Apply failed or stuck (adr032).
+		// Set while an Apply holds the Answer; a stamp on a listed row means that
+		// Apply stopped (adr032).
 		applyId: d
 			.integer()
 			.references(() => duplicateApply.id, { onDelete: "set null" }),

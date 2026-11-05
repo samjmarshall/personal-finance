@@ -88,6 +88,17 @@ describe("ApplyToasts", () => {
 		expect(screen.getAllByRole("progressbar")).toHaveLength(1);
 	});
 
+	it("shows at the top, clear of the Import page's sticky Apply bar", async () => {
+		renderToasts(running());
+
+		const toastItem = (await screen.findByRole("progressbar")).closest(
+			"[data-sonner-toast]",
+		);
+
+		expect(toastItem).toHaveAttribute("data-y-position", "top");
+		expect(toastItem).toHaveAttribute("data-x-position", "center");
+	});
+
 	it("keeps a closed toast closed on later ticks, then still shows the finish", async () => {
 		const first = running();
 		const { tick } = renderToasts(first);

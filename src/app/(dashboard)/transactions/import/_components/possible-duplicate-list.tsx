@@ -13,7 +13,7 @@ export function PossibleDuplicateList({
 }) {
 	const [reviews] = api.transaction.possibleDuplicates.useSuspenseQuery();
 	const utils = api.useUtils();
-	// ApplyProgress polls this cache, so Apply here waits on the same run.
+	// Same cache the progress toast polls, so Apply waits on the running one.
 	const { data: current } = api.transaction.currentApply.useQuery();
 	// Offline it fails at once with a toast; paused, it would hold every answer.
 	const start = api.transaction.applyAnswers.useMutation({
@@ -48,7 +48,14 @@ export function PossibleDuplicateList({
 
 			return true;
 		} catch {
-			// Error toast: src/trpc/query-client.ts.
+			// A global handler already toasts the error. On "already running",
+			// another tab's Apply holds the rows: show its toast and drop them.
+			await Promise.all([
+				utils.transaction.currentApply.invalidate(),
+				utils.transaction.possibleDuplicates.invalidate(),
+				utils.transaction.possibleDuplicateCount.invalidate(),
+			]);
+
 			return false;
 		}
 	}

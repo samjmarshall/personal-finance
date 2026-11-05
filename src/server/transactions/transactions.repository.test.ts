@@ -1164,9 +1164,8 @@ describe("startApply", () => {
 			      5,
 			      "use_bank",
 			      "pending",
-			      "running",
 			    ],
-			    "sql": "update "possible_duplicate" set "applyId" = $1, "answer" = stamp.answer, "updatedAt" = $2 from (values ($3::int, $4::duplicate_answer), ($5::int, $6::duplicate_answer)) as stamp(id, answer) where ("possible_duplicate"."id" = stamp.id and "possible_duplicate"."status" = $7 and ("possible_duplicate"."applyId" is null or not exists (select "id" from "duplicate_apply" where ("duplicate_apply"."id" = "possible_duplicate"."applyId" and "duplicate_apply"."status" = $8)))) returning "possible_duplicate"."id"",
+			    "sql": "update "possible_duplicate" set "applyId" = $1, "answer" = stamp.answer, "updatedAt" = $2 from (values ($3::int, $4::duplicate_answer), ($5::int, $6::duplicate_answer)) as stamp(id, answer) where ("possible_duplicate"."id" = stamp.id and "possible_duplicate"."status" = $7) returning "possible_duplicate"."id"",
 			  },
 			  {
 			    "method": "execute",
@@ -1190,15 +1189,17 @@ describe("startApply", () => {
 	});
 });
 
-describe("takeApplyBatch", () => {
-	it("takes a running Apply's pending Answers, Keep mine then Both are real then Use bank's", async () => {
+describe("nextApplyBatch", () => {
+	it("takes a live running Apply's pending Answers, Keep mine then Both are real then Use bank's", async () => {
 		const { repository, queries } = harness(() => [
 			[4, "keep_mine"],
 			[9, "both_real"],
 			[5, "use_bank"],
 		]);
 
-		await expect(repository.takeApplyBatch(7, 50)).resolves.toEqual([
+		await expect(
+			repository.nextApplyBatch(7, 50, new Date("2026-09-28T23:45:00.000Z")),
+		).resolves.toEqual([
 			{ id: 4, answer: Answer.KeepMine },
 			{ id: 9, answer: Answer.BothReal },
 			{ id: 5, answer: Answer.UseBank },
@@ -1208,14 +1209,15 @@ describe("takeApplyBatch", () => {
 			  {
 			    "method": "all",
 			    "params": [
+			      "running",
+			      "2026-09-28T23:45:00.000Z",
 			      7,
 			      "pending",
-			      "running",
 			      "keep_mine",
 			      "both_real",
 			      50,
 			    ],
-			    "sql": "select "possible_duplicate"."id", "possible_duplicate"."answer" from "possible_duplicate" inner join "duplicate_apply" on "duplicate_apply"."id" = "possible_duplicate"."applyId" where ("possible_duplicate"."applyId" = $1 and "possible_duplicate"."status" = $2 and "duplicate_apply"."status" = $3) order by case "possible_duplicate"."answer" when $4 then 0 when $5 then 1 else 2 end, "possible_duplicate"."id" asc limit $6",
+			    "sql": "select "possible_duplicate"."id", "possible_duplicate"."answer" from "possible_duplicate" inner join "duplicate_apply" on ("duplicate_apply"."id" = "possible_duplicate"."applyId" and "duplicate_apply"."status" = $1 and "duplicate_apply"."updatedAt" > $2) where ("possible_duplicate"."applyId" = $3 and "possible_duplicate"."status" = $4) order by case "possible_duplicate"."answer" when $5 then 0 when $6 then 1 else 2 end, "possible_duplicate"."id" asc limit $7",
 			  },
 			]
 		`);
@@ -1497,10 +1499,10 @@ describe("releaseAnswer", () => {
 });
 
 describe("finishApply", () => {
-	it("moves only a running Apply to done, counting the rest gone", async () => {
+	it("moves only a live running Apply to done, counting the rest gone", async () => {
 		const { repository, queries } = harness();
 
-		await repository.finishApply(7);
+		await repository.finishApply(7, new Date("2026-09-28T23:45:00.000Z"));
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
@@ -1511,8 +1513,9 @@ describe("finishApply", () => {
 			      "2026-09-29T00:00:00.000Z",
 			      7,
 			      "running",
+			      "2026-09-28T23:45:00.000Z",
 			    ],
-			    "sql": "update "duplicate_apply" set "status" = $1, "gone" = "duplicate_apply"."total" - "duplicate_apply"."applied" - "duplicate_apply"."taken", "updatedAt" = $2, "finishedAt" = $3 where ("duplicate_apply"."id" = $4 and "duplicate_apply"."status" = $5)",
+			    "sql": "update "duplicate_apply" set "status" = $1, "gone" = "duplicate_apply"."total" - "duplicate_apply"."applied" - "duplicate_apply"."taken", "updatedAt" = $2, "finishedAt" = $3 where ("duplicate_apply"."id" = $4 and "duplicate_apply"."status" = $5 and "duplicate_apply"."updatedAt" > $6)",
 			  },
 			]
 		`);

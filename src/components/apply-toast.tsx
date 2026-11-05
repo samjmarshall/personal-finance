@@ -56,6 +56,8 @@ export function ApplyToast({
 							"mt-2",
 						)}
 						href="/transactions/import"
+						// On that page already, the link goes nowhere: closing is the sign it worked.
+						onClick={onClose}
 					>
 						Review
 					</Link>

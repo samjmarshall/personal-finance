@@ -2,7 +2,7 @@ import type { CurrentApply, DuplicateApply } from "~/domain/transactions";
 import { DuplicateApplyStatus } from "~/lib/constants";
 import { formatCount } from "~/lib/utils";
 
-/** How a finished Apply ends: `error` when it failed or stuck, `warning` when some didn't land. */
+/** How a finished Apply ends: `error` when it stopped, `warning` when some didn't land. */
 export type ApplyOutcome = "success" | "warning" | "error";
 
 type Counts = Pick<CurrentApply, "total" | "pending">;
@@ -47,11 +47,19 @@ export function applyStoppedLabel({ total, pending }: Counts): string {
 export function applyOutcome({
 	status,
 	active,
+	pending,
 	gone,
 	taken,
-}: Pick<CurrentApply, "status" | "active" | "gone" | "taken">): ApplyOutcome {
-	if (status === DuplicateApplyStatus.Failed) return "error";
-	if (status === DuplicateApplyStatus.Running && !active) return "error";
+}: Pick<
+	CurrentApply,
+	"status" | "active" | "pending" | "gone" | "taken"
+>): ApplyOutcome {
+	const stopped =
+		status === DuplicateApplyStatus.Failed ||
+		(status === DuplicateApplyStatus.Running && !active);
+
+	// Stopped after its last Answer: nothing is left for the Member to redo.
+	if (stopped && pending > 0) return "error";
 	if (gone > 0 || taken > 0) return "warning";
 
 	return "success";

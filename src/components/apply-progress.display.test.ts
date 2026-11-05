@@ -51,6 +51,7 @@ describe("applyOutcome", () => {
 	const finished = {
 		status: DuplicateApplyStatus.Done,
 		active: false,
+		pending: 0,
 		gone: 0,
 		taken: 0,
 	};
@@ -59,12 +60,26 @@ describe("applyOutcome", () => {
 		["done, all applied", finished, "success"],
 		["done, some gone", { ...finished, gone: 1 }, "warning"],
 		["done, some taken", { ...finished, taken: 2 }, "warning"],
-		["failed", { ...finished, status: DuplicateApplyStatus.Failed }, "error"],
+		[
+			"failed",
+			{ ...finished, status: DuplicateApplyStatus.Failed, pending: 3 },
+			"error",
+		],
 		// No progress for 15 min: its job is dead, though no one marked it yet.
 		[
-			"running but stuck",
-			{ ...finished, status: DuplicateApplyStatus.Running },
+			"running but stopped",
+			{ ...finished, status: DuplicateApplyStatus.Running, pending: 3 },
 			"error",
+		],
+		[
+			"failed after its last Answer",
+			{ ...finished, status: DuplicateApplyStatus.Failed },
+			"success",
+		],
+		[
+			"stopped after its last Answer, some taken",
+			{ ...finished, status: DuplicateApplyStatus.Running, taken: 1 },
+			"warning",
 		],
 	] as const)("%s → %s", (_, apply, outcome) => {
 		expect(applyOutcome(apply)).toBe(outcome);

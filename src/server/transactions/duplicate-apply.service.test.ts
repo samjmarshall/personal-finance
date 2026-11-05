@@ -38,7 +38,7 @@ const useBank = (id: number): AnswerInput => ({ id, answer: Answer.UseBank });
 function serviceWith(staged: Partial<DuplicateApplyRepository>) {
 	const repository: DuplicateApplyRepository = {
 		startApply: unstaged,
-		takeApplyBatch: unstaged,
+		nextApplyBatch: unstaged,
 		applyAnswer: unstaged,
 		releaseAnswer: unstaged,
 		finishApply: unstaged,
@@ -129,16 +129,16 @@ describe("start", () => {
 });
 
 describe("applyBatch", () => {
-	it("takes 50 at a time and counts each through its own write", async () => {
-		const takeApplyBatch = recorder([keepMine(1), useBank(2)]);
+	it("takes 50 at a time from a live Apply and counts each through its own write", async () => {
+		const nextApplyBatch = recorder([keepMine(1), useBank(2)]);
 		const applyAnswer = recorder(true);
 		const { service } = serviceWith({
-			takeApplyBatch: takeApplyBatch.method,
+			nextApplyBatch: nextApplyBatch.method,
 			applyAnswer: applyAnswer.method,
 		});
 
 		await expect(service.applyBatch(7)).resolves.toEqual({ more: false });
-		expect(takeApplyBatch.calls).toEqual([[7, 50]]);
+		expect(nextApplyBatch.calls).toEqual([[7, 50, minutesAgo(15)]]);
 		expect(applyAnswer.calls).toEqual([
 			[7, keepMine(1)],
 			[7, useBank(2)],
@@ -148,7 +148,7 @@ describe("applyBatch", () => {
 	it("leaves an Answer whose review is gone for finish to count", async () => {
 		const releaseAnswer = recorder(true);
 		const { service } = serviceWith({
-			takeApplyBatch: async () => [keepMine(1)],
+			nextApplyBatch: async () => [keepMine(1)],
 			applyAnswer: async () => false,
 			releaseAnswer: releaseAnswer.method,
 		});
@@ -162,7 +162,7 @@ describe("applyBatch", () => {
 		const releaseAnswer = recorder(true);
 		const applied: number[] = [];
 		const { service } = serviceWith({
-			takeApplyBatch: async () => [useBank(2), keepMine(3)],
+			nextApplyBatch: async () => [useBank(2), keepMine(3)],
 			applyAnswer: async (_, { id }) => {
 				if (id === 2) throw failedQuery("23505");
 
@@ -182,7 +182,7 @@ describe("applyBatch", () => {
 	it("stops the step on any other failure, so Inngest retries it", async () => {
 		const error = new Error("connection reset");
 		const { service } = serviceWith({
-			takeApplyBatch: async () => [keepMine(1)],
+			nextApplyBatch: async () => [keepMine(1)],
 			applyAnswer: throwing(error),
 		});
 
@@ -195,7 +195,7 @@ describe("applyBatch", () => {
 	])("with %i Answers taken, more is %s", async (size, more) => {
 		const batch = Array.from({ length: size }, (_, i) => keepMine(i + 1));
 		const { service } = serviceWith({
-			takeApplyBatch: async () => batch,
+			nextApplyBatch: async () => batch,
 			applyAnswer: async () => true,
 		});
 
@@ -206,7 +206,7 @@ describe("applyBatch", () => {
 		const reviews = reviewsOn({ 1: 100, 2: 100 });
 		const releaseAnswer = recorder(true);
 		const { service } = serviceWith({
-			takeApplyBatch: async () => [keepMine(1), useBank(2)],
+			nextApplyBatch: async () => [keepMine(1), useBank(2)],
 			applyAnswer: reviews.applyAnswer,
 			releaseAnswer: releaseAnswer.method,
 		});
@@ -220,7 +220,7 @@ describe("applyBatch", () => {
 	it("lets the lower id win when two Use bank's share a row", async () => {
 		const reviews = reviewsOn({ 1: 100, 2: 100 });
 		const { service } = serviceWith({
-			takeApplyBatch: async () => [useBank(1), useBank(2)],
+			nextApplyBatch: async () => [useBank(1), useBank(2)],
 			applyAnswer: reviews.applyAnswer,
 		});
 
@@ -231,13 +231,13 @@ describe("applyBatch", () => {
 });
 
 describe("finish", () => {
-	it("closes the Apply", async () => {
+	it("closes the Apply only while it is live", async () => {
 		const finishApply = recorder(undefined);
 		const { service } = serviceWith({ finishApply: finishApply.method });
 
 		await service.finish(7);
 
-		expect(finishApply.calls).toEqual([[7]]);
+		expect(finishApply.calls).toEqual([[7, minutesAgo(15)]]);
 	});
 });
 
@@ -275,6 +275,21 @@ describe("current", () => {
 		const { service } = serviceWith({ latestApply: async () => row });
 
 		await expect(service.current()).resolves.toEqual({ ...row, active });
+	});
+
+	// Else one that stopped after its last Answer, all gone, shows a blank toast.
+	it("counts a stopped Apply's gone reviews, which only a finish saves", async () => {
+		const row = {
+			...APPLY,
+			status: DuplicateApplyStatus.Failed,
+			total: 5,
+			applied: 2,
+			taken: 1,
+			pending: 0,
+		};
+		const { service } = serviceWith({ latestApply: async () => row });
+
+		await expect(service.current()).resolves.toMatchObject({ gone: 2 });
 	});
 });
 

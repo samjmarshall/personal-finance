@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
 import { applyOutcome } from "~/components/apply-progress.display";
 import { ApplyToast } from "~/components/apply-toast";
@@ -9,6 +9,8 @@ import { api } from "~/trpc/react";
 
 const POLL_MS = 2000;
 const FINISHED_MS = 5000;
+// Bottom-right covers the Import page's sticky Apply bar; other toasts stay put.
+const POSITION = "top-center";
 
 /** Polls the latest Apply while it runs, so its toast follows the Member across pages. */
 export function ApplyProgress() {
@@ -41,7 +43,9 @@ export function ApplyToasts({
 	onFinished: () => void;
 }) {
 	const seenRunning = useRef<number | null>(null);
-	const closed = useRef<number | null>(null);
+	const dismissedApplyId = useRef<number | null>(null);
+	// Read when a poll lands, not as a dep: the parent passes a new arrow each render.
+	const finished = useEffectEvent(onFinished);
 
 	useEffect(() => {
 		if (!apply) return;
@@ -50,13 +54,13 @@ export function ApplyToasts({
 		if (seenRunning.current !== null && seenRunning.current !== apply.id) {
 			toast.dismiss(toastId(seenRunning.current));
 			seenRunning.current = null;
-			onFinished();
+			finished();
 		}
 
 		if (apply.active) {
 			seenRunning.current = apply.id;
 
-			if (closed.current === apply.id) return;
+			if (dismissedApplyId.current === apply.id) return;
 
 			toast.custom(
 				(id) => (
@@ -68,9 +72,10 @@ export function ApplyToasts({
 				),
 				{
 					id: toastId(apply.id),
+					position: POSITION,
 					duration: Number.POSITIVE_INFINITY,
 					onDismiss: () => {
-						closed.current = apply.id;
+						dismissedApplyId.current = apply.id;
 					},
 				},
 			);
@@ -81,7 +86,7 @@ export function ApplyToasts({
 		if (seenRunning.current !== apply.id) return;
 
 		seenRunning.current = null;
-		onFinished();
+		finished();
 
 		const outcome = applyOutcome(apply);
 		toast.custom(
@@ -94,11 +99,12 @@ export function ApplyToasts({
 			),
 			{
 				id: toastId(apply.id),
+				position: POSITION,
 				// An error asks the Member to act, so it waits for them.
 				duration: outcome === "error" ? Number.POSITIVE_INFINITY : FINISHED_MS,
 			},
 		);
-	}, [apply, onFinished]);
+	}, [apply]);
 
 	return null;
 }

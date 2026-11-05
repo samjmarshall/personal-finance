@@ -11,18 +11,18 @@ import type { TransactionsRepository } from "./transactions.repository";
 
 // One worker step: a retry redoes at most this many, and skips the done ones.
 const APPLY_BATCH = 50;
-// Every Answer moves the Apply's `updatedAt`, so this long with none means its
-// job is dead (adr032).
+// Every Answer bumps the Apply's last-touched time, so this long with none
+// means its job is dead (adr032).
 const APPLY_STALE_MS = 15 * 60_000;
 
-/** A running Apply updated after this may still report. */
+/** A running Apply touched since this is still alive. */
 export const applyActiveSince = (now = Date.now()) =>
 	new Date(now - APPLY_STALE_MS);
 
 export type DuplicateApplyRepository = Pick<
 	TransactionsRepository,
 	| "startApply"
-	| "takeApplyBatch"
+	| "nextApplyBatch"
 	| "applyAnswer"
 	| "releaseAnswer"
 	| "finishApply"
@@ -47,7 +47,7 @@ export class DuplicateApplyService {
 		this.logger = logger;
 	}
 
-	/** Fails a stuck Apply first, so it never blocks this one. */
+	/** Stops a dead Apply first, so it never blocks this one. */
 	async start({ answers }: ApplyAnswersInput): Promise<CurrentApply> {
 		try {
 			return await this.repository.startApply(answers, applyActiveSince());
@@ -62,9 +62,16 @@ export class DuplicateApplyService {
 		}
 	}
 
-	/** In the order taken: a Keep mine must land before a Use bank's on its row. */
+	/**
+	 * In the order taken: a Keep mine must land before a Use bank's on its row.
+	 * A late worker leaves an Apply the Member already sees as stopped (adr032).
+	 */
 	async applyBatch(applyId: number): Promise<{ more: boolean }> {
-		const batch = await this.repository.takeApplyBatch(applyId, APPLY_BATCH);
+		const batch = await this.repository.nextApplyBatch(
+			applyId,
+			APPLY_BATCH,
+			applyActiveSince(),
+		);
 
 		for (const answer of batch) {
 			await this.applyOne(applyId, answer);
@@ -74,7 +81,7 @@ export class DuplicateApplyService {
 	}
 
 	finish(applyId: number): Promise<void> {
-		return this.repository.finishApply(applyId);
+		return this.repository.finishApply(applyId, applyActiveSince());
 	}
 
 	/** Called once Inngest's retries run out. */
@@ -94,10 +101,15 @@ export class DuplicateApplyService {
 			active:
 				row.status === DuplicateApplyStatus.Running &&
 				row.updatedAt > applyActiveSince(),
+			// Saved only at the finish, so a stopped Apply's is the rest of its total.
+			gone:
+				row.status === DuplicateApplyStatus.Done
+					? row.gone
+					: row.total - row.applied - row.taken - row.pending,
 		};
 	}
 
-	// A gone review needs no count here: finish works it out from the total.
+	// A skipped review isn't counted; the final tally derives it from the total.
 	private async applyOne(applyId: number, answer: AnswerInput): Promise<void> {
 		try {
 			await this.repository.applyAnswer(applyId, answer);

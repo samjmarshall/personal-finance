@@ -332,7 +332,7 @@ describe("PossibleDuplicatePiles", () => {
 		);
 	});
 
-	it("marks a row its Apply didn't apply", () => {
+	it("marks a row its Apply didn't apply, for screen readers too", () => {
 		renderPiles({
 			reviews: [
 				{ ...COFFEE, answer: Answer.KeepMine, notApplied: true },
@@ -341,6 +341,12 @@ describe("PossibleDuplicatePiles", () => {
 		});
 
 		expect(screen.getAllByText("Didn't apply")).toHaveLength(1);
+		expect(
+			screen.getByRole("group", { name: /^Answer for Coffee.*Didn't apply$/ }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("group", { name: /^Answer for Coles/ }),
+		).not.toHaveAccessibleName(/Didn't apply/);
 	});
 
 	it("folds a pile away", async () => {

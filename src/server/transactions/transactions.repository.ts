@@ -132,8 +132,15 @@ export interface TransactionsRepository {
 	 * running Apply that isn't stale makes the insert hit a unique violation.
 	 */
 	startApply(answers: AnswerInput[], staleBefore: Date): Promise<CurrentApply>;
-	/** Pending Answers of a still-running Apply: Keep mine, then Both are real, then Use bank's; by id within each. */
-	takeApplyBatch(applyId: number, limit: number): Promise<AnswerInput[]>;
+	/**
+	 * Pending Answers of an Apply still running and touched after `activeSince`:
+	 * Keep mine, then Both are real, then Use bank's; by id within each.
+	 */
+	nextApplyBatch(
+		applyId: number,
+		limit: number,
+		activeSince: Date,
+	): Promise<AnswerInput[]>;
 	/**
 	 * Resolves one Answer and counts it, in one transaction. False when the review
 	 * is no longer pending on this Apply. A unique violation rolls back and throws.
@@ -141,8 +148,8 @@ export interface TransactionsRepository {
 	applyAnswer(applyId: number, answer: AnswerInput): Promise<boolean>;
 	/** Unstamps a review whose bank row another row holds, and counts it taken. False when it isn't stamped. */
 	releaseAnswer(applyId: number, id: number): Promise<boolean>;
-	/** Moves only a running Apply to done; whatever wasn't applied or taken is gone. */
-	finishApply(applyId: number): Promise<void>;
+	/** Moves only a live running Apply to done; whatever wasn't applied or taken is gone. */
+	finishApply(applyId: number, activeSince: Date): Promise<void>;
 	/** Fails only a running Apply. */
 	failApply(applyId: number, error: string): Promise<boolean>;
 	/** The newest Apply, with its count of still-pending stamped reviews. */
@@ -616,22 +623,13 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 
 				if (!apply) throw new Error("startApply: no row returned");
 
-				const running = tx
-					.select({ id: duplicateApply.id })
-					.from(duplicateApply)
-					.where(
-						and(eq(duplicateApply.id, possibleDuplicates.applyId), isRunning),
-					);
+				// The insert took the one running slot: older stamps are all stopped.
 				const stamped = await tx
 					.update(possibleDuplicates)
 					.set({ applyId: apply.id, answer: sql`${STAMP_ALIAS}.answer` })
 					.from(stampValues(answers))
 					.where(
-						and(
-							eq(possibleDuplicates.id, sql`${STAMP_ALIAS}.id`),
-							isPending,
-							or(isNull(possibleDuplicates.applyId), notExists(running)),
-						),
+						and(eq(possibleDuplicates.id, sql`${STAMP_ALIAS}.id`), isPending),
 					)
 					.returning({ id: possibleDuplicates.id });
 
@@ -643,15 +641,16 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		);
 	}
 
-	async takeApplyBatch(applyId: number, limit: number): Promise<AnswerInput[]> {
+	async nextApplyBatch(
+		applyId: number,
+		limit: number,
+		activeSince: Date,
+	): Promise<AnswerInput[]> {
 		const rows = await this.db
 			.select({ id: possibleDuplicates.id, answer: possibleDuplicates.answer })
 			.from(possibleDuplicates)
-			.innerJoin(
-				duplicateApply,
-				eq(duplicateApply.id, possibleDuplicates.applyId),
-			)
-			.where(and(eq(possibleDuplicates.applyId, applyId), isPending, isRunning))
+			.innerJoin(duplicateApply, liveApplyOf(activeSince))
+			.where(and(eq(possibleDuplicates.applyId, applyId), isPending))
 			.orderBy(
 				sql`case ${possibleDuplicates.answer} when ${Answer.KeepMine} then 0 when ${Answer.BothReal} then 1 else 2 end`,
 				asc(possibleDuplicates.id),
@@ -700,7 +699,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		});
 	}
 
-	async finishApply(applyId: number): Promise<void> {
+	async finishApply(applyId: number, activeSince: Date): Promise<void> {
 		await this.db
 			.update(duplicateApply)
 			.set({
@@ -708,7 +707,13 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				gone: sql`${duplicateApply.total} - ${duplicateApply.applied} - ${duplicateApply.taken}`,
 				finishedAt: new Date(),
 			})
-			.where(and(eq(duplicateApply.id, applyId), isRunning));
+			.where(
+				and(
+					eq(duplicateApply.id, applyId),
+					isRunning,
+					gt(duplicateApply.updatedAt, activeSince),
+				),
+			);
 	}
 
 	async failApply(applyId: number, error: string): Promise<boolean> {

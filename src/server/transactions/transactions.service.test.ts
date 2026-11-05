@@ -44,7 +44,7 @@ function serviceWith(
 		listPendingDuplicates: unstaged,
 		countPendingDuplicates: unstaged,
 		startApply: unstaged,
-		takeApplyBatch: unstaged,
+		nextApplyBatch: unstaged,
 		applyAnswer: unstaged,
 		releaseAnswer: unstaged,
 		finishApply: unstaged,

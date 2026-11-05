@@ -15,7 +15,7 @@ import { outboxService } from "~/server/outbox/outbox.module";
 import { DrizzleReceiptExtractionRepository } from "~/server/receipts/receipt-extraction.repository";
 import { ReceiptExtractionService } from "~/server/receipts/receipt-extraction.service";
 import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
-import { DuplicateApplyService } from "~/server/transactions/duplicate-apply.service";
+import { duplicateApplyService } from "~/server/transactions/duplicate-apply.module";
 import { TransactionReconcileService } from "~/server/transactions/transaction-reconcile.service";
 import { TransactionsInngestController } from "~/server/transactions/transactions.inngest.controller";
 import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
@@ -24,9 +24,9 @@ import { inngest } from "./client";
 
 // Composition root: every tier built once with the real db + client. The route
 // handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
-// function's cron/event triggers from it. The outbox, categories and balances
-// services are shared with other roots, so they come from their *.module.ts files
-// rather than being built here.
+// function's cron/event triggers from it. The outbox, categories, balances and
+// duplicate-apply services are shared with other roots, so they come from their
+// *.module.ts files rather than being built here.
 const outboxController = new OutboxInngestController({
 	inngest,
 	service: outboxService,
@@ -79,13 +79,7 @@ const cdrController = new CdrInngestController({
 
 const transactionsController = new TransactionsInngestController({
 	inngest,
-	service: new DuplicateApplyService({
-		repository: transactionsRepository,
-		logger: createRootLogger().with({
-			domain: "transactions",
-			component: "apply",
-		}),
-	}),
+	service: duplicateApplyService,
 });
 
 export const functions = [

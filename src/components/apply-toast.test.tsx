@@ -88,6 +88,25 @@ describe("ApplyToast", () => {
 		);
 	});
 
+	it("closes when the Member follows Review", async () => {
+		const onClose = vi.fn();
+		render(
+			<ApplyToast
+				apply={{
+					...APPLY,
+					status: DuplicateApplyStatus.Failed,
+					active: false,
+				}}
+				onClose={onClose}
+				phase="error"
+			/>,
+		);
+
+		await userEvent.setup().click(screen.getByRole("link", { name: "Review" }));
+
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
 	it.each(["running", "success", "error"] as const)(
 		"closes from the %s state",
 		async (phase) => {

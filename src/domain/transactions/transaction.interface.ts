@@ -85,7 +85,7 @@ export interface PossibleDuplicateReview {
 	descriptionScore: number | null;
 	/** Saved by an Apply; kept when that Apply didn't apply it. */
 	answer: Answer | null;
-	/** Its Apply failed or stuck before reaching it (adr032). */
+	/** Its Apply stopped before reaching it (adr032). */
 	notApplied: boolean;
 }
 

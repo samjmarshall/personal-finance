@@ -38,7 +38,7 @@ A Bank import can leave hundreds of Possible duplicates to answer. Apply sends e
 - `src/server/transactions/transactions.trpc.controller.ts` declares `applyAnswers` (mutation) and `currentApply` (query).
 - `src/server/transactions/duplicate-apply.service.ts` holds `DuplicateApplyService`: `start`, `applyBatch`, `finish`, `fail`, `current`. It also holds the batch size (50) and the 15-minute stuck rule.
 - `src/server/transactions/transactions.inngest.controller.ts` declares the `duplicate-apply` function and its `onFailure`.
-- `src/server/transactions/transactions.repository.ts` has the queries `startApply`, `takeApplyBatch`, `applyAnswer`, `releaseAnswer`, `finishApply`, `failApply` and `latestApply`. `listPendingDuplicates` and `countPendingDuplicates` hide the rows of a running Apply.
+- `src/server/transactions/transactions.repository.ts` has the queries `startApply`, `nextApplyBatch`, `applyAnswer`, `releaseAnswer`, `finishApply`, `failApply` and `latestApply`. `listPendingDuplicates` and `countPendingDuplicates` hide the rows of a running Apply.
 - `src/server/transactions/transactions.schema.ts` holds the `duplicate_apply` table and the `possible_duplicate.apply_id` and `answer` columns (migration `0029`).
 - `src/domain/transactions/transaction.dto.ts` holds `applyAnswersDto`: 1 to 10,000 Answers (`APPLY_ANSWERS_MAX`), each review once.
 
@@ -106,7 +106,7 @@ sequenceDiagram
     UI-->>M: toast "Applying answers", rows leave the list
     DB-->>Job: duplicate/apply.requested { applyId }
     loop batch-N, 50 per step
-        Job->>DB: takeApplyBatch (Keep mine → Both are real → Use bank's)
+        Job->>DB: nextApplyBatch (Keep mine → Both are real → Use bank's)
         loop each Answer
             Job->>DB: apply Answer + applied + 1 (one transaction)
             opt bank row already a Transaction

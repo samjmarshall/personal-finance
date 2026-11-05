@@ -317,9 +317,14 @@ function Row({
 				<legend className="sr-only">
 					Answer for {mine.description}, {formatDate(mine.date)},{" "}
 					{formatCurrency(Math.abs(mine.amount))}
+					{notApplied && ". Didn't apply"}
 				</legend>
+				{/* Screen readers hear it in the legend, so it isn't read twice. */}
 				{notApplied && (
-					<p className="mb-1.5 w-fit rounded-full border border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] px-2 py-0.5 text-xs font-medium text-[var(--badge-warn-fg)]">
+					<p
+						aria-hidden
+						className="mb-1.5 w-fit rounded-full border border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] px-2 py-0.5 text-xs font-medium text-[var(--badge-warn-fg)]"
+					>
 						Didn't apply
 					</p>
 				)}

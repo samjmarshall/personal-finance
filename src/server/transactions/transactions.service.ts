@@ -114,7 +114,7 @@ export class TransactionsService {
 		return assertRow(row, "create transaction");
 	}
 
-	// A running Apply's rows wait for it; a stuck one's come back (adr032).
+	// A running Apply's rows wait for it; a stopped one's come back (adr032).
 	listPossibleDuplicates(): Promise<PossibleDuplicateReview[]> {
 		return this.repository.listPendingDuplicates(applyActiveSince());
 	}
