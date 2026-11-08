@@ -304,9 +304,9 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - [x] On `local/<branch>`, applying 300+ Answers returns at once, the rows leave the list, and the toast counts up to "300 of 300", then shows success
 - [x] Going to another page and reloading mid-Apply brings the toast back
 - [x] Closing the toast mid-Apply keeps it closed until the finish toast
-- [ ] Stopping the Inngest dev server mid-Apply, then letting retries run out, shows the error toast "Stopped at x of y…" with "Review". The leftover rows show their saved answer and "Didn't apply" — verified via the stale path (worker killed, Apply backdated 16 min); the retries-exhausted `onFailure` path is unit-tested only
+- [ ] Stopping the Inngest dev server mid-Apply, then letting retries run out, shows the error toast "Stopped at x of y…" with "Review". The leftover rows show their saved answer and "Didn't apply" — verified via the stale path (worker killed, Apply backdated 16 min); the retries-exhausted `onFailure` path is unit-tested only. Re-validation 2026-11-05: still open; forcing a step failure needs DB fault injection on `local/<branch>`, which needs the owner
 - [x] A second Apply during a run shows "An apply is already running."
-- [ ] `/design-review` — ran 2026-11-05: 0 blockers, 1 High open ("Didn't apply" pill not announced to screen readers)
+- [ ] `/design-review` — first run 2026-11-05: 0 blockers, 1 High ("Didn't apply" not announced), fixed in 8278222 and confirmed. Re-run 2026-11-05: 1 Blocker open — the `top-center` running toast covers the sticky header nav at 375px (`.playwright-mcp/toast-375-_transactions_import.png`). Fixed 2026-11-08 (uncommitted): top toasts sit 5rem down below `lg`, so the toast starts at 80px under the 61px header at 375 and 768, and stays 24px at 1440 (Playwright, `.playwright-mcp/toast-fix-*.png`); needs a `/design-review` re-run to tick. 2 High (covers content at 768/1440; 5 s warning toast asks for action)
 
 ## References
 - Design doc: `thoughts/designs/2026-11-04-async-duplicate-apply-progress-toast.md` (carries `## Related ADRs`)

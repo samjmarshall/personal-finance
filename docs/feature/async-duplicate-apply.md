@@ -52,9 +52,10 @@ A Bank import can leave hundreds of Possible duplicates to answer. Apply sends e
 **Trade-offs**:
 - **Order matters.** Each batch runs Keep mine, then Both are real, then Use bank's, by id within each. A Use bank's turns every other pending review on its Transaction into its own Transaction, so a Keep mine on that Transaction must land first.
 - **Exact counts.** Each Answer and its `applied + 1` share one transaction. A retried batch skips rows that are no longer pending, so it never counts one twice.
-- **Stuck by quiet, not by age.** Every Answer moves `updatedAt`. A running Apply with no progress for 15 minutes reads as not active. The next `start` marks it `failed` ("No progress; failed by the next apply."). A big Apply that keeps moving never trips it.
+- **Stuck by quiet, not by age.** Every applied or taken Answer moves `updatedAt`. A running Apply with no progress for 15 minutes reads as not active. The next `start` marks it `failed` ("No progress; failed by the next apply."). A big Apply that keeps moving never trips it.
 - **Its own concurrency slot** (`"duplicate-apply"`), not `"cdr-sync"`. Sharing that slot would leave the toast stuck at 0 behind a long Bank import. Every write checks `status = pending`, so an Apply can safely run beside a sync.
 - **A late worker can't touch a newer Apply's row.** Each write matches the review's `apply_id` as well as `pending`.
+- **A late worker can't revive a Stopped Apply.** Each Answer first locks the Apply row and checks it is still live. A finish that comes too late marks the Apply `failed` ("No progress; its worker finished too late.") and logs it.
 - **The finish toast shows only in a tab that saw the Apply run.** A page load never replays an old result. After a reload, the "Didn't apply" rows are the record.
 - No job prunes `duplicate_apply` rows.
 
@@ -64,6 +65,7 @@ A Bank import can leave hundreds of Possible duplicates to answer. Apply sends e
 - Inngest dashboard: `duplicate-apply` runs and their `batch-N` / `finish` steps.
 - The latest `duplicate_apply` row: `status`, `total`, `applied`, `taken`, `gone`, `error`.
 - Log line `duplicate apply failed` (error level), with `applyId` and the message.
+- Log line `duplicate apply finished late` (error level), with `applyId` and `stopped` (whether this finish was the one that failed it).
 - `TracingMiddleware.onRunError` sends each thrown run error to PostHog error tracking.
 
 **Alerts**: none. One household uses the app before launch, and the Member sees a Stopped Apply in the app. Add an alert if Stopped Applies start to happen.
@@ -76,7 +78,7 @@ A Bank import can leave hundreds of Possible duplicates to answer. Apply sends e
 | Submit while an Apply runs | `ConflictError` | "An apply is already running." |
 | Transient DB error in a batch | Inngest retries the step (3 retries) | The bar pauses, then moves on |
 | Retries run out | `onFailure` → `failed` plus `error` | "Stopped at x of y. N answers didn't apply." with Review; missed rows keep their Answer, marked "Didn't apply" |
-| Event never delivered | `outbox-sweep` re-sends it; after 15 quiet minutes it reads as stuck, and the next Apply fails it | Same as retries running out |
+| Event never delivered | `outbox-sweep` re-sends it at the top of the hour. Within 15 minutes, the Apply runs as normal. Later, it already reads as Stopped: the worker applies nothing, fails it, and logs `duplicate apply finished late`. The next Apply also fails a stuck one | Same as retries running out |
 | Use bank's whose bank row is already another Transaction | Unique-key clash → `releaseAnswer` clears the Answer, `taken + 1` | "N still need an answer: the bank's row is already in your transactions." The row comes back blank |
 | Review gone before its turn (answered in another tab, settled by a sync, its Transaction deleted, or released by another Use bank's) | Counted `gone` at finish | "N no longer needed an answer." |
 

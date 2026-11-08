@@ -1,7 +1,7 @@
 ---
 Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-11-05'
+Date: '2026-11-08'
 # prettier-ignore
 ---
 
@@ -67,7 +67,7 @@ How it works (diagram under option 2):
 - `DrizzleTransactionsRepository` takes an `outbox: OutboxWriteDoor` dep, as `DrizzleCdrRepository` does.
 - `gone` is derived at finish, not counted. A row that vanished mid-run (deleted by another Answer, released by a sync, or cascaded with its Transaction) shows only as the gap.
 - Its counts follow a different rule from `cdr_import`, whose counts are "a guide, not a ledger". A reader must not copy one rule onto the other.
-- A 15-minute stuck rule: a `running` Apply with no progress for that long (`updatedAt`, moved by every count) reads as inactive, and the next `start` fails it. It reads progress, not age, so a big Apply that is still working never trips it. A worker that wakes later finds its rows unstamped or its Apply `failed` and does nothing.
+- A 15-minute stuck rule: a `running` Apply with no progress for that long (`updatedAt`, moved by every count) reads as inactive, and the next `start` fails it. It reads progress, not age, so a big Apply that is still working never trips it. A worker that wakes later finds its rows unstamped or its Apply `failed` and does nothing. _(Note 2026-11-08: it may also find its Apply still `running` but past the 15 minutes. Each Answer now locks the Apply row and checks it is still live first, so that worker applies nothing. Its finish then marks the Apply `failed` and logs `duplicate apply finished late`, so a Stopped Apply never stays `running`. A lost event the hourly `outbox-sweep` re-sends after 15 minutes ends the same way.)_
 - One Apply at a time. A Member who answers more rows during a run waits for it to finish before applying them.
 - Progress moves in 2 s polls, not a smooth stream.
 - A second service in the transactions domain (`DuplicateApplyService`), since the worker needs different deps from `TransactionsService`.
