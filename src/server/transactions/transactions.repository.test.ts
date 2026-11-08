@@ -1224,6 +1224,14 @@ describe("nextApplyBatch", () => {
 	});
 });
 
+// The lock read finds Apply 7 live; any other query answers as `respond` says.
+const liveApply =
+	(respond: Respond = () => []): Respond =>
+	(query) =>
+		query.sql.startsWith('select "id" from "duplicate_apply"')
+			? [[7]]
+			: respond(query);
+
 describe("applyAnswer", () => {
 	// The bank's half of review 4, as the delete returns it.
 	const TAKEN = [
@@ -1245,13 +1253,19 @@ describe("applyAnswer", () => {
 	const bumped = (queries: { sql: string }[]) =>
 		statements(queries).some((q) => q.startsWith('update "duplicate_apply"'));
 
-	it("keep mine marks the review kept and counts it, guarded on this Apply", async () => {
-		const { repository, queries } = harness(({ sql }) =>
-			sql.startsWith('update "possible_duplicate"') ? [[4]] : [],
+	it("keep mine locks the live Apply, marks the review kept and counts it, guarded on this Apply", async () => {
+		const { repository, queries } = harness(
+			liveApply(({ sql }) =>
+				sql.startsWith('update "possible_duplicate"') ? [[4]] : [],
+			),
 		);
 
 		await expect(
-			repository.applyAnswer(7, { id: 4, answer: Answer.KeepMine }),
+			repository.applyAnswer(
+				7,
+				{ id: 4, answer: Answer.KeepMine },
+				ACTIVE_SINCE,
+			),
 		).resolves.toBe(true);
 		expect(queries).toMatchInlineSnapshot(`
 			[
@@ -1259,6 +1273,15 @@ describe("applyAnswer", () => {
 			    "method": "execute",
 			    "params": [],
 			    "sql": "begin",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      7,
+			      "running",
+			      "2026-09-28T23:45:00.000Z",
+			    ],
+			    "sql": "select "id" from "duplicate_apply" where ("duplicate_apply"."id" = $1 and "duplicate_apply"."status" = $2 and "duplicate_apply"."updatedAt" > $3) for update",
 			  },
 			  {
 			    "method": "all",
@@ -1289,10 +1312,14 @@ describe("applyAnswer", () => {
 	});
 
 	it("use bank's moves the bank values and counts it, in one transaction", async () => {
-		const { repository, queries } = harness(taking);
+		const { repository, queries } = harness(liveApply(taking));
 
 		await expect(
-			repository.applyAnswer(7, { id: 4, answer: Answer.UseBank }),
+			repository.applyAnswer(
+				7,
+				{ id: 4, answer: Answer.UseBank },
+				ACTIVE_SINCE,
+			),
 		).resolves.toBe(true);
 		expect(queries).toMatchInlineSnapshot(`
 			[
@@ -1300,6 +1327,15 @@ describe("applyAnswer", () => {
 			    "method": "execute",
 			    "params": [],
 			    "sql": "begin",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      7,
+			      "running",
+			      "2026-09-28T23:45:00.000Z",
+			    ],
+			    "sql": "select "id" from "duplicate_apply" where ("duplicate_apply"."id" = $1 and "duplicate_apply"."status" = $2 and "duplicate_apply"."updatedAt" > $3) for update",
 			  },
 			  {
 			    "method": "all",
@@ -1360,18 +1396,24 @@ describe("applyAnswer", () => {
 			"WOOLWORTHS SYDNEY",
 			12,
 		];
-		const { repository, queries } = harness(({ sql }) =>
-			taking({ sql }).length
-				? [TAKEN]
-				: sql.startsWith('delete from "possible_duplicate"')
-					? [sameDay]
-					: [],
+		const { repository, queries } = harness(
+			liveApply(({ sql }) =>
+				taking({ sql }).length
+					? [TAKEN]
+					: sql.startsWith('delete from "possible_duplicate"')
+						? [sameDay]
+						: [],
+			),
 		);
 
 		await expect(
-			repository.applyAnswer(7, { id: 4, answer: Answer.UseBank }),
+			repository.applyAnswer(
+				7,
+				{ id: 4, answer: Answer.UseBank },
+				ACTIVE_SINCE,
+			),
 		).resolves.toBe(true);
-		expect(queries.slice(3, 5)).toMatchInlineSnapshot(`
+		expect(queries.slice(4, 6)).toMatchInlineSnapshot(`
 			[
 			  {
 			    "method": "all",
@@ -1401,12 +1443,16 @@ describe("applyAnswer", () => {
 	});
 
 	it("both are real adds the bank row and counts it", async () => {
-		const { repository, queries } = harness(taking);
+		const { repository, queries } = harness(liveApply(taking));
 
 		await expect(
-			repository.applyAnswer(7, { id: 4, answer: Answer.BothReal }),
+			repository.applyAnswer(
+				7,
+				{ id: 4, answer: Answer.BothReal },
+				ACTIVE_SINCE,
+			),
 		).resolves.toBe(true);
-		expect(statements(queries).slice(1, -1)).toMatchInlineSnapshot(`
+		expect(statements(queries).slice(2, -1)).toMatchInlineSnapshot(`
 			[
 			  "delete from "possible_duplicate" where ("possible_duplicate"."id" = $1 and "possible_duplicate"."status" = $2 and "possible_duplicate"."applyId" = $3) returning "provenance", "externalId", "externalAccountId", "accountName", "amount", "date", "description", "transactionId"",
 			  "insert into "transaction" ("id", "expenseId", "categoryId", "date", "description", "receiptDescription", "amount", "group", "frequency", "priority", "notes", "provenance", "externalId", "externalAccountId", "accountName", "createdAt", "updatedAt") values (default, default, default, $1, $2, default, $3, default, default, default, default, $4, $5, $6, $7, $8, $9) on conflict do nothing",
@@ -1418,25 +1464,49 @@ describe("applyAnswer", () => {
 	it.each([Answer.KeepMine, Answer.UseBank, Answer.BothReal])(
 		"%s reports false and counts nothing when the review isn't pending on this Apply",
 		async (answer) => {
-			const { repository, queries } = harness();
+			const { repository, queries } = harness(liveApply());
 
-			await expect(repository.applyAnswer(7, { id: 4, answer })).resolves.toBe(
-				false,
-			);
+			await expect(
+				repository.applyAnswer(7, { id: 4, answer }, ACTIVE_SINCE),
+			).resolves.toBe(false);
 			expect(bumped(queries)).toBe(false);
 			expect(statements(queries).at(-1)).toBe("commit");
 		},
 	);
 
+	// A late worker must not apply an Apply the Member already sees as stopped.
+	it("reports false and touches no row when the Apply isn't live", async () => {
+		const { repository, queries } = harness();
+
+		await expect(
+			repository.applyAnswer(
+				7,
+				{ id: 4, answer: Answer.UseBank },
+				ACTIVE_SINCE,
+			),
+		).resolves.toBe(false);
+		expect(statements(queries)).toEqual([
+			"begin",
+			expect.stringMatching(/^select "id" from "duplicate_apply"/),
+			"commit",
+		]);
+	});
+
 	it("rolls back the write and the count when the bank row sits on another row", async () => {
-		const { repository, queries } = harness((query) =>
-			query.sql.startsWith('update "transaction"')
-				? pgError("23505")
-				: taking(query),
+		const { repository, queries } = harness(
+			liveApply((query) =>
+				query.sql.startsWith('update "transaction"')
+					? pgError("23505")
+					: taking(query),
+			),
 		);
 
 		await expect(
-			repository.applyAnswer(7, { id: 4, answer: Answer.UseBank }),
+			repository.applyAnswer(
+				7,
+				{ id: 4, answer: Answer.UseBank },
+				ACTIVE_SINCE,
+			),
 		).rejects.toMatchObject({ cause: { code: "23505" } });
 		expect(bumped(queries)).toBe(false);
 		expect(statements(queries).at(-1)).toBe("rollback");
@@ -1444,18 +1514,31 @@ describe("applyAnswer", () => {
 });
 
 describe("releaseAnswer", () => {
-	it("unstamps the review and counts it taken, in one transaction", async () => {
-		const { repository, queries } = harness(({ sql }) =>
-			sql.startsWith('update "possible_duplicate"') ? [[4]] : [],
+	it("locks the live Apply, unstamps the review and counts it taken, in one transaction", async () => {
+		const { repository, queries } = harness(
+			liveApply(({ sql }) =>
+				sql.startsWith('update "possible_duplicate"') ? [[4]] : [],
+			),
 		);
 
-		await expect(repository.releaseAnswer(7, 4)).resolves.toBe(true);
+		await expect(repository.releaseAnswer(7, 4, ACTIVE_SINCE)).resolves.toBe(
+			true,
+		);
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
 			    "method": "execute",
 			    "params": [],
 			    "sql": "begin",
+			  },
+			  {
+			    "method": "all",
+			    "params": [
+			      7,
+			      "running",
+			      "2026-09-28T23:45:00.000Z",
+			    ],
+			    "sql": "select "id" from "duplicate_apply" where ("duplicate_apply"."id" = $1 and "duplicate_apply"."status" = $2 and "duplicate_apply"."updatedAt" > $3) for update",
 			  },
 			  {
 			    "method": "all",
@@ -1487,12 +1570,28 @@ describe("releaseAnswer", () => {
 	});
 
 	it("counts nothing when this Apply doesn't hold the review", async () => {
-		const { repository, queries } = harness();
+		const { repository, queries } = harness(liveApply());
 
-		await expect(repository.releaseAnswer(7, 4)).resolves.toBe(false);
+		await expect(repository.releaseAnswer(7, 4, ACTIVE_SINCE)).resolves.toBe(
+			false,
+		);
 		expect(statements(queries)).toEqual([
 			"begin",
+			expect.stringMatching(/^select "id" from "duplicate_apply"/),
 			expect.stringMatching(/^update "possible_duplicate"/),
+			"commit",
+		]);
+	});
+
+	it("touches no row when the Apply isn't live", async () => {
+		const { repository, queries } = harness();
+
+		await expect(repository.releaseAnswer(7, 4, ACTIVE_SINCE)).resolves.toBe(
+			false,
+		);
+		expect(statements(queries)).toEqual([
+			"begin",
+			expect.stringMatching(/^select "id" from "duplicate_apply"/),
 			"commit",
 		]);
 	});
@@ -1500,13 +1599,13 @@ describe("releaseAnswer", () => {
 
 describe("finishApply", () => {
 	it("moves only a live running Apply to done, counting the rest gone", async () => {
-		const { repository, queries } = harness();
+		const { repository, queries } = harness(() => [[7]]);
 
-		await repository.finishApply(7, new Date("2026-09-28T23:45:00.000Z"));
+		await expect(repository.finishApply(7, ACTIVE_SINCE)).resolves.toBe(true);
 		expect(queries).toMatchInlineSnapshot(`
 			[
 			  {
-			    "method": "execute",
+			    "method": "all",
 			    "params": [
 			      "done",
 			      "2026-09-29T00:00:00.000Z",
@@ -1515,10 +1614,16 @@ describe("finishApply", () => {
 			      "running",
 			      "2026-09-28T23:45:00.000Z",
 			    ],
-			    "sql": "update "duplicate_apply" set "status" = $1, "gone" = "duplicate_apply"."total" - "duplicate_apply"."applied" - "duplicate_apply"."taken", "updatedAt" = $2, "finishedAt" = $3 where ("duplicate_apply"."id" = $4 and "duplicate_apply"."status" = $5 and "duplicate_apply"."updatedAt" > $6)",
+			    "sql": "update "duplicate_apply" set "status" = $1, "gone" = "duplicate_apply"."total" - "duplicate_apply"."applied" - "duplicate_apply"."taken", "updatedAt" = $2, "finishedAt" = $3 where ("duplicate_apply"."id" = $4 and "duplicate_apply"."status" = $5 and "duplicate_apply"."updatedAt" > $6) returning "id"",
 			  },
 			]
 		`);
+	});
+
+	it("reports false when the Apply isn't live", async () => {
+		const { repository } = harness();
+
+		await expect(repository.finishApply(7, ACTIVE_SINCE)).resolves.toBe(false);
 	});
 });
 

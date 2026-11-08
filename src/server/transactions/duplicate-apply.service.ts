@@ -11,9 +11,10 @@ import type { TransactionsRepository } from "./transactions.repository";
 
 // One worker step: a retry redoes at most this many, and skips the done ones.
 const APPLY_BATCH = 50;
-// Every Answer bumps the Apply's last-touched time, so this long with none
-// means its job is dead (adr032).
+// Each Answer that lands bumps the Apply's last-touched time, so this long with
+// none means its job is dead (adr032).
 const APPLY_STALE_MS = 15 * 60_000;
+const LATE_FINISH_ERROR = "No progress; its worker finished too late.";
 
 /** A running Apply touched since this is still alive. */
 export const applyActiveSince = (now = Date.now()) =>
@@ -63,7 +64,7 @@ export class DuplicateApplyService {
 	}
 
 	/**
-	 * In the order taken: a Keep mine must land before a Use bank's on its row.
+	 * Never reorders the batch: a Keep mine must land before a Use bank's on its row.
 	 * A late worker leaves an Apply the Member already sees as stopped (adr032).
 	 */
 	async applyBatch(applyId: number): Promise<{ more: boolean }> {
@@ -80,8 +81,12 @@ export class DuplicateApplyService {
 		return { more: batch.length === APPLY_BATCH };
 	}
 
-	finish(applyId: number): Promise<void> {
-		return this.repository.finishApply(applyId, applyActiveSince());
+	/** A worker past the stuck limit stops its Apply instead: the Member already sees it stopped. */
+	async finish(applyId: number): Promise<void> {
+		if (await this.repository.finishApply(applyId, applyActiveSince())) return;
+
+		const stopped = await this.repository.failApply(applyId, LATE_FINISH_ERROR);
+		this.logger.error("duplicate apply finished late", { applyId, stopped });
 	}
 
 	/** Called once Inngest's retries run out. */
@@ -110,14 +115,19 @@ export class DuplicateApplyService {
 	}
 
 	// A skipped review isn't counted; the final tally derives it from the total.
+	// The clock is read per Answer: a slow batch can cross the stuck limit.
 	private async applyOne(applyId: number, answer: AnswerInput): Promise<void> {
 		try {
-			await this.repository.applyAnswer(applyId, answer);
+			await this.repository.applyAnswer(applyId, answer, applyActiveSince());
 		} catch (error) {
 			// Use bank's moves the bank id onto the household row; another row may hold it.
 			if (!isPgViolation(error, PgViolation.UniqueViolation)) throw error;
 
-			await this.repository.releaseAnswer(applyId, answer.id);
+			await this.repository.releaseAnswer(
+				applyId,
+				answer.id,
+				applyActiveSince(),
+			);
 		}
 	}
 }

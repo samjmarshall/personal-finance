@@ -143,13 +143,28 @@ export interface TransactionsRepository {
 	): Promise<AnswerInput[]>;
 	/**
 	 * Resolves one Answer and counts it, in one transaction. False when the review
-	 * is no longer pending on this Apply. A unique violation rolls back and throws.
+	 * is no longer pending on this Apply, or the Apply isn't running and touched
+	 * after `activeSince`. A unique violation rolls back and throws.
 	 */
-	applyAnswer(applyId: number, answer: AnswerInput): Promise<boolean>;
-	/** Unstamps a review whose bank row another row holds, and counts it taken. False when it isn't stamped. */
-	releaseAnswer(applyId: number, id: number): Promise<boolean>;
-	/** Moves only a live running Apply to done; whatever wasn't applied or taken is gone. */
-	finishApply(applyId: number, activeSince: Date): Promise<void>;
+	applyAnswer(
+		applyId: number,
+		answer: AnswerInput,
+		activeSince: Date,
+	): Promise<boolean>;
+	/**
+	 * Unstamps a review whose bank row another row holds, and counts it taken.
+	 * False when it isn't stamped, or the Apply isn't live as in `applyAnswer`.
+	 */
+	releaseAnswer(
+		applyId: number,
+		id: number,
+		activeSince: Date,
+	): Promise<boolean>;
+	/**
+	 * Moves only a live running Apply to done; whatever wasn't applied or taken
+	 * is gone. False when it wasn't live.
+	 */
+	finishApply(applyId: number, activeSince: Date): Promise<boolean>;
 	/** Fails only a running Apply. */
 	failApply(applyId: number, error: string): Promise<boolean>;
 	/** The newest Apply, with its count of still-pending stamped reviews. */
@@ -218,10 +233,10 @@ const stampValues = (answers: AnswerInput[]) =>
 	)}) as ${STAMP_ALIAS}(id, answer)`;
 
 const STALE_APPLY_ERROR = "No progress; failed by the next apply.";
-// Joined left, a match means the row is a still-moving Apply's to resolve.
-const liveApplyOf = (activeSince: Date) =>
+// A match is a running Apply that's still moving, so it owns its rows.
+const liveApply = (id: number | PgColumn, activeSince: Date) =>
 	and(
-		eq(duplicateApply.id, possibleDuplicates.applyId),
+		eq(duplicateApply.id, id),
 		isRunning,
 		gt(duplicateApply.updatedAt, activeSince),
 	);
@@ -587,7 +602,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 				transactions,
 				eq(transactions.id, possibleDuplicates.transactionId),
 			)
-			.leftJoin(duplicateApply, liveApplyOf(activeSince))
+			.leftJoin(
+				duplicateApply,
+				liveApply(possibleDuplicates.applyId, activeSince),
+			)
 			.where(and(isPending, isNull(duplicateApply.id)))
 			.orderBy(desc(possibleDuplicates.date), desc(possibleDuplicates.id));
 	}
@@ -596,7 +614,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		const [row] = await this.db
 			.select({ count: sql<number>`cast(count(*) as int)` })
 			.from(possibleDuplicates)
-			.leftJoin(duplicateApply, liveApplyOf(activeSince))
+			.leftJoin(
+				duplicateApply,
+				liveApply(possibleDuplicates.applyId, activeSince),
+			)
 			.where(and(isPending, isNull(duplicateApply.id)));
 
 		return row?.count ?? 0;
@@ -649,7 +670,10 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		const rows = await this.db
 			.select({ id: possibleDuplicates.id, answer: possibleDuplicates.answer })
 			.from(possibleDuplicates)
-			.innerJoin(duplicateApply, liveApplyOf(activeSince))
+			.innerJoin(
+				duplicateApply,
+				liveApply(possibleDuplicates.applyId, activeSince),
+			)
 			.where(and(eq(possibleDuplicates.applyId, applyId), isPending))
 			.orderBy(
 				sql`case ${possibleDuplicates.answer} when ${Answer.KeepMine} then 0 when ${Answer.BothReal} then 1 else 2 end`,
@@ -661,8 +685,13 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		return rows.map((row) => ({ id: row.id, answer: row.answer as Answer }));
 	}
 
-	applyAnswer(applyId: number, answer: AnswerInput): Promise<boolean> {
+	applyAnswer(
+		applyId: number,
+		answer: AnswerInput,
+		activeSince: Date,
+	): Promise<boolean> {
 		return this.db.transaction(async (tx) => {
+			if (!(await this.lockLiveApply(tx, applyId, activeSince))) return false;
 			if (!(await this.resolveAnswer(tx, answer, applyId))) return false;
 
 			await tx
@@ -674,8 +703,14 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		});
 	}
 
-	releaseAnswer(applyId: number, id: number): Promise<boolean> {
+	releaseAnswer(
+		applyId: number,
+		id: number,
+		activeSince: Date,
+	): Promise<boolean> {
 		return this.db.transaction(async (tx) => {
+			if (!(await this.lockLiveApply(tx, applyId, activeSince))) return false;
+
 			const released = await tx
 				.update(possibleDuplicates)
 				.set({ applyId: null, answer: null })
@@ -699,21 +734,18 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		});
 	}
 
-	async finishApply(applyId: number, activeSince: Date): Promise<void> {
-		await this.db
+	async finishApply(applyId: number, activeSince: Date): Promise<boolean> {
+		const finished = await this.db
 			.update(duplicateApply)
 			.set({
 				status: DuplicateApplyStatus.Done,
 				gone: sql`${duplicateApply.total} - ${duplicateApply.applied} - ${duplicateApply.taken}`,
 				finishedAt: new Date(),
 			})
-			.where(
-				and(
-					eq(duplicateApply.id, applyId),
-					isRunning,
-					gt(duplicateApply.updatedAt, activeSince),
-				),
-			);
+			.where(liveApply(applyId, activeSince))
+			.returning({ id: duplicateApply.id });
+
+		return finished.length > 0;
 	}
 
 	async failApply(applyId: number, error: string): Promise<boolean> {
@@ -786,6 +818,22 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 			.returning({ id: transactions.id });
 
 		return adopted.length > 0;
+	}
+
+	// Locks the Apply before its rows, as a start does, so a start failing it
+	// waits for this Answer and every later Answer sees it stopped.
+	private async lockLiveApply(
+		tx: Executor,
+		applyId: number,
+		activeSince: Date,
+	): Promise<boolean> {
+		const [live] = await tx
+			.select({ id: duplicateApply.id })
+			.from(duplicateApply)
+			.where(liveApply(applyId, activeSince))
+			.for("update");
+
+		return live !== undefined;
 	}
 
 	// Only a pending review its Apply still holds, so a late worker can't touch

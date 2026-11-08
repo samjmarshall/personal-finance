@@ -140,8 +140,31 @@ describe("applyBatch", () => {
 		await expect(service.applyBatch(7)).resolves.toEqual({ more: false });
 		expect(nextApplyBatch.calls).toEqual([[7, 50, minutesAgo(15)]]);
 		expect(applyAnswer.calls).toEqual([
-			[7, keepMine(1)],
-			[7, useBank(2)],
+			[7, keepMine(1), minutesAgo(15)],
+			[7, useBank(2), minutesAgo(15)],
+		]);
+	});
+
+	it("reads the clock per Answer, so a slow batch stops at the stuck limit", async () => {
+		const applyAnswer = recorder(true);
+		const { service } = serviceWith({
+			nextApplyBatch: async () => [keepMine(1), keepMine(2)],
+			applyAnswer: async (...args) => {
+				vi.setSystemTime(NOW.getTime() + 60_000);
+
+				return applyAnswer.method(...args);
+			},
+		});
+
+		try {
+			await service.applyBatch(7);
+		} finally {
+			vi.setSystemTime(NOW);
+		}
+
+		expect(applyAnswer.calls.map(([, , activeSince]) => activeSince)).toEqual([
+			minutesAgo(15),
+			minutesAgo(14),
 		]);
 	});
 
@@ -175,7 +198,7 @@ describe("applyBatch", () => {
 
 		await service.applyBatch(7);
 
-		expect(releaseAnswer.calls).toEqual([[7, 2]]);
+		expect(releaseAnswer.calls).toEqual([[7, 2, minutesAgo(15)]]);
 		expect(applied).toEqual([3]);
 	});
 
@@ -232,13 +255,39 @@ describe("applyBatch", () => {
 
 describe("finish", () => {
 	it("closes the Apply only while it is live", async () => {
-		const finishApply = recorder(undefined);
-		const { service } = serviceWith({ finishApply: finishApply.method });
+		const finishApply = recorder(true);
+		const { service, logs } = serviceWith({ finishApply: finishApply.method });
 
 		await service.finish(7);
 
 		expect(finishApply.calls).toEqual([[7, minutesAgo(15)]]);
+		expect(logs).toEqual([]);
 	});
+
+	// Left running, a late worker's Apply showed Stopped but never ended or logged.
+	it.each([true, false])(
+		"fails and logs an Apply a late worker can't finish (still running: %s)",
+		async (stopped) => {
+			const failApply = recorder(stopped);
+			const { service, logs } = serviceWith({
+				finishApply: async () => false,
+				failApply: failApply.method,
+			});
+
+			await service.finish(7);
+
+			expect(failApply.calls).toEqual([
+				[7, "No progress; its worker finished too late."],
+			]);
+			expect(logs).toEqual([
+				{
+					level: "error",
+					msg: "duplicate apply finished late",
+					attrs: { applyId: 7, stopped },
+				},
+			]);
+		},
+	);
 });
 
 describe("fail", () => {
@@ -277,7 +326,7 @@ describe("current", () => {
 		await expect(service.current()).resolves.toEqual({ ...row, active });
 	});
 
-	// Else one that stopped after its last Answer, all gone, shows a blank toast.
+	// Without this, an Apply stopped after its last Answer, all gone, showed a blank toast.
 	it("counts a stopped Apply's gone reviews, which only a finish saves", async () => {
 		const row = {
 			...APPLY,
