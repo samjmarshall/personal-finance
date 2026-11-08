@@ -43,7 +43,10 @@ export default function RootLayout({
 			<body className="font-sans">
 				<ThemeProvider>
 					<TRPCReactProvider>{children}</TRPCReactProvider>
-					<Toaster />
+					<Toaster
+						mobileOffset={{ top: "var(--toast-top)" }}
+						offset={{ top: "var(--toast-top)" }}
+					/>
 				</ThemeProvider>
 			</body>
 		</html>

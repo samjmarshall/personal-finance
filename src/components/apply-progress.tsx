@@ -9,7 +9,7 @@ import { api } from "~/trpc/react";
 
 const POLL_MS = 2000;
 const FINISHED_MS = 5000;
-// Bottom-right covers the Import page's sticky Apply bar; other toasts stay put.
+// Top, clear of the Import page's sticky Apply bar. Other toasts keep their spot.
 const POSITION = "top-center";
 
 /** Polls the latest Apply while it runs, so its toast follows the Member across pages. */
