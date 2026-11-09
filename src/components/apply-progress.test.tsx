@@ -148,6 +148,42 @@ describe("ApplyToasts", () => {
 		},
 	);
 
+	it.each([
+		["a taken warning waits", { applied: 199, taken: 1 }, Infinity],
+		["a gone-only warning closes", { applied: 199, gone: 1 }, 5000],
+		["a success closes", {}, 5000],
+	] as const)("%s", async (_, end, duration) => {
+		const custom = vi.spyOn(toast, "custom");
+		const first = running();
+		const { tick } = renderToasts(first);
+		await screen.findByRole("progressbar");
+
+		tick(done({ id: first.id, ...end }));
+
+		expect(custom).toHaveBeenLastCalledWith(
+			expect.any(Function),
+			expect.objectContaining({ duration }),
+		);
+		custom.mockRestore();
+	});
+
+	it("drops a waiting finish once the next Apply runs", async () => {
+		const first = running();
+		const { tick } = renderToasts(first);
+		await screen.findByRole("progressbar");
+		tick(done({ id: first.id, applied: 199, taken: 1 }));
+		await screen.findByRole("link", { name: "Review" });
+
+		tick(running({ id: first.id + 1000, applied: 0, pending: 200 }));
+
+		await screen.findByRole("progressbar");
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("link", { name: "Review" }),
+			).not.toBeInTheDocument(),
+		);
+	});
+
 	it("shows nothing for an Apply that finished before this render", async () => {
 		const { onFinished } = renderToasts(done());
 

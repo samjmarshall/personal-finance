@@ -88,7 +88,7 @@ describe("ApplyToast", () => {
 		);
 	});
 
-	// Its rows came back blank, so the Member is told where to find them.
+	// Taken rows still need an answer, so the warning must point to them.
 	it("links a warning with taken rows to them", () => {
 		render(
 			<ApplyToast
