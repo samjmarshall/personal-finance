@@ -295,7 +295,7 @@ describe("fail", () => {
 		const failApply = recorder(true);
 		const { service, logs } = serviceWith({ failApply: failApply.method });
 
-		await service.fail(7, "boom");
+		await service.fail(7, new Error("boom"));
 
 		expect(failApply.calls).toEqual([[7, "boom"]]);
 		expect(logs).toEqual([
@@ -305,6 +305,26 @@ describe("fail", () => {
 				attrs: { applyId: 7, message: "boom" },
 			},
 		]);
+	});
+
+	// A failed query's message lists the Answer's values, such as a bank description.
+	it("keeps the database's reason, not the failed query", async () => {
+		const failApply = recorder(true);
+		const { service, logs } = serviceWith({ failApply: failApply.method });
+
+		await service.fail(
+			7,
+			new Error(
+				'Failed query: insert into "transaction" ("description") values ($1)\nparams: JOS ROADHOUSE',
+				{ cause: new Error("deadlock detected") },
+			),
+		);
+
+		expect(failApply.calls).toEqual([[7, "deadlock detected"]]);
+		expect(logs[0]?.attrs).toEqual({
+			applyId: 7,
+			message: "deadlock detected",
+		});
 	});
 });
 

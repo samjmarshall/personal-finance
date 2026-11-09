@@ -6,6 +6,7 @@ import type {
 import { DuplicateApplyStatus } from "~/lib/constants";
 import { ConflictError } from "~/server/errors/domain-errors";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
+import { errorMessage } from "~/server/observability/errors/thrown";
 import type { Logger } from "~/server/observability/logging/logger";
 import type { TransactionsRepository } from "./transactions.repository";
 
@@ -15,6 +16,22 @@ const APPLY_BATCH = 50;
 // none means its job is dead (adr032).
 const APPLY_STALE_MS = 15 * 60_000;
 const LATE_FINISH_ERROR = "No progress; its worker finished too late.";
+
+// A failed query's own message lists the Answer's values; the reason sits on its
+// cause. A few hops at most, so a cause that loops can't spin.
+function rootMessage(error: unknown): string {
+	let root = error;
+
+	for (let hop = 0; hop < 5; hop += 1) {
+		const cause = (root as { cause?: unknown } | null)?.cause;
+
+		if (!cause) break;
+
+		root = cause;
+	}
+
+	return errorMessage(root);
+}
 
 /** A running Apply touched since this is still alive. */
 export const applyActiveSince = (now = Date.now()) =>
@@ -90,7 +107,9 @@ export class DuplicateApplyService {
 	}
 
 	/** Called once Inngest's retries run out. */
-	async fail(applyId: number, message: string): Promise<void> {
+	async fail(applyId: number, error: unknown): Promise<void> {
+		const message = rootMessage(error);
+
 		await this.repository.failApply(applyId, message);
 		this.logger.error("duplicate apply failed", { applyId, message });
 	}

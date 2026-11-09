@@ -33,7 +33,7 @@ export class TransactionsInngestController {
 				concurrency: APPLY_SLOT,
 				triggers: [{ event: "duplicate/apply.requested" }],
 				onFailure: ({ event, error }: FailureEventArgs) =>
-					this.service.fail(event.data.event.data.applyId, error.message),
+					this.service.fail(event.data.event.data.applyId, error),
 			},
 			async ({ event, step }) => {
 				const applyId: number = event.data.applyId;

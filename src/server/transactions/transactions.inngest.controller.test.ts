@@ -137,11 +137,13 @@ describe("TransactionsInngestController", () => {
 	it("fails the Apply once retries run out", async () => {
 		const h = harness();
 
+		const error = new Error("boom");
+
 		await h.apply.opts.onFailure?.({
 			event: { data: { event: applyEvent } },
-			error: new Error("boom"),
+			error,
 		});
 
-		expect(h.service.fail).toHaveBeenCalledWith(7, "boom");
+		expect(h.service.fail).toHaveBeenCalledWith(7, error);
 	});
 });
