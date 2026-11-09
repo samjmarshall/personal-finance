@@ -12,6 +12,7 @@ import { outboxService } from "~/server/outbox/outbox.module";
 import { receiptsService } from "~/server/receipts/receipts.module";
 import { DrizzleSettingsRepository } from "~/server/settings/settings.repository";
 import { SettingsService } from "~/server/settings/settings.service";
+import { duplicateApplyService } from "~/server/transactions/duplicate-apply.module";
 import { transactionsService } from "~/server/transactions/transactions.module";
 
 const income = new IncomeService({
@@ -38,6 +39,7 @@ export const services = {
 	cdr: new CdrService({
 		repository: new DrizzleCdrRepository({ db, outbox: outboxService }),
 	}),
+	duplicateApply: duplicateApplyService,
 	expenses: expensesService,
 	income,
 	receipts: receiptsService,

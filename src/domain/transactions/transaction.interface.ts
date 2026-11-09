@@ -1,4 +1,6 @@
 import type {
+	Answer,
+	DuplicateApplyStatus,
 	Frequency,
 	PossibleDuplicateStatus,
 	Priority,
@@ -45,6 +47,8 @@ export interface PossibleDuplicate {
 	id: number;
 	accountName: string;
 	amount: number;
+	answer: Answer | null;
+	applyId: number | null;
 	createdAt: Date;
 	date: Date;
 	description: string;
@@ -79,15 +83,33 @@ export interface PossibleDuplicateReview {
 	>;
 	/** Null on a review flagged before adr029. */
 	descriptionScore: number | null;
+	/** Saved by an Apply; kept when that Apply didn't apply it. */
+	answer: Answer | null;
+	/** Its Apply stopped before reaching it (adr032). */
+	notApplied: boolean;
 }
 
-// What one apply did. `gone`: already answered or no longer pending. `taken`: the
-// bank row already sits on another row.
-export interface ResolveDuplicatesResult {
-	resolved: number;
+// One background Apply of a Member's Answers (adr032). `gone`: no longer
+// pending when its turn came. `taken`: the bank row already sits on another row.
+export interface DuplicateApply {
+	id: number;
+	createdAt: Date;
+	error: string | null;
+	finishedAt: Date | null;
 	gone: number;
+	applied: number;
+	status: DuplicateApplyStatus;
 	taken: number;
+	total: number;
+	updatedAt: Date;
 }
+
+// `active`: running and moved recently enough that its job may still report.
+// `pending`: Answers still waiting on it.
+export type CurrentApply = DuplicateApply & {
+	active: boolean;
+	pending: number;
+};
 
 // What one reconcile did. `known` counts refreshed rows and reviews, and bank
 // rows a member already kept theirs over. Flagged is net pending reviews: a

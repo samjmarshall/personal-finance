@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Frequency, Priority } from "~/lib/constants";
+import { Answer, Frequency, Priority } from "~/lib/constants";
 import type { Transaction } from "./transaction.interface";
 
 // sortBy values must be real Transaction fields; `satisfies` makes tsc reject a
@@ -77,22 +77,22 @@ export const linkExpenseDto = z.object({
 
 export type LinkExpenseInput = z.infer<typeof linkExpenseDto>;
 
-export const resolveDuplicateDto = z.object({
+export const answerDto = z.object({
 	id: z.number().int().positive(),
-	choice: z.enum(["keep_mine", "use_bank", "both_real"]),
+	answer: z.enum(Answer),
 });
 
-export type ResolveDuplicateInput = z.infer<typeof resolveDuplicateDto>;
+export type AnswerInput = z.infer<typeof answerDto>;
 
-// The most answers one apply sends; the page splits a bigger batch.
-export const RESOLVE_DUPLICATES_MAX = 200;
+// The stamp binds 2 values per Answer, so this stays under Postgres's 65,534.
+export const APPLY_ANSWERS_MAX = 10_000;
 
-// One answer per review: a repeat would count as already answered.
-export const resolveDuplicatesDto = z.object({
+// One Answer per review: a repeat would count as already answered.
+export const applyAnswersDto = z.object({
 	answers: z
-		.array(resolveDuplicateDto)
+		.array(answerDto)
 		.min(1)
-		.max(RESOLVE_DUPLICATES_MAX)
+		.max(APPLY_ANSWERS_MAX)
 		.refine(
 			(answers) => new Set(answers.map((a) => a.id)).size === answers.length,
 			{
@@ -101,4 +101,4 @@ export const resolveDuplicatesDto = z.object({
 		),
 });
 
-export type ResolveDuplicatesInput = z.infer<typeof resolveDuplicatesDto>;
+export type ApplyAnswersInput = z.infer<typeof applyAnswersDto>;

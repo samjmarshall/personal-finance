@@ -2,6 +2,7 @@
 
 import { ChevronRight, Sparkles } from "lucide-react";
 import { useId, useRef, useState } from "react";
+import { applyProgressLabel } from "~/components/apply-progress.display";
 import { Money } from "~/components/money";
 import { Button } from "~/components/ui/button";
 import {
@@ -10,63 +11,64 @@ import {
 	CollapsibleTrigger,
 } from "~/components/ui/collapsible";
 import type {
+	AnswerInput,
+	CurrentApply,
 	PossibleDuplicateReview,
-	ResolveDuplicateInput,
 } from "~/domain/transactions";
+import type { Answer } from "~/lib/constants";
 import { cn, formatCount, formatCurrency, formatDate } from "~/lib/utils";
 import {
+	ANSWERS,
 	amountGapLabel,
-	CHOICES,
-	type DuplicateChoice,
 	type DuplicatePile,
 	dayGapLabel,
 	duplicatePiles,
 	fillLabel,
 } from "./import.display";
 
-type Staged = Partial<Record<number, DuplicateChoice>>;
+/** The Member's picks. Null is a cleared pick; a missing row keeps its saved Answer. */
+type Staged = Partial<Record<number, Answer | null>>;
+
+function pickOf(staged: Staged, { id, answer }: PossibleDuplicateReview) {
+	const picked = staged[id];
+
+	return picked === undefined ? answer : picked;
+}
 
 export function PossibleDuplicatePiles({
 	reviews,
-	applying,
+	sending,
+	progress,
 	onApply,
 }: {
 	reviews: PossibleDuplicateReview[];
-	/** An apply is saving; the answers wait for it. */
-	applying: boolean;
+	/** The Apply is being handed over; the answers wait for it. */
+	sending: boolean;
+	/** A running Apply. Its rows are hidden, so the rest stay open, but Apply waits. */
+	progress: Pick<CurrentApply, "total" | "pending"> | null;
 	/** Saves the picks. False when it failed, so they stay for another try. */
-	onApply: (answers: ResolveDuplicateInput[]) => Promise<boolean>;
+	onApply: (answers: AnswerInput[]) => Promise<boolean>;
 }) {
 	const [staged, setStaged] = useState<Staged>({});
 	const legendId = useId();
 	const piles = duplicatePiles(reviews);
 	// A pick for a row that has since gone (another tab, a re-import) is dropped here.
-	const answers = reviews.flatMap(({ id }) => {
-		const choice = staged[id];
+	const answers = reviews.flatMap((review) => {
+		const answer = pickOf(staged, review);
 
-		return choice ? [{ id, choice }] : [];
+		return answer ? [{ id: review.id, answer }] : [];
 	});
 
-	function pick(id: number, choice: DuplicateChoice | null) {
-		setStaged((current) => {
-			const next = { ...current };
-
-			if (choice) {
-				next[id] = choice;
-			} else {
-				delete next[id];
-			}
-
-			return next;
-		});
+	function pick(id: number, answer: Answer | null) {
+		setStaged((current) => ({ ...current, [id]: answer }));
 	}
 
 	function fill({ reviews: rows, suggestion }: DuplicatePile) {
 		setStaged((current) => {
 			const next = { ...current };
 
-			for (const { id } of rows) {
-				next[id] ??= suggestion;
+			for (const review of rows) {
+				if (!pickOf(current, review)) next[review.id] = suggestion;
 			}
 
 			return next;
@@ -78,7 +80,7 @@ export function PossibleDuplicatePiles({
 
 		if (!(await onApply(sent))) return;
 
-		// A taken row stays to review; its pick failed, so it starts blank again.
+		// Sent rows fall back to what the server saved: blank for a taken one.
 		setStaged((current) => {
 			const next = { ...current };
 
@@ -97,8 +99,8 @@ export function PossibleDuplicatePiles({
 				row, then apply them all at once.
 			</p>
 			<ul className="mt-2 space-y-0.5 text-sm text-muted-foreground">
-				{CHOICES.map(({ choice, label, effect }) => (
-					<li id={`${legendId}-${choice}`} key={choice}>
+				{ANSWERS.map(({ answer, label, effect }) => (
+					<li id={`${legendId}-${answer}`} key={answer}>
 						<span className="font-medium text-foreground">{label}</span>{" "}
 						{effect}
 					</li>
@@ -108,12 +110,12 @@ export function PossibleDuplicatePiles({
 			<div className="mt-4 space-y-4">
 				{piles.map((pile) => (
 					<Pile
-						applying={applying}
 						key={pile.key}
 						legendId={legendId}
 						onFill={() => fill(pile)}
 						onPick={pick}
 						pile={pile}
+						sending={sending}
 						staged={staged}
 					/>
 				))}
@@ -132,24 +134,29 @@ export function PossibleDuplicatePiles({
 				</p>
 				<div className="ml-auto flex gap-2">
 					<Button
-						disabled={answers.length === 0 || applying}
+						disabled={answers.length === 0 || sending}
 						// Stays in tab order once empty, so focus never drops to the page.
 						focusableWhenDisabled
-						onClick={() => setStaged({})}
+						// Null, not empty: a saved Answer would come back.
+						onClick={() =>
+							setStaged(Object.fromEntries(reviews.map(({ id }) => [id, null])))
+						}
 						size="sm"
 						variant="ghost"
 					>
 						Clear
 					</Button>
 					<Button
-						disabled={answers.length === 0}
+						// One Apply at a time (adr032).
+						disabled={answers.length === 0 || progress !== null}
 						focusableWhenDisabled
-						loading={applying}
+						loading={sending}
 						onClick={apply}
 						size="sm"
 					>
-						Apply {formatCount(answers.length)}{" "}
-						{answers.length === 1 ? "answer" : "answers"}
+						{progress
+							? `Applying ${applyProgressLabel(progress)}…`
+							: `Apply ${formatCount(answers.length)} ${answers.length === 1 ? "answer" : "answers"}`}
 					</Button>
 				</div>
 			</div>
@@ -160,21 +167,23 @@ export function PossibleDuplicatePiles({
 function Pile({
 	pile,
 	staged,
-	applying,
+	sending,
 	legendId,
 	onPick,
 	onFill,
 }: {
 	pile: DuplicatePile;
 	staged: Staged;
-	applying: boolean;
+	sending: boolean;
 	legendId: string;
-	onPick: (id: number, choice: DuplicateChoice | null) => void;
+	onPick: (id: number, answer: Answer | null) => void;
 	onFill: () => void;
 }) {
 	const whyId = useId();
-	const unanswered = pile.reviews.filter(({ id }) => !staged[id]).length;
-	const suggestion = CHOICES.find((c) => c.choice === pile.suggestion);
+	const unanswered = pile.reviews.filter(
+		(review) => !pickOf(staged, review),
+	).length;
+	const suggestion = ANSWERS.find((a) => a.answer === pile.suggestion);
 
 	return (
 		// Sized by its own width, not the screen's: the sidebar takes 16rem from lg up.
@@ -210,7 +219,7 @@ function Pile({
 					</p>
 				</div>
 				<Button
-					disabled={unanswered === 0 || applying}
+					disabled={unanswered === 0 || sending}
 					focusableWhenDisabled
 					onClick={onFill}
 					size="sm"
@@ -233,12 +242,12 @@ function Pile({
 				<ul className="divide-y divide-border">
 					{pile.reviews.map((review) => (
 						<Row
-							answer={staged[review.id] ?? null}
-							applying={applying}
+							answer={pickOf(staged, review)}
 							key={review.id}
 							legendId={legendId}
-							onPick={(choice) => onPick(review.id, choice)}
+							onPick={(answer) => onPick(review.id, answer)}
 							review={review}
+							sending={sending}
 						/>
 					))}
 				</ul>
@@ -248,17 +257,17 @@ function Pile({
 }
 
 function Row({
-	review: { id, bank, mine },
+	review: { id, bank, mine, notApplied },
 	answer,
-	applying,
+	sending,
 	legendId,
 	onPick,
 }: {
 	review: PossibleDuplicateReview;
-	answer: DuplicateChoice | null;
-	applying: boolean;
+	answer: Answer | null;
+	sending: boolean;
 	legendId: string;
-	onPick: (choice: DuplicateChoice | null) => void;
+	onPick: (answer: Answer | null) => void;
 }) {
 	const dayGap = dayGapLabel(bank.date, mine.date);
 	const amountGap = amountGapLabel(bank.amount, mine.amount);
@@ -302,39 +311,49 @@ function Row({
 			</div>
 			<fieldset
 				className="min-w-0 @lg/pile:col-span-2 @2xl/pile:col-span-1"
-				disabled={applying}
+				disabled={sending}
 			>
 				{/* Date and amount too: many rows share a description (every Coles shop). */}
 				<legend className="sr-only">
 					Answer for {mine.description}, {formatDate(mine.date)},{" "}
 					{formatCurrency(Math.abs(mine.amount))}
+					{notApplied && ". Didn't apply"}
 				</legend>
+				{/* Screen readers hear it in the legend, so it isn't read twice. */}
+				{notApplied && (
+					<p
+						aria-hidden
+						className="mb-1.5 w-fit rounded-full border border-[color:var(--badge-warn-border)] bg-[var(--badge-warn-bg)] px-2 py-0.5 text-xs font-medium text-[var(--badge-warn-fg)]"
+					>
+						Didn't apply
+					</p>
+				)}
 				<div className="flex w-full rounded-lg bg-muted p-0.5">
-					{CHOICES.map(({ choice, label }) => (
+					{ANSWERS.map(({ answer: value, label }) => (
 						<label
 							className="relative flex-1 cursor-pointer rounded-md px-2 py-1 text-center text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors select-none hover:text-foreground has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-ring has-disabled:cursor-not-allowed has-disabled:opacity-60 motion-reduce:transition-none"
-							key={choice}
+							key={value}
 							onPointerDown={() => {
 								pressed.current = true;
 							}}
 						>
 							<input
-								aria-describedby={`${legendId}-${choice}`}
-								checked={answer === choice}
+								aria-describedby={`${legendId}-${value}`}
+								checked={answer === value}
 								// Tabbing down stops short of the apply bar, not under it.
 								className="sr-only scroll-mb-32"
 								name={`answer-${id}`}
-								onChange={() => onPick(choice)}
+								onChange={() => onPick(value)}
 								// A second click on the picked answer clears it; from the keyboard, Delete.
 								// Not Space or a screen reader: a radio they pick stays picked.
 								onClick={() => {
-									if (pressed.current && answer === choice) onPick(null);
+									if (pressed.current && answer === value) onPick(null);
 
 									pressed.current = false;
 								}}
 								onKeyDown={(event) => {
 									if (
-										answer === choice &&
+										answer === value &&
 										(event.key === "Delete" || event.key === "Backspace")
 									) {
 										event.preventDefault();
@@ -342,7 +361,7 @@ function Row({
 									}
 								}}
 								type="radio"
-								value={choice}
+								value={value}
 							/>
 							{label}
 						</label>

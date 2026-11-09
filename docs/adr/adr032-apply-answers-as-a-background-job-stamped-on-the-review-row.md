@@ -1,7 +1,7 @@
 ---
-Status: 'Proposed'
+Status: 'Accepted'
 Deciders: 'Sam Marshall'
-Date: '2026-11-04'
+Date: '2026-11-08'
 # prettier-ignore
 ---
 
@@ -48,16 +48,16 @@ Chosen option: "2. Background job; Answers stamped on the review row; progress p
 
 How it works (diagram under option 2):
 
-- `possible_duplicate` gains `apply_id` (FK to a new `duplicate_apply` row, `on delete set null`) and `choice`.
+- `possible_duplicate` gains `apply_id` (FK to a new `duplicate_apply` row, `on delete set null`) and `answer`.
 - `start` makes one `outbox.commit` transaction. It fails any stuck running Apply, inserts the Apply, stamps the still-pending reviews that aren't in a running Apply, and emits `duplicate/apply.requested`. A partial unique index allows one `running` Apply; a clash throws `ConflictError`. One Apply takes up to 10,000 Answers, a cap set by Postgres's 65,534 bind-value limit on the stamping query.
-- Inngest `duplicate-apply` (own concurrency key `"duplicate-apply"`, retries 3) loops `batch-N` steps of 50, ordered Keep mine → Both are real → Use bank's, so a "Use bank's" can never release a row the Member chose to keep. Each Answer and its `resolved + 1` share one transaction; a unique-key clash clears the stamp and adds 1 to `taken`. A `finish` step sets `gone = total − resolved − taken`; `onFailure` marks the Apply `failed`.
-- A watcher in the dashboard layout polls `currentApply` every 2 s while one runs and drives one sonner toast. Progress is `total − remaining`, where `remaining` counts pending rows still stamped.
+- Inngest `duplicate-apply` (own concurrency key `"duplicate-apply"`, retries 3) loops `batch-N` steps of 50, ordered Keep mine → Both are real → Use bank's, so a "Use bank's" can never release a row the Member chose to keep. Each Answer and its `applied + 1` share one transaction; a unique-key clash clears the stamp and adds 1 to `taken`. A `finish` step sets `gone = total − applied − taken`; `onFailure` marks the Apply `failed`.
+- A watcher in the dashboard layout polls `currentApply` every 2 s while one runs and drives one sonner toast. Progress is `total − pending`, where `pending` counts pending rows still stamped.
 
 ### Positive Consequences
 
 - A reload, closed tab or dropped connection loses nothing. The toast comes back from `currentApply`, and the Answers keep applying server-side.
-- A failed Apply leaves its leftover rows pending, with their `choice` and a "Didn't apply" note. The Member re-applies from the list, so there is one Apply path, not a separate retry.
-- `resolved` and `taken` are a ledger, not a guide: each count is bumped in the same transaction as its Answer, and a retried batch skips rows already out of `pending`.
+- A failed Apply leaves its leftover rows pending, with their `answer` and a "Didn't apply" note. The Member re-applies from the list, so there is one Apply path, not a separate retry.
+- `applied` and `taken` are a ledger, not a guide: each count is bumped in the same transaction as its Answer, and a retried batch skips rows already out of `pending`.
 - Rows in a running Apply are hidden from the list and counts, so the same review can't be sent twice.
 - It reuses the outbox (adr002), Inngest and the `latestImport` polling pattern. No push transport to run or secure.
 
@@ -67,7 +67,7 @@ How it works (diagram under option 2):
 - `DrizzleTransactionsRepository` takes an `outbox: OutboxWriteDoor` dep, as `DrizzleCdrRepository` does.
 - `gone` is derived at finish, not counted. A row that vanished mid-run (deleted by another Answer, released by a sync, or cascaded with its Transaction) shows only as the gap.
 - Its counts follow a different rule from `cdr_import`, whose counts are "a guide, not a ledger". A reader must not copy one rule onto the other.
-- A 15-minute stuck rule: a `running` Apply with no progress for that long (`updatedAt`, moved by every count) reads as inactive, and the next `start` fails it. It reads progress, not age, so a big Apply that is still working never trips it. A worker that wakes later finds its rows unstamped or its Apply `failed` and does nothing.
+- A 15-minute stuck rule: a `running` Apply with no progress for that long (`updatedAt`, moved by every count) reads as inactive, and the next `start` fails it. It reads progress, not age, so a big Apply that is still working never trips it. A worker that wakes later finds its rows unstamped or its Apply `failed` and does nothing. _(Note 2026-11-08: it may also find its Apply still `running` but past the 15 minutes. Each Answer now locks the Apply row and checks it is still live first, so that worker applies nothing. Its finish then marks the Apply `failed` and logs `duplicate apply finished late`, so a Stopped Apply never stays `running`. A lost event the hourly `outbox-sweep` re-sends after 15 minutes ends the same way.)_
 - One Apply at a time. A Member who answers more rows during a run waits for it to finish before applying them.
 - Progress moves in 2 s polls, not a smooth stream.
 - A second service in the transactions domain (`DuplicateApplyService`), since the worker needs different deps from `TransactionsService`.
@@ -99,7 +99,7 @@ sequenceDiagram
     end
     I->>DB: finish: done, gone
     loop every 2 s while running
-        B->>DB: currentApply (total − remaining)
+        B->>DB: currentApply (total − pending)
     end
 ```
 
@@ -121,7 +121,7 @@ The Apply row holds the Answers array and a cursor (a recovery point), and the r
 
 ### 4. Background job; Answers in a separate `apply_answer` table; progress polled
 
-One row per Answer: `applyId`, `reviewId`, `choice`, `outcome`.
+One row per Answer: `applyId`, `reviewId`, `answer`, `outcome`.
 
 - Good, because every Answer keeps its own outcome, even after its review row is deleted.
 - Bad, because it adds a table whose job the stamped review row already does: pending stamped rows are the outstanding Answers.

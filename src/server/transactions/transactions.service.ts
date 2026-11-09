@@ -2,9 +2,6 @@ import type {
 	ExpenseConsumption,
 	LinkExpenseInput,
 	PossibleDuplicateReview,
-	ResolveDuplicateInput,
-	ResolveDuplicatesInput,
-	ResolveDuplicatesResult,
 	Transaction,
 	TransactionCreateInput,
 	TransactionListQuery,
@@ -24,6 +21,7 @@ import {
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
+import { applyActiveSince } from "./duplicate-apply.service";
 import type {
 	DatedTransaction,
 	DateWindow,
@@ -116,26 +114,13 @@ export class TransactionsService {
 		return assertRow(row, "create transaction");
 	}
 
+	// A running Apply's rows wait for it; a stopped one's come back (adr032).
 	listPossibleDuplicates(): Promise<PossibleDuplicateReview[]> {
-		return this.repository.listPendingDuplicates();
+		return this.repository.listPendingDuplicates(applyActiveSince());
 	}
 
 	possibleDuplicateCount(): Promise<number> {
-		return this.repository.countPendingDuplicates();
-	}
-
-	// One at a time, each on its own: a gone or taken review is counted, not
-	// thrown, so the rest still land.
-	async resolveDuplicates({
-		answers,
-	}: ResolveDuplicatesInput): Promise<ResolveDuplicatesResult> {
-		const result: ResolveDuplicatesResult = { resolved: 0, gone: 0, taken: 0 };
-
-		for (const answer of answers) {
-			result[await this.resolveOne(answer)] += 1;
-		}
-
-		return result;
+		return this.repository.countPendingDuplicates(applyActiveSince());
 	}
 
 	// A missing id 404s at the first read; a row deleted between that read and
@@ -199,27 +184,6 @@ export class TransactionsService {
 
 	datedAmounts(): Promise<Pick<Transaction, "date" | "amount">[]> {
 		return this.repository.datedAmounts();
-	}
-
-	// Missing or already answered counts as gone; a bank row held elsewhere counts as taken.
-	private async resolveOne({
-		id,
-		choice,
-	}: ResolveDuplicateInput): Promise<keyof ResolveDuplicatesResult> {
-		const resolve = {
-			keep_mine: () => this.repository.keepMine(id),
-			use_bank: () => this.repository.useBanks(id),
-			both_real: () => this.repository.bothReal(id),
-		}[choice];
-
-		try {
-			return (await resolve()) ? "resolved" : "gone";
-		} catch (error) {
-			// Use bank's moves the bank id onto the household row; another row may hold it.
-			if (isPgViolation(error, PgViolation.UniqueViolation)) return "taken";
-
-			throw error;
-		}
 	}
 
 	/** 404s a missing row; refuses a changed amount or date on a synced row. True when synced. */

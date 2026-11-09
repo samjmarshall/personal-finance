@@ -2,13 +2,11 @@ import type { CdrImport, LatestImport } from "~/domain/cdr";
 import {
 	type PossibleDuplicateReview,
 	type ReconcileCounts,
-	type ResolveDuplicateInput,
-	type ResolveDuplicatesResult,
 	SIMILAR_SCORE,
 	SIMILAR_WORDS,
 	sharedWords,
 } from "~/domain/transactions";
-import { CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
+import { Answer, CdrImportStatus, HOUSEHOLD_TIME_ZONE } from "~/lib/constants";
 import {
 	dayNumberInZone,
 	formatCount,
@@ -94,23 +92,25 @@ export function amountGapLabel(bank: number, mine: number): string | null {
 	return `${formatCurrency(Math.abs(cents) / 100)} ${cents > 0 ? "more" : "less"} than yours`;
 }
 
-export type DuplicateChoice = ResolveDuplicateInput["choice"];
-
 /** Drives the legend and every row's answers, so their order can't drift. */
-export const CHOICES: {
-	choice: DuplicateChoice;
+export const ANSWERS: {
+	answer: Answer;
 	label: string;
 	effect: string;
 }[] = [
-	{ choice: "keep_mine", label: "Keep mine", effect: "drops the bank's copy." },
 	{
-		choice: "use_bank",
+		answer: Answer.KeepMine,
+		label: "Keep mine",
+		effect: "drops the bank's copy.",
+	},
+	{
+		answer: Answer.UseBank,
 		label: "Use bank's",
 		effect:
 			"gives yours its date and amount, and keeps your description, category, expense and receipt.",
 	},
 	{
-		choice: "both_real",
+		answer: Answer.BothReal,
 		label: "Both are real",
 		effect: "adds the bank's row.",
 	},
@@ -121,7 +121,7 @@ export interface DuplicatePile {
 	title: string;
 	why: string;
 	/** What the pile's fill button picks for its unanswered rows. */
-	suggestion: DuplicateChoice;
+	suggestion: Answer;
 	reviews: PossibleDuplicateReview[];
 }
 
@@ -131,13 +131,13 @@ const PILES: Omit<DuplicatePile, "reviews">[] = [
 		key: "similar_description",
 		title: "Similar description",
 		why: "The descriptions match. Almost always the same purchase.",
-		suggestion: "use_bank",
+		suggestion: Answer.UseBank,
 	},
 	{
 		key: "different_description",
 		title: "Different description",
 		why: "The descriptions don't match. Most likely two purchases.",
-		suggestion: "both_real",
+		suggestion: Answer.BothReal,
 	},
 ];
 
@@ -202,33 +202,4 @@ export function fillLabel(
 	return unanswered === 1
 		? `${label} for the last one`
 		: `${label} for the other ${formatCount(unanswered)}`;
-}
-
-/** The toast after an apply. A taken review stays, so it still needs an answer. */
-export function appliedLabel({
-	resolved,
-	gone,
-	taken,
-}: ResolveDuplicatesResult): string {
-	const parts: string[] = [];
-
-	if (resolved > 0) {
-		parts.push(
-			`Applied ${formatCount(resolved)} ${resolved === 1 ? "answer" : "answers"}.`,
-		);
-	}
-
-	if (gone > 0) {
-		parts.push(
-			`${formatCount(gone)} ${gone === 1 ? "was" : "were"} already answered.`,
-		);
-	}
-
-	if (taken > 0) {
-		parts.push(
-			`${formatCount(taken)} still ${taken === 1 ? "needs" : "need"} an answer: the bank's row is already in your transactions.`,
-		);
-	}
-
-	return parts.join(" ");
 }

@@ -2,10 +2,11 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type {
+	AnswerInput,
+	CurrentApply,
 	PossibleDuplicateReview,
-	ResolveDuplicateInput,
 } from "~/domain/transactions";
-import { Provenance } from "~/lib/constants";
+import { Answer, Provenance } from "~/lib/constants";
 import { formatDate } from "~/lib/utils";
 import { PossibleDuplicatePiles } from "./possible-duplicate-piles";
 
@@ -37,6 +38,8 @@ function review(
 			provenance: Provenance.Manual,
 		},
 		descriptionScore: score,
+		answer: null,
+		notApplied: false,
 	};
 }
 
@@ -58,19 +61,22 @@ const REVIEWS = [COFFEE, GROCERIES, VERCEL];
 
 function renderPiles({
 	reviews = REVIEWS,
-	applying = false,
+	sending = false,
+	progress = null,
 	saved = true,
 }: {
 	reviews?: PossibleDuplicateReview[];
-	applying?: boolean;
+	sending?: boolean;
+	progress?: Pick<CurrentApply, "total" | "pending"> | null;
 	saved?: boolean;
 } = {}) {
-	const onApply = vi.fn(async (_: ResolveDuplicateInput[]) => saved);
+	const onApply = vi.fn(async (_: AnswerInput[]) => saved);
 	render(
 		<PossibleDuplicatePiles
-			applying={applying}
 			onApply={onApply}
+			progress={progress}
 			reviews={reviews}
+			sending={sending}
 		/>,
 	);
 
@@ -155,8 +161,8 @@ describe("PossibleDuplicatePiles", () => {
 		await user.click(screen.getByRole("button", { name: "Apply 2 answers" }));
 
 		expect(onApply).toHaveBeenCalledWith([
-			{ id: 1, choice: "keep_mine" },
-			{ id: 3, choice: "both_real" },
+			{ id: 1, answer: Answer.KeepMine },
+			{ id: 3, answer: Answer.BothReal },
 		]);
 	});
 
@@ -178,9 +184,9 @@ describe("PossibleDuplicatePiles", () => {
 		).toHaveLength(2);
 		await user.click(screen.getByRole("button", { name: "Apply 3 answers" }));
 		expect(onApply).toHaveBeenCalledWith([
-			{ id: 1, choice: "keep_mine" },
-			{ id: 2, choice: "use_bank" },
-			{ id: 3, choice: "both_real" },
+			{ id: 1, answer: Answer.KeepMine },
+			{ id: 2, answer: Answer.UseBank },
+			{ id: 3, answer: Answer.BothReal },
 		]);
 	});
 
@@ -256,8 +262,8 @@ describe("PossibleDuplicatePiles", () => {
 		expect(keep).toBeChecked();
 	});
 
-	it("holds every answer while an apply saves", () => {
-		renderPiles({ applying: true });
+	it("holds every answer while the apply sends", () => {
+		renderPiles({ sending: true });
 
 		for (const radio of screen.getAllByRole("radio")) {
 			expect(radio).toBeDisabled();
@@ -266,6 +272,81 @@ describe("PossibleDuplicatePiles", () => {
 		expect(
 			screen.getByRole("button", { name: "Use bank's for all 2" }),
 		).toHaveAttribute("aria-disabled", "true");
+	});
+
+	it("holds Apply at the running count while an Apply runs", async () => {
+		const { user } = renderPiles({ progress: { total: 200, pending: 80 } });
+
+		await user.click(
+			within(answerFor("Coffee")).getByRole("radio", { name: "Keep mine" }),
+		);
+
+		expect(
+			screen.getByRole("button", { name: "Applying 120 of 200…" }),
+		).toHaveAttribute("aria-disabled", "true");
+	});
+
+	it("keeps the answers open while an Apply runs", () => {
+		renderPiles({ progress: { total: 200, pending: 80 } });
+
+		for (const radio of screen.getAllByRole("radio")) {
+			expect(radio).toBeEnabled();
+		}
+
+		expect(
+			screen.getByRole("button", { name: "Use bank's for all 2" }),
+		).not.toHaveAttribute("aria-disabled", "true");
+	});
+
+	it("starts a row on its saved answer and counts it", async () => {
+		const { onApply, user } = renderPiles({
+			reviews: [{ ...COFFEE, answer: Answer.UseBank }, GROCERIES, VERCEL],
+		});
+
+		expect(
+			within(answerFor("Coffee")).getByRole("radio", { name: "Use bank's" }),
+		).toBeChecked();
+		expect(screen.getByText(/of 3 answered/)).toHaveTextContent(
+			"1 of 3 answered",
+		);
+		expect(
+			screen.getByRole("button", { name: "Use bank's for the last one" }),
+		).toBeInTheDocument();
+
+		await user.click(screen.getByRole("button", { name: "Apply 1 answer" }));
+		expect(onApply).toHaveBeenCalledWith([{ id: 1, answer: Answer.UseBank }]);
+	});
+
+	it("blanks a saved answer with Clear", async () => {
+		const { user } = renderPiles({
+			reviews: [{ ...COFFEE, answer: Answer.UseBank }],
+		});
+
+		await user.click(screen.getByRole("button", { name: "Clear" }));
+
+		expect(
+			within(answerFor("Coffee")).getByRole("radio", { name: "Use bank's" }),
+		).not.toBeChecked();
+		expect(screen.getByText(/of 1 answered/)).toHaveTextContent(
+			"0 of 1 answered",
+		);
+	});
+
+	it("marks a row its Apply didn't apply, for screen readers too", () => {
+		renderPiles({
+			reviews: [
+				{ ...COFFEE, answer: Answer.KeepMine, notApplied: true },
+				GROCERIES,
+			],
+		});
+
+		expect(screen.getAllByText("Didn't apply")).toHaveLength(1);
+		expect(
+			screen.getByRole("group", { name: /^Answer for Coffee.*Didn't apply$/ }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("group", { name: /^Answer for Coles/ }),
+		).not.toHaveAccessibleName(/Didn't apply/);
 	});
 
 	it("folds a pile away", async () => {

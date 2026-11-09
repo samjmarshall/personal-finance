@@ -3,6 +3,7 @@ import {
 	asc,
 	desc,
 	eq,
+	getTableColumns,
 	gt,
 	gte,
 	ilike,
@@ -22,7 +23,10 @@ import {
 import { alias, type PgColumn } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type {
+	AnswerInput,
+	CurrentApply,
 	DescriptionEmbedding,
+	DuplicateApply,
 	ExpenseConsumption,
 	MatchCandidate,
 	PossibleDuplicateReview,
@@ -38,10 +42,17 @@ import type {
 	transactionSortBy,
 	UnplannedWindow,
 } from "~/domain/transactions";
-import { PossibleDuplicateStatus } from "~/lib/constants";
+import {
+	Answer,
+	DuplicateApplyStatus,
+	PossibleDuplicateStatus,
+} from "~/lib/constants";
 import type { db as realDb } from "~/server/db";
+import { buildOutboxEvent } from "~/server/inngest/events";
+import type { OutboxWriteDoor } from "~/server/outbox/outbox.service";
 import {
 	descriptionEmbeddings,
+	duplicateApply,
 	possibleDuplicates,
 	transactions,
 } from "./transactions.schema";
@@ -108,13 +119,56 @@ export interface TransactionsRepository {
 	 * adoption whose row was claimed or deleted since the read adds its bank row.
 	 */
 	applyReconcile(plan: ReconcilePlan): Promise<ReconcileCounts>;
-	/** Newest bank date first. */
-	listPendingDuplicates(): Promise<PossibleDuplicateReview[]>;
-	countPendingDuplicates(): Promise<number>;
-	/** Each resolve acts only on a pending review; false when there is none. */
-	keepMine(id: number): Promise<boolean>;
-	useBanks(id: number): Promise<boolean>;
-	bothReal(id: number): Promise<boolean>;
+	/**
+	 * Newest bank date first. Leaves out rows of a running Apply updated after
+	 * `activeSince`; a stamped row still listed is one its Apply didn't apply.
+	 */
+	listPendingDuplicates(activeSince: Date): Promise<PossibleDuplicateReview[]>;
+	/** Counts the same rows the review list shows. */
+	countPendingDuplicates(activeSince: Date): Promise<number>;
+	/**
+	 * One transaction: fails a running Apply idle since before `staleBefore`, adds
+	 * the new one, stamps each Answer on its pending review, emits the event. A
+	 * running Apply that isn't stale makes the insert hit a unique violation.
+	 */
+	startApply(answers: AnswerInput[], staleBefore: Date): Promise<CurrentApply>;
+	/**
+	 * Pending Answers of an Apply still running and touched after `activeSince`:
+	 * Keep mine, then Both are real, then Use bank's; by id within each.
+	 */
+	nextApplyBatch(
+		applyId: number,
+		limit: number,
+		activeSince: Date,
+	): Promise<AnswerInput[]>;
+	/**
+	 * Resolves one Answer and counts it, in one transaction. False when the review
+	 * is no longer pending on this Apply, or the Apply isn't running and touched
+	 * after `activeSince`. A unique violation rolls back and throws.
+	 */
+	applyAnswer(
+		applyId: number,
+		answer: AnswerInput,
+		activeSince: Date,
+	): Promise<boolean>;
+	/**
+	 * Unstamps a review whose bank row another row holds, and counts it taken.
+	 * False when it isn't stamped, or the Apply isn't live as in `applyAnswer`.
+	 */
+	releaseAnswer(
+		applyId: number,
+		id: number,
+		activeSince: Date,
+	): Promise<boolean>;
+	/**
+	 * Moves only a live running Apply to done; whatever wasn't applied or taken
+	 * is gone. False when it wasn't live.
+	 */
+	finishApply(applyId: number, activeSince: Date): Promise<boolean>;
+	/** Fails only a running Apply. */
+	failApply(applyId: number, error: string): Promise<boolean>;
+	/** The newest Apply, with its count of still-pending stamped reviews. */
+	latestApply(): Promise<(DuplicateApply & { pending: number }) | undefined>;
 	/** `undefined` when no row has the id. */
 	findSyncedValues(id: number): Promise<SyncedValues | undefined>;
 	/** `undefined` when no row has the id. */
@@ -166,18 +220,42 @@ const isPending = eq(
 	PossibleDuplicateStatus.Pending,
 );
 
+const isRunning = eq(duplicateApply.status, DuplicateApplyStatus.Running);
+
+// Postgres types a VALUES column from its first row, so each value is cast.
+const STAMP_ALIAS = sql.raw("stamp");
+const stampValues = (answers: AnswerInput[]) =>
+	sql`(values ${sql.join(
+		answers.map(
+			({ id, answer }) => sql`(${id}::int, ${answer}::duplicate_answer)`,
+		),
+		sql`, `,
+	)}) as ${STAMP_ALIAS}(id, answer)`;
+
+const STALE_APPLY_ERROR = "No progress; failed by the next apply.";
+// A match is a running Apply that's still moving, so it owns its rows.
+const liveApply = (id: number | PgColumn, activeSince: Date) =>
+	and(
+		eq(duplicateApply.id, id),
+		isRunning,
+		gt(duplicateApply.updatedAt, activeSince),
+	);
+
 // Spend is a positive amount; a refund (negative) counts as 0 toward it.
 const spendAmount = sql`case when ${transactions.amount} > 0 then ${transactions.amount} else 0 end`;
 
 interface DrizzleTransactionsRepositoryDeps {
 	db: typeof realDb;
+	outbox: OutboxWriteDoor;
 }
 
 export class DrizzleTransactionsRepository implements TransactionsRepository {
 	private readonly db: typeof realDb;
+	private readonly outbox: OutboxWriteDoor;
 
-	constructor({ db }: DrizzleTransactionsRepositoryDeps) {
+	constructor({ db, outbox }: DrizzleTransactionsRepositoryDeps) {
 		this.db = db;
+		this.outbox = outbox;
 	}
 
 	async list(query: TransactionListQuery): Promise<TransactionPage> {
@@ -497,7 +575,7 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		});
 	}
 
-	listPendingDuplicates(): Promise<PossibleDuplicateReview[]> {
+	listPendingDuplicates(activeSince: Date): Promise<PossibleDuplicateReview[]> {
 		return this.db
 			.select({
 				id: possibleDuplicates.id,
@@ -516,71 +594,190 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 					provenance: transactions.provenance,
 				},
 				descriptionScore: possibleDuplicates.descriptionScore,
+				answer: possibleDuplicates.answer,
+				notApplied: sql<boolean>`${possibleDuplicates.applyId} is not null`,
 			})
 			.from(possibleDuplicates)
 			.innerJoin(
 				transactions,
 				eq(transactions.id, possibleDuplicates.transactionId),
 			)
-			.where(isPending)
+			.leftJoin(
+				duplicateApply,
+				liveApply(possibleDuplicates.applyId, activeSince),
+			)
+			.where(and(isPending, isNull(duplicateApply.id)))
 			.orderBy(desc(possibleDuplicates.date), desc(possibleDuplicates.id));
 	}
 
-	async countPendingDuplicates(): Promise<number> {
+	async countPendingDuplicates(activeSince: Date): Promise<number> {
 		const [row] = await this.db
 			.select({ count: sql<number>`cast(count(*) as int)` })
 			.from(possibleDuplicates)
-			.where(isPending);
+			.leftJoin(
+				duplicateApply,
+				liveApply(possibleDuplicates.applyId, activeSince),
+			)
+			.where(and(isPending, isNull(duplicateApply.id)));
 
 		return row?.count ?? 0;
 	}
 
-	async keepMine(id: number): Promise<boolean> {
-		const kept = await this.db
-			.update(possibleDuplicates)
-			.set({ status: PossibleDuplicateStatus.Kept })
-			.where(and(eq(possibleDuplicates.id, id), isPending))
-			.returning({ id: possibleDuplicates.id });
-
-		return kept.length > 0;
-	}
-
-	useBanks(id: number): Promise<boolean> {
-		return this.db.transaction(async (tx) => {
-			const [review] = await this.takeReview(tx, id);
-
-			if (!review) return false;
-
-			const { transactionId, description: _, ...bank } = review;
-			await tx
-				.update(transactions)
-				.set(bank)
-				.where(eq(transactions.id, transactionId));
-			// The row is now that bank row, so any other review it held is another purchase.
-			const others = await this.takeReviewsOn(tx, transactionId);
-
-			if (others.length) {
+	// The event carries the Apply id, known only after the insert, so the row,
+	// its stamps and the event commit together.
+	startApply(answers: AnswerInput[], staleBefore: Date): Promise<CurrentApply> {
+		return this.outbox.commit(
+			async (tx) => {
 				await tx
-					.insert(transactions)
-					.values(others.map(({ id: _, ...bank }) => bank))
-					.onConflictDoNothing();
-			}
+					.update(duplicateApply)
+					.set({
+						status: DuplicateApplyStatus.Failed,
+						error: STALE_APPLY_ERROR,
+						finishedAt: new Date(),
+					})
+					.where(and(isRunning, lt(duplicateApply.updatedAt, staleBefore)));
+
+				const [apply] = await tx
+					.insert(duplicateApply)
+					.values({ total: answers.length })
+					.returning();
+
+				if (!apply) throw new Error("startApply: no row returned");
+
+				// The insert took the one running slot: older stamps are all stopped.
+				const stamped = await tx
+					.update(possibleDuplicates)
+					.set({ applyId: apply.id, answer: sql`${STAMP_ALIAS}.answer` })
+					.from(stampValues(answers))
+					.where(
+						and(eq(possibleDuplicates.id, sql`${STAMP_ALIAS}.id`), isPending),
+					)
+					.returning({ id: possibleDuplicates.id });
+
+				return { ...apply, active: true, pending: stamped.length };
+			},
+			(apply) => [
+				buildOutboxEvent("duplicate/apply.requested", { applyId: apply.id }),
+			],
+		);
+	}
+
+	async nextApplyBatch(
+		applyId: number,
+		limit: number,
+		activeSince: Date,
+	): Promise<AnswerInput[]> {
+		const rows = await this.db
+			.select({ id: possibleDuplicates.id, answer: possibleDuplicates.answer })
+			.from(possibleDuplicates)
+			.innerJoin(
+				duplicateApply,
+				liveApply(possibleDuplicates.applyId, activeSince),
+			)
+			.where(and(eq(possibleDuplicates.applyId, applyId), isPending))
+			.orderBy(
+				sql`case ${possibleDuplicates.answer} when ${Answer.KeepMine} then 0 when ${Answer.BothReal} then 1 else 2 end`,
+				asc(possibleDuplicates.id),
+			)
+			.limit(limit);
+
+		// A stamp always sets the answer, but the column type stays nullable.
+		return rows.map((row) => ({ id: row.id, answer: row.answer as Answer }));
+	}
+
+	applyAnswer(
+		applyId: number,
+		answer: AnswerInput,
+		activeSince: Date,
+	): Promise<boolean> {
+		return this.db.transaction(async (tx) => {
+			if (!(await this.lockLiveApply(tx, applyId, activeSince))) return false;
+			if (!(await this.resolveAnswer(tx, answer, applyId))) return false;
+
+			await tx
+				.update(duplicateApply)
+				.set({ applied: sql`${duplicateApply.applied} + 1` })
+				.where(eq(duplicateApply.id, applyId));
 
 			return true;
 		});
 	}
 
-	bothReal(id: number): Promise<boolean> {
+	releaseAnswer(
+		applyId: number,
+		id: number,
+		activeSince: Date,
+	): Promise<boolean> {
 		return this.db.transaction(async (tx) => {
-			const [review] = await this.takeReview(tx, id);
+			if (!(await this.lockLiveApply(tx, applyId, activeSince))) return false;
 
-			if (!review) return false;
+			const released = await tx
+				.update(possibleDuplicates)
+				.set({ applyId: null, answer: null })
+				.where(
+					and(
+						eq(possibleDuplicates.id, id),
+						eq(possibleDuplicates.applyId, applyId),
+						isPending,
+					),
+				)
+				.returning({ id: possibleDuplicates.id });
 
-			const { transactionId: _, ...bank } = review;
-			await tx.insert(transactions).values(bank).onConflictDoNothing();
+			if (!released.length) return false;
+
+			await tx
+				.update(duplicateApply)
+				.set({ taken: sql`${duplicateApply.taken} + 1` })
+				.where(eq(duplicateApply.id, applyId));
 
 			return true;
 		});
+	}
+
+	async finishApply(applyId: number, activeSince: Date): Promise<boolean> {
+		const finished = await this.db
+			.update(duplicateApply)
+			.set({
+				status: DuplicateApplyStatus.Done,
+				gone: sql`${duplicateApply.total} - ${duplicateApply.applied} - ${duplicateApply.taken}`,
+				finishedAt: new Date(),
+			})
+			.where(liveApply(applyId, activeSince))
+			.returning({ id: duplicateApply.id });
+
+		return finished.length > 0;
+	}
+
+	async failApply(applyId: number, error: string): Promise<boolean> {
+		const failed = await this.db
+			.update(duplicateApply)
+			.set({
+				status: DuplicateApplyStatus.Failed,
+				error,
+				finishedAt: new Date(),
+			})
+			.where(and(eq(duplicateApply.id, applyId), isRunning))
+			.returning({ id: duplicateApply.id });
+
+		return failed.length > 0;
+	}
+
+	async latestApply(): Promise<
+		(DuplicateApply & { pending: number }) | undefined
+	> {
+		const [row] = await this.db
+			.select({
+				...getTableColumns(duplicateApply),
+				pending: sql<number>`(select count(*)::int from ${possibleDuplicates} where ${and(
+					eq(possibleDuplicates.applyId, duplicateApply.id),
+					isPending,
+				)})`,
+			})
+			.from(duplicateApply)
+			.orderBy(desc(duplicateApply.id))
+			.limit(1);
+
+		return row;
 	}
 
 	// A re-sync refreshes only the bank-owned columns. The description and member
@@ -623,10 +820,107 @@ export class DrizzleTransactionsRepository implements TransactionsRepository {
 		return adopted.length > 0;
 	}
 
-	private takeReview(tx: Executor, id: number) {
+	// Locks the Apply before its rows, as a start does, so a start failing it
+	// waits for this Answer and every later Answer sees it stopped.
+	private async lockLiveApply(
+		tx: Executor,
+		applyId: number,
+		activeSince: Date,
+	): Promise<boolean> {
+		const [live] = await tx
+			.select({ id: duplicateApply.id })
+			.from(duplicateApply)
+			.where(liveApply(applyId, activeSince))
+			.for("update");
+
+		return live !== undefined;
+	}
+
+	// Only a pending review its Apply still holds, so a late worker can't touch
+	// a row a newer Apply took.
+	private pendingReview(id: number, applyId: number) {
+		return and(
+			eq(possibleDuplicates.id, id),
+			isPending,
+			eq(possibleDuplicates.applyId, applyId),
+		);
+	}
+
+	private resolveAnswer(
+		tx: Executor,
+		{ id, answer }: AnswerInput,
+		applyId: number,
+	): Promise<boolean> {
+		switch (answer) {
+			case Answer.KeepMine:
+				return this.resolveKeepMine(tx, id, applyId);
+			case Answer.UseBank:
+				return this.resolveUseBank(tx, id, applyId);
+			case Answer.BothReal:
+				return this.resolveBothReal(tx, id, applyId);
+		}
+	}
+
+	private async resolveKeepMine(
+		tx: Executor,
+		id: number,
+		applyId: number,
+	): Promise<boolean> {
+		const kept = await tx
+			.update(possibleDuplicates)
+			.set({ status: PossibleDuplicateStatus.Kept })
+			.where(this.pendingReview(id, applyId))
+			.returning({ id: possibleDuplicates.id });
+
+		return kept.length > 0;
+	}
+
+	private async resolveUseBank(
+		tx: Executor,
+		id: number,
+		applyId: number,
+	): Promise<boolean> {
+		const [review] = await this.takeReview(tx, id, applyId);
+
+		if (!review) return false;
+
+		const { transactionId, description: _, ...bank } = review;
+		await tx
+			.update(transactions)
+			.set(bank)
+			.where(eq(transactions.id, transactionId));
+		// The row is now that bank row, so any other review it held is another purchase.
+		const others = await this.takeReviewsOn(tx, transactionId);
+
+		if (others.length) {
+			await tx
+				.insert(transactions)
+				.values(others.map(({ id: _, ...bank }) => bank))
+				.onConflictDoNothing();
+		}
+
+		return true;
+	}
+
+	private async resolveBothReal(
+		tx: Executor,
+		id: number,
+		applyId: number,
+	): Promise<boolean> {
+		const [review] = await this.takeReview(tx, id, applyId);
+
+		if (!review) return false;
+
+		const { transactionId: _, ...bank } = review;
+		await tx.insert(transactions).values(bank).onConflictDoNothing();
+
+		return true;
+	}
+
+	private takeReview(tx: Executor, id: number, applyId: number) {
 		return tx
 			.delete(possibleDuplicates)
-			.where(and(eq(possibleDuplicates.id, id), isPending))
+			.where(this.pendingReview(id, applyId))
 			.returning({
 				...reviewBankRow,
 				transactionId: possibleDuplicates.transactionId,

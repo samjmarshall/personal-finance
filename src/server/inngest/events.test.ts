@@ -99,6 +99,7 @@ type _NameIsRegistryKeys = Expect<
 		| "receipt/email.received"
 		| "receipt/retry"
 		| "cdr/import.requested"
+		| "duplicate/apply.requested"
 	>
 >;
 type _PayloadShape = Expect<

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
 	ExpenseConsumption,
 	PossibleDuplicateReview,
@@ -43,9 +43,13 @@ function serviceWith(
 		applyReconcile: unstaged,
 		listPendingDuplicates: unstaged,
 		countPendingDuplicates: unstaged,
-		keepMine: unstaged,
-		useBanks: unstaged,
-		bothReal: unstaged,
+		startApply: unstaged,
+		nextApplyBatch: unstaged,
+		applyAnswer: unstaged,
+		releaseAnswer: unstaged,
+		finishApply: unstaged,
+		failApply: unstaged,
+		latestApply: unstaged,
 		findSyncedValues: unstaged,
 		update: unstaged,
 		findUnplanned: unstaged,
@@ -214,91 +218,40 @@ describe("possible duplicates", () => {
 			provenance: Provenance.Manual,
 		},
 		descriptionScore: 0.2,
+		answer: null,
+		notApplied: false,
 	};
 
-	it("lists and counts the pending reviews", async () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-09-29T00:00:00.000Z"));
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// A running Apply quiet for 15 min is dead, so its rows come back (adr032).
+	it("lists and counts the pending reviews outside a live Apply", async () => {
+		const since: Date[] = [];
 		const service = serviceWith({
-			listPendingDuplicates: async () => [REVIEW],
-			countPendingDuplicates: async () => 1,
+			listPendingDuplicates: async (activeSince) => {
+				since.push(activeSince);
+
+				return [REVIEW];
+			},
+			countPendingDuplicates: async (activeSince) => {
+				since.push(activeSince);
+
+				return 1;
+			},
 		});
 
 		await expect(service.listPossibleDuplicates()).resolves.toEqual([REVIEW]);
 		await expect(service.possibleDuplicateCount()).resolves.toBe(1);
-	});
-
-	it.each([
-		["keep_mine", "keepMine"],
-		["use_bank", "useBanks"],
-		["both_real", "bothReal"],
-	] as const)("%s resolves through %s", async (choice, method) => {
-		const calls: number[] = [];
-		const service = serviceWith({
-			[method]: async (id: number) => {
-				calls.push(id);
-
-				return true;
-			},
-		});
-
-		await expect(
-			service.resolveDuplicates({ answers: [{ id: 4, choice }] }),
-		).resolves.toEqual({ resolved: 1, gone: 0, taken: 0 });
-		expect(calls).toEqual([4]);
-	});
-
-	it("answers each review in turn, in the order given", async () => {
-		const calls: unknown[][] = [];
-		const service = serviceWith({
-			keepMine: async (id) => {
-				calls.push(["keepMine", id]);
-
-				return true;
-			},
-			useBanks: async (id) => {
-				calls.push(["useBanks", id]);
-
-				return true;
-			},
-		});
-
-		await service.resolveDuplicates({
-			answers: [
-				{ id: 7, choice: "use_bank" },
-				{ id: 4, choice: "keep_mine" },
-			],
-		});
-
-		expect(calls).toEqual([
-			["useBanks", 7],
-			["keepMine", 4],
+		expect(since).toEqual([
+			new Date("2026-09-28T23:45:00.000Z"),
+			new Date("2026-09-28T23:45:00.000Z"),
 		]);
-	});
-
-	it("counts a review that is gone and a bank row that is taken, and keeps going", async () => {
-		const service = serviceWith({
-			keepMine: async () => false,
-			useBanks: throwing(failedQuery("23505")),
-			bothReal: async () => true,
-		});
-
-		await expect(
-			service.resolveDuplicates({
-				answers: [
-					{ id: 1, choice: "keep_mine" },
-					{ id: 2, choice: "use_bank" },
-					{ id: 3, choice: "both_real" },
-				],
-			}),
-		).resolves.toEqual({ resolved: 1, gone: 1, taken: 1 });
-	});
-
-	it("lets any other driver error bubble", async () => {
-		const error = failedQuery("57014");
-		const service = serviceWith({ bothReal: throwing(error) });
-
-		await expect(
-			service.resolveDuplicates({ answers: [{ id: 4, choice: "both_real" }] }),
-		).rejects.toBe(error);
 	});
 });
 

@@ -1,4 +1,5 @@
 import { AppNav, MobileNav } from "~/components/app-nav";
+import { ApplyProgress } from "~/components/apply-progress";
 import { AsyncBoundary } from "~/components/async-boundary";
 import { NavMember, NavMemberSkeleton } from "~/components/nav-member";
 
@@ -19,6 +20,7 @@ export default function DashboardLayout({
 			<div className="flex min-w-0 flex-1 flex-col">
 				<MobileNav />
 				<main className="flex-1">{children}</main>
+				<ApplyProgress />
 			</div>
 		</div>
 	);

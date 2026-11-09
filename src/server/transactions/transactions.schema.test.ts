@@ -3,12 +3,17 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import {
+	DuplicateApplyStatus,
 	Frequency,
 	PossibleDuplicateStatus,
 	Priority,
 	Provenance,
 } from "~/lib/constants";
-import { possibleDuplicates, transactions } from "./transactions.schema";
+import {
+	duplicateApply,
+	possibleDuplicates,
+	transactions,
+} from "./transactions.schema";
 
 const cols = getTableColumns(transactions);
 
@@ -92,11 +97,35 @@ describe("possible_duplicate", () => {
 		expect(index?.config.where).toBeUndefined();
 	});
 
-	it("goes when its household row goes", () => {
-		const [fk] = config.foreignKeys;
+	const fkTo = (table: unknown) =>
+		config.foreignKeys.find((fk) => fk.reference().foreignTable === table);
 
-		expect(config.foreignKeys).toHaveLength(1);
-		expect(fk?.reference().foreignTable).toBe(transactions);
-		expect(fk?.onDelete).toBe("cascade");
+	it("goes when its household row goes", () => {
+		expect(config.foreignKeys).toHaveLength(2);
+		expect(fkTo(transactions)?.onDelete).toBe("cascade");
+	});
+
+	it("outlives the Apply that stamped it", () => {
+		expect(fkTo(duplicateApply)?.onDelete).toBe("set null");
+	});
+});
+
+describe("duplicate_apply", () => {
+	const config = getTableConfig(duplicateApply);
+
+	it("starts every Apply running", () => {
+		expect(getTableColumns(duplicateApply).status.default).toBe(
+			DuplicateApplyStatus.Running,
+		);
+	});
+
+	// adr032: one Apply at a time.
+	it("allows one running Apply only", () => {
+		const index = config.indexes.find(
+			(i) => i.config.name === "duplicate_apply_running_idx",
+		);
+
+		expect(index?.config.unique).toBe(true);
+		expect(index?.config.where).toBeDefined();
 	});
 });

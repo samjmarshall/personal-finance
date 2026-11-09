@@ -2,7 +2,7 @@
 date: 2026-11-04
 design: thoughts/designs/2026-11-04-async-duplicate-apply-progress-toast.md
 adrs: [adr032]
-status: Ready to implement
+status: Done
 ---
 # Async Duplicate Apply with a Progress Toast Implementation Plan
 
@@ -144,13 +144,13 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - `src/server/transactions/transactions.service.test.ts:36-63`: add the 7 new methods to the fake as `unstaged`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] The generated `drizzle/0029_*.sql` has both enums, the table, the partial unique index `WHERE status = 'running'`, both columns, the FK `ON DELETE SET NULL` and the `apply_id` index
-- [ ] `make db_branch_status` shows `*` on `local/<branch>`, then `make db_migrate` applies 0029
-- [ ] The existing "resolving a review" snapshots pass unchanged
-- [ ] Apply on the Import page still works through the old path
-- [ ] `/security-review` (touches `src/lib/constants.ts`)
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] The generated `drizzle/0029_*.sql` has both enums, the table, the partial unique index `WHERE status = 'running'`, both columns, the FK `ON DELETE SET NULL` and the `apply_id` index
+- [x] `make db_branch_status` shows `*` on `local/<branch>`, then `make db_migrate` applies 0029
+- [x] The existing "resolving a review" snapshots pass unchanged
+- [ ] Apply on the Import page still works through the old path — n/a at validation: Phase 3 removed the old path; the new path was verified live instead
+- [x] `/security-review` (touches `src/lib/constants.ts`)
 
 ## Phase 2: Background job and tRPC procedures
 ### Changes
@@ -218,11 +218,11 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
   - `possible-duplicate-piles.test.tsx:13-41`: the fixture gains `answer: null, notApplied: false`.
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `registry-golden.test.ts` pins `duplicate/apply.requested`, `duplicate-apply` and the `"duplicate-apply"` key
-- [ ] On `local/<branch>` with the Inngest dev server running, `duplicate-apply` shows with concurrency key `"duplicate-apply"`
-- [ ] Apply on the Import page still works through the old path, and its rows still show
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `registry-golden.test.ts` pins `duplicate/apply.requested`, `duplicate-apply` and the `"duplicate-apply"` key
+- [x] On `local/<branch>` with the Inngest dev server running, `duplicate-apply` shows with concurrency key `"duplicate-apply"`
+- [ ] Apply on the Import page still works through the old path, and its rows still show — n/a at validation: old path removed in Phase 3
 
 ## Phase 3: Progress toast and Import page switch
 ### Changes
@@ -298,19 +298,19 @@ Phase 1 adds the data model and repository and leaves the old path working. Phas
 - `transaction.interface.ts:84-90`: delete `ResolveDuplicatesResult`, and drop the barrel exports (`src/domain/transactions/index.ts:26-29,47,69-71,91-92`).
 
 ### Success
-- [ ] `make check` passes
-- [ ] `make test` passes
-- [ ] `rg "resolveDuplicates|RESOLVE_DUPLICATES_MAX|DuplicateChoice" src` returns nothing
-- [ ] On `local/<branch>`, applying 300+ Answers returns at once, the rows leave the list, and the toast counts up to "300 of 300", then shows success
-- [ ] Going to another page and reloading mid-Apply brings the toast back
-- [ ] Closing the toast mid-Apply keeps it closed until the finish toast
-- [ ] Stopping the Inngest dev server mid-Apply, then letting retries run out, shows the error toast "Stopped at x of y…" with "Review". The leftover rows show their saved answer and "Didn't apply"
-- [ ] A second Apply during a run shows "An apply is already running."
-- [ ] `/design-review`
+- [x] `make check` passes
+- [x] `make test` passes
+- [x] `rg "resolveDuplicates|RESOLVE_DUPLICATES_MAX|DuplicateChoice" src` returns nothing
+- [x] On `local/<branch>`, applying 300+ Answers returns at once, the rows leave the list, and the toast counts up to "300 of 300", then shows success
+- [x] Going to another page and reloading mid-Apply brings the toast back
+- [x] Closing the toast mid-Apply keeps it closed until the finish toast
+- [x] Stopping the Inngest dev server mid-Apply, then letting retries run out, shows the error toast "Stopped at x of y…" with "Review". The leftover rows show their saved answer and "Didn't apply" — verified via the stale path (worker killed, Apply backdated 16 min). Retries-exhausted `onFailure` path verified end to end 2026-11-09 (owner approved DB access on `local/<branch>`): 3 seeded Keep mine reviews, a trigger raising on the 2nd, Inngest dev server on. Apply 23 stopped at 1 of 3; after retries (~2.5 min) Inngest ran `duplicate-apply (failure)` and the row went `failed`. The toast showed "Stopped at 1 of 3. 2 answers didn't apply." with Review and stayed open past 25 s; the 2 rows showed "Didn't apply" with Keep mine kept. After the trigger was dropped, Apply 24 applied both, the stop toast closed, and the list emptied (`.playwright-mcp/onfail-*.png`). Test rows and trigger removed
+- [x] A second Apply during a run shows "An apply is already running."
+- [x] `/design-review` — first run 2026-11-05: 0 blockers, 1 High ("Didn't apply" not announced), fixed in 8278222 and confirmed. Re-run 2026-11-05: 1 Blocker open — the `top-center` running toast covers the sticky header nav at 375px (`.playwright-mcp/toast-375-_transactions_import.png`). Fixed in a7ecf6e: top toasts sit 5rem down below `lg`, so the toast starts at 80px under the 61px header at 375 and 768, and stays 24px at 1440 (Playwright, `.playwright-mcp/toast-fix-*.png`). Re-run 2026-11-08: 0 Blockers (header fix confirmed at 375/768/1023 on 5 routes), 2 High still open: (1) the centred top toast covers the "Import from bank" button on `/transactions` at 768 (151×28px) and 1024 (`.playwright-mcp/dr3-toast-pages-transactions-*.png`); (2) the warning toast asks for action but closes after 5 s with no Review link. 2026-11-09: (1) accepted as a known trade-off: every toast position covers something, the toast is closable and stays closed until the finish; (2) fixed: a warning with taken rows now waits and links to Review (`applyNeedsReview`), unit-tested. Re-run 2026-11-09 on the toast delta (Playwright, mocked `currentApply`): 0 Blockers, 0 High. A taken warning stays open past 9 s with Review; gone-only warning and success close at ~5.3 s with no Review; Review closes the toast; AA contrast in both themes (`.playwright-mcp/dr4-*.png`). 2 Medium open: a taken warning covers the title at 375, and warning and error look alike but for the icon. Toast re-validation 2026-11-09 after 600a643 (Playwright, mocked `currentApply`, 1440): a taken warning waits ~34 s, then closes when the next Apply shows on a refetch; only the new running toast is left. Same when the next Apply lands on the refetch right after the finish. No console errors (`.playwright-mcp/v5-*.png`). A newer Apply first seen already finished now closes it too (unit-tested)
 
 ## References
 - Design doc: `thoughts/designs/2026-11-04-async-duplicate-apply-progress-toast.md` (carries `## Related ADRs`)
-- ADRs: `docs/adr/adr032-apply-answers-as-a-background-job-stamped-on-the-review-row.md` (Proposed), implemented by Phases 1–3 (data and repository in Phase 1, job in Phase 2, client in Phase 3)
+- ADRs: `docs/adr/adr032-apply-answers-as-a-background-job-stamped-on-the-review-row.md` (Accepted), implemented by Phases 1–3 (data and repository in Phase 1, job in Phase 2, client in Phase 3)
 - Composes with: adr002 (outbox write door), adr004 (3-tier), adr017 (`cdr-import` precedent), adr029 (how reviews are flagged)
 - Precedent: `src/server/cdr/cdr.repository.ts:190-205`, `src/server/cdr/cdr.inngest.controller.ts:48-88`, `src/server/cdr/cdr.service.ts:74-94`, `src/app/(dashboard)/transactions/import/_components/import-view.tsx:16-41`
 - sonner 2.0.8 behaviour: `node_modules/sonner/dist/index.mjs:189-215,528-565,842,860,1145-1147`

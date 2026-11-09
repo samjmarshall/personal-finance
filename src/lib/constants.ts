@@ -79,6 +79,18 @@ export enum PossibleDuplicateStatus {
 	Kept = "kept",
 }
 
+export enum Answer {
+	KeepMine = "keep_mine",
+	UseBank = "use_bank",
+	BothReal = "both_real",
+}
+
+export enum DuplicateApplyStatus {
+	Running = "running",
+	Done = "done",
+	Failed = "failed",
+}
+
 // One household with AU banks only (CDR is AUD-only), so one fixed zone decides
 // which calendar day a row falls on. Becomes a setting with household scoping.
 export const HOUSEHOLD_TIME_ZONE = "Australia/Sydney";

@@ -1,13 +1,8 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { toast } from "sonner";
-import {
-	RESOLVE_DUPLICATES_MAX,
-	type ResolveDuplicateInput,
-} from "~/domain/transactions";
+import { useEffect, useEffectEvent, useRef } from "react";
+import type { AnswerInput } from "~/domain/transactions";
 import { api } from "~/trpc/react";
-import { appliedLabel } from "./import.display";
 import { PossibleDuplicatePiles } from "./possible-duplicate-piles";
 
 export function PossibleDuplicateList({
@@ -18,12 +13,12 @@ export function PossibleDuplicateList({
 }) {
 	const [reviews] = api.transaction.possibleDuplicates.useSuspenseQuery();
 	const utils = api.useUtils();
+	// Same cache the progress toast polls, so Apply waits on the running one.
+	const { data: current } = api.transaction.currentApply.useQuery();
 	// Offline it fails at once with a toast; paused, it would hold every answer.
-	const resolve = api.transaction.resolveDuplicates.useMutation({
+	const start = api.transaction.applyAnswers.useMutation({
 		networkMode: "always",
 	});
-	// Own flag, not isPending: a big apply is several calls, and it dips between them.
-	const [applying, setApplying] = useState(false);
 
 	// The apply bar leaves with the last row, taking focus with it.
 	const hadReviews = useRef(reviews.length > 0);
@@ -40,41 +35,30 @@ export function PossibleDuplicateList({
 		}
 	}, [reviews]);
 
-	async function apply(answers: ResolveDuplicateInput[]) {
-		setApplying(true);
-		const tally = { resolved: 0, gone: 0, taken: 0 };
-
+	async function apply(answers: AnswerInput[]) {
 		try {
-			for (let at = 0; at < answers.length; at += RESOLVE_DUPLICATES_MAX) {
-				const done = await resolve.mutateAsync({
-					answers: answers.slice(at, at + RESOLVE_DUPLICATES_MAX),
-				});
-				tally.resolved += done.resolved;
-				tally.gone += done.gone;
-				tally.taken += done.taken;
-			}
-
-			if (tally.gone > 0 || tally.taken > 0) {
-				toast.warning(appliedLabel(tally));
-			} else {
-				toast.success(appliedLabel(tally));
-			}
+			const started = await start.mutateAsync({ answers });
+			// A fetch begun before the start would land the old Apply over this one.
+			await utils.transaction.currentApply.cancel();
+			// The toast shows now, not on the next poll.
+			utils.transaction.currentApply.setData(undefined, started);
+			// The running Apply's rows leave the list; the rest refetch when it ends.
+			await Promise.all([
+				utils.transaction.possibleDuplicates.invalidate(),
+				utils.transaction.possibleDuplicateCount.invalidate(),
+			]);
 
 			return true;
 		} catch {
-			// Error toast: src/trpc/query-client.ts. Earlier calls still landed, so count them.
-			const landed = appliedLabel(tally);
-
-			if (landed) toast.warning(landed);
+			// A global handler already toasts the error. On "already running",
+			// another tab's Apply holds the rows: show its toast and drop them.
+			await Promise.all([
+				utils.transaction.currentApply.invalidate(),
+				utils.transaction.possibleDuplicates.invalidate(),
+				utils.transaction.possibleDuplicateCount.invalidate(),
+			]);
 
 			return false;
-		} finally {
-			// An answer changes rows, totals, the header badge and the review list, so refetch all.
-			await Promise.all([
-				utils.transaction.invalidate(),
-				utils.expense.consumption.invalidate(),
-			]);
-			setApplying(false);
 		}
 	}
 
@@ -89,9 +73,10 @@ export function PossibleDuplicateList({
 
 	return (
 		<PossibleDuplicatePiles
-			applying={applying}
 			onApply={apply}
+			progress={current?.active ? current : null}
 			reviews={reviews}
+			sending={start.isPending}
 		/>
 	);
 }

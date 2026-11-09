@@ -3,10 +3,9 @@ import {
 	type PossibleDuplicateReview,
 	SIMILAR_SCORE,
 } from "~/domain/transactions";
-import { CdrImportStatus, Provenance } from "~/lib/constants";
+import { Answer, CdrImportStatus, Provenance } from "~/lib/constants";
 import {
 	amountGapLabel,
-	appliedLabel,
 	dayGapLabel,
 	duplicatePiles,
 	fillLabel,
@@ -141,6 +140,8 @@ function review(
 			provenance: Provenance.Manual,
 		},
 		descriptionScore: score,
+		answer: null,
+		notApplied: false,
 	};
 }
 
@@ -202,8 +203,8 @@ describe("duplicatePiles", () => {
 			["different_description", [2]],
 		]);
 		expect(piles.map((pile) => pile.suggestion)).toEqual([
-			"use_bank",
-			"both_real",
+			Answer.UseBank,
+			Answer.BothReal,
 		]);
 	});
 
@@ -232,25 +233,5 @@ describe("fillLabel", () => {
 		[0, 12, "All answered"],
 	])("%i of %i unanswered → %s", (unanswered, total, label) => {
 		expect(fillLabel("Use bank's", unanswered, total)).toBe(label);
-	});
-});
-
-describe("appliedLabel", () => {
-	it("counts what was applied", () => {
-		expect(appliedLabel({ resolved: 1, gone: 0, taken: 0 })).toBe(
-			"Applied 1 answer.",
-		);
-		expect(appliedLabel({ resolved: 3, gone: 0, taken: 0 })).toBe(
-			"Applied 3 answers.",
-		);
-	});
-
-	it("says which were already answered and which still need one", () => {
-		expect(appliedLabel({ resolved: 2, gone: 1, taken: 2 })).toBe(
-			"Applied 2 answers. 1 was already answered. 2 still need an answer: the bank's row is already in your transactions.",
-		);
-		expect(appliedLabel({ resolved: 0, gone: 2, taken: 1 })).toBe(
-			"2 were already answered. 1 still needs an answer: the bank's row is already in your transactions.",
-		);
 	});
 });

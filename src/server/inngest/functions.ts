@@ -15,16 +15,18 @@ import { outboxService } from "~/server/outbox/outbox.module";
 import { DrizzleReceiptExtractionRepository } from "~/server/receipts/receipt-extraction.repository";
 import { ReceiptExtractionService } from "~/server/receipts/receipt-extraction.service";
 import { ReceiptsInngestController } from "~/server/receipts/receipts.inngest.controller";
+import { duplicateApplyService } from "~/server/transactions/duplicate-apply.module";
 import { TransactionReconcileService } from "~/server/transactions/transaction-reconcile.service";
+import { TransactionsInngestController } from "~/server/transactions/transactions.inngest.controller";
 import { DrizzleTransactionsRepository } from "~/server/transactions/transactions.repository";
 
 import { inngest } from "./client";
 
 // Composition root: every tier built once with the real db + client. The route
 // handler (src/app/api/inngest/route.ts) serves this array; Inngest discovers each
-// function's cron/event triggers from it. The outbox, categories and balances
-// services are shared with other roots, so they come from their *.module.ts files
-// rather than being built here.
+// function's cron/event triggers from it. The outbox, categories, balances and
+// duplicate-apply services are shared with other roots, so they come from their
+// *.module.ts files rather than being built here.
 const outboxController = new OutboxInngestController({
 	inngest,
 	service: outboxService,
@@ -45,6 +47,11 @@ const receiptsController = new ReceiptsInngestController({
 	service: receiptExtractionService,
 });
 
+const transactionsRepository = new DrizzleTransactionsRepository({
+	db,
+	outbox: outboxService,
+});
+
 // An unset key builds no client, so the daily run is a logged no-op.
 const cdrSyncService = new CdrSyncService({
 	repository: new DrizzleCdrRepository({ db, outbox: outboxService }),
@@ -55,7 +62,7 @@ const cdrSyncService = new CdrSyncService({
 			})
 		: null,
 	transactions: new TransactionReconcileService({
-		repository: new DrizzleTransactionsRepository({ db }),
+		repository: transactionsRepository,
 		embeddingModel: bedrock.embedding(env.BEDROCK_EMBEDDING_MODEL),
 		logger: createRootLogger().with({
 			domain: "transactions",
@@ -70,8 +77,14 @@ const cdrController = new CdrInngestController({
 	service: cdrSyncService,
 });
 
+const transactionsController = new TransactionsInngestController({
+	inngest,
+	service: duplicateApplyService,
+});
+
 export const functions = [
 	...outboxController.functions,
 	...receiptsController.functions,
 	...cdrController.functions,
+	...transactionsController.functions,
 ];

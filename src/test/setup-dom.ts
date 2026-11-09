@@ -17,3 +17,6 @@ globalThis.ResizeObserver ??= class {
 	unobserve() {}
 	disconnect() {}
 };
+
+// jsdom has no pointer capture; sonner calls it when a toast is pressed.
+Element.prototype.setPointerCapture ??= () => {};
