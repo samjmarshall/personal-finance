@@ -2,7 +2,10 @@
 
 import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
-import { applyOutcome } from "~/components/apply-progress.display";
+import {
+	applyNeedsReview,
+	applyOutcome,
+} from "~/components/apply-progress.display";
 import { ApplyToast } from "~/components/apply-toast";
 import type { CurrentApply } from "~/domain/transactions";
 import { api } from "~/trpc/react";
@@ -100,8 +103,9 @@ export function ApplyToasts({
 			{
 				id: toastId(apply.id),
 				position: POSITION,
-				// An error asks the Member to act, so it waits for them.
-				duration: outcome === "error" ? Number.POSITIVE_INFINITY : FINISHED_MS,
+				duration: applyNeedsReview(apply, outcome)
+					? Number.POSITIVE_INFINITY
+					: FINISHED_MS,
 			},
 		);
 	}, [apply]);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DuplicateApplyStatus } from "~/lib/constants";
 import {
 	appliedLabel,
+	applyNeedsReview,
 	applyOutcome,
 	applyProgressLabel,
 	applyStoppedLabel,
@@ -83,5 +84,16 @@ describe("applyOutcome", () => {
 		],
 	] as const)("%s → %s", (_, apply, outcome) => {
 		expect(applyOutcome(apply)).toBe(outcome);
+	});
+});
+
+describe("applyNeedsReview", () => {
+	it.each([
+		["all applied", 0, "success", false],
+		["some gone", 0, "warning", false],
+		["some taken", 1, "warning", true],
+		["stopped", 0, "error", true],
+	] as const)("%s → %s", (_, taken, outcome, needed) => {
+		expect(applyNeedsReview({ taken }, outcome)).toBe(needed);
 	});
 });

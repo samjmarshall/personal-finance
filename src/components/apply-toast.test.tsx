@@ -88,6 +88,29 @@ describe("ApplyToast", () => {
 		);
 	});
 
+	// Its rows came back blank, so the Member is told where to find them.
+	it("links a warning with taken rows to them", () => {
+		render(
+			<ApplyToast
+				apply={{
+					...APPLY,
+					applied: 199,
+					taken: 1,
+					pending: 0,
+					status: DuplicateApplyStatus.Done,
+					active: false,
+				}}
+				onClose={() => {}}
+				phase="warning"
+			/>,
+		);
+
+		expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute(
+			"href",
+			"/transactions/import",
+		);
+	});
+
 	it("closes when the Member follows Review", async () => {
 		const onClose = vi.fn();
 		render(

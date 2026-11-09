@@ -8,6 +8,7 @@ import Link from "next/link";
 import {
 	type ApplyOutcome,
 	appliedLabel,
+	applyNeedsReview,
 	applyProgressLabel,
 	applyStoppedLabel,
 } from "~/components/apply-progress.display";
@@ -49,7 +50,7 @@ export function ApplyToast({
 						{phase === "error" ? applyStoppedLabel(apply) : appliedLabel(apply)}
 					</p>
 				)}
-				{phase === "error" && (
+				{phase !== "running" && applyNeedsReview(apply, phase) && (
 					<Link
 						className={cn(
 							buttonVariants({ variant: "outline", size: "xs" }),

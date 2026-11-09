@@ -44,6 +44,14 @@ export function applyStoppedLabel({ total, pending }: Counts): string {
 	return `Stopped at ${applyProgressLabel({ total, pending })}. ${formatCount(pending)} ${answers} didn't apply.`;
 }
 
+/** Rows are left on the list for the Member, so the toast says where and waits. */
+export function applyNeedsReview(
+	{ taken }: Pick<CurrentApply, "taken">,
+	outcome: ApplyOutcome,
+): boolean {
+	return outcome === "error" || taken > 0;
+}
+
 export function applyOutcome({
 	status,
 	active,
