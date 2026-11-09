@@ -38,6 +38,8 @@ export function PossibleDuplicateList({
 	async function apply(answers: AnswerInput[]) {
 		try {
 			const started = await start.mutateAsync({ answers });
+			// A fetch begun before the start would land the old Apply over this one.
+			await utils.transaction.currentApply.cancel();
 			// The toast shows now, not on the next poll.
 			utils.transaction.currentApply.setData(undefined, started);
 			// The running Apply's rows leave the list; the rest refetch when it ends.
