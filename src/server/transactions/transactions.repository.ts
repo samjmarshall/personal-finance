@@ -124,7 +124,7 @@ export interface TransactionsRepository {
 	 * `activeSince`; a stamped row still listed is one its Apply didn't apply.
 	 */
 	listPendingDuplicates(activeSince: Date): Promise<PossibleDuplicateReview[]>;
-	/** Same rows as `listPendingDuplicates`. */
+	/** Counts the same rows the review list shows. */
 	countPendingDuplicates(activeSince: Date): Promise<number>;
 	/**
 	 * One transaction: fails a running Apply idle since before `staleBefore`, adds

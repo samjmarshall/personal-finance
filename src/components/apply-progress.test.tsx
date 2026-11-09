@@ -143,7 +143,6 @@ describe("ApplyToasts", () => {
 			expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
 			expect(onFinished).toHaveBeenCalledOnce();
 
-			// A later poll of the same finished Apply changes nothing.
 			tick(done({ id: first.id, ...end }));
 			expect(onFinished).toHaveBeenCalledOnce();
 		},

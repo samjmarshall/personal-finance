@@ -2,12 +2,12 @@ import type { CurrentApply, DuplicateApply } from "~/domain/transactions";
 import { DuplicateApplyStatus } from "~/lib/constants";
 import { formatCount } from "~/lib/utils";
 
-/** How a finished Apply ends: `error` when it stopped, `warning` when some didn't land. */
+/** How a finished Apply ends: stopped with Answers left, partly landed, or all landed. */
 export type ApplyOutcome = "success" | "warning" | "error";
 
 type Counts = Pick<CurrentApply, "total" | "pending">;
 
-/** The toast after an apply. A taken review stays, so it still needs an answer. */
+/** A taken review stays pending, so it still needs an Answer. */
 export function appliedLabel({
 	applied,
 	gone,

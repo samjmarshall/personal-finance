@@ -106,7 +106,7 @@ export class DuplicateApplyService {
 			active:
 				row.status === DuplicateApplyStatus.Running &&
 				row.updatedAt > applyActiveSince(),
-			// Saved only at the finish, so a stopped Apply's is the rest of its total.
+			// Saved only at the finish; a stopped Apply's is whatever wasn't applied, taken or left pending.
 			gone:
 				row.status === DuplicateApplyStatus.Done
 					? row.gone
