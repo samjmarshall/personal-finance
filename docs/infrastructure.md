@@ -13,7 +13,15 @@ Terraform in `infrastructure/` owns infrastructure only: the Vercel project, per
 | Deployment | `ref = main`, `production = true` | `ref = <branch>`, last apply wins |
 | PostHog | owns `posthog_insight` + `posthog_alert` + `posthog_cohort` (imported) | none; the provider is still configured, so the key is still needed |
 
-State bucket `139035987018-terraform-state` (S3 lockfile locking). Both IdPs (`oidc.vercel.com/rekurve`, `token.actions.githubusercontent.com`) already exist in the account and are read, never created.
+State bucket `139035987018-terraform-state` (S3 lockfile locking). Both IdPs (`oidc.vercel.com/samjmarshall`, `token.actions.githubusercontent.com`) already exist in the account and are read, never created.
+
+The Vercel team slug sits in the OIDC token's `iss`, `aud` and `sub`, so renaming the team breaks Bedrock until both of these are done: create the new IdP by hand, then set `vercel_team_slug` in `infrastructure/locals.tf` and push.
+
+```sh
+aws iam create-open-id-connect-provider \
+  --url https://oidc.vercel.com/<team-slug> \
+  --client-id-list https://vercel.com/<team-slug>
+```
 
 ## Local use
 
