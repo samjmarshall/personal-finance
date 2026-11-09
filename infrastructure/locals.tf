@@ -2,7 +2,7 @@ locals {
   project              = jsondecode(file("${path.module}/../package.json")).name
   github_repo          = "samjmarshall/${local.project}"
   is_prod              = var.environment == "production"
-  vercel_team_slug     = "rekurve"
+  vercel_team_slug     = "samjmarshall"
   vercel_oidc_issuer   = "oidc.vercel.com/${local.vercel_team_slug}" # Team issuer mode
   vercel_oidc_audience = "https://vercel.com/${local.vercel_team_slug}"
   vercel_project_id    = local.is_prod ? vercel_project.this[0].id : data.vercel_project.this[0].id

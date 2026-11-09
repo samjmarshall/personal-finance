@@ -9,8 +9,9 @@ data "vercel_project" "this" {
   name = local.project
 }
 
-# AWS allows one IdP per issuer URL per account and ai-insurance-claims already
-# created this one; creating it again would fail with EntityAlreadyExists.
+# Read, never created: the IdP is made once by hand (docs/infrastructure.md) so
+# preview, which applies before production, never waits on production to own it.
+# The issuer URL carries the team slug, so renaming the Vercel team needs a new IdP.
 data "aws_iam_openid_connect_provider" "vercel" {
   url = "https://${local.vercel_oidc_issuer}"
 }
