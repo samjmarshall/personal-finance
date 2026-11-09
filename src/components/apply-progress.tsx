@@ -47,12 +47,21 @@ export function ApplyToasts({
 }) {
 	const seenRunning = useRef<number | null>(null);
 	const dismissedApplyId = useRef<number | null>(null);
-	const finishShown = useRef<number | null>(null);
+	const finishedApplyId = useRef<number | null>(null);
 	// Read when a poll lands, not as a dep: the parent passes a new arrow each render.
 	const finished = useEffectEvent(onFinished);
 
 	useEffect(() => {
 		if (!apply) return;
+
+		// Once a newer Apply shows up, the last one's finish toast is old news.
+		if (
+			finishedApplyId.current !== null &&
+			finishedApplyId.current !== apply.id
+		) {
+			toast.dismiss(toastId(finishedApplyId.current));
+			finishedApplyId.current = null;
+		}
 
 		// Another tab started the next Apply before this one's end was polled.
 		if (seenRunning.current !== null && seenRunning.current !== apply.id) {
@@ -62,12 +71,6 @@ export function ApplyToasts({
 		}
 
 		if (apply.active) {
-			// A finish toast that waits for the Member is old news once the next Apply runs.
-			if (finishShown.current !== null && finishShown.current !== apply.id) {
-				toast.dismiss(toastId(finishShown.current));
-				finishShown.current = null;
-			}
-
 			seenRunning.current = apply.id;
 
 			if (dismissedApplyId.current === apply.id) return;
@@ -96,7 +99,7 @@ export function ApplyToasts({
 		if (seenRunning.current !== apply.id) return;
 
 		seenRunning.current = null;
-		finishShown.current = apply.id;
+		finishedApplyId.current = apply.id;
 		finished();
 
 		const outcome = applyOutcome(apply);

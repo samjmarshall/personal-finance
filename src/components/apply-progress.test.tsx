@@ -9,6 +9,7 @@ import { ApplyToasts } from "./apply-progress";
 // Sonner's store outlives a test and replays live toasts to a new <Toaster />.
 afterEach(() => {
 	toast.dismiss();
+	vi.restoreAllMocks();
 });
 
 // A close dismisses a frame later, so a shared id could hit the next test's toast.
@@ -149,6 +150,11 @@ describe("ApplyToasts", () => {
 	);
 
 	it.each([
+		[
+			"an error waits",
+			{ status: DuplicateApplyStatus.Failed, applied: 120, pending: 80 },
+			Infinity,
+		],
 		["a taken warning waits", { applied: 199, taken: 1 }, Infinity],
 		["a gone-only warning closes", { applied: 199, gone: 1 }, 5000],
 		["a success closes", {}, 5000],
@@ -164,7 +170,6 @@ describe("ApplyToasts", () => {
 			expect.any(Function),
 			expect.objectContaining({ duration }),
 		);
-		custom.mockRestore();
 	});
 
 	it("drops a waiting finish once the next Apply runs", async () => {
@@ -177,6 +182,23 @@ describe("ApplyToasts", () => {
 		tick(running({ id: first.id + 1000, applied: 0, pending: 200 }));
 
 		await screen.findByRole("progressbar");
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("link", { name: "Review" }),
+			).not.toBeInTheDocument(),
+		);
+	});
+
+	// Another tab can run and finish the next Apply while this tab isn't polling.
+	it("drops a waiting finish once a newer Apply shows up already done", async () => {
+		const first = running();
+		const { tick } = renderToasts(first);
+		await screen.findByRole("progressbar");
+		tick(done({ id: first.id, applied: 199, taken: 1 }));
+		await screen.findByRole("link", { name: "Review" });
+
+		tick(done({ id: first.id + 1000 }));
+
 		await waitFor(() =>
 			expect(
 				screen.queryByRole("link", { name: "Review" }),
