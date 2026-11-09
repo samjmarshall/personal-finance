@@ -53,7 +53,7 @@ A Bank import can leave hundreds of Possible duplicates to answer. Apply sends e
 - **Order matters.** Each batch runs Keep mine, then Both are real, then Use bank's, by id within each. A Use bank's turns every other pending review on its Transaction into its own Transaction, so a Keep mine on that Transaction must land first.
 - **Exact counts.** Each Answer and its `applied + 1` share one transaction. A retried batch skips rows that are no longer pending, so it never counts one twice.
 - **Stuck by quiet, not by age.** Every applied or taken Answer moves `updatedAt`. A running Apply with no progress for 15 minutes reads as not active. The next `start` marks it `failed` ("No progress; failed by the next apply."). A big Apply that keeps moving never trips it.
-- **Its own concurrency slot** (`"duplicate-apply"`), not `"cdr-sync"`. Sharing that slot would leave the toast stuck at 0 behind a long Bank import. Every write checks `status = pending`, so an Apply can safely run beside a sync.
+- **Its own concurrency slot** (`"duplicate-apply"`), not `"cdr-sync"`. Sharing that slot would leave the toast stuck at 0 behind a long Bank import. Every write checks `status = pending`, so an Apply never undoes a sync. A Use bank's and a sync on the same Transaction lock its rows in opposite order and can deadlock: Postgres aborts one side, and that job's usual retry takes over.
 - **A late worker can't touch a newer Apply's row.** Each write matches the review's `apply_id` as well as `pending`.
 - **A late worker can't revive a Stopped Apply.** Each Answer first locks the Apply row and checks it is still live. A finish that comes too late marks the Apply `failed` ("No progress; its worker finished too late.") and logs it.
 - **The finish toast shows only in a tab that saw the Apply run.** A page load never replays an old result. After a reload, the "Didn't apply" rows are the record.
@@ -148,7 +148,7 @@ A review row in an Apply is in one of three states:
 - **Another tab starts the next Apply** before this tab polls the end. This tab drops the old toast, refetches, and shows the new one.
 - **Tab closed mid-Apply.** The job keeps going. On return, the list shows the result.
 - **Clear on a "Didn't apply" row** blanks its saved Answer for this send.
-- **Error toast** stays until closed. A success or warning toast closes after 5 s.
+- **Error toast**, and a warning with taken rows, stays until closed and links to Review. A success toast, or a warning with only gone rows, closes after 5 s.
 
 **Side effects**: the same writes as each Answer (see [History import](history-import.md#flow): Keep mine drops the bank row, Use bank's updates your row and frees its other reviews, Both are real adds the bank row). Inserts one `outbox` row per Apply. Invalidates the `transaction.*` and `expense.consumption` queries when an Apply ends.
 

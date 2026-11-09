@@ -2,7 +2,7 @@ import type { FailureEventArgs, Inngest, InngestFunction } from "inngest";
 import type { DuplicateApplyService } from "./duplicate-apply.service";
 
 const RETRIES = 3;
-// adr032: one Apply at a time, so two never race on the same review.
+// adr032: one step at a time, so two batches never write the same review at once.
 const APPLY_SLOT = {
 	limit: 1,
 	key: '"duplicate-apply"',
