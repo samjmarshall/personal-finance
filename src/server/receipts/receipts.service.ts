@@ -23,6 +23,7 @@ import {
 	ConflictError,
 	InvalidInputError,
 	NotFoundError,
+	UnauthorizedError,
 } from "~/server/errors/domain-errors";
 import { rethrowFkConflict } from "~/server/errors/fk-conflict";
 import { isPgViolation, PgViolation } from "~/server/errors/parse-error";
@@ -44,14 +45,6 @@ const RENDERABLE_TYPES = new Set([
 	"image/png",
 	"application/pdf",
 ]);
-
-// Blob passes a throw from the token hook straight through, so a class survives
-// to the catch where a matched message string could silently stop matching.
-export class UploadUnauthorizedError extends Error {
-	constructor() {
-		super("Unauthorized");
-	}
-}
 
 const NOT_FOUND_MESSAGE = "Receipt not found.";
 const BODY_NOT_FOUND_MESSAGE = "Receipt body not found.";
@@ -307,7 +300,9 @@ export class ReceiptsService {
 		memberId: string | undefined,
 	): Promise<unknown> {
 		return this.uploads.answer(request, event, async (pathname) => {
-			if (memberId === undefined) throw new UploadUnauthorizedError();
+			// Blob rethrows this as-is, so the error type survives; matching on the
+			// message could silently break.
+			if (memberId === undefined) throw new UnauthorizedError("Unauthorized");
 
 			this.assertUploadPath(pathname);
 

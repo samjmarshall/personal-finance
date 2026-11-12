@@ -15,8 +15,10 @@ import {
 } from "vitest";
 import type { SessionReader } from "~/server/auth/session-reader";
 import {
+	ConflictError,
 	InvalidInputError,
 	NotFoundError,
+	UnauthorizedError,
 } from "~/server/errors/domain-errors";
 import type {
 	LogAttributes,
@@ -24,10 +26,7 @@ import type {
 } from "~/server/observability/logging/logger";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 import { ReceiptsHttpController } from "./receipts.http.controller";
-import {
-	type ReceiptsService,
-	UploadUnauthorizedError,
-} from "./receipts.service";
+import type { ReceiptsService } from "./receipts.service";
 
 // A registered provider makes the ambient tracer record, so the span the controller
 // opens lands in the exporter and currentTraceId() sees it. The real
@@ -87,7 +86,7 @@ function harness({ memberId = "m1" }: { memberId?: string } = {}) {
 				return { type: event.type, response: "ok" };
 			}
 
-			if (member === undefined) throw new UploadUnauthorizedError();
+			if (member === undefined) throw new UnauthorizedError("Unauthorized");
 
 			return { type: event.type, clientToken: `tok:${member}` };
 		},
@@ -472,6 +471,24 @@ describe("ReceiptsHttpController.upload", () => {
 		const [span] = exporter.getFinishedSpans();
 		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
 		expect(span?.attributes["http.response.status_code"]).toBe(400);
+		expect(logs).toHaveLength(1);
+		expect(logs[0]).toMatchObject({
+			level: "warn",
+			msg: "blob token mint rejected",
+		});
+	});
+
+	it("409s a ConflictError from the mint with a warn log and an errored span", async () => {
+		const { controller, answerUpload, logs } = harness();
+		answerUpload.mockRejectedValueOnce(new ConflictError("taken"));
+
+		const response = await post(controller);
+
+		expect(response.status).toBe(409);
+		await expect(response.json()).resolves.toEqual({ error: "taken" });
+		const [span] = exporter.getFinishedSpans();
+		expect(span?.status).toEqual({ code: SpanStatusCode.ERROR });
+		expect(span?.attributes["http.response.status_code"]).toBe(409);
 		expect(logs).toHaveLength(1);
 		expect(logs[0]).toMatchObject({
 			level: "warn",

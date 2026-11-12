@@ -16,9 +16,8 @@ import { flattenError, ZodError } from "zod";
 
 import type { Context } from "~/server/api/context";
 import {
-	ConflictError,
-	InvalidInputError,
-	NotFoundError,
+	DomainError,
+	type DomainErrorKind,
 } from "~/server/errors/domain-errors";
 import { reportError } from "~/server/observability/errors/report-error";
 import { createRootLogger } from "~/server/observability/logging/logger";
@@ -144,9 +143,18 @@ const observabilityMiddleware = t.middleware(
 	},
 );
 
+// A `Record` so a new kind fails the typecheck until it has a code.
+const TRPC_CODE: Record<DomainErrorKind, TRPCError["code"]> = {
+	not_found: "NOT_FOUND",
+	conflict: "CONFLICT",
+	invalid_input: "BAD_REQUEST",
+	unauthorized: "UNAUTHORIZED",
+};
+
 /**
- * Services throw transport-free domain errors; this is the one place they become
- * codes. Sits inside observability so spans and logs see the mapped code.
+ * Services throw transport-free domain errors; this turns them into tRPC codes
+ * (HTTP has its own map). Sits inside observability so spans and logs see the
+ * mapped code.
  * Only a raw throw (tRPC wraps it as a 500) is mapped; a deliberate TRPCError
  * keeps its code even if its cause is a domain error.
  */
@@ -157,11 +165,8 @@ const errorMappingMiddleware = t.middleware(async ({ next }) => {
 
 	const { cause } = result.error;
 
-	if (cause instanceof NotFoundError) throw mappedError("NOT_FOUND", cause);
-	if (cause instanceof ConflictError) throw mappedError("CONFLICT", cause);
-
-	if (cause instanceof InvalidInputError) {
-		throw mappedError("BAD_REQUEST", cause);
+	if (cause instanceof DomainError) {
+		throw mappedError(TRPC_CODE[cause.kind], cause);
 	}
 
 	return result;

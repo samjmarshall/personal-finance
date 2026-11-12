@@ -108,18 +108,29 @@ an id.
 
 ## Errors
 
-- Services throw `NotFoundError` / `ConflictError` / `InvalidInputError`
-  (`src/server/errors/`), never `TRPCError`. Nothing under `src/server/errors/`
-  imports tRPC. `InvalidInputError` is for input a DTO can't check alone (it
-  depends on server config, such as the upload pathname prefix).
+- Services throw a `DomainError` (`src/server/errors/domain-errors.ts`), never
+  `TRPCError`. Each subclass carries a `kind`: `NotFoundError` (`not_found`),
+  `ConflictError` (`conflict`), `InvalidInputError` (`invalid_input`),
+  `UnauthorizedError` (`unauthorized`). Each sets a literal `name`, since a
+  minified build renames classes. Nothing under `src/server/errors/` imports tRPC.
+  `InvalidInputError` is for input a DTO can't check alone (it depends on server
+  config, such as the upload pathname prefix).
 - A service turns a pg violation into `ConflictError` with `isPgViolation` /
   `rethrowFkConflict`. A missing row is `NotFoundError`; `assertRow` throws a plain
   `Error`, which stays `INTERNAL_SERVER_ERROR`.
 - Repositories let driver errors bubble.
-- The tRPC error-mapping middleware (`src/server/api/trpc.ts`) owns the code:
-  `NotFoundError` → `NOT_FOUND`, `ConflictError` → `CONFLICT`,
-  `InvalidInputError` → `BAD_REQUEST`, message and cause kept.
-  Anything else passes through unchanged.
+- One map per transport turns a `kind` into a code. Each is a
+  `Record<DomainErrorKind, …>`, so a new kind fails the typecheck until both
+  cover it:
+  - tRPC: `TRPC_CODE` in the error-mapping middleware (`src/server/api/trpc.ts`):
+    `NOT_FOUND`, `CONFLICT`, `BAD_REQUEST`, `UNAUTHORIZED`, message and cause
+    kept. Anything else passes through unchanged.
+  - HTTP: `httpStatusFor(error)` (`src/server/errors/http-status.ts`): 404, 409,
+    400, 401; `undefined` for anything else, so the controller picks its own
+    fallback. Per-route response bodies stay the controller's.
+- Not domain errors (no `kind`, never mapped): `ReceiptTooLargeError`,
+  `RedisUnavailableError`, `RedbarkRetryableError`, `CdrSyncError`. They are
+  worker or infra signals, not member-facing outcomes.
 
 ## Service split rule
 

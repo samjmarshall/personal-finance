@@ -1,17 +1,11 @@
 import type { HandleUploadBody } from "@vercel/blob/client";
 import type { SessionReader } from "~/server/auth/session-reader";
-import {
-	InvalidInputError,
-	NotFoundError,
-} from "~/server/errors/domain-errors";
+import { httpStatusFor } from "~/server/errors/http-status";
 import type { Logger } from "~/server/observability/logging/logger";
 import { BaggageKey } from "~/server/observability/tracing/baggage";
 import { traceIdHeaders } from "~/server/observability/tracing/current-trace-id";
 import { failSpan, withSpan } from "~/server/observability/tracing/tracer";
-import {
-	type ReceiptsService,
-	UploadUnauthorizedError,
-} from "./receipts.service";
+import type { ReceiptsService } from "./receipts.service";
 
 // Blob POSTs two events to the upload route: the browser's token request and, in
 // production, its own upload-completed webhook. Name the span for the work done,
@@ -34,16 +28,10 @@ function parseReceiptId(raw: string): number | null {
 	return id <= MAX_RECEIPT_ID ? id : null;
 }
 
-// Once the body is checked, Blob's completion callback can only fail its signature
-// check (the caller's fault); anything else is ours — the store token, the mint.
-function failureStatus(
-	error: unknown,
-	type: HandleUploadBody["type"],
-): 401 | 400 | 500 {
-	if (error instanceof UploadUnauthorizedError) return 401;
-	if (error instanceof InvalidInputError) return 400;
-
-	return type === "blob.upload-completed" ? 400 : 500;
+// Domain errors keep their own status. Otherwise, after the body check, a Blob
+// callback can only fail its signature (caller's fault); the rest is ours.
+function failureStatus(error: unknown, type: HandleUploadBody["type"]): number {
+	return httpStatusFor(error) ?? (type === "blob.upload-completed" ? 400 : 500);
 }
 
 // Reject every shape Blob would throw on (null, unknown event, no pathname) as a
@@ -138,7 +126,7 @@ export class ReceiptsHttpController {
 				},
 			});
 		} catch (error) {
-			if (error instanceof NotFoundError) return notFound();
+			if (httpStatusFor(error) === 404) return notFound();
 
 			throw error;
 		}
@@ -164,7 +152,7 @@ export class ReceiptsHttpController {
 				},
 			});
 		} catch (error) {
-			if (error instanceof NotFoundError) return notFound();
+			if (httpStatusFor(error) === 404) return notFound();
 
 			throw error;
 		}
@@ -228,13 +216,13 @@ export class ReceiptsHttpController {
 					span.setAttribute("http.response.status_code", status);
 
 					// Same levels as the tRPC middleware: a signed-out tab is routine (warn,
-					// clean span), a rejected callback or token path is the caller's fault
-					// (warn), the rest is ours (error).
+					// clean span), any other 4xx is the caller's fault (warn), the rest is
+					// ours (error).
 					if (status === 401) {
 						this.logger.warn("blob token mint refused", {
 							"blob.event_type": event.type,
 						});
-					} else if (status === 400) {
+					} else if (status < 500) {
 						failSpan(span, error);
 						this.logger.warn(
 							event.type === "blob.upload-completed"
@@ -253,9 +241,9 @@ export class ReceiptsHttpController {
 						});
 					}
 
-					// A 500's message is ours (e.g. a missing store token), not the caller's.
+					// A 5xx's message is ours (e.g. a missing store token), not the caller's.
 					const message =
-						status !== 500 && error instanceof Error
+						status < 500 && error instanceof Error
 							? error.message
 							: "Upload failed";
 

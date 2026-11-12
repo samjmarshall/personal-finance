@@ -5,6 +5,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import {
 	afterAll,
 	afterEach,
@@ -29,7 +30,9 @@ import {
 	ConflictError,
 	InvalidInputError,
 	NotFoundError,
+	UnauthorizedError,
 } from "~/server/errors/domain-errors";
+import { httpStatusFor } from "~/server/errors/http-status";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
 const exporter = new InMemorySpanExporter();
@@ -50,6 +53,7 @@ afterEach(() => vi.restoreAllMocks());
 const notFound = new NotFoundError("gone");
 const conflict = new ConflictError("taken");
 const invalid = new InvalidInputError("bad path");
+const unauthorized = new UnauthorizedError("who are you");
 
 const router = createTRPCRouter({
 	ok: publicProcedure.query(() => "result"),
@@ -80,6 +84,9 @@ const router = createTRPCRouter({
 	}),
 	invalid: publicProcedure.query(() => {
 		throw invalid;
+	}),
+	unauthorized: publicProcedure.query(() => {
+		throw unauthorized;
 	}),
 	plain: publicProcedure.query(() => {
 		throw new Error("plain");
@@ -255,6 +262,35 @@ describe("error mapping", () => {
 			cause: invalid,
 		});
 	});
+
+	it("maps an UnauthorizedError to UNAUTHORIZED, keeping its message and cause", async () => {
+		await expect(caller().unauthorized()).rejects.toMatchObject({
+			code: "UNAUTHORIZED",
+			message: "who are you",
+			cause: unauthorized,
+		});
+	});
+
+	// The two maps are typed apart, so only this catches them drifting apart.
+	it.each([
+		["notFound", notFound],
+		["conflict", conflict],
+		["invalid", invalid],
+		["unauthorized", unauthorized],
+	] as const)(
+		"gives %s the same HTTP status as a route would",
+		async (path, domainError) => {
+			captureStdout();
+			const error = await caller()
+				[path]()
+				.catch((thrown: unknown) => thrown);
+
+			expect(error).toBeInstanceOf(TRPCError);
+			expect(getHTTPStatusCodeFromError(error as TRPCError)).toBe(
+				httpStatusFor(domainError),
+			);
+		},
+	);
 
 	it("keeps the domain error's stack so traces show where it was thrown", async () => {
 		captureStdout();
