@@ -28,9 +28,8 @@ function parseReceiptId(raw: string): number | null {
 	return id <= MAX_RECEIPT_ID ? id : null;
 }
 
-// A domain error keeps its own status. Past that, once the body is checked, Blob's
-// completion callback can only fail its signature check (the caller's fault);
-// anything else is ours — the store token, the mint.
+// Domain errors keep their own status. Otherwise, after the body check, a Blob
+// callback can only fail its signature (caller's fault); the rest is ours.
 function failureStatus(error: unknown, type: HandleUploadBody["type"]): number {
 	return httpStatusFor(error) ?? (type === "blob.upload-completed" ? 400 : 500);
 }

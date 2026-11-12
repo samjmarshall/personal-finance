@@ -152,8 +152,9 @@ const TRPC_CODE: Record<DomainErrorKind, TRPCError["code"]> = {
 };
 
 /**
- * Services throw transport-free domain errors; this is where they become tRPC
- * codes (HTTP's map is `http-status.ts`). Sits inside observability so spans and logs see the mapped code.
+ * Services throw transport-free domain errors; this turns them into tRPC codes
+ * (HTTP has its own map). Sits inside observability so spans and logs see the
+ * mapped code.
  * Only a raw throw (tRPC wraps it as a 500) is mapped; a deliberate TRPCError
  * keeps its code even if its cause is a domain error.
  */

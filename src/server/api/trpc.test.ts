@@ -5,6 +5,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import {
 	afterAll,
 	afterEach,
@@ -31,6 +32,7 @@ import {
 	NotFoundError,
 	UnauthorizedError,
 } from "~/server/errors/domain-errors";
+import { httpStatusFor } from "~/server/errors/http-status";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
 const exporter = new InMemorySpanExporter();
@@ -268,6 +270,27 @@ describe("error mapping", () => {
 			cause: unauthorized,
 		});
 	});
+
+	// The two maps are typed apart, so only this catches them drifting apart.
+	it.each([
+		["notFound", notFound],
+		["conflict", conflict],
+		["invalid", invalid],
+		["unauthorized", unauthorized],
+	] as const)(
+		"gives %s the same HTTP status as a route would",
+		async (path, domainError) => {
+			captureStdout();
+			const error = await caller()
+				[path]()
+				.catch((thrown: unknown) => thrown);
+
+			expect(error).toBeInstanceOf(TRPCError);
+			expect(getHTTPStatusCodeFromError(error as TRPCError)).toBe(
+				httpStatusFor(domainError),
+			);
+		},
+	);
 
 	it("keeps the domain error's stack so traces show where it was thrown", async () => {
 		captureStdout();

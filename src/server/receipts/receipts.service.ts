@@ -300,9 +300,8 @@ export class ReceiptsService {
 		memberId: string | undefined,
 	): Promise<unknown> {
 		return this.uploads.answer(request, event, async (pathname) => {
-			// Blob passes a throw from the token hook straight through, so a class
-			// survives to the catch where a matched message string could silently stop
-			// matching.
+			// Blob rethrows this as-is, so the error type survives; matching on the
+			// message could silently break.
 			if (memberId === undefined) throw new UnauthorizedError("Unauthorized");
 
 			this.assertUploadPath(pathname);
