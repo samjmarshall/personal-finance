@@ -16,6 +16,7 @@ import {
 	ConflictError,
 	InvalidInputError,
 	NotFoundError,
+	UnauthorizedError,
 } from "~/server/errors/domain-errors";
 import type { ExpensesService } from "~/server/expenses/expenses.service";
 import type { TransactionsService } from "~/server/transactions/transactions.service";
@@ -27,11 +28,7 @@ import {
 	unstaged,
 } from "~/test/fakes";
 import type { ReceiptsRepository } from "./receipts.repository";
-import {
-	ReceiptsService,
-	type StoredBlob,
-	UploadUnauthorizedError,
-} from "./receipts.service";
+import { ReceiptsService, type StoredBlob } from "./receipts.service";
 
 // No tracer set up means no trace id. Register one to prove it reaches the row.
 const provider = new NodeTracerProvider();
@@ -864,7 +861,7 @@ describe("answerUpload", () => {
 
 		await expect(
 			service.answerUpload(request, event, undefined),
-		).rejects.toThrow(UploadUnauthorizedError);
+		).rejects.toThrow(UnauthorizedError);
 	});
 
 	it("refuses a token for a path outside the upload prefix", async () => {

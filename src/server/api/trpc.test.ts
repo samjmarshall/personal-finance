@@ -29,6 +29,7 @@ import {
 	ConflictError,
 	InvalidInputError,
 	NotFoundError,
+	UnauthorizedError,
 } from "~/server/errors/domain-errors";
 import { SpanAttributeProcessor } from "~/server/observability/sdk/span-processor";
 
@@ -50,6 +51,7 @@ afterEach(() => vi.restoreAllMocks());
 const notFound = new NotFoundError("gone");
 const conflict = new ConflictError("taken");
 const invalid = new InvalidInputError("bad path");
+const unauthorized = new UnauthorizedError("who are you");
 
 const router = createTRPCRouter({
 	ok: publicProcedure.query(() => "result"),
@@ -80,6 +82,9 @@ const router = createTRPCRouter({
 	}),
 	invalid: publicProcedure.query(() => {
 		throw invalid;
+	}),
+	unauthorized: publicProcedure.query(() => {
+		throw unauthorized;
 	}),
 	plain: publicProcedure.query(() => {
 		throw new Error("plain");
@@ -253,6 +258,14 @@ describe("error mapping", () => {
 			code: "BAD_REQUEST",
 			message: "bad path",
 			cause: invalid,
+		});
+	});
+
+	it("maps an UnauthorizedError to UNAUTHORIZED, keeping its message and cause", async () => {
+		await expect(caller().unauthorized()).rejects.toMatchObject({
+			code: "UNAUTHORIZED",
+			message: "who are you",
+			cause: unauthorized,
 		});
 	});
 
